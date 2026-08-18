@@ -1,6 +1,9 @@
 # deploy/api/retry_policy.py
 
-- RetryPolicy · class · L9-L102 — class RetryPolicy
-- classify_error · method · L35-L82 — def classify_error(error: object) -> str
-- should_retry · method · L85-L92 — def should_retry(attempt: int, max_retries: int, error: object) -> bool
-- backoff_delay · method · L95-L102 — def backoff_delay(attempt: int, base_delay: float) -> float
+- AdaptiveRetryStrategy · class · L12-L198 — class AdaptiveRetryStrategy
+- classify · method · L37-L109 — def classify(error: object) -> str
+- should_retry · method · L112-L131 — def should_retry(attempt: int, max_retries: int, error: object) -> bool
+- delay · method · L134-L151 — def delay(attempt: int, error_type: str) -> float
+- delay_from_retry_after · method · L154-L181 — def delay_from_retry_after(header_value: str | None) -> float | None
+- classify_error · method · L186-L189 — def classify_error(error: object) -> str
+- backoff_delay · method · L192-L198 — def backoff_delay(attempt: int, base_delay: float) -> float

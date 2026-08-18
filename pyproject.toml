@@ -1,4 +1,9 @@
 # imagefree_api 项目配置
+[project]
+dependencies = [
+    "prometheus-client>=0.21",
+]
+
 [tool.pytest.ini_options]
 # 测试发现：tests/ 目录（pytest 风格）+ scripts/ 下的 unittest 文件
 testpaths = ["tests"]

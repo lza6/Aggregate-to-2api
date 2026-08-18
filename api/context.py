@@ -57,12 +57,16 @@ def extract_trace_id(request_headers: dict) -> str | None:
 
 # ── Middleware ─────────────────────────────────────────────
 class RequestContextMiddleware:
-    """FastAPI middleware：在每个请求开始时设置 context，结束时清理。
+    """FastAPI/Starlette ASGI middleware：在每个请求开始时设置 context，结束时清理。
 
     用法：
-        app.add_middleware(RequestContextMiddleware)  # 或
-        app.middleware("http")(RequestContextMiddleware())
+        app.add_middleware(RequestContextMiddleware)  # 标准 ASGI 方式
+        或
+        app.middleware("http")(RequestContextMiddleware())  # 装饰器方式
     """
+
+    def __init__(self, app=None):
+        self.app = app
 
     async def __call__(self, request, call_next):
         # 提取客户端 IP（Starlette Request 对象）

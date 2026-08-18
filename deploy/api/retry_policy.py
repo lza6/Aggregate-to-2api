@@ -6,7 +6,6 @@ F-04: 新增 AdaptiveRetryStrategy，支持按错误类型分类的自适应退�
 import random
 import time
 from email.utils import parsedate_to_datetime
-from typing import Any
 
 
 class AdaptiveRetryStrategy:
@@ -95,12 +94,6 @@ class AdaptiveRetryStrategy:
             if marker in msg:
                 return "network_error"
 
-        # 4. 400 + rate_limit → 在消息标记中已覆盖，但需确保 400 单独处理
-        if "400" in msg:
-            if "rate_limit" in msg or "rate limit" in msg:
-                return "rate_limited"
-            return "permanent"
-
         for marker in AdaptiveRetryStrategy.PERMANENT_MARKERS:
             if marker in msg:
                 return "permanent"
@@ -125,7 +118,8 @@ class AdaptiveRetryStrategy:
         # 使用 error_type 对应的 max_retries（如果存在），取两者最小值
         type_config = AdaptiveRetryStrategy.ERROR_TYPES.get(error_type)
         type_max = type_config["max_retries"] if type_config is not None else max_retries
-        assert isinstance(type_max, int)
+        if not isinstance(type_max, int):
+            raise TypeError(f"Expected int for max_retries, got {type(type_max).__name__}")
         effective_max = min(type_max, max_retries)
 
         return attempt < effective_max

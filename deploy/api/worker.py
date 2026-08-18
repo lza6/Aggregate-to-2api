@@ -640,7 +640,14 @@ class Engine:
                                   else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
                     break
                 try:
-                    result = await self._generate_once(row, token)
+                    with tracer.start_as_current_span(
+                        "provider.submit",
+                        attributes={
+                            "attempt": attempt,
+                            "task.model": row.get("model", "default"),
+                        },
+                    ):
+                        result = await self._generate_once(row, token)
                 except Exception as e:
                     last_error = str(e)
                     if _is_token_rejected(e):

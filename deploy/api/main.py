@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -49,6 +49,7 @@ from .providers.registry import startup_all as providers_startup
 from .providers.registry import shutdown_all as providers_shutdown
 
 from .metrics_ext import imagefree_metrics as metrics_v2
+from .log_ws import ws_log_handler, register_ws, unregister_ws
 
 # M3: 结构化日志格式（含 trace_id 占位，日志里以 trace=<id> 呈现）。
 # IMP-08: trace_id 由 LoggingInstrumentor + TraceIdLogFilter 动态追加到 message 末尾，
@@ -81,6 +82,8 @@ def _uptime_human(seconds: int) -> str:
 async def lifespan(_app: FastAPI):
     # IMP-08: 启动 OTel 追踪（IF_OTEL_ENABLED=1 时生效）
     init_telemetry()
+    # U-02: 注入 WebSocket 日志处理器，所有模块的日志自动广播到前端
+    logging.getLogger().addHandler(ws_log_handler)
     await engine.start()
     gallery_cache.start_reaper()
     # IMP-11: 启动时从 DB 恢复缓存
@@ -250,6 +253,8 @@ async def lifespan(_app: FastAPI):
     await imagefree_client.close_client()
     # IMP-08: 关闭 OTel 追踪（Flush + 反注册 Instrumentation）
     shutdown_telemetry()
+    # U-02: 移除 WebSocket 日志处理器
+    logging.getLogger().removeHandler(ws_log_handler)
 
 
 db = DB(config.DB_FILE)
@@ -270,6 +275,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── 挂载前端管理面板 ──────────────────────────────────
+_FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
+if _FRONTEND_DIR.exists():
+    try:
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/admin", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
+        log.info("前端管理面板已挂载到 /admin")
+    except Exception as e:
+        log.warning("前端管理面板挂载失败: %s", e)
 # A-05: contextvars 请求上下文中间件 - 在每个请求开始时设置 request context
 app.add_middleware(RequestContextMiddleware)
 
@@ -1214,6 +1229,25 @@ async def metrics():
 async def get_logs(lines: int = Query(50, ge=1, le=200)):
     """返回最近 N 行日志（内存环形缓冲区，最多 200 条）。"""
     return {"logs": log_buffer_handler.snapshot(lines)}
+
+
+@app.websocket("/v1/logs/ws")
+async def log_websocket(websocket: WebSocket):
+    """WebSocket 实时日志推送（U-02）。
+
+    连接后自动接收日志流，前端定期发送 "ping" 保持连接，
+    服务端回复 "pong" 保活。断开后自动清理订阅者。
+    """
+    await register_ws(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except Exception:
+        pass
+    finally:
+        await unregister_ws(websocket)
 
 
 @app.get("/v1/dead-letter-queue")

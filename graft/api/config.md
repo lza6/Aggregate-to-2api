@@ -7,23 +7,23 @@
 - ProviderSettings · class · L72-L89 — class ProviderSettings(BaseModel)
 - PoolSettings · class · L92-L97 — class PoolSettings(BaseModel)
 - QueueSettings · class · L100-L118 — class QueueSettings(BaseModel)
-- ObservabilitySettings · class · L121-L125 — class ObservabilitySettings(BaseModel)
-- EditSettings · class · L128-L149 — class EditSettings(BaseModel)
-- SecuritySettings · class · L152-L155 — class SecuritySettings(BaseModel)
-- Settings · class · L161-L676 — class Settings(BaseSettings)
-- _proxy_empty_is_none · method · L432-L436 — def _proxy_empty_is_none(cls, v: str | None) -> str | None
-- _bool_str_coerce · method · L452-L456 — def _bool_str_coerce(cls, v: str | bool) -> bool
-- _resolve_proxy_and_init_groups · method · L459-L579 — def _resolve_proxy_and_init_groups(self) -> "Settings"
-- db · method · L582-L584 — def db(self) -> DBSettings
-- http · method · L587-L589 — def http(self) -> HTTPSettings
-- solver · method · L592-L594 — def solver(self) -> SolverSettings
-- cache · method · L597-L599 — def cache(self) -> CacheSettings
-- provider · method · L602-L604 — def provider(self) -> ProviderSettings
-- pool · method · L607-L609 — def pool(self) -> PoolSettings
-- queue · method · L612-L614 — def queue(self) -> QueueSettings
-- observability · method · L617-L619 — def observability(self) -> ObservabilitySettings
-- edit · method · L622-L624 — def edit(self) -> EditSettings
-- security · method · L627-L629 — def security(self) -> SecuritySettings
-- settings_json · method · L631-L644 — def settings_json(self) -> dict
-- validate · method · L646-L676 — def validate(self) -> list[str]
-- apply_model · function · L847-L850 — def apply_model(prompt: str, model: str) -> str
+- ObservabilitySettings · class · L121-L126 — class ObservabilitySettings(BaseModel)
+- EditSettings · class · L129-L150 — class EditSettings(BaseModel)
+- SecuritySettings · class · L153-L156 — class SecuritySettings(BaseModel)
+- Settings · class · L162-L681 — class Settings(BaseSettings)
+- _proxy_empty_is_none · method · L436-L440 — def _proxy_empty_is_none(cls, v: str | None) -> str | None
+- _bool_str_coerce · method · L456-L460 — def _bool_str_coerce(cls, v: str | bool) -> bool
+- _resolve_proxy_and_init_groups · method · L463-L584 — def _resolve_proxy_and_init_groups(self) -> "Settings"
+- db · method · L587-L589 — def db(self) -> DBSettings
+- http · method · L592-L594 — def http(self) -> HTTPSettings
+- solver · method · L597-L599 — def solver(self) -> SolverSettings
+- cache · method · L602-L604 — def cache(self) -> CacheSettings
+- provider · method · L607-L609 — def provider(self) -> ProviderSettings
+- pool · method · L612-L614 — def pool(self) -> PoolSettings
+- queue · method · L617-L619 — def queue(self) -> QueueSettings
+- observability · method · L622-L624 — def observability(self) -> ObservabilitySettings
+- edit · method · L627-L629 — def edit(self) -> EditSettings
+- security · method · L632-L634 — def security(self) -> SecuritySettings
+- settings_json · method · L636-L649 — def settings_json(self) -> dict
+- validate · method · L651-L681 — def validate(self) -> list[str]
+- apply_model · function · L853-L856 — def apply_model(prompt: str, model: str) -> str
