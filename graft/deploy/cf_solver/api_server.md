@@ -1,0 +1,38 @@
+# deploy/cf_solver/api_server.py
+
+- ClearanceAPIServer · class · L19-L1037 — class ClearanceAPIServer
+- __init__ · method · L43-L73 — def __init__(self, headless: bool, thread: int, page_count: int, proxy_support: bool, proxy_file: str = "proxies.txt", cleanup_interval_minutes: int = 10)
+- _load_proxies · method · L79-L88 — def _load_proxies(self)
+- _next_proxy · method · L90-L95 — def _next_proxy(self)
+- _create_context_with_proxy · method · L97-L110 — async def _create_context_with_proxy(self, proxy: str = None)
+- _startup · method · L116-L122 — async def _startup(self)
+- _shutdown · method · L124-L130 — async def _shutdown(self)
+- _initialize_browser · method · L132-L143 — async def _initialize_browser(self)
+- _build_page_pool · method · L145-L155 — async def _build_page_pool(self)
+- _cleanup_results · method · L157-L196 — async def _cleanup_results(self)
+- _periodic_cleanup · method · L198-L295 — async def _periodic_cleanup(self, interval_minutes: int = 10)
+- _save_debug_on_fail · method · L301-L354 — async def _save_debug_on_fail(self, page, task_id: str, round_num: int, url: str)
+- _solve_turnstile · method · L356-L461 — async def _solve_turnstile(self, task_id: str, url: str, sitekey: str, action: str = None, cdata: str = None, proxy: str = None)
+- _solve_clearance · method · L468-L560 — async def _solve_clearance(self, task_id: str, url: str, timeout: int = 30)
+- _is_cloudfront_blocked · method · L574-L576 — def _is_cloudfront_blocked(self, title: str) -> bool
+- _solve_aws_token · method · L578-L778 — async def _solve_aws_token(self, task_id: str, url: str, timeout: int = 30)
+- _navigate_and_poll · function · L588-L644 — async def _navigate_and_poll(p, ctx, attempt_label: str)
+- _solve_recaptcha · method · L785-L909 — async def _solve_recaptcha(self, task_id: str, url: str, sitekey: str, action: str)
+- block_resources · function · L821-L832 — async def block_resources(route)
+- process_turnstile · method · L916-L933 — async def process_turnstile(self, url: str = Query(...), sitekey: str = Query(...), action: str = Query(None), cdata: str = Query(None), proxy: str = Query(None))
+- process_clearance · method · L935-L961 — async def process_clearance( self, url: str = Query(..., description="URL target yang dilindungi Cloudflare"), timeout: int = Query(30, description="Waktu tunggu maksimal dalam detik (default: 30)"), )
+- process_aws_token · method · L963-L985 — async def process_aws_token( self, url: str = Query(..., description="URL target (e.g. https://vala-wallet.cc/waitlist)"), timeout: int = Query(30, description="Waktu tunggu maksimal dalam detik"), )
+- process_recaptcha · method · L987-L1007 — async def process_recaptcha( self, url: str = Query(..., description="URL target / Domain yang menggunakan reCAPTCHA v3"), sitekey: str = Query(..., description="siteKey untuk Google reCAPTCHA v3"), action: str = Query("submit", description="Action name untuk reCAPTCHA v3 (default: submit)") )
+- get_result · method · L1009-L1037 — async def get_result(self, task_id: str = Query(..., alias="id"))
+- create_app · function · L1040-L1045 — def create_app(headless, thread, page_count, proxy_support, proxy_file="proxies.txt", cleanup_interval_minutes=10) -> FastAPI
+- _print_banner · function · L1051-L1066 — def _print_banner()
+- _auto_install · function · L1071-L1102 — def _auto_install()
+- _camoufox_data_exists · function · L1105-L1117 — def _camoufox_data_exists(): # Linux/macOS 旧路径
+- _check_xvfb · function · L1120-L1143 — def _check_xvfb(headless: bool)
+- _load_config · function · L1163-L1172 — def _load_config() -> dict
+- _save_config · function · L1175-L1178 — def _save_config(cfg: dict)
+- _parse_value · function · L1181-L1192 — def _parse_value(key, raw, current)
+- _show_config_summary · function · L1195-L1211 — def _show_config_summary(cfg: dict)
+- _interactive_config · function · L1214-L1243 — def _interactive_config(cfg: dict) -> dict
+- _check_port · function · L1246-L1268 — def _check_port(cfg: dict) -> dict
+- _check_system · function · L1271-L1304 — def _check_system(cfg: dict)

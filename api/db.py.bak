@@ -1,0 +1,98 @@
+# ── 读 ────────────────────────────────────────
+        _PUBLIC_COLS = (
+            "id", "status", "image_url", "image_base64", "image_mime", "error",
+            "created_at", "duration_sec", "type", "model",
+        )
+
+        # 任务列表列（不含 image_base64 大字段，避免批量文件解析 I/O）
+        _TASK_LIST_COLS = (
+            "id", "status", "image_url", "error",
+            "created_at", "duration_sec", "type", "model", "aspect_ratio",
+        )
+
+        # 画廊/错误列表列（不含 base64 大字段，IMP-26）
+        _GALLERY_COLS = (
+            "id", "status", "image_url", "image_mime", "error",
+            "created_at", "finished_at", "duration_sec", "type", "model",
+            "prompt", "aspect_ratio",
+        )
+        _ERROR_COLS = (
+            "id", "status", "error",
+            "created_at", "duration_sec", "type", "model",
+            "prompt", "aspect_ratio",
+        )
+
+        def get(self, task_id: str) -> dict | None:
+            self._ensure_flushed()
+            row = self._read_conn.execute(
+                "SELECT * FROM requests WHERE id=?", (task_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return self._row_to_dict(row)
+
+        def get_public(self, task_id: str) -> dict | None:
+            """轻量查询：只取公共 API 响应字段（不含 prompt），供 /v1/tasks 等读路径。"""
+            self._ensure_flushed()
+            cols = ", ".join(self._PUBLIC_COLS)
+            row = self._read_conn.execute(
+                f"SELECT {cols} FROM requests WHERE id=?", (task_id,)
+            ).fetchone()
+            if not row:
+                return None
+            return self._row_to_dict(row, default=False)
+
+        def list_tasks(self, limit: int = 50, offset: int = 0,
+                       status: str | None = None, model: str | None = None,
+                       sort: str = "created_at") -> tuple[list[dict], int]:
+            """任务列表查询（IMP-41）。"""
+            self._ensure_flushed()
+            where = []
+            params: list = []
+            if status:
+                where.append("status=?")
+                params.append(status)
+            if model:
+                where.append("model=?")
+                params.append(model)
+            where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+            # 总条数
+            total_row = self._read_conn.execute(
+                f"SELECT COUNT(*) FROM requests{where_clause}", params
+            ).fetchone()
+            total = int(total_row[0])
+            # 排序方向
+            direction = "DESC" if sort == "created_at" else "DESC"
+            # 数据行
+            cols = ", ".join(self._TASK_LIST_COLS)
+            rows = self._read_conn.execute(
+                f"SELECT {cols} FROM requests{where_clause}"
+                f" ORDER BY {sort} {direction} LIMIT ? OFFSET ?",
+                (*params, limit, offset),
+            ).fetchall()
+            items = [self._row_to_dict(r) for r in rows]
+            return items, total
+
+        def recent_images(self, limit: int = 50) -> list[dict]:
+            """画廊：最近完成的、有图的请求（IMP-26: 不含 image_base64）。"""
+            self._ensure_flushed()
+            cols = ", ".join(self._GALLERY_COLS)
+            rows = self._read_conn.execute(
+                f"SELECT {cols} FROM requests WHERE status='completed' AND image_url IS NOT NULL"
+                " ORDER BY finished_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [self._row_to_dict(r) for r in rows]
+
+        def recent_errors(self, limit: int = 20) -> list[dict]:
+            """最近失败的请求（含错误原因/prompt），供在线排查，无需 SSH。
+            IMP-26: 不含 image_base64。
+            """
+            self._ensure_flushed()
+            cols = ", ".join(self._ERROR_COLS)
+            rows = self._read_conn.execute(
+                f"SELECT {cols} FROM requests WHERE status='error'"
+                " ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [self._row_to_dict(r) for r in rows]

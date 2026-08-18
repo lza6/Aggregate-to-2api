@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (keep local, not in repo)
+data/*.db
+data/imgs/
+data/stats.json
+data/queue.db
+data/account_pool.db
+data/email_registry.db
+api.tar
+
+# Runtime
+*.log
+.env
+!deploy/.env.example
+
+# Deploy artifacts
+deploy/cf_solver/debug_logs/
+deploy/cf_solver/proxies.txt
+deploy/data/
+
+# Test artifacts
+.pytest_cache/
+test-results/
+
+# Seal
+计划书/
+所有用到的提供商/

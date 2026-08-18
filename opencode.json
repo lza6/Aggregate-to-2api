@@ -1,0 +1,14 @@
+{
+  "mcp": {
+    "graft": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@nanonets/graft",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

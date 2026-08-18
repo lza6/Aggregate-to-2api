@@ -1,0 +1,18 @@
+# tests/test_solver_guard.py
+
+- TestStats · class · L15-L67 — class TestStats
+- test_record_success_failure_counts_and_avg · method · L16-L26 — def test_record_success_failure_counts_and_avg(self)
+- test_window_success_rate_and_avg · method · L28-L36 — def test_window_success_rate_and_avg(self)
+- test_window_drops_old_entries · method · L38-L45 — def test_window_drops_old_entries(self)
+- test_unknown_reason_categorized_other · method · L47-L50 — def test_unknown_reason_categorized_other(self)
+- test_no_solve_yet_returns_none_fields · method · L52-L58 — def test_no_solve_yet_returns_none_fields(self)
+- test_rejected_total · method · L60-L64 — def test_rejected_total(self)
+- test_reason_categories_are_known · method · L66-L67 — def test_reason_categories_are_known(self)
+- TestCircuit · class · L71-L133 — class TestCircuit
+- test_open_after_threshold · method · L72-L81 — def test_open_after_threshold(self)
+- test_not_open_below_threshold · method · L83-L88 — def test_not_open_below_threshold(self)
+- test_allow_solve_when_closed · method · L90-L92 — def test_allow_solve_when_closed(self)
+- test_half_open_probe_release · method · L94-L103 — def test_half_open_probe_release(self)
+- test_recover_on_probe_success · method · L105-L114 — def test_recover_on_probe_success(self)
+- test_consecutive_failures_reset_on_success · method · L116-L124 — def test_consecutive_failures_reset_on_success(self)
+- test_success_clears_circuit_and_counter · method · L126-L133 — def test_success_clears_circuit_and_counter(self)

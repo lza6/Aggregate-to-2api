@@ -1,0 +1,23 @@
+# tests/test_retry_policy.py
+
+- TestClassifyError · class · L15-L49 — class TestClassifyError
+- test_classify_error · method · L39-L40 — def test_classify_error(self, err: str, expected: str) -> None
+- test_classify_error_timeout_exception · method · L42-L43 — def test_classify_error_timeout_exception(self) -> None
+- test_classify_error_connection_error · method · L45-L46 — def test_classify_error_connection_error(self) -> None
+- test_classify_error_empty_string · method · L48-L49 — def test_classify_error_empty_string(self) -> None
+- TestShouldRetry · class · L52-L69 — class TestShouldRetry
+- test_should_retry_transient_under_max · method · L55-L57 — def test_should_retry_transient_under_max(self) -> None
+- test_should_retry_transient_at_max · method · L59-L61 — def test_should_retry_transient_at_max(self) -> None
+- test_should_retry_permanent · method · L63-L65 — def test_should_retry_permanent(self) -> None
+- test_should_retry_one_attempt_no_retry · method · L67-L69 — def test_should_retry_one_attempt_no_retry(self) -> None
+- TestBackoffDelay · class · L72-L118 — class TestBackoffDelay
+- test_backoff_delay_attempt_1 · method · L75-L79 — def test_backoff_delay_attempt_1(self) -> None
+- test_backoff_delay_attempt_2 · method · L81-L85 — def test_backoff_delay_attempt_2(self) -> None
+- test_backoff_delay_attempt_3 · method · L87-L91 — def test_backoff_delay_attempt_3(self) -> None
+- test_backoff_delay_attempt_4 · method · L93-L97 — def test_backoff_delay_attempt_4(self) -> None
+- test_backoff_delay_different_base · method · L99-L105 — def test_backoff_delay_different_base(self) -> None
+- test_backoff_delay_jitter · method · L107-L112 — def test_backoff_delay_jitter(self) -> None
+- test_backoff_delay_non_negative · method · L114-L118 — def test_backoff_delay_non_negative(self) -> None
+- TestIntegrationTransientThenPermanent · class · L121-L137 — class TestIntegrationTransientThenPermanent
+- test_transient_then_permanent_no_retry · method · L124-L130 — def test_transient_then_permanent_no_retry(self) -> None
+- test_all_transient_retry_up_to_max · method · L132-L137 — def test_all_transient_retry_up_to_max(self) -> None

@@ -1,0 +1,11 @@
+{
+    "headless": true,
+    "thread": 1,
+    "page_count": 1,
+    "proxy_support": false,
+    "proxy_file": "proxies.txt",
+    "host": "0.0.0.0",
+    "port": 8001,
+    "debug": false,
+    "cleanup_interval_minutes": 10
+}

@@ -1,0 +1,23 @@
+# tests/test_proxy_optimize.py
+
+- TestProxyEntry · class · L13-L55 — class TestProxyEntry
+- test_use_count_starts_zero · method · L14-L16 — def test_use_count_starts_zero(self)
+- test_cooling_property · method · L18-L22 — def test_cooling_property(self)
+- test_available_after_use_count_exceeds_max · method · L24-L30 — def test_available_after_use_count_exceeds_max(self)
+- test_24h_reset_use_count · method · L32-L39 — def test_24h_reset_use_count(self)
+- test_cooldown_map_values · method · L41-L49 — def test_cooldown_map_values(self)
+- test_cooldown_map_from_env · method · L51-L55 — def test_cooldown_map_from_env(self)
+- TestProxyPool · class · L58-L210 — class TestProxyPool
+- test_acquire_prefers_unused · method · L59-L73 — def test_acquire_prefers_unused(self)
+- test_acquire_after_all_used_chooses_earliest_cooldown · method · L75-L95 — def test_acquire_after_all_used_chooses_earliest_cooldown(self)
+- test_acquire_use_count_increments · method · L97-L104 — def test_acquire_use_count_increments(self)
+- test_acquire_cooldown_set_after_use · method · L106-L122 — def test_acquire_cooldown_set_after_use(self)
+- test_cooldown_on_use_respects_map · method · L124-L133 — def test_cooldown_on_use_respects_map(self)
+- test_mark_failure_does_not_increment_use_count · method · L135-L142 — def test_mark_failure_does_not_increment_use_count(self)
+- test_mark_failure_429_sets_cooldown · method · L144-L153 — def test_mark_failure_429_sets_cooldown(self)
+- test_mark_failure_non_429_sets_short_cooldown · method · L155-L162 — def test_mark_failure_non_429_sets_short_cooldown(self)
+- test_acquire_returns_none_when_empty · method · L164-L166 — def test_acquire_returns_none_when_empty(self)
+- test_acquire_respects_prefer_source · method · L168-L175 — def test_acquire_respects_prefer_source(self)
+- test_all_entries_cooling_falls_back · method · L177-L189 — def test_all_entries_cooling_falls_back(self)
+- test_snapshot_includes_use_count_and_cooling · method · L191-L200 — def test_snapshot_includes_use_count_and_cooling(self)
+- test_max_use_per_day_blocks_reuse · method · L202-L210 — def test_max_use_per_day_blocks_reuse(self)

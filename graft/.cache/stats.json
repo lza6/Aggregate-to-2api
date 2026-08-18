@@ -1,0 +1,15 @@
+{
+  "nodeCount": 9841,
+  "edgeCount": 21847,
+  "languages": [
+    "javascript",
+    "python"
+  ],
+  "totalCount": 9841,
+  "readyCount": 0,
+  "staleCount": 0,
+  "dirty": true,
+  "syncing": false,
+  "syncedAt": "2026-08-18T19:41:46.826Z",
+  "lastFile": "plan.md"
+}

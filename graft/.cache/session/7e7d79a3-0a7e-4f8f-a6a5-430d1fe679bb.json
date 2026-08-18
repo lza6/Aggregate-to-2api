@@ -1,0 +1,24 @@
+{
+  "lastQuery": "仓库的README.md记得更新清楚哈，我也附带了项目的相关截图了。然后呢就是说这个请你帮我推送到这个GitHub仓库https://github.com/lza6/Image-to-2api/tree/main。记得创建发行版等等的哈，我们现在要开源啦，MIT协议。。然后呢UI界面上你要统计一下总cf求解的成功率，然后呢求解的统计记录等等那些也要有，这样方便开发者后期面对求解的这个来进行处理等等之类的你懂吧？.然后呢肯定要继续你的上文啊",
+  "perAgentQuery": {},
+  "graftReads": 0,
+  "sourceReads": 0,
+  "savedTokens": 0,
+  "injectedPointers": [
+    "api/imagefree_client.py:L30-L31",
+    "deploy/api/imagefree_client.py:L29-L30",
+    "api/providers/imagefree.py:L21-L76",
+    "deploy/api/imagefree_client.py:L30-L31",
+    "deploy/api/providers/aifreeforever.py",
+    "所有用到的提供商/aifreeforever网站源代码和抓包/ImageGeneratorWorkspaceApp.DFKZuWWf.js:L1-L6",
+    "deploy/api/providers/aifreeforever.py:L62-L184",
+    "deploy/api/providers/aifreeforever.py:L62-L186",
+    "api/free_proxy_fetcher.py:L72-L82",
+    "deploy/api/free_proxy_fetcher.py:L72-L82",
+    "所有用到的提供商/minimaxh3网站源代码和抓包/b65bc0240218b787.js:L1-L1",
+    ".",
+    "asyncio",
+    "logging"
+  ],
+  "nudges": 2
+}

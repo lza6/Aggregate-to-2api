@@ -1,0 +1,47 @@
+# imagefree_api Docker 构建上下文忽略（部署到服务器时省传输、防泄密）
+# 注意：本地构建镜像也要避免打包无关/敏感文件
+
+# 版本控制
+.git
+.gitignore
+
+# 凭据/密钥（绝不进镜像）
+*.pem
+*.key
+config.local.json
+.env
+.env.local
+
+# 本地运行时产物
+data/
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 工具/编辑器
+.idea/
+.vscode/
+.claude/
+.codegraph/
+.code-review-graph/
+.wolf/
+.gemini/
+.cursor/
+.kiro/
+.windsurf/
+
+# 抓包素材（大文件，部署不需要）
+网站源代码和抓包/
+
+# 开发脚本（部署镜像不需要；如需 loadtest 单独拷贝）
+scripts/
+tests/
+
+# 服务器部署资产自身（Dockerfile/compose 由 deploy/ 下执行时排除）
+deploy/

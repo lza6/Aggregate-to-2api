@@ -1,0 +1,29 @@
+# cf_solver 服务镜像（复用 GPT 项目 camoufox 依赖层）
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# ─── 第1层：camoufox(firefox 内核) headless 运行库 + xvfb 兜底 ───
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev \
+    libgtk-3-0 libx11-xcb1 libdbus-glib-1-2 libxt6 libasound2 \
+    libxcomposite1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 \
+    libnss3 libnspr4 libxss1 libxshmfence1 \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# ─── 第2层：Python 依赖（含 camoufox[fetch]）───
+COPY cf_solver/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ─── 第3层：预下载 camoufox 浏览器引擎（避免运行期拉取）───
+RUN python -m camoufox fetch || echo "[warn] camoufox fetch 失败，运行期再试"
+
+# ─── 第4层：应用源码 ───
+COPY cf_solver ./
+
+EXPOSE 8001
+CMD ["python", "boterdrop_wrapper.py"]

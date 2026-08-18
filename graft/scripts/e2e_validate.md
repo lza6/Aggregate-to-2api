@@ -1,0 +1,26 @@
+# scripts/e2e_validate.py
+
+- _reconfigure_stdout · function · L36-L40 — def _reconfigure_stdout()
+- port_open · function · L43-L48 — def port_open(port: int, host: str = "127.0.0.1") -> bool
+- wait_port · function · L51-L59 — def wait_port(port: int, timeout: float, desc: str) -> bool
+- E2E · class · L62-L369 — class E2E
+- __init__ · method · L63-L72 — def __init__(self, mode: str, api_port: int, concurrency: int, fault_inject: bool)
+- start · method · L75-L117 — def start(self) -> None
+- _start_mock_solver · method · L119-L128 — def _start_mock_solver(self) -> None
+- stop · method · L130-L158 — def stop(self) -> None
+- get · method · L161-L164 — def get(self, path: str) -> dict
+- post · method · L166-L172 — def post(self, path: str, body: dict | None = None) -> dict
+- check · method · L174-L175 — def check(self, name: str, cond: bool, detail: str = "") -> None
+- run · method · L178-L193 — def run(self) -> int
+- _wait_pool_warmup · method · L195-L197 — def _wait_pool_warmup(self) -> None: # 等待预取补到基础水位（mock 0.3s/token，空闲水位 1；1s 内应就绪）
+- _verify_healthz · method · L199-L214 — def _verify_healthz(self) -> None
+- _verify_metrics · method · L216-L232 — def _verify_metrics(self) -> None
+- _submit_burst · method · L234-L247 — def _submit_burst(self, n: int) -> list[str]
+- _one · function · L240-L243 — def _one(i: int)
+- _wait_tasks · method · L249-L265 — def _wait_tasks(self, ids: list[str], timeout: float) -> dict[str, dict]
+- _verify_concurrency_no_starvation · method · L267-L293 — def _verify_concurrency_no_starvation(self) -> None
+- _verify_generate_path · method · L295-L310 — def _verify_generate_path(self) -> None: # 注意：_wait_tasks 会原地清空入参列表，故传 list(ids) 副本，保留 len(ids) 供断言
+- _solver_fault · method · L312-L315 — def _solver_fault(self, mode: str) -> None
+- _verify_circuit_breaker · method · L317-L353 — def _verify_circuit_breaker(self) -> None
+- _print_report · method · L355-L369 — def _print_report(self) -> None
+- main · function · L372-L388 — def main() -> int

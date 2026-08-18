@@ -1,0 +1,35 @@
+# tests/test_db_connection_pool.py
+
+- _make_db · function · L18-L37 — def _make_db(pool_size: int = 3, timeout: int = 5, batch_enabled: bool = True)
+- _cleanup · function · L40-L52 — def _cleanup(db, path: str)
+- TestConnectionPool · class · L55-L145 — class TestConnectionPool
+- test_pool_creates_correct_number_of_connections · method · L58-L66 — def test_pool_creates_correct_number_of_connections(self)
+- test_pool_size_1_single_conn · method · L68-L76 — def test_pool_size_1_single_conn(self)
+- test_read_conn_separate_from_write_conns · method · L78-L87 — def test_read_conn_separate_from_write_conns(self)
+- test_round_robin_distributes_writes · method · L89-L100 — def test_round_robin_distributes_writes(self)
+- test_read_uses_read_conn_not_pool · method · L102-L117 — def test_read_uses_read_conn_not_pool(self)
+- test_write_uses_pool_connections · method · L119-L134 — def test_write_uses_pool_connections(self)
+- test_close_cleans_all_connections · method · L136-L145 — def test_close_cleans_all_connections(self)
+- TestConcurrentReadWrite · class · L148-L237 — class TestConcurrentReadWrite
+- test_concurrent_writes_from_multiple_threads · method · L151-L179 — def test_concurrent_writes_from_multiple_threads(self)
+- writer · function · L158-L167 — def writer(n: int)
+- test_concurrent_read_write_no_deadlock · method · L181-L216 — def test_concurrent_read_write_no_deadlock(self)
+- writer · function · L187-L193 — def writer()
+- reader · function · L195-L202 — def reader()
+- test_round_robin_under_concurrent_writes · method · L218-L237 — def test_round_robin_under_concurrent_writes(self)
+- record_conn · function · L224-L226 — def record_conn()
+- TestHealthCheck · class · L240-L303 — class TestHealthCheck
+- test_health_check_returns_true_for_healthy_conn · method · L243-L250 — def test_health_check_returns_true_for_healthy_conn(self)
+- test_health_check_returns_false_for_closed_conn · method · L252-L260 — def test_health_check_returns_false_for_closed_conn(self)
+- test_auto_reconnect_on_stale_connection · method · L262-L286 — def test_auto_reconnect_on_stale_connection(self)
+- test_auto_reconnect_still_works · method · L288-L303 — def test_auto_reconnect_still_works(self)
+- TestPoolSizeOne · class · L306-L341 — class TestPoolSizeOne
+- test_single_conn_behaves_like_original · method · L309-L323 — def test_single_conn_behaves_like_original(self)
+- test_pool_size_1_no_round_robin · method · L325-L333 — def test_pool_size_1_no_round_robin(self)
+- test_pool_size_1_backward_compat_conn · method · L335-L341 — def test_pool_size_1_backward_compat_conn(self)
+- TestConnectionLeak · class · L344-L388 — class TestConnectionLeak
+- test_no_connection_leak_after_close · method · L347-L361 — def test_no_connection_leak_after_close(self)
+- test_close_then_create_does_not_leak · method · L363-L388 — def test_close_then_create_does_not_leak(self)
+- TestBatchWriteWithPool · class · L391-L425 — class TestBatchWriteWithPool
+- test_batch_write_with_pool · method · L394-L408 — def test_batch_write_with_pool(self)
+- test_non_batch_write_with_pool · method · L410-L425 — def test_non_batch_write_with_pool(self)

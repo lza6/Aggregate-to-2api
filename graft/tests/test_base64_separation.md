@@ -1,0 +1,18 @@
+# tests/test_base64_separation.py
+
+- make_db · function · L24-L30 — def make_db()
+- cleanup_db · function · L33-L40 — def cleanup_db(db, path)
+- temp_base64_dir · function · L45-L52 — def temp_base64_dir(monkeypatch)
+- test_get_public_no_base64 · function · L56-L73 — def test_get_public_no_base64()
+- test_gallery_no_base64 · function · L77-L93 — def test_gallery_no_base64()
+- test_errors_no_base64 · function · L97-L112 — def test_errors_no_base64()
+- test_mark_finished_writes_file · function · L116-L146 — def test_mark_finished_writes_file()
+- test_mark_finished_no_base64 · function · L150-L164 — def test_mark_finished_no_base64()
+- test_read_base64 · function · L168-L183 — def test_read_base64()
+- test_get_base64_path · function · L187-L203 — def test_get_base64_path()
+- test_clean_base64_files · function · L207-L234 — def test_clean_base64_files()
+- test_auto_create_dir · function · L238-L261 — def test_auto_create_dir(monkeypatch)
+- test_task_to_public_resolves_file · function · L265-L292 — def test_task_to_public_resolves_file()
+- test_task_to_public_legacy_base64 · function · L296-L309 — def test_task_to_public_legacy_base64()
+- test_base64_store_api · function · L313-L343 — def test_base64_store_api()
+- test_clean_expired_keeps_fresh · function · L347-L360 — def test_clean_expired_keeps_fresh()

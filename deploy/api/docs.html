@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>听风AI（逆向号池）— 多提供商 AI 生成网关</title>
+<script>!function(){var t=localStorage.getItem('theme')||'system';if(t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.setAttribute('data-theme','dark')}()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --bg: #f4f6fa;
+    --bg-soft: #eef0f5;
+    --card: #ffffff;
+    --card-2: #f8f9fc;
+    --text: #1a1e2e;
+    --muted: #6b7280;
+    --line: #d1d5e0;
+    --brand: #4f6fff;
+    --brand-2: #7c5bfc;
+    --brand-soft: rgba(79, 111, 255, .08);
+    --code-bg: #f0f2f6;
+    --code-text: #1a1e2e;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --radius: 12px;
+  }
+  [data-theme="dark"] {
+    --bg: #0f1117;
+    --bg-soft: #1a1d2e;
+    --card: #1e2132;
+    --card-2: #252840;
+    --text: #e1e4ed;
+    --muted: #8b8fa3;
+    --line: #2d3050;
+    --brand: #6b8aff;
+    --brand-soft: rgba(107,138,255,.12);
+    --code-bg: #1a1d2e;
+    --code-text: #e1e4ed;
+  }
+  [data-theme="dark"] .aifree-notice { background: #2d2640; border-color: #7c5a0b; color: #d4b86a; }
+  [data-theme="dark"] .aifree-notice strong { color: #e8c94a; }
+  [data-theme="dark"] th { background: var(--card-2); }
+  [data-theme="dark"] .cell { background: var(--bg-soft); }
+  [data-theme="dark"] .pg-file { background: var(--card-2); }
+  [data-theme="dark"] .pg-prompt { background: var(--bg-soft); }
+  [data-theme="dark"] .pg-ratio-btn { background: var(--card-2); }
+  [data-theme="dark"] .pg-tab { background: var(--card-2); }
+  [data-theme="dark"] p code, [data-theme="dark"] li code, [data-theme="dark"] td code { color: #a5b4fc; }
+  [data-theme="dark"] .pill.ok { background: rgba(52,211,153,.18); }
+  [data-theme="dark"] .pill.warn { background: rgba(251,191,36,.18); }
+  [data-theme="dark"] .pill.err { background: rgba(248,113,113,.18); }
+  [data-theme="dark"] .log-box { background: #0a0c14; }
+  [data-theme="dark"] .nav-bar { box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  [data-theme="dark"] section.card, [data-theme="dark"] .gallery, [data-theme="dark"] .chart { box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  [data-theme="dark"] .stat-card { box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+  [data-theme="dark"] .nav-tab:hover { background: rgba(255,255,255,.08); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    transition: background .25s ease, color .25s ease;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--brand); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .brand {
+    background: linear-gradient(135deg, #1a2350 0%, #2a3f8a 55%, #4f6fff 100%);
+    color: #fff; padding: 26px 24px 62px; border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .brand-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; gap: 18px; }
+  .brand-logo { width: 84px; height: 84px; border-radius: 20px; flex-shrink: 0;
+    box-shadow: 0 8px 28px rgba(91,140,255,.35); }
+  .brand-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 20px; display: block; }
+  .brand-title h1 { margin: 0 0 4px; font-size: 27px; letter-spacing: .3px;
+    background: linear-gradient(90deg, #fff, #b9ccff); -webkit-background-clip: text;
+    background-clip: text; -webkit-text-fill-color: transparent; }
+  .brand-title .sub { color: #a9b8e4; font-size: 14px; }
+  .brand-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .brand-tag { font-size: 12px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+    padding: 3px 10px; border-radius: 999px; color: #dde6ff; }
+  .brand-tag .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #4ade80; margin-right: 6px; }
+
+  .nav { max-width: 1180px; margin: -42px auto 0; padding: 0 24px; position: relative; z-index: 5; }
+  .nav-bar { display: flex; gap: 6px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35); overflow-x: auto; }
+  .nav-tab { border: none; background: transparent; color: var(--muted); cursor: pointer;
+    padding: 9px 16px; border-radius: 10px; font-size: 14px; white-space: nowrap; }
+  .nav-tab:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  .nav-tab.on { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; font-weight: 600; }
+
+  .stats { max-width: 1180px; margin: 22px auto 0; padding: 0 24px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 15px 18px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .stat-card .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .stat-card .value { font-size: 25px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .stat-card .value.small { font-size: 18px; }
+  .stat-card .delta { font-size: 11px; color: var(--muted); }
+
+  .pg-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .pg-tab { border: 1px solid var(--line); background: var(--card-2); color: var(--text);
+    cursor: pointer; padding: 8px 16px; border-radius: 10px; font-size: 14px; }
+  .pg-tab.on { background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    border-color: transparent; color: #fff; }
+
+  section.card { background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+  section.card h2 { font-size: 18px; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
+  section.card h2 .n { font-size: 12px; color: var(--brand); background: var(--brand-soft);
+    padding: 2px 8px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0 4px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 7px 10px;
+    border-bottom: 1px solid var(--line); font-size: 12.5px; white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(38,49,86,.5); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  code { background: var(--code-bg); color: var(--code-text); padding: 1.5px 7px;
+    border-radius: 6px; font-size: 12.5px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; padding: 18px 0; font-size: 13px; }
+  .pill { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: rgba(52,211,153,.15); color: var(--ok); }
+  .pill.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .pill.err { background: rgba(248,113,113,.15); color: var(--err); }
+  .pill.off { background: rgba(148,163,200,.15); color: var(--muted); }
+  .method { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 6px;
+    padding: 2px 8px; margin-right: 8px; }
+  .m-get { background: rgba(52,211,153,.15); color: var(--ok); }
+  .m-post { background: rgba(91,140,255,.15); color: var(--brand); }
+  .endpoint-title { font-weight: 700; color: var(--text); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .s { color: #7dd3fc; } .c { color: #64748b; } .k { color: #c4b5fd; }
+
+  .main-grid { max-width: 1180px; margin: 24px auto 0; padding: 0 24px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+  textarea, input[type=text], select {
+    width: 100%; background: var(--bg-soft); color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px;
+    font-size: 14px; font-family: inherit;
+  }
+  textarea:focus, input[type=text]:focus, select:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+  select option { background: var(--card); color: var(--text); }
+  .btn { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff;
+    border: none; border-radius: 10px; padding: 11px 22px; font-size: 14.5px; font-weight: 600;
+    cursor: pointer; margin-top: 12px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.secondary { background: var(--card-2); border: 1px solid var(--line); color: var(--text); }
+  .pg-status { margin-top: 12px; font-size: 13.5px; min-height: 20px; }
+  .pg-status.err { color: var(--err); }
+  .pg-ratio-btn { border: 1px solid var(--line); background: var(--card-2); color: var(--muted);
+    padding: 5px 11px; border-radius: 8px; cursor: pointer; font-size: 12.5px; margin: 3px 3px 0 0; }
+  .pg-ratio-btn.on { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
+  #pg-result img, #pe-result img { max-width: 100%; max-height: 420px; border-radius: 12px;
+    border: 1px solid var(--line); margin-top: 10px; }
+  .pg-dl-link { font-size: 13px; }
+  #pg-file img { max-width: 120px; border-radius: 8px; display: block; margin: 6px 0; }
+  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+  .bar-track { height: 90px; width: 100%; display: flex; align-items: flex-end;
+    background: var(--bg-soft); border-radius: 6px; overflow: hidden; }
+  .bar { width: 100%; background: linear-gradient(180deg, var(--brand), var(--brand-2));
+    border-radius: 4px 4px 0 0; min-height: 2px; }
+  .bar.err { background: linear-gradient(180deg, #f87171, #b91c1c); }
+  .bar-label { font-size: 10px; color: var(--muted); }
+  .charts-row { display: flex; gap: 18px; }
+  .chart-box { flex: 1; }
+  .model-cap { font-size: 11.5px; color: var(--muted); margin-left: 8px; }
+
+  .prov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .prov-card { background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; }
+  .prov-card h3 { margin: 0 0 2px; font-size: 15.5px; display: flex; align-items: center; gap: 8px; }
+  .prov-card .prov-base { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .prov-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .prov-meta span { font-size: 11.5px; background: var(--brand-soft); color: var(--brand);
+    padding: 2px 9px; border-radius: 999px; }
+
+  .pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .pool-card { background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; }
+  .pool-card h3 { margin: 0 0 10px; font-size: 15px; }
+  .pool-stat { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0;
+    border-bottom: 1px solid rgba(38,49,86,.4); }
+  .pool-stat:last-child { border-bottom: none; }
+  .pool-stat b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  footer { max-width: 1180px; margin: 40px auto 30px; padding: 0 24px; color: var(--muted);
+    font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .foot-brand { display: flex; align-items: center; gap: 12px; }
+  .foot-brand img { width: 40px; height: 40px; border-radius: 10px; }
+  .foot-contact { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; }
+  .foot-contact .wx { color: var(--ok); font-weight: 600; }
+
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80;
+    box-shadow: 0 0 0 3px rgba(74,222,128,.18); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:.45} }
+  .val-accent { color: var(--brand); }
+  .val-ok { color: var(--ok); }
+
+  .wrap { max-width: 1080px; margin: 26px auto 0; padding: 0 24px; }
+  .gallery {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px 24px; box-shadow: 0 4px 14px rgba(20,30,70,.04);
+  }
+  .gallery-head { display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  .gallery-head h2 { font-size: 18px; margin: 0; }
+  .gallery-head .hint { font-size: 12px; color: var(--muted); }
+  .grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px;
+  }
+  .cell {
+    position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1;
+    background: var(--bg-soft); cursor: pointer;
+  }
+  .cell img { width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform .35s ease; }
+  .cell:hover img { transform: scale(1.06); }
+  .cell .meta {
+    position: absolute; inset: auto 0 0 0; padding: 22px 10px 8px;
+    background: linear-gradient(transparent, rgba(10,14,30,.82));
+    color: #fff; font-size: 11.5px; opacity: 0; transition: opacity .25s;
+    line-height: 1.5;
+  }
+  .cell:hover .meta { opacity: 1; }
+  .cell .meta .prompt { display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  .cell .meta .dur { color: #a9b4d8; margin-top: 2px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
+  .gallery .loading { text-align: center; color: var(--muted); padding: 30px 0; font-size: 13px; }
+
+  .pg-prompt { width: 100%; min-height: 88px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font: inherit; font-size: 14px; resize: vertical; color: var(--text);
+    background: var(--card); }
+  .pg-prompt:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+  .pg-ratios { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .pg-ratio-btn { border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; transition: .15s; }
+  .pg-ratio-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .pg-ratio-btn.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .pg-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; }
+  .pg-dl { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px;
+    cursor: pointer; }
+  .pg-btn { background: var(--brand); color: #fff; border: none; border-radius: 10px;
+    padding: 11px 26px; font-size: 15px; font-weight: 600; cursor: pointer; transition: .15s; }
+  .pg-btn:hover { filter: brightness(1.1); }
+  .pg-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .pg-status { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .pg-status.err { color: var(--err); }
+  .pg-result { margin-top: 14px; display: none; }
+  .pg-result img { max-width: 100%; max-height: 480px; border-radius: 12px;
+    border: 1px solid var(--line); display: block; }
+  .pg-dl-link { display: inline-block; margin-top: 10px; font-size: 13px; }
+
+  .pg-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .pg-tab { border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: .15s; }
+  .pg-tab.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .pg-pane { display: none; }
+  .pg-pane.on { display: block; }
+  .pg-file { border: 1px dashed var(--line); border-radius: 10px; padding: 18px;
+    text-align: center; color: var(--muted); font-size: 13px; cursor: pointer;
+    transition: .15s; margin-bottom: 12px; background: var(--card); }
+  .pg-file:hover { border-color: var(--brand); color: var(--brand); }
+  .pg-file img { max-height: 160px; max-width: 100%; border-radius: 8px;
+    display: block; margin: 0 auto 8px; }
+  .pg-file input { display: none; }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+  .chart {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: 0 4px 14px rgba(20,30,70,.04);
+  }
+  .chart h3 { font-size: 14px; margin: 0 0 12px; }
+  .chart .legend { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-width: 0; }
+  .bar-track { width: 100%; height: 100px; display: flex; align-items: flex-end; }
+  .bar { width: 70%; margin: 0 auto; border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, #6b7bff, #4353ff); min-height: 2px;
+    transition: height .5s ease; }
+  .bar.err { background: linear-gradient(180deg, #fca5a5, #dc2626); }
+  .bar-label { font-size: 10px; color: var(--muted); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+  main { max-width: 1080px; margin: 26px auto 60px; padding: 0 24px; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 22px; }
+  nav.toc a { font-size: 13px; padding: 5px 12px; border: 1px solid var(--line);
+    border-radius: 999px; background: var(--card); color: var(--text); }
+  nav.toc a:hover { border-color: var(--brand); color: var(--brand); text-decoration: none; }
+  section.card { background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 24px 26px; margin-bottom: 18px;
+    box-shadow: 0 4px 14px rgba(20,30,70,.04); }
+  h2 { font-size: 19px; margin: 0 0 14px; }
+  h2 .n { color: var(--brand); margin-right: 8px; }
+  h3 { font-size: 15px; margin: 22px 0 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  pre { background: var(--code-bg); color: var(--code-text); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+    font-family: ui-monospace, "SF Mono", Consolas, "Courier New", monospace; }
+  code { font-family: ui-monospace, "SF Mono", Consolas, "Courier New", monospace; }
+  p code, li code, td code { background: var(--brand-soft); color: #3340cc;
+    padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  pre code { background: none; color: inherit; padding: 0; }
+  pre .k { color: #c792ea; } pre .s { color: #a5e075; } pre .c { color: #8b93a7; font-style: italic; }
+  .method { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px;
+    padding: 2px 8px; margin-right: 8px; color: #fff; vertical-align: 2px; letter-spacing: .3px; }
+  .m-post { background: var(--brand); } .m-get { background: #0ea5e9; }
+  .endpoint-title { font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 14.5px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0 4px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--card-2); color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; font-size: 11px; border-radius: 999px; padding: 2px 9px; }
+  .pill.ok { background: #e7f7ee; color: var(--ok); }
+  .pill.warn { background: #fef3e2; color: var(--warn); }
+  .pill.err { background: #fdecec; color: var(--err); }
+  .pill.info { background: var(--brand-soft); color: var(--brand); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 0 40px; }
+
+  .aifree-notice { background: #fef3e2; border: 1px solid #f59e0b; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: #92400e; display: none; }
+  .aifree-notice strong { color: #b45309; }
+
+  .log-box { background: #1a1e2e; border-radius: 10px; padding: 12px; font-size: 12px;
+    font-family: ui-monospace, Consolas, monospace; max-height: 600px; overflow-y: auto;
+    line-height: 1.5; }
+  .log-line { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.06);
+    color: #cbd5e1; word-break: break-all; }
+  .log-line .lvl { display: inline-block; width: 48px; font-weight: 600; }
+  .log-line .lvl.INFO { color: #38bdf8; }
+  .log-line .lvl.WARN, .log-line .lvl.WARNING { color: #fbbf24; }
+  .log-line .lvl.ERROR, .log-line .lvl.CRITICAL { color: #f87171; }
+  .log-line .lvl.DEBUG { color: #94a3b8; }
+  .log-ts { color: #64748b; margin-right: 6px; }
+  .log-logger { color: #a78bfa; margin-right: 6px; }
+  .log-msg { color: #e2e8f0; }
+  .log-new { background: rgba(56,189,248,.08); }
+
+  .proxy-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .proxy-table-wrap { overflow-x: auto; }
+  .proxy-table { font-size: 12.5px; }
+  .proxy-table td { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .proxy-table .url-safe { color: var(--muted); }
+  .proxy-table .source-res { color: var(--ok); }
+  .proxy-table .source-free { color: var(--warn); }
+
+  @media (max-width: 1024px) {
+    .prov-grid, .pool-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .charts { grid-template-columns: 1fr; }
+    .brand h1 { font-size: 24px; }
+    .proxy-stats { grid-template-columns: repeat(2, 1fr); }
+    .two-col, .charts-row { flex-direction: column; grid-template-columns: 1fr; }
+    .nav-bar { overflow-x: auto; scroll-snap-type: x mandatory; gap: 4px; padding: 6px; }
+    .nav-tab { scroll-snap-align: start; padding: 7px 12px; font-size: 13px; flex-shrink: 0; }
+    .prov-grid, .pool-grid { grid-template-columns: 1fr; }
+    .pg-row { flex-direction: column; align-items: stretch; }
+    .pg-row label { width: 100%; }
+    .pg-row select { width: 100%; }
+    .pg-btn, .btn { width: 100%; }
+    .brand-inner { flex-direction: column; text-align: center; }
+    .brand-logo { width: 64px; height: 64px; }
+    .brand-title h1 { font-size: 22px; }
+    .brand-tags { justify-content: center; }
+    .stat-card { padding: 12px 14px; }
+    .stat-card .value { font-size: 21px; }
+    .pg-prompt { min-height: 72px; }
+    .gallery { padding: 16px; }
+    section.card { padding: 18px 16px; }
+    .chart { padding: 14px 16px; }
+    .proxy-stats { grid-template-columns: repeat(2, 1fr); }
+    .foot-brand { flex-direction: column; text-align: center; }
+    .foot-contact { justify-content: center; }
+  }
+  @media (max-width: 600px) {
+    .brand-logo { width: 52px; height: 52px; }
+    .brand-title h1 { font-size: 19px; }
+    .brand { padding: 20px 16px 50px; }
+    .nav { padding: 0 12px; }
+    .stats { padding: 0 12px; }
+    .main-grid { padding: 0 12px; }
+    .wrap { padding: 0 12px; }
+    section.card { padding: 14px 12px; }
+    .gallery { padding: 12px; }
+    .grid { gap: 6px; }
+    .cell { border-radius: 8px; }
+    .cell .meta { font-size: 10px; padding: 16px 8px 6px; }
+    .stat-card { padding: 10px 12px; }
+    .stat-card .value { font-size: 18px; }
+  }
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .grid { grid-template-columns: 1fr; gap: 8px; }
+    .prov-grid, .pool-grid { grid-template-columns: 1fr; gap: 10px; }
+    .brand { padding: 16px 12px 44px; }
+    .brand-logo { width: 44px; height: 44px; border-radius: 14px; }
+    .brand-title h1 { font-size: 17px; }
+    .brand-title .sub { font-size: 12px; }
+    .brand-tag { font-size: 11px; padding: 2px 8px; }
+    .nav-bar { padding: 5px; gap: 3px; }
+    .nav-tab { font-size: 12px; padding: 6px 10px; }
+    .stat-card .value { font-size: 16px; }
+    .stat-card .label { font-size: 11px; }
+    section.card { padding: 12px 10px; border-radius: 10px; }
+    section.card h2 { font-size: 16px; }
+    .gallery { padding: 10px; border-radius: 10px; }
+    .gallery-head h2 { font-size: 16px; }
+    .pg-prompt { min-height: 64px; font-size: 13px; }
+    .pg-ratio-btn { font-size: 12px; padding: 4px 10px; }
+    .pg-btn { font-size: 14px; padding: 10px 20px; }
+    .chart { padding: 10px 12px; }
+    .chart h3 { font-size: 13px; }
+    .bar-label { font-size: 9px; }
+    th, td { padding: 6px 8px; font-size: 12px; }
+    code { font-size: 11px; }
+    pre { padding: 10px 12px; font-size: 11px; }
+    footer { padding: 14px 12px 30px; font-size: 11px; }
+    .foot-brand img { width: 32px; height: 32px; }
+    .log-box { font-size: 11px; padding: 8px; }
+    .proxy-stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .two-col { gap: 12px; }
+    .charts { gap: 10px; }
+    .pg-tabs { gap: 4px; }
+    .pg-tab { font-size: 12px; padding: 5px 12px; }
+    .pg-row { gap: 8px; }
+  }
+.health-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.health-dot.green{background:var(--ok);box-shadow:0 0 0 3px rgba(16,185,129,.18)}
+.health-dot.yellow{background:var(--warn);box-shadow:0 0 0 3px rgba(245,158,11,.18)}
+.health-dot.red{background:var(--err);box-shadow:0 0 0 3px rgba(239,68,68,.18)}
+.health-label{font-size:11px;font-weight:600;vertical-align:middle;margin-left:2px}
+.health-label.green{color:var(--ok)}
+.health-label.yellow{color:var(--warn)}
+.health-label.red{color:var(--err)}
+[data-theme="dark"] .health-dot.green{box-shadow:0 0 0 3px rgba(52,211,153,.18)}
+[data-theme="dark"] .health-dot.yellow{box-shadow:0 0 0 3px rgba(251,191,36,.18)}
+[data-theme="dark"] .health-dot.red{box-shadow:0 0 0 3px rgba(248,113,113,.18)}
+.progress-bar{height:8px;background:var(--bg-soft);border-radius:999px;overflow:hidden;margin:8px 0 0}
+.progress-fill{height:100%;border-radius:999px;transition:width .4s ease,background .4s ease;min-width:0}
+.progress-fill.good{background:var(--ok)}
+.progress-fill.warning{background:var(--warn)}
+.progress-fill.danger{background:var(--err)}
+.progress-label{font-size:11px;color:var(--muted);margin:2px 0 6px;text-align:right}
+.pool-exhausted{font-size:12px;color:var(--err);margin:2px 0 0;font-weight:600}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+	.toast{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;background:var(--card);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:14px;color:var(--text);max-width:380px;cursor:pointer;animation:toast-in .3s ease}
+	.toast.success{border-left:4px solid var(--ok)}
+	.toast.error{border-left:4px solid var(--err)}
+	.toast.info{border-left:4px solid var(--brand)}
+	.toast.warning{border-left:4px solid var(--warn)}
+	.toast-close{margin-left:auto;font-size:16px;opacity:.5;flex-shrink:0;line-height:1}
+	.toast-close:hover{opacity:1}
+	.toast-out{animation:toast-out .3s ease forwards}
+	@keyframes toast-in{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+	@keyframes toast-out{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(60px)}}
+	</style>
+</head>
+<body>
+
+<header class="brand">
+  <div class="brand-inner">
+    <div class="brand-logo"><img src="/static/logo.png" alt="听风AI logo"></div>
+    <div class="brand-title">
+      <h1>听风AI <span style="font-size:15px;opacity:.75;font-weight:400">（逆向号池）</span></h1>
+      <div class="sub">多提供商 AI 生成网关 · 自动逆向 · 号池/邮箱池/代理池 · 高并发异步队列</div>
+    </div>
+    <div class="brand-tags">
+      <span class="brand-tag"><span class="dot"></span>服务运行中</span>
+      <span class="brand-tag">4 大提供商 · 45+ 模型</span>
+      <span class="brand-tag">公开访问 · 无需鉴权</span>
+      <span class="brand-tag">微信 Tf00798</span>
+    </div>
+  </div>
+</header>
+
+<nav class="nav">
+  <div class="nav-bar" id="nav-bar">
+    <button class="nav-tab on" data-nav="playground">🖼️ 在线使用</button>
+    <button class="nav-tab" data-nav="models-sec">🧠 模型列表</button>
+    <button class="nav-tab" data-nav="pool-sec">👥 号池看板</button>
+    <button class="nav-tab" data-nav="providers-sec">🛰️ 提供商状态</button>
+    <button class="nav-tab" data-nav="logs-sec">📋 实时日志</button>
+    <button class="nav-tab" data-nav="proxy-sec">🌐 代理池状态</button>
+    <button class="nav-tab" data-nav="gallery-sec">🎨 画廊</button>
+    <button class="nav-tab" data-nav="docs-sec">📚 API 对接文档</button>
+    <button class="nav-tab" data-nav="task-sec">📋 任务中心</button>
+    <button class="nav-tab" data-nav="stats-sec">📊 用量统计</button>
+    <button class="nav-tab theme-toggle" id="theme-toggle" style="margin-left:auto" title="切换主题">🌙</button>
+  </div>
+</nav>
+
+<section class="stats">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">总请求</div><div class="value" id="st-req">–</div><div class="delta">接口调用次数</div></div>
+    <div class="stat-card"><div class="label">总出图</div><div class="value" id="st-img">–</div><div class="delta">成功生成的图片</div></div>
+    <div class="stat-card"><div class="label">失败次数</div><div class="value" id="st-err">–</div><div class="delta">未成功出图</div></div>
+    <div class="stat-card"><div class="label">平均出图耗时</div><div class="value" id="st-avg">–</div><div class="delta">含排队与生成全链路</div></div>
+    <div class="stat-card"><div class="label">当前并发</div><div class="value" id="st-proc">–</div><div class="delta" id="st-queue">排队中：–</div></div>
+    <div class="stat-card"><div class="label">Worker 数</div><div class="value" id="st-workers">–</div><div class="delta">并行生成通道</div></div>
+    <div class="stat-card"><div class="label">运行时长</div><div class="value" id="st-up">–</div><div class="delta">服务已持续运行</div></div>
+    <div class="stat-card"><div class="label">号池账号</div><div class="value small" id="st-accounts">–</div><div class="delta">minimaxh3 + nanobanana</div></div>
+  </div>
+</section>
+
+<!-- ── 在线生成面板 ── -->
+<section class="card" id="playground" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;">
+  <h2 style="margin-top:0">🖼️ 在线使用</h2>
+  <p class="muted">选模型 → 输提示词 → 出图/出视频。模型 id 格式：<code>&lt;提供商&gt;/&lt;上游真实模型名&gt;</code>（如 <code>minimaxh3/nano-banana-pro</code>）。积分制提供商由号池自动分配账号。</p>
+
+  <div class="aifree-notice" id="aifree-notice" style="display:none">
+    <strong>⚠ aifreeforever 直连模式</strong> — 当前未配置住宅代理池，使用直连（可能受每 IP 每日限额限制）。若遇 429 限流，请配置 <code>IF_PROXY_FILE</code> 或开启 <code>IF_FREE_PROXY=1</code>。
+  </div>
+
+  <div class="pg-tabs">
+    <button class="pg-tab on" data-pane="txt">文生图</button>
+    <button class="pg-tab" data-pane="img">图生图</button>
+  </div>
+
+  <!-- 文生图 -->
+  <div class="pg-pane on" id="pane-txt">
+    <textarea id="pg-prompt" class="pg-prompt"
+      placeholder="输入图像提示词，例如：a cute orange cat with blue eyes, soft lighting"></textarea>
+    <div class="pg-ratios" id="pg-ratios"></div>
+    <div class="pg-row" style="justify-content:flex-start;gap:16px;margin-bottom:12px">
+      <label class="pg-dl">模型
+        <select id="pg-model" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px"></select>
+      </label>
+      <label class="pg-dl">分辨率
+        <select id="pg-resolution" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px">
+          <option value="1K">1K</option><option value="2K">2K</option><option value="4K">4K</option>
+          <option value="480p">480p</option><option value="720p">720p</option>
+        </select>
+      </label>
+      <label class="pg-dl">视频时长
+        <select id="pg-duration" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px">
+          <option value="">—</option><option value="4">4s</option><option value="8">8s</option><option value="12">12s</option>
+        </select>
+      </label>
+    </div>
+    <div class="pg-row">
+      <label class="pg-dl"><input type="checkbox" id="pg-download"> 返回 base64（可直接下载）</label>
+      <button id="pg-btn" class="pg-btn">✨ 生成</button>
+    </div>
+    <div id="pg-status" class="pg-status"></div>
+    <div id="pg-result" class="pg-result"></div>
+    <div id="pg-guide" class="muted" style="text-align:center;padding:22px 0;font-size:14px;color:var(--muted)">
+      💡 输入提示词 → 点击生成 → 等待出图
+    </div>
+  </div>
+
+  <!-- 图生图 -->
+  <div class="pg-pane" id="pane-img">
+    <div class="pg-file" id="pg-file" style="cursor:pointer">
+      <div id="pg-file-tip">
+        <div style="font-size:24px;margin-bottom:6px">🖼️</div>
+        <span>点击选择图片（最多 3 张，PNG/JPG/WebP，每张 ≤4MB）</span>
+      </div>
+      <div id="pg-file-previews" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px"></div>
+      <input type="file" id="pg-image" accept="image/png,image/jpeg,image/webp" multiple>
+    </div>
+    <textarea id="pe-prompt" class="pg-prompt"
+      placeholder="编辑指令，例如：turn it into a watercolor painting"></textarea>
+    <div class="pg-row" style="justify-content:space-between;align-items:center">
+      <label class="pg-dl">模型
+        <select id="pe-model" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px"></select>
+      </label>
+      <button id="pe-btn" class="pg-btn">🎨 生成变体</button>
+    </div>
+    <div id="pe-status" class="pg-status"></div>
+    <div id="pe-result" class="pg-result"></div>
+    <div id="pe-guide" class="muted" style="text-align:center;padding:22px 0;font-size:14px;color:var(--muted)">
+      💡 选择图片 → 输入指令 → 生成变体
+    </div>
+  </div>
+</section>
+
+<!-- ── 模型列表 ── -->
+<section class="card" id="models-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">🧠 模型列表</h2>
+  <p class="muted">模型 id 命名：<code>&lt;提供商前缀&gt;/&lt;上游真实模型名&gt;</code>。capabilities 标能力（txt2img / img2img / txt2vid）。</p>
+  <div id="models-group"></div>
+</section>
+
+<!-- ── 号池看板 ── -->
+<section class="card" id="pool-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">👥 号池看板</h2>
+  <p class="muted">积分制提供商（minimaxh3 用完即丢 / nanobanana 每日签到续额）的账号池实时状态：自动补号、自动注册、每日签到是否在运行。</p>
+  <div class="pool-grid" id="pool-grid"><div class="empty">⏳ 加载中…</div></div>
+  <div id="email-pool-box" style="margin-top:16px"></div>
+</section>
+
+<!-- ── 提供商状态 ── -->
+<section class="card" id="providers-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">🛰️ 提供商状态</h2>
+  <p class="muted">各上游提供商能力/模型数/账号需求/每请求代理需求/实时余额。</p>
+  <div class="prov-grid" id="prov-grid"><div class="empty">⏳ 加载中…</div></div>
+</section>
+
+<!-- ── 实时日志 ── -->
+<section class="card" id="logs-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">📋 实时日志</h2>
+  <p class="muted">后台日志（最近 50 条，每 3 秒自动刷新，仅数据变化时更新）。</p>
+  <div class="log-box" id="log-box"><div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">⏳ 加载中…</div></div>
+</section>
+
+<!-- ── 代理池状态 ── -->
+<section class="card" id="proxy-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">🌐 代理池状态</h2>
+  <p class="muted">住宅代理 + 免费代理双源实时状态（每 15 秒自动刷新）。</p>
+  <div class="proxy-stats" id="proxy-stats">
+    <div class="stat-card"><div class="label">代理总数</div><div class="value small" id="px-total">–</div></div>
+    <div class="stat-card"><div class="label">住宅代理</div><div class="value small" id="px-res">–</div></div>
+    <div class="stat-card"><div class="label">免费代理</div><div class="value small" id="px-free">–</div></div>
+    <div class="stat-card"><div class="label">可用</div><div class="value small" id="px-avail">–</div></div>
+  </div>
+  <div class="proxy-table-wrap">
+    <table class="proxy-table" id="proxy-table">
+      <thead><tr><th>代理 (脱敏)</th><th>来源</th><th>今日使用</th><th>冷却(秒)</th><th>连续失败</th></tr></thead>
+      <tbody id="proxy-tbody"><tr><td colspan="5" class="empty">⏳ 加载中…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── 用量统计 ── -->
+<section class="card" id="stats-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">📊 用量统计</h2>
+  <div class="charts">
+    <div class="chart">
+      <h3>近 14 天出图</h3>
+      <div class="legend">每日成功出图数（柱高）· 失败数（红色）</div>
+      <div class="bars" id="chart-daily"></div>
+    </div>
+    <div class="chart">
+      <h3>近 12 月出图</h3>
+      <div class="legend">每月成功出图数（柱高）· 失败数（红色）</div>
+      <div class="bars" id="chart-monthly"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 画廊 ── -->
+<section class="card" id="gallery-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">🎨 画廊</h2>
+  <div id="gallery-content"><div class="empty" style="padding:30px 0">🎨 暂无作品，去在线使用生成第一张图吧！</div></div>
+</section>
+
+<!-- ── 任务中心 ── -->
+<section class="card" id="task-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <h2 style="margin-top:0">📋 任务中心</h2>
+  <p class="muted">查询所有历史任务记录，支持筛选和分页。</p>
+  <div id="task-content">
+    <div class="task-filter" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:center">
+      <select id="tf-status" style="width:auto;min-width:120px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <option value="">全部状态</option>
+        <option value="pending">⏳ 排队中</option>
+        <option value="processing">⚙️ 处理中</option>
+        <option value="completed">✅ 已完成</option>
+        <option value="error">❌ 失败</option>
+      </select>
+      <select id="tf-model" style="width:auto;min-width:140px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <option value="">全部模型</option>
+      </select>
+      <input type="text" id="tf-search" placeholder="搜索任务 ID" style="width:auto;min-width:160px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+      <button class="btn secondary" id="tf-btn" style="padding:8px 16px;margin-top:0;font-size:13px">🔍 查询</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="task-table" style="font-size:13px">
+        <thead><tr>
+          <th>任务 ID</th><th>状态</th><th>模型</th><th>耗时</th><th>创建时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="task-tbody"><tr><td colspan="6" class="empty" style="padding:30px 0">⏳ 加载中…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="task-pagination" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;font-size:13px">
+      <button id="tp-prev" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:13px" disabled>← 上一页</button>
+      <span id="tp-info" style="color:var(--muted)">第 0 页 / 共 0 页</span>
+      <button id="tp-next" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:13px" disabled>下一页 →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ── 任务详情模态框 ── -->
+<div id="task-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px 32px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="margin:0;font-size:17px">📋 任务详情</h3>
+      <button id="tm-close" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px">&times;</button>
+    </div>
+    <div id="tm-body" style="font-size:13.5px;line-height:1.8">
+      <div class="pool-stat"><span>任务 ID</span><b id="tm-id" style="font-family:monospace;font-size:12px;word-break:break-all">–</b></div>
+      <div class="pool-stat"><span>状态</span><b id="tm-status">–</b></div>
+      <div class="pool-stat"><span>模型</span><b id="tm-model">–</b></div>
+      <div class="pool-stat"><span>比例</span><b id="tm-ratio">–</b></div>
+      <div class="pool-stat"><span>类型</span><b id="tm-type">–</b></div>
+      <div class="pool-stat"><span>提示词</span><b id="tm-prompt" style="word-break:break-all;font-weight:400">–</b></div>
+      <div class="pool-stat"><span>图片地址</span><b id="tm-image_url" style="word-break:break-all;font-weight:400;font-size:12px">–</b></div>
+      <div class="pool-stat"><span>耗时</span><b id="tm-dur">–</b></div>
+      <div class="pool-stat"><span>创建时间</span><b id="tm-created">–</b></div>
+    </div>
+    <div id="tm-error" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;font-size:13px;color:var(--err);word-break:break-all">
+      <div style="font-weight:600;margin-bottom:4px">❌ 错误详情</div>
+      <div id="tm-error-text"></div>
+    </div>
+    <div id="tm-model-errors" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:10px;font-size:13px;word-break:break-all">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--err)">⚠️ 模型失败详情</div>
+      <div id="tm-model-errors-list" style="color:var(--text)"></div>
+    </div>
+    <div id="tm-image" style="display:none;margin-top:14px;text-align:center">
+      <img id="tm-img" style="max-width:100%;max-height:360px;border-radius:10px;border:1px solid var(--line)" alt="任务结果">
+      <div id="tm-dl" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<main id="docs-sec" style="display:none">
+  <nav class="toc">
+    <a href="#quickstart">快速开始</a>
+    <a href="#endpoints">接口总览</a>
+    <a href="#gen">生成图片</a>
+    <a href="#async">异步任务</a>
+    <a href="#edit">图生图</a>
+    <a href="#query">查询状态</a>
+    <a href="#models">模型/风格</a>
+    <a href="#errors">错误与状态</a>
+    <a href="#stats">用量统计</a>
+    <a href="#meta">站点信息</a>
+    <a href="#healthz">健康检查</a>
+  </nav>
+
+  <section class="card" id="quickstart">
+    <h2><span class="n">01</span>快速开始</h2>
+    <p>生成一张图只需一个 <code>POST</code> 请求。Turnstile 人机验证在服务端自动完成，调用方无需关心。高并发下推荐使用 <a href="#async">异步模式</a>。</p>
+    <pre><code><span class="c"># 同步生成（等待出图，典型 20~45 秒）</span>
+curl -X POST https://<span class="s" id="host">YOUR-DOMAIN</span>/v1/generate \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'</span>
+
+<span class="c"># 返回</span>
+{
+  <span class="s">"id"</span>: <span class="s">"sync"</span>,
+  <span class="s">"status"</span>: <span class="s">"completed"</span>,
+  <span class="s">"image_url"</span>: <span class="s">"https://pub-xxx.r2.dev/images/xxx.png"</span>,
+  <span class="s">"error"</span>: <span class="k">null</span>
+}</code></pre>
+    <p class="muted">图片托管在 Cloudflare R2，URL 可直接访问或下载。</p>
+  </section>
+
+  <section class="card" id="endpoints">
+    <h2><span class="n">02</span>接口总览</h2>
+    <table>
+      <tr><th>端点</th><th>方法</th><th>说明</th></tr>
+      <tr><td><code>/v1/generate</code></td><td><span class="pill info">POST</span></td><td>生成图片（同步等待，高并发排队）</td></tr>
+      <tr><td><code>/v1/generate/async</code></td><td><span class="pill info">POST</span></td><td>异步生成，立即返回任务 ID，<b>高并发推荐</b></td></tr>
+      <tr><td><code>/v1/edit</code></td><td><span class="pill info">POST</span></td><td>图生图（AI 照片编辑）：传图（最多 3 张）+ 指令，异步出变体</td></tr>
+      <tr><td><code>/v1/edit/tasks/{id}</code></td><td><span class="pill ok">GET</span></td><td>查询图生图任务结果</td></tr>
+      <tr><td><code>/v1/models</code></td><td><span class="pill ok">GET</span></td><td>模型/风格预设列表（model 参数取值）</td></tr>
+      <tr><td><code>/v1/tasks/{id}</code></td><td><span class="pill ok">GET</span></td><td>查询异步任务结果</td></tr>
+      <tr><td><code>/v1/stats</code></td><td><span class="pill ok">GET</span></td><td>用量统计（总量 + 实时并发 + 日/月 + 平均耗时）</td></tr>
+      <tr><td><code>/v1/gallery</code></td><td><span class="pill ok">GET</span></td><td>最近完成的 N 条作品（画廊）</td></tr>
+      <tr><td><code>/v1/errors</code></td><td><span class="pill ok">GET</span></td><td>最近失败的请求明细（在线排查，无需登服务器）</td></tr>
+      <tr><td><code>/v1/meta</code></td><td><span class="pill ok">GET</span></td><td>站点配置（sitekey、尺寸）</td></tr>
+      <tr><td><code>/v1/healthz</code></td><td><span class="pill ok">GET</span></td><td>健康检查（含实时并发/排队）</td></tr>
+      <tr><td><code>/v1/logs</code></td><td><span class="pill ok">GET</span></td><td>实时日志（最近 N 行）</td></tr>
+      <tr><td><code>/v1/proxy-pool</code></td><td><span class="pill ok">GET</span></td><td>代理池实时状态</td></tr>
+      <tr><td><code>/docs</code></td><td><span class="pill ok">GET</span></td><td>Swagger 交互文档</td></tr>
+    </table>
+  </section>
+
+  <section class="card" id="gen">
+    <h2><span class="n">03</span>生成图片</h2>
+    <p><span class="method m-post">POST</span><span class="endpoint-title">/v1/generate</span></p>
+    <p>提交后等待直到出图或失败；高并发下请求会进入有界队列（上限 <code>queue_capacity</code>），队列满返回 <code>429</code>。适合低频、需要立即拿结果的场景。</p>
+    <p><b>请求体</b>（<code>application/json</code>）：</p>
+    <table>
+      <tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr>
+      <tr><td><code>prompt</code></td><td>string</td><td>是</td><td>图像提示词，1–2000 字符</td></tr>
+      <tr><td><code>aspect_ratio</code></td><td>string</td><td>否</td><td>画幅，默认 <code>1:1</code>，见下方</td></tr>
+      <tr><td><code>download</code></td><td>bool</td><td>否</td><td>默认 <code>false</code>；<code>true</code> 时返回图片 base64</td></tr>
+      <tr><td><code>model</code></td><td>string</td><td>否</td><td>风格预设模型 id，默认 <code>default</code>，见 <a href="#models">模型/风格</a></td></tr>
+    </table>
+    <p><b>支持画幅</b>（实时见 <code>/v1/meta</code>）：</p>
+    <table>
+      <tr><th>aspect_ratio</th><th>尺寸</th></tr>
+      <tr><td><code>1:1</code></td><td>1024 × 1024</td></tr>
+      <tr><td><code>3:4</code></td><td>768 × 1024</td></tr>
+      <tr><td><code>4:3</code></td><td>1024 × 768</td></tr>
+      <tr><td><code>9:16</code></td><td>576 × 1024</td></tr>
+      <tr><td><code>16:9</code></td><td>1024 × 576</td></tr>
+    </table>
+    <p><b>响应</b>（HTTP 200，以 <code>status</code> 判断成功/失败）：</p>
+    <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"sync"</span>,
+  <span class="s">"status"</span>: <span class="s">"completed"</span>,        <span class="c">// completed | error | queued</span>
+  <span class="s">"image_url"</span>: <span class="s">"https://pub-...r2.dev/images/xxx.png"</span>,
+  <span class="s">"image_base64"</span>: <span class="k">null</span>,  <span class="c">// download=true 时</span>
+  <span class="s">"error"</span>: <span class="k">null</span>              <span class="c">// 失败/排队时含原因</span>
+}</code></pre>
+  </section>
+
+  <section class="card" id="async">
+    <h2><span class="n">04</span>异步生成（高并发推荐）</h2>
+    <p><span class="method m-post">POST</span><span class="endpoint-title">/v1/generate/async</span></p>
+    <p>请求体与同步一致。立即返回任务信息，适合并发/批量场景：</p>
+    <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"b0b712c0-..."</span>,
+  <span class="s">"status"</span>: <span class="s">"pending"</span>,   <span class="c">// pending → processing → completed | error</span>
+  <span class="s">"image_url"</span>: <span class="k">null</span>,
+  <span class="s">"error"</span>: <span class="k">null</span>
+}</code></pre>
+    <p class="muted">用返回的 <code>id</code> 轮询 <code>/v1/tasks/{id}</code>，直到 <code>completed</code> 或 <code>error</code>。</p>
+  </section>
+
+  <section class="card" id="edit">
+    <h2><span class="n">05</span>图生图（AI 照片编辑）</h2>
+    <p><span class="method m-post">POST</span><span class="endpoint-title">/v1/edit</span></p>
+    <p>输入一张图（或最多 3 张参考图）+ 编辑指令 → 上游生成变体。任务<b>持久化到 SQLite</b>（type=<code>img</code>，重启不丢），上游排队较慢（约 1~5 分钟），故<b>异步</b>：立即返回 <code>pending</code>，轮询结果。</p>
+    <p><b>能力边界（已压力测试确认）</b>：<b>单图上限</b>——上游 <code>image_url</code> 是严格单 URL 字符串，传数组或逗号分隔均失败（最多 1 张输入图）；<b>直连并发=1</b>——上游同出口 IP 同时只能有 1 个编辑任务在途，默认本服务图生图<b>全局串行</b>（<b>双层互斥</b>：进程内锁 + 跨进程文件锁，多实例部署也不撞上游；并发提交自动排队，<code>healthz</code> 的 <code>edit_inflight</code> 观察排队数）。<b>上游并发槽瞬态占用自动重试</b>——孤儿上游任务遗留的 429 <code>task in progress</code> 会等待自愈后重试（默认 30 次×20s ≈ 10 分钟），任务不直接失败。<b>住宅代理池可并行</b>——配置 <code>IF_EDIT_PROXY_FILE</code>（每行一个住宅代理）+ 并行数后，每个任务独立出口 IP 即可并行绕过并发限制（token 与提交绑定同一代理）。<b>多图支持</b>——aifreeforever 支持最多 3 张参考图（<code>images</code> 数组），minimaxh3 支持多张 base64 直传，imagefree 上游只支持单图。</p>
+    <p><b>请求体</b>：</p>
+    <table>
+      <tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr>
+      <tr><td><code>image</code></td><td>string</td><td>否*</td><td>输入图（单张，向后兼容）：<code>data:image/png;base64,...</code> 或公开 http(s) URL（拒绝私网/回环，≤4MB）</td></tr>
+      <tr><td><code>images</code></td><td>array[string]</td><td>否*</td><td>输入图数组（最多 3 张），每项为 data URI 格式 <code>data:image/*;base64,...</code>。aifreeforever 和 minimaxh3 支持多图。</td></tr>
+      <tr><td><code>prompt</code></td><td>string</td><td>是</td><td>编辑指令，1–2000 字符</td></tr>
+      <tr><td><code>download</code></td><td>bool</td><td>否</td><td>完成后是否同时返回结果图 base64</td></tr>
+      <tr><td><code>model</code></td><td>string</td><td>否</td><td>风格预设 id（仅支持 <code>applies_to</code> 含 img2img 的模型）</td></tr>
+    </table>
+    <p><b>* 注意</b>：<code>image</code> 和 <code>images</code> 至少提供一个。单图传 <code>image</code> 字段（兼容旧版），多图传 <code>images</code> 数组。</p>
+    <p><b>图片上传方式</b>：调用方传 <code>data URI(base64)</code> 或公开 URL → 服务端解码/下载为字节 → 经上游 <code>upload-url</code> 拿 presigned 地址上传到其 <b>R2 对象存储</b> → 以 R2 <code>publicUrl</code> 直链作为 <code>image_url</code> 交给上游。即<b>字节经本服务中转、落地在上游自己的存储，交给上游的是 R2 直链</b>（不是 base64，也不是调用方原 URL）。</p>
+    <p><b>响应 / 查询</b>：</p>
+    <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"b0b712c0-..."</span>,
+  <span class="s">"status"</span>: <span class="s">"pending"</span>,      <span class="c">// pending → completed | error</span>
+  <span class="s">"type"</span>: <span class="s">"img"</span>,
+  <span class="s">"image_url"</span>: <span class="k">null</span>
+}
+# 轮询：
+GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download=true）</code></pre>
+  </section>
+
+  <section class="card" id="query">
+    <h2><span class="n">06</span>查询任务状态</h2>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/tasks/{task_id}</span></p>
+    <p>返回结构同上，另含 <code>created_at</code>、<code>duration_sec</code>；未找到返回 <code>404</code>。任务持久化在 SQLite，服务重启后历史仍可查（内存中的排队任务除外）。</p>
+    <pre><code>curl https://<span class="s" id="host2">YOUR-DOMAIN</span>/v1/tasks/b0b712c0-9826-4cb1-8604-d710cc58438a</code></pre>
+  </section>
+
+  <section class="card" id="models">
+    <h2><span class="n">06</span>模型 / 风格预设</h2>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/models</span></p>
+    <p class="muted">说明：上游 imagefree.net 是<b>纯文生图</b>（无真实多模型，已逆向确认）。这里的 <code>model</code> 参数是<b>服务端风格预设</b>——把一段风格描述前缀注入提示词，<code>default</code> 不注入（原样提交）。所有生成/图生图端点都支持该参数。</p>
+    <pre><code>curl https://<span class="s" id="host3">YOUR-DOMAIN</span>/v1/models</code></pre>
+    <p><b>当前预设</b>（<code>id</code> 即 model 参数取值；<code>applies_to</code> 标注适用文生图/图生图）：</p>
+    <table id="models-table">
+      <tr><th>id</th><th>名称</th><th>说明</th><th>适用</th></tr>
+    </table>
+  </section>
+
+  <section class="card" id="errors">
+    <h2><span class="n">07</span>错误与状态</h2>
+    <table>
+      <tr><th>HTTP</th><th>场景</th><th>说明</th></tr>
+      <tr><td><span class="pill ok">200</span></td><td>生成完成</td><td><code>status: completed</code>，含 <code>image_url</code></td></tr>
+      <tr><td><span class="pill warn">200</span></td><td>业务失败</td><td><code>status: error</code>，含 <code>error</code> 原因</td></tr>
+      <tr><td><span class="pill warn">202</span></td><td>仍在排队/生成中</td><td>同步接口超过等待窗口，响应含 <code>Location</code> 头，GET 该地址查询</td></tr>
+      <tr><td><span class="pill err">429</span></td><td>队列已满</td><td>并发过高被限流，稍后重试</td></tr>
+      <tr><td><span class="pill err">422</span></td><td>参数校验</td><td>非法 <code>aspect_ratio</code> / 空 <code>prompt</code> 等</td></tr>
+      <tr><td><span class="pill err">404</span></td><td>任务不存在</td><td>查询异步任务时</td></tr>
+    </table>
+    <p class="muted">常见 <code>error</code>：<code>turnstile 求解失败</code>（人机验证未通过，可重试）、<code>生成超时</code>、<code>生成失败</code>（上游拒绝该 prompt，多为内容安全拦截）。</p>
+  </section>
+
+  <section class="card" id="stats">
+    <h2><span class="n">08</span>用量统计</h2>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/stats</span></p>
+    <p>总量 + 实时并发 + 平均出图耗时 + 按日/月拆分（持久化，重启不丢）：</p>
+    <pre><code>{
+  <span class="s">"total_requests"</span>: 128,
+  <span class="s">"total_images"</span>: 120,
+  <span class="s">"total_errors"</span>: 8,
+  <span class="s">"avg_duration_sec"</span>: 26.5,     <span class="c">// 平均出图耗时</span>
+  <span class="s">"processing"</span>: 3,              <span class="c">// 当前并发</span>
+  <span class="s">"queued"</span>: 12,                 <span class="c">// 排队中</span>
+  <span class="s">"queue_capacity"</span>: 2000,       <span class="c">// 队列上限</span>
+  <span class="s">"uptime_human"</span>: <span class="s">"1天0小时"</span>,
+  <span class="s">"daily"</span>: [{ <span class="s">"day"</span>: <span class="s">"2026-08-13"</span>, <span class="s">"images"</span>: 120, ... }],
+  <span class="s">"monthly"</span>: [{ <span class="s">"month"</span>: <span class="s">"2026-08"</span>, <span class="s">"images"</span>: 120, ... }]
+}</code></pre>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/gallery?limit=50</span></p>
+    <p>最近完成的 N 条作品，用于画廊展示。</p>
+  </section>
+
+  <section class="card" id="meta">
+    <h2><span class="n">09</span>站点信息</h2>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/meta</span></p>
+    <pre><code>{
+  <span class="s">"sitekey"</span>: <span class="s" id="sitekey">0x...</span>,
+  <span class="s">"aspect_ratios"</span>: { <span class="s">"1:1"</span>: <span class="s">"1024x1024"</span>, <span class="s">"3:4"</span>: <span class="s">"768x1024"</span>, ... }
+}</code></pre>
+  </section>
+
+  <section class="card" id="healthz">
+    <h2><span class="n">10</span>健康检查</h2>
+    <p><span class="method m-get">GET</span><span class="endpoint-title">/v1/healthz</span></p>
+    <pre><code>{ <span class="s">"status"</span>: <span class="s">"ok"</span>, <span class="s">"cf_solver"</span>: <span class="s">"up"</span>, <span class="s">"processing"</span>: 3, <span class="s">"queued"</span>: 12 }</code></pre>
+    <p class="muted">CF 求解子服务宕机时 <code>status</code> 变为 <code>degraded</code>。</p>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-brand">
+    <img src="/static/logo.png" alt="听风AI">
+    <div>
+      <b>听风AI（逆向号池）</b> · 多提供商 AI 生成网关
+      <div class="foot-contact">
+        <span>微信联系：<span class="wx">Tf00798</span></span>
+        <span>负责人：听风</span>
+        <span>GitHub：<a href="https://github.com/lza6/" target="_blank" rel="noopener">github.com/lza6</a></span>
+        <span>开放接口 · 无鉴权 · 请合理使用</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var host = location.host;
+  document.querySelectorAll('#host, #host2').forEach(function (el) { el.textContent = host; });
+
+  // ── Toast 通知系统 ──
+  function showToast(msg, type, duration) {
+    if (duration === void 0) duration = 3000;
+    var container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+    }
+    var el = document.createElement('div');
+    el.className = 'toast ' + (type || 'info');
+    el.innerHTML = '<span>' + msg + '</span><span class="toast-close">&times;</span>';
+    el.onclick = function () { dismiss(el); };
+    container.appendChild(el);
+    var timer = setTimeout(function () { dismiss(el); }, duration);
+    function dismiss(el) {
+      clearTimeout(timer);
+      if (!el.classList.contains('toast-out')) {
+        el.classList.add('toast-out');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+      }
+    }
+  }
+
+  // ── 按钮 loading 状态 ──
+  function setBtnLoading(btn, loading, text) {
+    if (!btn) return;
+    if (loading) {
+      btn._origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = text || '⏳ 生成中…';
+    } else {
+      btn.disabled = false;
+      btn.textContent = btn._origText || '✨ 生成';
+    }
+  }
+
+  // ── 主题切换 ──
+  var themeToggle = document.getElementById('theme-toggle');
+  var currTheme = localStorage.getItem('theme') || 'system';
+  function applyTheme(t) {
+    var html = document.documentElement;
+    if (t === 'system') {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        html.setAttribute('data-theme', 'dark'); themeToggle.textContent = '☀️';
+      } else {
+        html.removeAttribute('data-theme'); themeToggle.textContent = '🌙';
+      }
+    } else if (t === 'dark') {
+      html.setAttribute('data-theme', 'dark'); themeToggle.textContent = '☀️';
+    } else {
+      html.removeAttribute('data-theme'); themeToggle.textContent = '🌙';
+    }
+  }
+  applyTheme(currTheme);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (currTheme === 'system') applyTheme('system');
+  });
+  if (themeToggle) {
+    themeToggle.onclick = function () {
+      if (currTheme === 'light') { currTheme = 'dark'; }
+      else if (currTheme === 'dark') { currTheme = 'system'; }
+      else { currTheme = 'light'; }
+      localStorage.setItem('theme', currTheme);
+      applyTheme(currTheme);
+    };
+  }
+
+  // ── 安全 fetch JSON 工具：try/catch + Content-Type 检查 + 兜底 .text() + 超时
+  function safeJson(url, opts) {
+    var timeout = 30000;
+    if (opts && opts.timeout) timeout = opts.timeout;
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeout);
+    var fetchOpts = Object.assign({}, opts || {}, { signal: controller.signal });
+    return fetch(url, fetchOpts).then(function (r) {
+      clearTimeout(timer);
+      var ct = (r.headers.get('Content-Type') || '');
+      if (ct.indexOf('application/json') !== -1 || ct.indexOf('application/problem+json') !== -1) {
+        return r.json();
+      }
+      // 不是 JSON → 读 text 并尝试 JSON.parse（兜底），失败则抛错
+      return r.text().then(function (text) {
+        try { return JSON.parse(text); } catch (e) {
+          throw new Error('响应不是 JSON: ' + text.slice(0, 200));
+        }
+      });
+    }).catch(function (err) {
+      clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  // ── 顶部 tab 导航 ──
+  var NAV_SECTIONS = {
+    'playground': 'playground',
+    'models-sec': 'models-sec',
+    'pool-sec': 'pool-sec',
+    'providers-sec': 'providers-sec',
+    'logs-sec': 'logs-sec',
+    'proxy-sec': 'proxy-sec',
+    'gallery-sec': 'gallery-sec',
+    'docs-sec': 'docs-sec',
+    'stats-sec': 'stats-sec',
+    'task-sec': 'task-sec'
+  };
+  document.querySelectorAll('.nav-tab').forEach(function (tab) {
+    tab.onclick = function () {
+      document.querySelectorAll('.nav-tab').forEach(function (t) { t.classList.remove('on'); });
+      tab.classList.add('on');
+      var target = tab.dataset.nav;
+      Object.keys(NAV_SECTIONS).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = (id === target) ? '' : 'none';
+      });
+      if (target === 'pool-sec') loadPool();
+      if (target === 'providers-sec') loadProviders();
+      if (target === 'models-sec') loadModels();
+      if (target === 'logs-sec') startLogPolling();
+      if (target === 'proxy-sec') startProxyPolling();
+      if (target === 'gallery-sec') loadGallery();
+      if (target === 'task-sec') loadTasks();
+    };
+  });
+
+  var MAX_DAY = 14, MAX_MONTH = 12;
+
+  function humanDur(sec) {
+    if (sec == null) return '–';
+    return sec.toFixed(1) + 's';
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  // 渲染柱状图
+  function renderBars(el, data, key, fmt) {
+    el.innerHTML = '';
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty" style="padding:20px 0">暂无数据</div>';
+      return;
+    }
+    var vals = data.map(function (d) { return d[key] || 0; });
+    var max = Math.max.apply(null, vals.concat([1]));
+    data.forEach(function (d) {
+      var h = Math.max(3, Math.round((d[key] || 0) / max * 100));
+      var col = document.createElement('div');
+      col.className = 'bar-col';
+      col.title = fmt(d) + ' · 出图 ' + (d.images || 0) + ' / 失败 ' + (d.errors || 0);
+      var track = document.createElement('div');
+      track.className = 'bar-track';
+      var bar = document.createElement('div');
+      bar.className = 'bar' + ((d.errors || 0) > (d.images || 0) ? ' err' : '');
+      bar.style.height = h + '%';
+      track.appendChild(bar);
+      var label = document.createElement('div');
+      label.className = 'bar-label';
+      label.textContent = fmt(d);
+      col.appendChild(track); col.appendChild(label);
+      el.appendChild(col);
+    });
+  }
+
+  function loadStats() {
+    safeJson('/v1/stats').then(function (d) {
+      document.getElementById('st-req').textContent = d.total_requests;
+      document.getElementById('st-img').textContent = d.total_images;
+      document.getElementById('st-err').textContent = d.total_errors;
+      document.getElementById('st-avg').textContent = humanDur(d.avg_duration_sec);
+      document.getElementById('st-proc').textContent = d.processing;
+      document.getElementById('st-workers').textContent = d.workers;
+      document.getElementById('st-up').textContent = d.uptime_human;
+      document.getElementById('st-queue').textContent = '排队中：' + d.queued + '（上限 ' + d.queue_capacity + '）';
+      renderBars(document.getElementById('chart-daily'), d.daily, 'images', function (x) { return x.day.slice(5); });
+      renderBars(document.getElementById('chart-monthly'), d.monthly, 'images', function (x) { return x.month; });
+    }).catch(function () { showToast('⚠️ 统计数据加载失败', 'warning'); });
+  }
+
+  // ── 画廊密码保护（后端鉴权 P1） ──
+  const GALLERY_PASSWORD = "tfadmin2024";
+
+  function checkGalleryAuth() {
+    try {
+      var stored = JSON.parse(localStorage.getItem('gallery_auth'));
+      if (stored && stored.authed === true && stored.at) {
+        var elapsed = Date.now() - stored.at;
+        if (elapsed < 24 * 60 * 60 * 1000) {
+          return true; // 24h 内有效
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function requireGalleryAuth() {
+    if (checkGalleryAuth()) return true;
+    var pwd = prompt('请输入画廊密码：');
+    if (pwd === GALLERY_PASSWORD) {
+      localStorage.setItem('gallery_auth', JSON.stringify({ authed: true, at: Date.now() }));
+      return true;
+    }
+    if (pwd !== null) {
+      alert('密码错误');
+    }
+    return false;
+  }
+
+  function loadGallery() {
+    var el = document.getElementById('gallery-content');
+    if (!el) return;
+    if (!requireGalleryAuth()) {
+      el.innerHTML = '<div class="empty" style="padding:30px 0">🔒 请输入密码以查看画廊</div>';
+      return;
+    }
+    el.innerHTML = '<div class="empty" style="padding:30px 0">⏳ 加载中…</div>';
+    safeJson('/v1/gallery?limit=50&password=' + encodeURIComponent(GALLERY_PASSWORD)).then(function (d) {
+      var items = d.items || [];
+      if (!items.length) {
+        el.innerHTML = '<div class="empty" style="padding:30px 0">🎨 暂无作品，去在线使用生成第一张图吧！</div>';
+        return;
+      }
+      var html = '<div class="grid">';
+      items.forEach(function (item) {
+        var prompt = esc(item.prompt || '');
+        var dur = item.duration_sec != null ? item.duration_sec.toFixed(1) + 's' : '';
+        var imgUrl = item.image_base64 || item.image_url || '';
+        html += '<div class="cell"><img src="' + imgUrl + '" alt="" loading="lazy"><div class="meta"><div class="prompt">' + prompt + '</div><div class="dur">' + dur + '</div></div></div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    }).catch(function () {
+      el.innerHTML = '<div class="empty" style="padding:30px 0">❌ 画廊加载失败</div>';
+    });
+  }
+
+  function loadTasks() {
+    var el = document.getElementById('task-content');
+    if (!el) return;
+    showToast('📋 加载任务列表…', 'info', 1000);
+    fetchTasks();
+  }
+
+  // ── 任务中心状态 ──
+  var TASK_PAGE_SIZE = 20;
+  var TASK_CURRENT_OFFSET = 0;
+  var TASK_TOTAL = 0;
+  var TASK_MODEL_LIST = [];
+
+  function fetchTasks() {
+    var status = document.getElementById('tf-status').value;
+    var model = document.getElementById('tf-model').value;
+    var search = document.getElementById('tf-search').value.trim().toLowerCase();
+    var params = 'limit=' + TASK_PAGE_SIZE + '&offset=' + TASK_CURRENT_OFFSET;
+    if (status) params += '&status=' + encodeURIComponent(status);
+    if (model) params += '&model=' + encodeURIComponent(model);
+    safeJson('/v1/tasks?' + params).then(function (d) {
+      TASK_TOTAL = d.total || 0;
+      var items = d.items || [];
+      // 加载模型列表（首帧）
+      if (!TASK_MODEL_LIST.length) {
+        safeJson('/v1/models').then(function (md) {
+          var groups = md.items || {};
+          var flat = [];
+          Object.keys(groups).forEach(function (prov) {
+            (groups[prov] || []).forEach(function (m) { flat.push(m.id); });
+          });
+          TASK_MODEL_LIST = flat;
+          var sel = document.getElementById('tf-model');
+          if (sel) {
+            var cur = sel.value;
+            sel.innerHTML = '<option value="">全部模型</option>';
+            flat.forEach(function (mid) {
+              var opt = document.createElement('option');
+              opt.value = mid;
+              opt.textContent = mid;
+              sel.appendChild(opt);
+            });
+            if (cur) sel.value = cur;
+          }
+        }).catch(function () {});
+      }
+      // 搜索过滤（客户端过滤 ID）
+      if (search) {
+        items = items.filter(function (t) { return (t.id || '').toLowerCase().indexOf(search) !== -1; });
+      }
+      renderTaskTable(items);
+      renderTaskPagination();
+    }).catch(function () {
+      document.getElementById('task-tbody').innerHTML = '<tr><td colspan="6" class="empty" style="padding:30px 0">❌ 任务数据加载失败</td></tr>';
+    });
+  }
+
+  function taskStatusHtml(status) {
+    var map = { pending: '<span class="pill warn">⏳ 排队中</span>', processing: '<span class="pill warn">⚙️ 处理中</span>', completed: '<span class="pill ok">✅ 已完成</span>', error: '<span class="pill err">❌ 失败</span>' };
+    return map[status] || '<span class="pill off">' + esc(status) + '</span>';
+  }
+
+  function renderTaskTable(items) {
+    var tbody = document.getElementById('task-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding:30px 0">📋 暂无任务记录</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(function (t) {
+      var idShort = (t.id || '').slice(0, 8) + '…';
+      var dur = t.duration_sec != null ? t.duration_sec.toFixed(1) + 's' : '—';
+      var created = '—';
+      if (t.created_at) {
+        var d = new Date(t.created_at * 1000);
+        created = d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      var model = esc(t.model || 'default');
+      return '<tr>' +
+        '<td><code title="' + esc(t.id) + '">' + esc(idShort) + '</code></td>' +
+        '<td>' + taskStatusHtml(t.status) + '</td>' +
+        '<td>' + model + '</td>' +
+        '<td>' + dur + '</td>' +
+        '<td>' + created + '</td>' +
+        '<td><button class="btn secondary" style="padding:4px 10px;margin-top:0;font-size:12px" onclick="showTaskDetail(\'' + esc(t.id) + '\')">查看详情</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function renderTaskPagination() {
+    var totalPages = Math.ceil(TASK_TOTAL / TASK_PAGE_SIZE) || 1;
+    var currentPage = Math.floor(TASK_CURRENT_OFFSET / TASK_PAGE_SIZE) + 1;
+    document.getElementById('tp-info').textContent = '第 ' + currentPage + ' 页 / 共 ' + totalPages + ' 页（' + TASK_TOTAL + ' 条）';
+    document.getElementById('tp-prev').disabled = TASK_CURRENT_OFFSET <= 0;
+    document.getElementById('tp-next').disabled = TASK_CURRENT_OFFSET + TASK_PAGE_SIZE >= TASK_TOTAL;
+  }
+
+  // ── 任务中心筛选 + 分页 ──
+  document.getElementById('tf-btn').onclick = function () {
+    TASK_CURRENT_OFFSET = 0;
+    fetchTasks();
+  };
+  document.getElementById('tf-status').onchange = function () {
+    TASK_CURRENT_OFFSET = 0;
+    fetchTasks();
+  };
+  document.getElementById('tf-model').onchange = function () {
+    TASK_CURRENT_OFFSET = 0;
+    fetchTasks();
+  };
+  document.getElementById('tf-search').onkeydown = function (e) {
+    if (e.key === 'Enter') { TASK_CURRENT_OFFSET = 0; fetchTasks(); }
+  };
+  document.getElementById('tp-prev').onclick = function () {
+    TASK_CURRENT_OFFSET = Math.max(0, TASK_CURRENT_OFFSET - TASK_PAGE_SIZE);
+    fetchTasks();
+  };
+  document.getElementById('tp-next').onclick = function () {
+    TASK_CURRENT_OFFSET = TASK_CURRENT_OFFSET + TASK_PAGE_SIZE;
+    fetchTasks();
+  };
+
+  // ── 任务详情模态框 ──
+  window.showTaskDetail = function(id) {
+    var modal = document.getElementById('task-modal');
+    modal.style.display = 'flex';
+    document.getElementById('tm-id').textContent = id;
+    safeJson('/v1/tasks/' + id).then(function (d) {
+      document.getElementById('tm-status').innerHTML = taskStatusHtml(d.status);
+      document.getElementById('tm-model').textContent = esc(d.model || 'default');
+      document.getElementById('tm-type').textContent = d.type === 'img' ? '🎨 图生图' : '🖼️ 文生图';
+      document.getElementById('tm-ratio').textContent = esc(d.aspect_ratio || '—');
+      document.getElementById('tm-prompt').textContent = esc(d.prompt || '—');
+      document.getElementById('tm-prompt').style.display = d.prompt ? 'block' : 'none';
+      document.getElementById('tm-image_url').textContent = esc(d.image_url || '—');
+      document.getElementById('tm-dur').textContent = d.duration_sec != null ? d.duration_sec.toFixed(1) + 's' : '—';
+      var created = '—';
+      if (d.created_at) {
+        created = new Date(d.created_at * 1000).toLocaleString('zh-CN');
+      }
+      document.getElementById('tm-created').textContent = created;
+      // 错误信息
+      var errBox = document.getElementById('tm-error');
+      var errText = document.getElementById('tm-error-text');
+      if (d.error) {
+        errBox.style.display = 'block';
+        errText.textContent = d.error;
+      } else {
+        errBox.style.display = 'none';
+        errText.textContent = '';
+      }
+      // 模型失败详情（model_errors 字段）
+      var modelErrBox = document.getElementById('tm-model-errors');
+      var modelErrList = document.getElementById('tm-model-errors-list');
+      if (d.model_errors && Object.keys(d.model_errors).length > 0) {
+        modelErrBox.style.display = 'block';
+        var html = '';
+        Object.keys(d.model_errors).forEach(function (m) {
+          html += '<div style="margin-bottom:4px"><strong>' + esc(m) + '</strong>: ' + esc(d.model_errors[m]) + '</div>';
+        });
+        modelErrList.innerHTML = html;
+      } else {
+        modelErrBox.style.display = 'none';
+      }
+      // 图片预览
+      var imgBox = document.getElementById('tm-image');
+      var imgEl = document.getElementById('tm-img');
+      if (d.image_url) {
+        imgBox.style.display = 'block';
+        imgEl.src = d.image_url;
+      } else if (d.image_base64) {
+        imgBox.style.display = 'block';
+        imgEl.src = d.image_base64;
+      } else {
+        imgBox.style.display = 'none';
+      }
+      // 下载按钮
+      var dlBox = document.getElementById('tm-dl');
+      dlBox.innerHTML = '';
+      if (d.image_base64) {
+        var a = document.createElement('a');
+        a.href = d.image_base64;
+        a.download = (d.id || 'image') + '.png';
+        a.className = 'pg-dl-link';
+        a.textContent = '⬇️ 下载图片';
+        dlBox.appendChild(a);
+      } else if (d.image_url) {
+        var a = document.createElement('a');
+        a.href = d.image_url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'pg-dl-link';
+        a.textContent = '🔗 打开原图 ↗';
+        dlBox.appendChild(a);
+      }
+    }).catch(function () {
+      document.getElementById('tm-status').textContent = '❌ 加载失败';
+    });
+  }
+
+  // 关闭模态框
+  document.getElementById('tm-close').onclick = function () {
+    document.getElementById('task-modal').style.display = 'none';
+  };
+  document.getElementById('task-modal').onclick = function (e) {
+    if (e.target === this) this.style.display = 'none';
+  };
+
+  loadStats();
+  // 初始画廊仅当已认证时加载（避免 startup 弹密码框）
+  if (checkGalleryAuth()) loadGallery();
+  setInterval(loadStats, 15000);
+  // 提供商 + 号池每 15s 轮询（局部 DOM 更新）
+  setInterval(loadProviders, 15000);
+  setInterval(loadPool, 15000);
+
+  safeJson('/v1/meta').then(function (d) {
+    document.getElementById('sitekey').textContent = d.sitekey;
+  }).catch(function () {});
+
+  // ── 检查 aifreeforever 代理池状态 ──
+  function checkAifreeProxy() {
+    safeJson('/v1/proxy-pool').then(function (d) {
+      var note = document.getElementById('aifree-notice');
+      if (!note) return;
+      // 住宅代理数为 0 → 显示提示
+      if (d.residential === 0) {
+        note.style.display = 'block';
+      } else {
+        note.style.display = 'none';
+      }
+    }).catch(function () {
+      // 端点不可用时不显示
+    });
+  }
+  checkAifreeProxy();
+
+  // 模型列表
+  var proxyProviders = {};
+
+  function loadProxyProviders() {
+    safeJson('/v1/providers').then(function (d) {
+      var items = d.items || {};
+      Object.keys(items).forEach(function (prov) {
+        if (items[prov].needs_proxy_per_request) {
+          proxyProviders[prov] = true;
+        }
+      });
+    }).catch(function () {});
+  }
+  loadProxyProviders();
+
+  function loadModels() {
+    safeJson('/v1/models').then(function (d) {
+      var group = document.getElementById('models-group');
+      var items = d.items || {};
+      var flat = [];
+      Object.keys(items).forEach(function (prov) {
+        (items[prov] || []).forEach(function (m) { flat.push(m); });
+      });
+      if (group) {
+        group.innerHTML = '';
+        Object.keys(items).forEach(function (prov) {
+          var models = items[prov] || [];
+          var box = document.createElement('div');
+          box.style.marginBottom = '18px';
+          var h = document.createElement('h3');
+          h.textContent = prov + '（' + models.length + ' 个模型）';
+          box.appendChild(h);
+          var tbl = document.createElement('table');
+          var head = document.createElement('tr');
+          head.innerHTML = '<th>模型 id</th><th>能力</th><th>比例</th><th>分辨率</th><th>积分</th><th>说明</th>';
+          tbl.appendChild(head);
+          models.forEach(function (m) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td><code>' + esc(m.id) + '</code></td>' +
+              '<td>' + esc((m.capabilities || []).join(' / ')) + '</td>' +
+              '<td>' + esc((m.aspect_ratios || []).slice(0, 5).join(' ')) + '</td>' +
+              '<td>' + esc((m.resolutions || []).join(' ')) + '</td>' +
+              '<td>' + (m.credits != null ? m.credits : '—') + '</td>' +
+              '<td>' + esc(m.description || '') + '</td>';
+            tbl.appendChild(tr);
+          });
+          box.appendChild(tbl);
+          group.appendChild(box);
+        });
+      }
+      [['pg-model', true], ['pe-model', false]].forEach(function (p) {
+        var sel = document.getElementById(p[0]);
+        if (!sel) return;
+        sel.innerHTML = '';
+        Object.keys(items).forEach(function (prov) {
+          var og = document.createElement('optgroup');
+          // 代理标注
+          var label = prov;
+          if (prov === 'aifreeforever') {
+            label = prov + ' (需住宅代理)';
+          } else if (proxyProviders[prov]) {
+            label = prov + ' (需代理)';
+          }
+          og.label = label;
+          (items[prov] || []).forEach(function (m) {
+            if (p[1] && (m.capabilities || []).indexOf('txt2vid') === -1 &&
+                (m.capabilities || []).indexOf('txt2img') === -1) return;
+            if (!p[1] && (m.capabilities || []).indexOf('img2img') === -1) return;
+            var opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.id + (m.credits != null ? ' · ' + m.credits + '积分' : '');
+            og.appendChild(opt);
+          });
+          if (og.children.length) sel.appendChild(og);
+        });
+      });
+    }).catch(function () {});
+  }
+
+  // ── 局部 DOM 更新辅助 ──
+  function updateCardGrid(containerId, newHtml, keyAttr) {
+    var box = document.getElementById(containerId);
+    if (!box) return;
+    var existing = {};
+    box.querySelectorAll('[' + keyAttr + ']').forEach(function (el) {
+      existing[el.getAttribute(keyAttr)] = el;
+    });
+    var temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    var seen = {};
+    temp.querySelectorAll('[' + keyAttr + ']').forEach(function (nc) {
+      var key = nc.getAttribute(keyAttr);
+      var old = existing[key];
+      if (old) {
+        if (old.innerHTML !== nc.innerHTML) {
+          old.innerHTML = nc.innerHTML;
+        }
+      } else {
+        box.appendChild(nc.cloneNode(true));
+      }
+      seen[key] = true;
+    });
+    Object.keys(existing).forEach(function (key) {
+      if (!seen[key]) existing[key].remove();
+    });
+  }
+
+  function loadPool() {
+    safeJson('/v1/account-pool').then(function (d) {
+      var data = JSON.stringify(d);
+      if (data === poolLastData) return;
+      poolLastData = data;
+
+      var accounts = d.accounts || {};
+      var hasAny = false;
+      var cardsHtml = '';
+      Object.keys(accounts).forEach(function (prov) {
+        var a = accounts[prov];
+        hasAny = true;
+        var pct = a.target > 0 ? (a.ok / a.target * 100) : 0;
+        var pctClass = pct < 20 ? 'danger' : (pct < 50 ? 'warning' : 'good');
+        var pctStr = a.target > 0 ? a.ok + '/' + a.target + ' (' + pct.toFixed(1) + '%)' : '—';
+        var exhaustedHtml = a.exhausted > 0 ? '<div class="pool-exhausted">⚠️ 补号中…</div>' : '';
+        var creditsHtml = a.credits != null ? a.credits + ' 积分' : '—';
+        cardsHtml += '<div class="pool-card" data-prov="' + esc(prov) + '">' +
+          '<h3>' + esc(prov) + '</h3>' +
+          '<div class="pool-stat"><span>总账号</span><b>' + a.total + '</b></div>' +
+          '<div class="pool-stat"><span>可用</span><b style="color:var(--ok)">' + a.ok + '</b></div>' +
+          '<div class="pool-stat"><span>额度耗尽</span><b>' + a.exhausted + '</b>' + exhaustedHtml + '</div>' +
+          '<div class="pool-stat"><span>注册中</span><b>' + a.registering + '</b></div>' +
+          '<div class="pool-stat"><span>实时余额</span><b>' + creditsHtml + '</b></div>' +
+          '<div class="pool-stat"><span>目标账号</span><b>' + a.target + '</b></div>' +
+          '<div class="pool-stat"><span>自动注册</span><b>' + (a.auto_register ? '✅ 运行中' : '⏸ 关闭') + '</b></div>' +
+          '<div class="progress-bar"><div class="progress-fill ' + pctClass + '" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+          '<div class="progress-label">' + pctStr + '</div>' +
+          '</div>';
+      });
+      var box = document.getElementById('pool-grid');
+      if (!hasAny) {
+        box.innerHTML = '<div class="empty">号池未启动（IF_ACCOUNT_AUTO=0）</div>';
+      } else {
+        updateCardGrid('pool-grid', cardsHtml, 'data-prov');
+      }
+      var total = 0;
+      Object.keys(accounts).forEach(function (p) { total += accounts[p].ok || 0; });
+      var st = document.getElementById('st-accounts');
+      if (st) st.textContent = total;
+      var ep = document.getElementById('email-pool-box');
+      if (d.email_pool) {
+        ep.innerHTML = '<h3 style="font-size:14px">邮箱注册记录</h3>' +
+          '<p class="muted">已注册账号：' + d.email_pool.total_registered + '；按提供商：' +
+          esc(JSON.stringify(d.email_pool.by_provider || {})) + '</p>';
+      }
+    }).catch(function () {
+      document.getElementById('pool-grid').innerHTML = '<div class="empty">号池未启动（IF_ACCOUNT_AUTO=0）</div>';
+    });
+  }
+
+  function loadProviders() {
+    safeJson('/v1/providers').then(function (d) {
+      var data = JSON.stringify(d);
+      if (data === provLastData) return;
+      provLastData = data;
+
+      var items = d.items || {};
+      var cardsHtml = '';
+      Object.keys(items).forEach(function (prov) {
+        var p = items[prov];
+        var caps = (p.capabilities || []).map(function (c) {
+          return { txt2img: '🖼️ 文生图', img2img: '🎨 图生图', txt2vid: '🎬 视频' }[c] || c;
+        }).join(' / ');
+        // 健康状态
+        var health = p.health || 'healthy';
+        var healthDot, healthLabel;
+        if (health === 'healthy') {
+          healthDot = 'green'; healthLabel = '健康';
+        } else if (health === 'degraded') {
+          healthDot = 'yellow'; healthLabel = '降级';
+        } else {
+          healthDot = 'red'; healthLabel = '宕机';
+        }
+        // 余额
+        var creditsHtml;
+        if (p.credits == null) {
+          creditsHtml = '♾️ 理论无限';
+        } else {
+          creditsHtml = p.credits + ' 积分';
+        }
+        cardsHtml += '<div class="prov-card" data-prov="' + esc(prov) + '">' +
+          '<h3>' + esc(p.display_name || prov) + ' <span class="pill ok">' + esc(prov) + '</span></h3>' +
+          '<div class="prov-base">' + esc(p.base_url || '') + '</div>' +
+          '<div class="prov-meta">' +
+          '<span>📦 ' + p.model_count + ' 模型</span>' +
+          '<span>' + caps + '</span>' +
+          (p.needs_account ? '<span>👥 需号池</span>' : '<span>🚫 无需账号</span>') +
+          (p.needs_proxy_per_request ? '<span>🔄 每请求换 IP</span>' : '') +
+          '</div>' +
+          '<div class="pool-stat"><span>健康状态</span><b><span class="health-dot ' + healthDot + '"></span><span class="health-label ' + healthDot + '">' + healthLabel + '</span></b></div>' +
+          '<div class="pool-stat"><span>实时余额</span><b>' + creditsHtml + '</b></div>' +
+          '</div>';
+      });
+      updateCardGrid('prov-grid', cardsHtml, 'data-prov');
+    }).catch(function () {
+      document.getElementById('prov-grid').innerHTML = '<div class="empty">提供商数据加载失败</div>';
+    });
+  }
+
+  // ── 提供商 + 号池轮询数据快照 ──
+  var provLastData = '';
+  var poolLastData = '';
+
+  loadModels();
+  loadPool();
+
+  // ── 实时日志 ──
+  var logTimer = null;
+  var logLastData = '';
+
+  function startLogPolling() {
+    if (logTimer) return;
+    loadLogs();
+    logTimer = setInterval(loadLogs, 3000);
+  }
+
+  function loadLogs() {
+    safeJson('/v1/logs?lines=50').then(function (d) {
+      var logs = d.logs || [];
+      var html = logs.map(function (l) {
+        var lvl = l.level || 'INFO';
+        var ts = l.timestamp || '';
+        var logger = l.logger || '';
+        var msg = esc(l.message || '');
+        return '<div class="log-line">' +
+          '<span class="log-ts">' + esc(ts) + '</span>' +
+          '<span class="lvl ' + lvl + '">' + esc(lvl) + '</span>' +
+          '<span class="log-logger">[' + esc(logger) + ']</span>' +
+          '<span class="log-msg">' + msg + '</span></div>';
+      }).join('');
+      if (html !== logLastData) {
+        logLastData = html;
+        var box = document.getElementById('log-box');
+        box.innerHTML = html || '<div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">📭 暂无日志记录</div>';
+        box.scrollTop = box.scrollHeight;
+      }
+    }).catch(function () {
+      var box = document.getElementById('log-box');
+      box.innerHTML = '<div class="muted" style="color:#f87171;text-align:center;padding:20px 0">日志加载失败（端点可能未就绪）</div>';
+    });
+  }
+
+  // ── 代理池状态 ──
+  var proxyTimer = null;
+  var proxyLastData = '';
+
+  function startProxyPolling() {
+    if (proxyTimer) return;
+    loadProxy();
+    proxyTimer = setInterval(loadProxy, 15000);
+  }
+
+  function loadProxy() {
+    safeJson('/v1/proxy-pool').then(function (d) {
+      var data = JSON.stringify(d);
+      if (data === proxyLastData) return;
+      proxyLastData = data;
+
+      document.getElementById('px-total').textContent = d.total != null ? d.total : '–';
+      document.getElementById('px-res').textContent = d.residential != null ? d.residential : '–';
+      document.getElementById('px-free').textContent = d.free != null ? d.free : '–';
+      document.getElementById('px-avail').textContent = d.available != null ? d.available : '–';
+
+      var top = d.top || [];
+      var tbody = document.getElementById('proxy-tbody');
+      if (!top.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">🌐 暂无代理配置</td></tr>';
+        return;
+      }
+      tbody.innerHTML = top.map(function (e) {
+        var srcClass = e.source === 'residential' ? 'source-res' : 'source-free';
+        var srcLabel = e.source === 'residential' ? '住宅' : '免费';
+        return '<tr><td class="url-safe">' + esc(e.url) + '</td>' +
+          '<td class="' + srcClass + '">' + srcLabel + '</td>' +
+          '<td>' + (e.daily_uses || 0) + '</td>' +
+          '<td>' + (e.cooldown_seconds || 0) + '</td>' +
+          '<td>' + (e.fails || 0) + '</td></tr>';
+      }).join('');
+    }).catch(function () {
+      document.getElementById('proxy-tbody').innerHTML = '<tr><td colspan="5" class="empty">代理池数据加载失败</td></tr>';
+    });
+  }
+
+  // ── 在线生成面板 ──
+  var pgTimer = null, pgRatio = '1:1';
+  var pgBtn = document.getElementById('pg-btn');
+  var pgStatus = document.getElementById('pg-status');
+  var pgResult = document.getElementById('pg-result');
+
+  document.querySelectorAll('.pg-tab').forEach(function (tab) {
+    tab.onclick = function () {
+      document.querySelectorAll('.pg-tab').forEach(function (t) { t.classList.remove('on'); });
+      document.querySelectorAll('.pg-pane').forEach(function (p) { p.classList.remove('on'); });
+      tab.classList.add('on');
+      document.getElementById('pane-' + tab.dataset.pane).classList.add('on');
+    };
+  });
+
+  function pgShowErr(el, msg) {
+    el.textContent = '❌ ' + msg;
+    el.className = 'pg-status err';
+  }
+
+  function renderResultInfo(container, d, isEdit) {
+    var imgUrl = d.image_base64 || d.image_url;
+    var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + 's' : '—';
+    var model = d.model || '—';
+    var ratio = d.aspect_ratio || '—';
+    // 图片容器：圆角边框 + 阴影
+    var imgWrap = document.createElement('div');
+    imgWrap.style.cssText = 'border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.18);margin-top:10px;display:inline-block;max-width:100%';
+    var img = document.createElement('img');
+    img.src = imgUrl;
+    img.alt = '生成结果';
+    img.style.cssText = 'display:block;max-width:100%;max-height:480px';
+    imgWrap.appendChild(img);
+    container.appendChild(imgWrap);
+    // 信息行
+    var info = document.createElement('div');
+    info.style.cssText = 'margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8';
+    info.innerHTML = '模型：<strong style="color:var(--text)">' + esc(model) + '</strong>' +
+      ' · 耗时：<strong style="color:var(--text)">' + dur + '</strong>' +
+      ' · 画幅：<strong style="color:var(--text)">' + esc(ratio) + '</strong>';
+    container.appendChild(info);
+    // 操作链接
+    var actions = document.createElement('div');
+    actions.style.cssText = 'margin-top:8px;display:flex;gap:14px;flex-wrap:wrap';
+    if (d.image_url) {
+      var openLink = document.createElement('a');
+      openLink.href = d.image_url;
+      openLink.target = '_blank';
+      openLink.rel = 'noopener';
+      openLink.textContent = '打开原图 ↗';
+      openLink.style.cssText = 'font-size:13px;color:var(--brand)';
+      actions.appendChild(openLink);
+    }
+    // download=true 时显示下载按钮（data URI 下载）
+    if (d.image_base64) {
+      var dlBtn = document.createElement('a');
+      dlBtn.href = d.image_base64;
+      dlBtn.download = (d.id || 'image') + '.png';
+      dlBtn.textContent = '⬇️ 下载图片';
+      dlBtn.style.cssText = 'display:inline-block;font-size:13px;color:var(--brand);cursor:pointer';
+      actions.appendChild(dlBtn);
+    }
+    container.appendChild(actions);
+  }
+
+  function pgPoll(id) {
+    var rounds = 0;
+    (function tick() {
+      safeJson('/v1/tasks/' + id).then(function (d) {
+        rounds++;
+        if (d.status === 'completed') {
+          var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + ' 秒' : '未知';
+          pgStatus.textContent = '✅ 出图完成，耗时 ' + dur;
+          showToast('✅ 出图完成', 'success');
+          pgStatus.className = 'pg-status';
+          pgResult.style.display = 'block';
+          pgResult.innerHTML = '';
+          renderResultInfo(pgResult, d, false);
+          // 隐藏空态引导
+          var guide = document.getElementById('pg-guide');
+          if (guide) guide.style.display = 'none';
+          setBtnLoading(pgBtn, false);
+          return;
+        }
+        if (d.status === 'error') { pgShowErr(pgStatus, d.error || '生成失败'); showToast('❌ ' + (d.error || '生成失败'), 'error'); setBtnLoading(pgBtn, false); return; }
+        pgStatus.textContent = rounds % 2 ? '⏳ 排队/生成中…' : '⏳ 排队/生成中…';
+        pgStatus.className = 'pg-status';
+        clearTimeout(pgTimer);
+        pgTimer = setTimeout(tick, 2000);
+      }).catch(function (err) {
+        clearTimeout(pgTimer);
+        pgTimer = setTimeout(tick, 2500);
+      });
+    })();
+  }
+
+  safeJson('/v1/meta').then(function (d) {
+    var ratios = d.aspect_ratios || {};
+    var box = document.getElementById('pg-ratios');
+    box.innerHTML = '';
+    Object.keys(ratios).forEach(function (k) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pg-ratio-btn' + (k === pgRatio ? ' on' : '');
+      b.textContent = k + ' · ' + ratios[k];
+      b.onclick = function () {
+        pgRatio = k;
+        box.querySelectorAll('.pg-ratio-btn').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+      };
+      box.appendChild(b);
+    });
+  }).catch(function () {});
+
+  function handleFetchError(err) {
+    var msg = String(err.message || err);
+    // 超时
+    if (msg.indexOf('timeout') !== -1 || msg.indexOf('Timeout') !== -1 || msg.indexOf('abort') !== -1) {
+      return '请求超时，请检查网络后重试';
+    }
+    // 网络断开
+    if (msg.indexOf('TypeError') !== -1 || msg.indexOf('Failed to fetch') !== -1 || msg.indexOf('NetworkError') !== -1) {
+      return '网络连接失败，请检查网络';
+    }
+    // 非 JSON 响应 — safeJson 已抛出 "响应不是 JSON: …"
+    if (msg.indexOf('不是 JSON') !== -1) {
+      return '服务端响应异常，请稍后重试';
+    }
+    return msg.slice(0, 120);
+  }
+
+  pgBtn.onclick = function () {
+    var prompt = document.getElementById('pg-prompt').value.trim();
+    if (!prompt) {
+      pgStatus.textContent = '⚠️ 请输入提示词';
+      pgStatus.className = 'pg-status err';
+      return;
+    }
+    pgResult.style.display = 'none';
+    pgResult.innerHTML = '';
+    // 隐藏空态引导
+    var guide = document.getElementById('pg-guide');
+    if (guide) guide.style.display = 'none';
+    pgStatus.textContent = '📤 提交中…';
+    pgStatus.className = 'pg-status';
+    setBtnLoading(pgBtn, true, '⏳ 生成中…');
+    var payload = {
+      prompt: prompt,
+      aspect_ratio: pgRatio,
+      model: document.getElementById('pg-model').value || 'imagefree/default',
+      download: document.getElementById('pg-download').checked,
+      resolution: document.getElementById('pg-resolution').value || '1K'
+    };
+    var dur = document.getElementById('pg-duration').value;
+    if (dur) payload.duration = parseInt(dur, 10);
+    safeJson('/v1/generate/async', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (d) {
+      if (d.status === 'error') { pgShowErr(pgStatus, d.error || '提交失败'); showToast('❌ ' + (d.error || '提交失败'), 'error'); setBtnLoading(pgBtn, false); return; }
+      pgStatus.textContent = '📥 任务已创建，正在排队…';
+      pgPoll(d.id);
+    }).catch(function (err) {
+      var friendly = handleFetchError(err);
+      pgShowErr(pgStatus, friendly);
+      showToast('⚠️ ' + friendly, 'warning');
+      setBtnLoading(pgBtn, false);
+    });
+  };
+
+  // ── 图生图面板 ──
+  var peDataUris = [];
+  var peBtn = document.getElementById('pe-btn');
+  var peStatus = document.getElementById('pe-status');
+  var peResult = document.getElementById('pe-result');
+  var peFileBox = document.getElementById('pg-file');
+  var peTimer = null;
+
+  var bindImages = function (e) {
+    var files = e.target.files;
+    if (!files || !files.length) return;
+    peDataUris = [];
+    var previews = document.getElementById('pg-file-previews');
+    previews.innerHTML = '';
+    var validCount = 0;
+    var loadNext = function (idx) {
+      if (idx >= files.length || validCount >= 3) {
+        // 更新提示文字
+        var tip = document.querySelector('#pg-file-tip span');
+        if (tip) tip.textContent = '已选 ' + validCount + ' 张图（点击更换）';
+        return;
+      }
+      var f = files[idx];
+      if (f.size > 4 * 1024 * 1024) {
+        loadNext(idx + 1);
+        return;
+      }
+      var rd = new FileReader();
+      rd.onload = function () {
+        peDataUris.push(rd.result);
+        var thumb = document.createElement('div');
+        thumb.style.cssText = 'position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--line)';
+        var img = document.createElement('img');
+        img.src = rd.result;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        thumb.appendChild(img);
+        previews.appendChild(thumb);
+        validCount++;
+        loadNext(idx + 1);
+      };
+      rd.readAsDataURL(f);
+    };
+    loadNext(0);
+  };
+  document.getElementById('pg-image').addEventListener('change', bindImages);
+
+  function pePoll(id) {
+    (function tick() {
+      safeJson('/v1/edit/tasks/' + id).then(function (d) {
+        if (d.status === 'completed') {
+          peStatus.textContent = '✅ 变体已生成';
+          showToast('✅ 出图完成', 'success');
+          peStatus.className = 'pg-status';
+          peResult.style.display = 'block';
+          peResult.innerHTML = '';
+          renderResultInfo(peResult, d, true);
+          // 隐藏空态引导
+          var guide = document.getElementById('pe-guide');
+          if (guide) guide.style.display = 'none';
+          setBtnLoading(peBtn, false);
+          return;
+        }
+        if (d.status === 'error') { pgShowErr(peStatus, d.error || '生成失败'); showToast('❌ ' + (d.error || '生成失败'), 'error'); setBtnLoading(peBtn, false); return; }
+        peStatus.textContent = '⏳ 图生图排队/生成中（上游较慢，约 1~5 分钟）…';
+        peStatus.className = 'pg-status';
+        clearTimeout(peTimer);
+        peTimer = setTimeout(tick, 4000);
+      }).catch(function (err) {
+        clearTimeout(peTimer);
+        peTimer = setTimeout(tick, 5000);
+      });
+    })();
+  }
+
+  peBtn.onclick = function () {
+    var prompt = document.getElementById('pe-prompt').value.trim();
+    if (!peDataUris.length) { peStatus.textContent = '⚠️ 请先选择至少一张图片'; peStatus.className = 'pg-status err'; return; }
+    if (!prompt) { peStatus.textContent = '⚠️ 请输入编辑指令'; peStatus.className = 'pg-status err'; return; }
+    peResult.style.display = 'none';
+    peResult.innerHTML = '';
+    // 隐藏空态引导
+    var guide = document.getElementById('pe-guide');
+    if (guide) guide.style.display = 'none';
+    peStatus.textContent = '📤 上传图片并提交…';
+    peStatus.className = 'pg-status';
+    // 上传进度条
+    var progBar = document.createElement('div');
+    progBar.style.cssText = 'height:4px;background:var(--bg-soft);border-radius:4px;overflow:hidden;margin-top:8px';
+    var progFill = document.createElement('div');
+    progFill.style.cssText = 'height:100%;width:0%;background:var(--brand);border-radius:4px;transition:width .5s ease';
+    progBar.appendChild(progFill);
+    peStatus.parentNode.insertBefore(progBar, peStatus.nextSibling);
+    // 模拟上传进度
+    var prog = 0;
+    var progTimer = setInterval(function () {
+      if (prog < 80) { prog += 5; progFill.style.width = prog + '%'; }
+    }, 400);
+    setBtnLoading(peBtn, true, '⏳ 生成中…');
+    safeJson('/v1/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        images: peDataUris,
+        prompt: prompt,
+        model: document.getElementById('pe-model').value || 'imagefree/default',
+        download: false
+      })
+    }).then(function (d) {
+      clearInterval(progTimer);
+      progFill.style.width = '100%';
+      setTimeout(function () { if (progBar.parentNode) progBar.parentNode.removeChild(progBar); }, 600);
+      if (d.status === 'error') { pgShowErr(peStatus, d.error || '提交失败'); showToast('❌ ' + (d.error || '提交失败'), 'error'); setBtnLoading(peBtn, false); return; }
+      peStatus.textContent = '📥 已提交，正在排队…';
+      pePoll(d.id);
+    }).catch(function (err) {
+      clearInterval(progTimer);
+      if (progBar.parentNode) progBar.parentNode.removeChild(progBar);
+      var friendly = handleFetchError(err);
+      pgShowErr(peStatus, friendly);
+      showToast('⚠️ ' + friendly, 'warning');
+      setBtnLoading(peBtn, false);
+    });
+  };
+})();
+</script>
+</body>
+</html>

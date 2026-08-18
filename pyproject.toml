@@ -1,0 +1,7 @@
+# imagefree_api 项目配置
+[tool.pytest.ini_options]
+# 测试发现：tests/ 目录（pytest 风格）+ scripts/ 下的 unittest 文件
+testpaths = ["tests"]
+# 收集规则：默认 python_classes=Test*（pytest 8 默认）即可，无需显式覆盖
+addopts = "-p no:cacheprovider --no-header -q"
+asyncio_mode = "auto"

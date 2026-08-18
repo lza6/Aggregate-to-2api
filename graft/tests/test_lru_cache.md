@@ -1,0 +1,23 @@
+# tests/test_lru_cache.py
+
+- test_get_set_within_ttl · function · L10-L14 — async def test_get_set_within_ttl()
+- test_cache_hits_repeatedly · function · L18-L23 — async def test_cache_hits_repeatedly()
+- test_ttl_expiry · function · L27-L33 — async def test_ttl_expiry()
+- test_maxsize_eviction · function · L37-L45 — async def test_maxsize_eviction()
+- test_maxsize_lru_ordering · function · L49-L59 — async def test_maxsize_lru_ordering()
+- test_clear · function · L63-L70 — async def test_clear()
+- test_invalidate_specific_key · function · L74-L81 — async def test_invalidate_specific_key()
+- test_set_overwrites_existing · function · L85-L90 — async def test_set_overwrites_existing()
+- test_reaper_cleans_expired · function · L94-L103 — async def test_reaper_cleans_expired()
+- test_stop_reaper_clears · function · L107-L114 — async def test_stop_reaper_clears()
+- test_concurrent_safety · function · L118-L128 — async def test_concurrent_safety()
+- worker · function · L122-L126 — async def worker(key: str) -> None
+- test_concurrent_get_set_mixed · function · L132-L148 — async def test_concurrent_get_set_mixed()
+- writer · function · L138-L141 — async def writer() -> None
+- reader · function · L143-L146 — async def reader() -> None
+- test_missing_key_returns_none · function · L152-L155 — async def test_missing_key_returns_none()
+- test_snapshot · function · L159-L170 — async def test_snapshot()
+- test_cache_hits_miss_db_mock · function · L174-L201 — async def test_cache_hits_miss_db_mock()
+- fake_db_query · function · L178-L181 — async def fake_db_query() -> str
+- test_ttl_expiry_db_reread · function · L205-L228 — async def test_ttl_expiry_db_reread()
+- fake_db_query · function · L209-L212 — async def fake_db_query() -> str

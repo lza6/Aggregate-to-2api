@@ -1,0 +1,49 @@
+# deploy/api/worker.py
+
+- _safe_proxy_label · function · L34-L46 — def _safe_proxy_label(key: str) -> str
+- QueueFull · class · L49-L50 — class QueueFull(RuntimeError)
+- _is_token_rejected · function · L58-L61 — def _is_token_rejected(err: object) -> bool
+- _TokenPool · class · L64-L228 — class _TokenPool
+- __init__ · method · L72-L93 — def __init__(self, key: str, target_getter, maxsize: int, idle_ttl: float, proxy: str | None): # key: "direct" 或代理 URL；target_getter: () -> int 动态目标水位
+- acquire · method · L95-L125 — async def acquire(self, timeout: float) -> str | None
+- _signal_if_empty · method · L127-L130 — def _signal_if_empty(self) -> None
+- update_solve_time · method · L132-L135 — def update_solve_time(self, duration: float) -> None
+- _get_prefetch_delay · method · L137-L141 — def _get_prefetch_delay(self) -> float
+- prefetch_loop · method · L143-L195 — async def prefetch_loop(self) -> None
+- _prune_expired · method · L197-L211 — def _prune_expired(self) -> None
+- size · method · L213-L214 — def size(self) -> int
+- snapshot · method · L216-L228 — def snapshot(self) -> dict
+- TokenPoolManager · class · L231-L344 — class TokenPoolManager
+- __init__ · method · L234-L239 — def __init__(self, engine)
+- start · method · L241-L244 — async def start(self) -> None
+- stop · method · L246-L256 — async def stop(self) -> None
+- acquire · method · L258-L271 — async def acquire(self, key: str, timeout: float) -> str | None
+- _ensure_pool · method · L273-L307 — def _ensure_pool(self, key: str) -> _TokenPool
+- _reap_idle_proxy_pools · method · L309-L326 — async def _reap_idle_proxy_pools(self) -> None
+- pools_snapshot · method · L328-L337 — def pools_snapshot(self) -> dict
+- direct_queue · method · L339-L341 — def direct_queue(self) -> asyncio.Queue
+- direct_pool_size · method · L343-L344 — def direct_pool_size(self) -> int
+- _WorkerHandle · class · L347-L356 — class _WorkerHandle
+- __init__ · method · L352-L356 — def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event)
+- Engine · class · L359-L706 — class Engine
+- __init__ · method · L360-L377 — def __init__(self, db)
+- start · method · L380-L397 — async def start(self) -> None: # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
+- stop · method · L399-L412 — async def stop(self) -> None
+- submit · method · L415-L418 — async def submit(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default") -> str
+- submit_priority · method · L420-L441 — async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default", priority: int = 2) -> str
+- _next_seq · method · L443-L445 — def _next_seq(self) -> int
+- wait_result · method · L447-L456 — async def wait_result(self, task_id: str, timeout: float) -> dict
+- _resume_from_queue · method · L458-L472 — def _resume_from_queue(self) -> int
+- token_pool · method · L476-L478 — def token_pool(self) -> asyncio.Queue
+- _acquire_token · method · L480-L482 — async def _acquire_token(self, timeout: float) -> str | None
+- acquire_token · method · L484-L487 — async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None
+- _create_worker · method · L490-L494 — def _create_worker(self, idx: int) -> _WorkerHandle
+- _worker_loop · method · L496-L536 — async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
+- _auto_scale_loop · method · L539-L548 — async def _auto_scale_loop(self) -> None
+- _auto_scale_once · method · L550-L582 — async def _auto_scale_once(self) -> None
+- _idle_workers_count · method · L584-L589 — def _idle_workers_count(self) -> int
+- _shrink_one_worker · method · L591-L601 — def _shrink_one_worker(self) -> None
+- _process · method · L603-L656 — async def _process(self, task_id: str) -> None
+- _finish · method · L658-L666 — def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
+- _generate_once · method · L668-L693 — async def _generate_once(self, row: dict, token: str) -> dict
+- snapshot · method · L696-L706 — def snapshot(self) -> dict

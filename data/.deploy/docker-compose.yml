@@ -1,0 +1,77 @@
+services:
+  cfsolver:
+    build:
+      context: .
+      dockerfile: Dockerfile.cfsolver
+    image: imagefree-cfsolver:latest
+    container_name: imagefree-cfsolver
+    restart: unless-stopped
+    mem_limit: 1500m
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',8001),timeout=2).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: imagefree-api:latest
+    container_name: imagefree-api
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      - cfsolver
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - IF_CF_SOLVER_URL=http://cfsolver:8001
+      - IF_HOST=0.0.0.0
+      - IF_PORT=8100
+      - IF_BASE_URL=https://imagefree.net
+      - IF_SITEKEY=0x4AAAAAACE-XLGoQUckKKm_
+      - IF_WORKERS=10
+      - IF_TOKEN_POOL_SIZE=6
+      - IF_TOKEN_WAIT_TIMEOUT=30
+      - IF_SOLVE_CIRCUIT_THRESHOLD=5
+      - IF_SOLVE_CIRCUIT_PROBE_SECONDS=30
+      - IF_PROXY=
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - NO_PROXY=*
+      # ── 多提供商网关 / 号池 / 邮箱池 / 代理池 ──
+      - IF_ACCOUNT_AUTO=1
+      - IF_MINIMAXH3_ACCOUNT_TARGET=500
+      - IF_NANOBANANA_ACCOUNT_TARGET=500
+      - IF_ACCOUNT_DB_FILE=/app/data/account_pool.db
+      - IF_EMAIL_DB_FILE=/app/data/email_registry.db
+      # minimaxh3 turnstile 被站点拒（外部求解兼容未解），先关自动注册专注 nanobanana（可每日签到）
+      - IF_MINIMAXH3_AUTOREG=0
+      # kookeey 住宅代理（chatgpt2api 同款账户；号池注册每号粘性 IP）
+      - IF_KOOKEEY_ENABLED=1
+      - IF_KOOKEEY_USER_ID=1023701
+      - IF_KOOKEEY_SEC_USER=4a2c845a
+      - IF_KOOKEEY_SEC_PASS=12843fee
+      - IF_KOOKEEY_COUNTRY=US
+      - IF_KOOKEEY_GATE=gate.kookeey.info
+      # 免费代理池（aifreeforever 每 IP 每日限额场景；注册不走免费代理=安全红线）
+      - IF_FREE_PROXY=1
+      - IF_FREE_PROXY_REFRESH_MIN=30
+      - IF_PROXY_COOLDOWN_SECONDS=120
+      - IF_MOCK_REGISTER=0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

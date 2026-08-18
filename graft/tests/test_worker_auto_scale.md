@@ -1,0 +1,13 @@
+# tests/test_worker_auto_scale.py
+
+- auto_scale_config · function · L16-L25 — def auto_scale_config(monkeypatch)
+- test_scale_up_when_queue_long · function · L29-L53 — async def test_scale_up_when_queue_long(auto_scale_config, tmp_db)
+- test_scale_down_when_queue_short · function · L57-L70 — async def test_scale_down_when_queue_short(auto_scale_config, tmp_db)
+- test_scale_down_when_idle · function · L74-L90 — async def test_scale_down_when_idle(auto_scale_config, tmp_db)
+- test_scale_respects_lower_bound · function · L94-L108 — async def test_scale_respects_lower_bound(auto_scale_config, tmp_db)
+- test_scale_respects_upper_bound · function · L112-L126 — async def test_scale_respects_upper_bound(auto_scale_config, tmp_db)
+- test_no_auto_scale_when_disabled · function · L130-L146 — async def test_no_auto_scale_when_disabled(tmp_db, monkeypatch)
+- test_auto_scale_loop_starts_and_stops · function · L150-L159 — async def test_auto_scale_loop_starts_and_stops(auto_scale_config, tmp_db)
+- test_worker_loop_stops_via_event · function · L163-L174 — async def test_worker_loop_stops_via_event(auto_scale_config, tmp_db)
+- test_scale_up_per_cycle_limited · function · L178-L198 — async def test_scale_up_per_cycle_limited(auto_scale_config, tmp_db)
+- test_scale_down_per_cycle_limited · function · L202-L215 — async def test_scale_down_per_cycle_limited(auto_scale_config, tmp_db)

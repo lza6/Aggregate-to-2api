@@ -1,0 +1,61 @@
+# imagefree_api 服务器部署 — Docker Compose
+# 服务：cfsolver(8001, 内部) + api(8100, 公网)
+# 说明：东京服务器可直连 imagefree.net，无需代理；无鉴权，公益开放。
+
+services:
+  cfsolver:
+    build:
+      context: .
+      dockerfile: Dockerfile.cfsolver
+    image: imagefree-cfsolver:latest
+    container_name: imagefree-cfsolver
+    restart: unless-stopped
+    mem_limit: 1500m
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',8001),timeout=2).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # 不暴露公网端口，仅 compose 内部网络供 api 访问
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: imagefree-api:latest
+    container_name: imagefree-api
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      - cfsolver
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - IF_CF_SOLVER_URL=http://cfsolver:8001
+      - IF_HOST=0.0.0.0
+      - IF_PORT=8100
+      - IF_BASE_URL=https://imagefree.net
+      - IF_SITEKEY=0x4AAAAAACE-XLGoQUckKKm_
+      # 免费代理池（aifreeforever 每 IP 每日限额必须）
+      - IF_FREE_PROXY=1
+      - IF_FREE_PROXY_REFRESH_MIN=10
+      # 服务器直连，显式清空代理
+      - IF_PROXY=
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - NO_PROXY=*
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

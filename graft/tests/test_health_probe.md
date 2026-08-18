@@ -1,0 +1,41 @@
+# tests/test_health_probe.py
+
+- MockProviderA · class · L41-L61 — class MockProviderA(Provider)
+- __init__ · method · L47-L51 — def __init__(self) -> None
+- generate · method · L53-L57 — async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw) -> GenerationResult
+- health_check · method · L59-L61 — async def health_check(self) -> str
+- MockProviderB · class · L64-L91 — class MockProviderB(Provider)
+- __init__ · method · L77-L81 — def __init__(self) -> None
+- generate · method · L83-L87 — async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw) -> GenerationResult
+- health_check · method · L89-L91 — async def health_check(self) -> str
+- MockProviderC · class · L94-L112 — class MockProviderC(Provider)
+- __init__ · method · L100-L103 — def __init__(self) -> None
+- generate · method · L105-L108 — async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw) -> GenerationResult
+- health_check · method · L110-L112 — async def health_check(self) -> str
+- fresh_registry · function · L116-L123 — def fresh_registry()
+- TestHealthCheckExecution · class · L127-L189 — class TestHealthCheckExecution
+- test_health_check_all_updates_status · method · L131-L147 — async def test_health_check_all_updates_status(self, fresh_registry)
+- _healthy · function · L138-L140 — async def _healthy(_self=p)
+- test_health_check_inherits_down · method · L150-L160 — async def test_health_check_inherits_down(self, fresh_registry)
+- _broken_check · function · L155-L156 — async def _broken_check()
+- test_health_check_exception_sets_down · method · L163-L173 — async def test_health_check_exception_sets_down(self, fresh_registry)
+- _broken_check · function · L168-L169 — async def _broken_check()
+- test_healthy_providers · method · L175-L189 — def test_healthy_providers(self, fresh_registry)
+- TestAutoFailover · class · L193-L252 — class TestAutoFailover
+- test_provider_for_healthy_preferred · method · L196-L201 — def test_provider_for_healthy_preferred(self, fresh_registry)
+- test_provider_for_down_fallback · method · L203-L211 — def test_provider_for_down_fallback(self, fresh_registry)
+- test_provider_for_prefer_healthy_false · method · L213-L220 — def test_provider_for_prefer_healthy_false(self, fresh_registry)
+- test_provider_for_no_alternative · method · L222-L231 — def test_provider_for_no_alternative(self, fresh_registry)
+- test_find_alternative_returns_correct_model · method · L233-L241 — def test_find_alternative_returns_correct_model(self, fresh_registry)
+- test_find_alternative_no_healthy_alternative · method · L243-L252 — def test_find_alternative_no_healthy_alternative(self, fresh_registry)
+- TestRecoveryFallback · class · L256-L290 — class TestRecoveryFallback
+- test_recovery_fallback · method · L259-L271 — def test_recovery_fallback(self, fresh_registry)
+- test_mark_down_and_up · method · L273-L282 — def test_mark_down_and_up(self, fresh_registry)
+- test_healthy_providers_excludes_degraded · method · L284-L290 — def test_healthy_providers_excludes_degraded(self, fresh_registry)
+- TestFailoverTaskDelivery · class · L294-L336 — class TestFailoverTaskDelivery
+- test_alternative_provider_generates · method · L298-L314 — async def test_alternative_provider_generates(self, fresh_registry)
+- test_preferred_recovers_and_handles_tasks · method · L317-L336 — async def test_preferred_recovers_and_handles_tasks(self, fresh_registry)
+- TestHealthCheckDisabled · class · L340-L360 — class TestHealthCheckDisabled
+- test_health_check_enabled_config · method · L343-L346 — def test_health_check_enabled_config(self)
+- test_health_check_all_still_works · method · L349-L360 — async def test_health_check_all_still_works(self, fresh_registry)
+- _healthy · function · L354-L356 — async def _healthy(_self=p)

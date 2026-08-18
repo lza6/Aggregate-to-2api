@@ -1,0 +1,23 @@
+# tests/test_db_batch_write.py
+
+- _make_db · function · L18-L34 — def _make_db(enabled: bool = True, window: float = 0.2)
+- _cleanup · function · L37-L44 — def _cleanup(db, path: str)
+- TestBatchWriteEnabled · class · L47-L173 — class TestBatchWriteEnabled
+- test_batch_merges_multiple_writes_into_one_commit · method · L50-L73 — def test_batch_merges_multiple_writes_into_one_commit(self)
+- test_mark_started_and_finished_also_batched · method · L75-L93 — def test_mark_started_and_finished_also_batched(self)
+- test_update_upstream_task_batched · method · L95-L110 — def test_update_upstream_task_batched(self)
+- test_flush_after_stop_empties_buffer · method · L112-L125 — def test_flush_after_stop_empties_buffer(self)
+- test_flush_is_idempotent · method · L127-L137 — def test_flush_is_idempotent(self)
+- test_concurrent_append_and_flush · method · L139-L173 — def test_concurrent_append_and_flush(self)
+- writer · function · L145-L150 — def writer(n: int)
+- flusher · function · L152-L158 — def flusher(count: int)
+- TestBatchWriteDisabled · class · L176-L218 — class TestBatchWriteDisabled
+- test_each_write_commits_immediately · method · L179-L195 — def test_each_write_commits_immediately(self)
+- test_batch_controls_off_no_buffer_usage · method · L197-L208 — def test_batch_controls_off_no_buffer_usage(self)
+- test_flush_noop_when_disabled · method · L210-L218 — def test_flush_noop_when_disabled(self)
+- TestBatchTimer · class · L221-L275 — class TestBatchTimer
+- test_timer_flushes_after_window · method · L225-L250 — async def test_timer_flushes_after_window(self)
+- test_cancelled_timer_flushes_remaining · method · L253-L275 — async def test_cancelled_timer_flushes_remaining(self)
+- TestIdempotentRecovery · class · L278-L309 — class TestIdempotentRecovery
+- test_flushed_data_is_queryable · method · L281-L296 — def test_flushed_data_is_queryable(self)
+- test_repeated_flush_does_not_duplicate · method · L298-L309 — def test_repeated_flush_does_not_duplicate(self)

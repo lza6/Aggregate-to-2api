@@ -1,0 +1,21 @@
+# tests/test_providers.py
+
+- _bootstrap · function · L16-L18 — def _bootstrap()
+- TestRegistry · class · L22-L58 — class TestRegistry
+- test_providers_registered · method · L23-L24 — def test_providers_registered(self)
+- test_model_naming_contract · method · L26-L34 — def test_model_naming_contract(self)
+- test_minimaxh3_models · method · L36-L41 — def test_minimaxh3_models(self)
+- test_aifreeforever_models · method · L43-L47 — def test_aifreeforever_models(self)
+- test_imagefree_legacy_presets · method · L49-L51 — def test_imagefree_legacy_presets(self)
+- test_provider_summary · method · L53-L58 — def test_provider_summary(self)
+- TestProviderGenerate · class · L65-L118 — class TestProviderGenerate
+- test_imagefree_provider_needs_engine · method · L67-L71 — async def test_imagefree_provider_needs_engine(self)
+- test_minimaxh3_mock_account_generates · method · L74-L80 — async def test_minimaxh3_mock_account_generates(self, monkeypatch)
+- test_minimaxh3_video_mock · method · L83-L88 — async def test_minimaxh3_video_mock(self, monkeypatch)
+- test_minimaxh3_no_account_error · method · L91-L96 — async def test_minimaxh3_no_account_error(self, monkeypatch)
+- test_minimaxh3_exhausted_credits · method · L99-L104 — async def test_minimaxh3_exhausted_credits(self, monkeypatch)
+- test_aifreeforever_no_proxy_pool · method · L107-L112 — async def test_aifreeforever_no_proxy_pool(self)
+- test_nanobanana_contract_placeholder · method · L115-L118 — async def test_nanobanana_contract_placeholder(self)
+- test_dispatch_generate_routes · function · L123-L152 — async def test_dispatch_generate_routes(tmp_db, monkeypatch)
+- test_dispatch_edit_routes · function · L156-L173 — async def test_dispatch_edit_routes(tmp_db, monkeypatch)
+- test_normalize_model_legacy · function · L176-L180 — def test_normalize_model_legacy()
