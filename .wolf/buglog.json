@@ -1,0 +1,12 @@
+{
+  "id": "imp-11-cache-persist",
+  "timestamp": "2026-08-19T03:25:00Z",
+  "error_message": "IMP-11: 画廊/统计缓存持久化 — 缓存到期时同步写回 DB，防重启后缓存空窗期",
+  "file": "api/cache.py, api/db.py, api/main.py, api/worker.py",
+  "root_cause": "缺失：set 时未写 DB、stop 时未 flush、start 时未恢复",
+  "fix": "1. cache.py: 新增 _DbPending 缓冲区 + _serialize/_deserialize + restore_from_db + flush_to_db + _flush_all_to_db\n2. db.py: 新增 cache_store 表 + save_cache_batch/load_cache_snapshot/delete_cache_batch\n3. main.py: gallery_cache 传入 persist_db=db，lifespan 中 restore_from_db/flush_to_db\n4. worker.py: _finish 出图完成时 invalidate_prefix('gallery:')",
+  "tags": ["IMP-11", "cache", "persist", "reboot-safety"],
+  "related_bugs": [],
+  "occurrences": 1,
+  "last_seen": "2026-08-19T03:25:00Z"
+}

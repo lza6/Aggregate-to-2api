@@ -1,23 +1,43 @@
 # tests/test_retry_policy.py
 
-- TestClassifyError · class · L15-L49 — class TestClassifyError
-- test_classify_error · method · L39-L40 — def test_classify_error(self, err: str, expected: str) -> None
-- test_classify_error_timeout_exception · method · L42-L43 — def test_classify_error_timeout_exception(self) -> None
-- test_classify_error_connection_error · method · L45-L46 — def test_classify_error_connection_error(self) -> None
-- test_classify_error_empty_string · method · L48-L49 — def test_classify_error_empty_string(self) -> None
-- TestShouldRetry · class · L52-L69 — class TestShouldRetry
-- test_should_retry_transient_under_max · method · L55-L57 — def test_should_retry_transient_under_max(self) -> None
-- test_should_retry_transient_at_max · method · L59-L61 — def test_should_retry_transient_at_max(self) -> None
-- test_should_retry_permanent · method · L63-L65 — def test_should_retry_permanent(self) -> None
-- test_should_retry_one_attempt_no_retry · method · L67-L69 — def test_should_retry_one_attempt_no_retry(self) -> None
-- TestBackoffDelay · class · L72-L118 — class TestBackoffDelay
-- test_backoff_delay_attempt_1 · method · L75-L79 — def test_backoff_delay_attempt_1(self) -> None
-- test_backoff_delay_attempt_2 · method · L81-L85 — def test_backoff_delay_attempt_2(self) -> None
-- test_backoff_delay_attempt_3 · method · L87-L91 — def test_backoff_delay_attempt_3(self) -> None
-- test_backoff_delay_attempt_4 · method · L93-L97 — def test_backoff_delay_attempt_4(self) -> None
-- test_backoff_delay_different_base · method · L99-L105 — def test_backoff_delay_different_base(self) -> None
-- test_backoff_delay_jitter · method · L107-L112 — def test_backoff_delay_jitter(self) -> None
-- test_backoff_delay_non_negative · method · L114-L118 — def test_backoff_delay_non_negative(self) -> None
-- TestIntegrationTransientThenPermanent · class · L121-L137 — class TestIntegrationTransientThenPermanent
-- test_transient_then_permanent_no_retry · method · L124-L130 — def test_transient_then_permanent_no_retry(self) -> None
-- test_all_transient_retry_up_to_max · method · L132-L137 — def test_all_transient_retry_up_to_max(self) -> None
+- TestClassifyError · class · L23-L57 — class TestClassifyError
+- test_classify_error · method · L47-L48 — def test_classify_error(self, err: str, expected: str) -> None
+- test_classify_error_timeout_exception · method · L50-L51 — def test_classify_error_timeout_exception(self) -> None
+- test_classify_error_connection_error · method · L53-L54 — def test_classify_error_connection_error(self) -> None
+- test_classify_error_empty_string · method · L56-L57 — def test_classify_error_empty_string(self) -> None
+- TestShouldRetry · class · L60-L77 — class TestShouldRetry
+- test_should_retry_transient_under_max · method · L63-L65 — def test_should_retry_transient_under_max(self) -> None
+- test_should_retry_transient_at_max · method · L67-L69 — def test_should_retry_transient_at_max(self) -> None
+- test_should_retry_permanent · method · L71-L73 — def test_should_retry_permanent(self) -> None
+- test_should_retry_one_attempt_no_retry · method · L75-L77 — def test_should_retry_one_attempt_no_retry(self) -> None
+- TestBackoffDelay · class · L80-L126 — class TestBackoffDelay
+- test_backoff_delay_attempt_1 · method · L83-L87 — def test_backoff_delay_attempt_1(self) -> None
+- test_backoff_delay_attempt_2 · method · L89-L93 — def test_backoff_delay_attempt_2(self) -> None
+- test_backoff_delay_attempt_3 · method · L95-L99 — def test_backoff_delay_attempt_3(self) -> None
+- test_backoff_delay_attempt_4 · method · L101-L105 — def test_backoff_delay_attempt_4(self) -> None
+- test_backoff_delay_different_base · method · L107-L113 — def test_backoff_delay_different_base(self) -> None
+- test_backoff_delay_jitter · method · L115-L120 — def test_backoff_delay_jitter(self) -> None
+- test_backoff_delay_non_negative · method · L122-L126 — def test_backoff_delay_non_negative(self) -> None
+- TestIntegrationTransientThenPermanent · class · L129-L145 — class TestIntegrationTransientThenPermanent
+- test_transient_then_permanent_no_retry · method · L132-L138 — def test_transient_then_permanent_no_retry(self) -> None
+- test_all_transient_retry_up_to_max · method · L140-L145 — def test_all_transient_retry_up_to_max(self) -> None
+- TestAdaptiveRetryStrategy · class · L148-L308 — class TestAdaptiveRetryStrategy
+- test_error_type_classification · method · L151-L173 — def test_error_type_classification(self) -> None
+- test_classify_error_types_httpx_response · method · L175-L191 — def test_classify_error_types_httpx_response(self) -> None
+- MockResponse · class · L177-L178 — class MockResponse
+- MockError · class · L180-L183 — class MockError
+- __init__ · method · L181-L183 — def __init__(self, status_code: int) -> None
+- test_classify_error_default · method · L193-L195 — def test_classify_error_default(self) -> None
+- test_should_retry_by_error_type · method · L197-L214 — def test_should_retry_by_error_type(self) -> None
+- test_should_retry_passed_max_retries_as_fallback · method · L216-L221 — def test_should_retry_passed_max_retries_as_fallback(self) -> None
+- test_delay_range · method · L223-L238 — def test_delay_range(self) -> None
+- test_delay_not_deterministic · method · L240-L244 — def test_delay_not_deterministic(self) -> None
+- test_delay_capped_at_max · method · L246-L254 — def test_delay_capped_at_max(self) -> None
+- test_delay_unknown_error_type · method · L256-L261 — def test_delay_unknown_error_type(self) -> None
+- test_delay_from_retry_after_none · method · L263-L265 — def test_delay_from_retry_after_none(self) -> None
+- test_delay_from_retry_after_integer · method · L267-L270 — def test_delay_from_retry_after_integer(self) -> None
+- test_delay_from_retry_after_invalid · method · L272-L275 — def test_delay_from_retry_after_invalid(self) -> None
+- test_delay_from_retry_after_http_date · method · L277-L283 — def test_delay_from_retry_after_http_date(self) -> None
+- test_classify_error_compatible · method · L285-L294 — def test_classify_error_compatible(self) -> None
+- test_backoff_delay_compatible · method · L296-L304 — def test_backoff_delay_compatible(self) -> None
+- test_retry_policy_alias_exists · method · L306-L308 — def test_retry_policy_alias_exists(self) -> None

@@ -24,8 +24,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .errors import AppError, ErrorCodes, error_response
+from .errors import AppError, ErrorCodes, error_response, STATUS_CODE_ERROR_MAP
 from pydantic import BaseModel, Field
+
+# A-05: contextvars 请求上下文
+from .context import RequestContextMiddleware, RequestIdLogFilter
 
 from . import config
 from . import imagefree_client
@@ -36,7 +39,9 @@ from .db import DB, task_to_public
 from .solver_guard import REASON_CATEGORIES, solver_guard
 from .worker import Engine, QueueFull
 from .cache import LRUCache
+from .cache_warmup import warmup_cache
 from .telemetry import init_telemetry, shutdown_telemetry
+from .audit import audit_log
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
@@ -50,6 +55,8 @@ logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT,
                     datefmt="%Y-%m-%d %H:%M:%S")
 # 注入 LogBuffer 到 root logger，捕获所有模块的日志
 logging.getLogger().addHandler(log_buffer_handler)
+# A-05: 注入 RequestIdLogFilter，自动在日志消息末尾追加 [req=<request_id>]
+logging.getLogger().addFilter(RequestIdLogFilter())
 
 log = logging.getLogger("imagefree_api")
 
@@ -77,6 +84,8 @@ async def lifespan(_app: FastAPI):
     restored = await gallery_cache.restore_from_db()
     if restored:
         log.info("缓存从 DB 恢复完成: %d 个条目", restored)
+    # F-05: 启动时预热常见查询缓存（异步，不影响启动速度）
+    _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     # IMP-25: 启动 DB 批量写入定时器
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
@@ -183,6 +192,13 @@ async def lifespan(_app: FastAPI):
     _recover_task = asyncio.create_task(_provider_recover_loop())
 
     yield
+    # F-05: 停止缓存预热任务
+    if _warmup_task and not _warmup_task.done():
+        _warmup_task.cancel()
+        try:
+            await _warmup_task
+        except asyncio.CancelledError:
+            pass
     # IMP-25: 停止前刷新 DB 写缓冲区
     if _batch_timer_task:
         _batch_timer_task.cancel()
@@ -239,6 +255,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# A-05: contextvars 请求上下文中间件 - 在每个请求开始时设置 request context
+app.add_middleware(RequestContextMiddleware)
 
 # ── 统一错误处理 ─────────────────────────────────
 @app.exception_handler(AppError)
@@ -252,22 +270,8 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
     """HTTPException → 统一错误响应格式（状态码/SQL/业务），映射到标准错误码。"""
     _status_code = exc.status_code
     _message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-    # 状态码 → 错误码映射
-    _code_map = {
-        400: ErrorCodes.BAD_REQUEST,
-        401: ErrorCodes.UNAUTHORIZED,
-        403: ErrorCodes.UNAUTHORIZED,
-        404: ErrorCodes.NOT_FOUND,
-        408: ErrorCodes.TASK_TIMEOUT,
-        409: ErrorCodes.IDEMPOTENCY_KEY_EXISTS,
-        413: ErrorCodes.BAD_REQUEST,
-        422: ErrorCodes.BAD_REQUEST,
-        429: ErrorCodes.RATE_LIMITED,
-        500: ErrorCodes.INTERNAL_ERROR,
-        503: ErrorCodes.PROVIDER_DOWN,
-    }
     return error_response(
-        _code_map.get(_status_code, ErrorCodes.BAD_REQUEST),
+        STATUS_CODE_ERROR_MAP.get(_status_code, ErrorCodes.BAD_REQUEST),
         _message,
         _status_code,
     )
@@ -1282,8 +1286,10 @@ async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
 
 
 @app.post("/v1/dead-letter-queue/{task_id}/retry")
-async def retry_dlq_task(task_id: str):
+async def retry_dlq_task(task_id: str, request: Request):
     """从死信队列移除指定任务（清空记录，重新入队重试语义）。"""
+    client_ip = request.client.host if request.client else "unknown"
+    audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
     db.retry_dlq(task_id)
     return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
 

@@ -12,6 +12,6 @@
 - test_autoregister_loop_fills_to_target · function · L74-L99 — async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch)
 - test_daily_checkin_updates_credits · function · L104-L121 — async def test_daily_checkin_updates_credits(tmp_path)
 - _checkin · function · L111-L112 — async def _checkin(acc)
-- TestEmailPool · class · L125-L148 — class TestEmailPool
-- test_allocate_unique_and_record · method · L126-L138 — def test_allocate_unique_and_record(self, tmp_path)
-- test_stats · method · L140-L148 — def test_stats(self, tmp_path)
+- TestEmailPool · class · L125-L150 — class TestEmailPool
+- test_allocate_unique_and_record · method · L127-L139 — async def test_allocate_unique_and_record(self, tmp_path)
+- test_stats · method · L142-L150 — async def test_stats(self, tmp_path)

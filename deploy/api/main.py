@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .errors import AppError, ErrorCodes, error_response
+from .errors import AppError, ErrorCodes, error_response, STATUS_CODE_ERROR_MAP
 from pydantic import BaseModel, Field
 
 from . import config
@@ -252,22 +252,8 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
     """HTTPException → 统一错误响应格式（状态码/SQL/业务），映射到标准错误码。"""
     _status_code = exc.status_code
     _message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-    # 状态码 → 错误码映射
-    _code_map = {
-        400: ErrorCodes.BAD_REQUEST,
-        401: ErrorCodes.UNAUTHORIZED,
-        403: ErrorCodes.UNAUTHORIZED,
-        404: ErrorCodes.NOT_FOUND,
-        408: ErrorCodes.TASK_TIMEOUT,
-        409: ErrorCodes.IDEMPOTENCY_KEY_EXISTS,
-        413: ErrorCodes.BAD_REQUEST,
-        422: ErrorCodes.BAD_REQUEST,
-        429: ErrorCodes.RATE_LIMITED,
-        500: ErrorCodes.INTERNAL_ERROR,
-        503: ErrorCodes.PROVIDER_DOWN,
-    }
     return error_response(
-        _code_map.get(_status_code, ErrorCodes.BAD_REQUEST),
+        STATUS_CODE_ERROR_MAP.get(_status_code, ErrorCodes.BAD_REQUEST),
         _message,
         _status_code,
     )

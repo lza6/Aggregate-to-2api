@@ -1,25 +1,26 @@
 # api/email_pool.py
 
-- MailSource · class · L39-L46 — class MailSource
-- new_address · method · L44-L46 — async def new_address(self) -> tuple[str, dict]
-- TempTfSource · class · L50-L72 — class TempTfSource(MailSource)
-- __init__ · method · L54-L56 — def __init__(self) -> None
-- new_address · method · L58-L62 — def new_address(self) -> tuple[str, dict]: # 纯本地随机生成（无需网络），10 位小写字母数字 → 百万亿级空间
-- fetch_mails · method · L64-L72 — def fetch_mails(self, address: str) -> list[dict]
-- TempMailSource · class · L76-L141 — class TempMailSource(MailSource)
-- __init__ · method · L88-L94 — def __init__(self) -> None
-- new_address · method · L96-L118 — def new_address(self) -> tuple[str, dict]: # chatgpt2api 逆向确认：POST /mailbox（空 body）→ {token, mailbox}（建箱+拿 JWT）。 # temp-mail 有建箱限流（429 Too Many Request）——加最小间隔 + 失败退避，防批量注册触发。
-- fetch_mails · method · L120-L141 — def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- Do22Source · class · L145-L199 — class Do22Source(MailSource)
-- __init__ · method · L158-L164 — def __init__(self) -> None
-- new_address · method · L166-L184 — def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L186-L199 — def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L203-L305 — class EmailPool
-- __init__ · method · L204-L210 — def __init__(self, db_path: str = DB_FILE) -> None
-- _init_schema · method · L212-L224 — def _init_schema(self) -> None
-- _load_used · method · L226-L228 — def _load_used(self) -> set[str]
-- allocate · method · L231-L270 — def allocate(self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None) -> tuple[str, object]
-- wait_for_mail · method · L273-L286 — def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0, contains: str | None = None) -> dict | None
-- record · method · L289-L295 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
-- registered_providers · method · L297-L299 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L301-L305 — def stats(self) -> dict
+- MailSource · class · L40-L51 — class MailSource
+- new_address · method · L45-L47 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L49-L51 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempTfSource · class · L55-L77 — class TempTfSource(MailSource)
+- __init__ · method · L59-L61 — def __init__(self) -> None
+- new_address · method · L63-L67 — async def new_address(self) -> tuple[str, dict]: # 纯本地随机生成（无需网络），10 位小写字母数字 → 百万亿级空间
+- fetch_mails · method · L69-L77 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempMailSource · class · L81-L145 — class TempMailSource(MailSource)
+- __init__ · method · L93-L99 — def __init__(self) -> None
+- new_address · method · L101-L122 — async def new_address(self) -> tuple[str, dict]: # chatgpt2api 逆向确认：POST /mailbox（空 body）→ {token, mailbox}（建箱+拿 JWT）。 # temp-mail 有建箱限流（429 Too Many Request）——加最小间隔 + 失败退避，防批量注册触发。
+- fetch_mails · method · L124-L145 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- Do22Source · class · L149-L203 — class Do22Source(MailSource)
+- __init__ · method · L162-L168 — def __init__(self) -> None
+- new_address · method · L170-L188 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L190-L203 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- EmailPool · class · L207-L310 — class EmailPool
+- __init__ · method · L208-L214 — def __init__(self, db_path: str = DB_FILE) -> None
+- _init_schema · method · L216-L228 — def _init_schema(self) -> None
+- _load_used · method · L230-L232 — def _load_used(self) -> set[str]
+- allocate · method · L235-L274 — async def allocate(self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None) -> tuple[str, object]
+- wait_for_mail · method · L277-L291 — async def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0, contains: str | None = None) -> dict | None
+- record · method · L294-L300 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
+- registered_providers · method · L302-L304 — def registered_providers(self, email: str) -> list[str]
+- stats · method · L306-L310 — def stats(self) -> dict

@@ -1,25 +1,26 @@
 # tests/test_telemetry.py
 
-- TestTelemetryLifecycle · class · L25-L71 — class TestTelemetryLifecycle
-- test_disabled_when_env_not_set · method · L26-L34 — def test_disabled_when_env_not_set(self)
-- test_enabled_with_env · method · L36-L48 — def test_enabled_with_env(self)
-- test_double_init_shutdown_no_error · method · L50-L58 — def test_double_init_shutdown_no_error(self)
-- test_missing_package_graceful · method · L60-L71 — def test_missing_package_graceful(self)
-- TestTraceIdLogFilter · class · L77-L135 — class TestTraceIdLogFilter
-- test_filter_appends_trace_id_when_otel_active · method · L78-L103 — def test_filter_appends_trace_id_when_otel_active(self)
-- test_filter_noop_when_otel_disabled · method · L105-L116 — def test_filter_noop_when_otel_disabled(self)
-- test_filter_noop_when_no_active_span · method · L118-L135 — def test_filter_noop_when_no_active_span(self)
-- TestCustomSpans · class · L141-L164 — class TestCustomSpans
-- test_get_tracer_returns_tracer · method · L142-L154 — def test_get_tracer_returns_tracer(self)
-- test_is_otel_enabled_reflects_state · method · L156-L164 — def test_is_otel_enabled_reflects_state(self)
-- TestWorkerSpan · class · L170-L220 — class TestWorkerSpan
-- test_worker_process_creates_span · method · L172-L220 — async def test_worker_process_creates_span(self)
-- _TestSpan · class · L199-L204 — class _TestSpan
-- __init__ · method · L200-L201 — def __init__(self)
-- set_attribute · method · L203-L204 — def set_attribute(self, k, v)
-- TestTurnstileSpan · class · L226-L241 — class TestTurnstileSpan
-- test_solve_turnstile_span_attributes · method · L227-L241 — def test_solve_turnstile_span_attributes(self)
-- TestTelemetrySnapshot · class · L247-L268 — class TestTelemetrySnapshot
-- test_telemetry_module_importable · method · L248-L252 — def test_telemetry_module_importable(self)
-- test_all_public_api_exists · method · L254-L268 — def test_all_public_api_exists(self)
-- _clean_env · function · L275-L284 — def _clean_env()
+- TestTelemetryLifecycle · class · L20-L86 — class TestTelemetryLifecycle
+- test_disabled_when_env_not_set · method · L21-L35 — def test_disabled_when_env_not_set(self)
+- test_enabled_with_env · method · L37-L49 — def test_enabled_with_env(self)
+- test_double_init_shutdown_no_error · method · L51-L59 — def test_double_init_shutdown_no_error(self)
+- test_missing_package_graceful · method · L61-L69 — def test_missing_package_graceful(self)
+- test_disabled_then_enabled · method · L71-L86 — def test_disabled_then_enabled(self)
+- TestTraceIdLogFilter · class · L92-L170 — class TestTraceIdLogFilter
+- test_filter_available · method · L93-L99 — def test_filter_available(self)
+- test_filter_noop_when_otel_disabled · method · L101-L117 — def test_filter_noop_when_otel_disabled(self)
+- test_filter_noop_when_no_active_span · method · L119-L140 — def test_filter_noop_when_no_active_span(self)
+- test_filter_appends_trace_id_when_otel_active · method · L142-L170 — def test_filter_appends_trace_id_when_otel_active(self)
+- TestCustomSpans · class · L176-L223 — class TestCustomSpans
+- test_get_tracer_returns_tracer · method · L177-L195 — def test_get_tracer_returns_tracer(self)
+- test_get_tracer_noop_when_disabled · method · L197-L205 — def test_get_tracer_noop_when_disabled(self)
+- test_is_otel_enabled_reflects_state · method · L207-L223 — def test_is_otel_enabled_reflects_state(self)
+- TestWorkerSpan · class · L229-L249 — class TestWorkerSpan
+- test_worker_process_span_attributes · method · L230-L249 — def test_worker_process_span_attributes(self)
+- TestTurnstileSpan · class · L255-L274 — class TestTurnstileSpan
+- test_solve_turnstile_span_attributes · method · L256-L274 — def test_solve_turnstile_span_attributes(self)
+- TestTelemetrySnapshot · class · L280-L309 — class TestTelemetrySnapshot
+- test_telemetry_module_importable · method · L281-L285 — def test_telemetry_module_importable(self)
+- test_all_public_api_exists · method · L287-L301 — def test_all_public_api_exists(self)
+- test_main_module_imports_telemetry · method · L303-L309 — def test_main_module_imports_telemetry(self)
+- _clean_env · function · L316-L331 — def _clean_env()

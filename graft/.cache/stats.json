@@ -1,15 +1,16 @@
 {
-  "nodeCount": 9841,
-  "edgeCount": 21847,
+  "nodeCount": 1893,
+  "edgeCount": 3388,
   "languages": [
-    "javascript",
-    "python"
+    "python",
+    "tsx",
+    "typescript"
   ],
-  "totalCount": 9841,
+  "totalCount": 1893,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-18T19:41:46.826Z",
-  "lastFile": "plan.md"
+  "syncedAt": "2026-08-18T22:37:52.236Z",
+  "lastFile": "config.py"
 }
