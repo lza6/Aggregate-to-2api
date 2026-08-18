@@ -10,3 +10,4 @@ opentelemetry-exporter-otlp-proto-grpc>=1.20
 opentelemetry-instrumentation-fastapi>=0.40
 opentelemetry-instrumentation-httpx>=0.40
 opentelemetry-instrumentation-logging>=0.40
+prometheus-client>=0.21
