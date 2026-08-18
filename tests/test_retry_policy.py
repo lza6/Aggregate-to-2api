@@ -220,6 +220,10 @@ class TestAdaptiveRetryStrategy:
         assert AdaptiveRetryStrategy.should_retry(1, 5, "gibberish error") is True
         assert AdaptiveRetryStrategy.should_retry(3, 5, "gibberish error") is False
 
+    def test_should_retry_zero_attempt(self) -> None:
+        """attempt < 1 时不应重试。"""
+        assert AdaptiveRetryStrategy.should_retry(0, 3, "timeout") is False
+
     def test_delay_range(self) -> None:
         """delay 在预期范围内，且有 jitter。"""
         random.seed(42)
