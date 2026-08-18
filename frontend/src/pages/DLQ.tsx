@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchDLQ, retryDLQTask, clearDLQ } from '../api';
+import { fetchDLQ, retryDLQTask, clearDLQ, notify } from '../api';
 
 export function DLQPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -16,13 +16,25 @@ export function DLQPage() {
   useEffect(() => { load(); }, []);
 
   const handleRetry = async (taskId: string) => {
-    await retryDLQTask(taskId);
+    setLoading(true);
+    try {
+      await retryDLQTask(taskId);
+      notify('重试成功', 'success');
+    } catch (e) {
+      notify('重试失败: ' + (e as Error).message, 'error');
+    }
     await load();
   };
 
   const handleClear = async () => {
     if (!confirm('确定清空死信队列？')) return;
-    await clearDLQ();
+    setLoading(true);
+    try {
+      await clearDLQ();
+      notify('死信队列已清空', 'success');
+    } catch (e) {
+      notify('清空失败: ' + (e as Error).message, 'error');
+    }
     await load();
   };
 

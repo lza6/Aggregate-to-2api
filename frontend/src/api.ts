@@ -10,13 +10,21 @@ export interface Stats {
   workers: number;
   uptime_human: string;
   daily: { date: string; requests: number; images: number; errors: number }[];
+  monthly: { month: string; requests: number; images: number }[];
   solver: {
     status: string;
     solve_total: number;
     solve_success_total: number;
     solve_failure_total: number;
+    solve_avg_seconds: number | null;
     window_success_rate: number | null;
+    window_solve_count: number;
+    window_avg_seconds: number | null;
+    consecutive_failures: number;
     circuit_open: boolean;
+    failure_reasons: Record<string, number>;
+    rejected_total: number;
+    token_pools: Record<string, { key: string; size: number; target: number; idle: boolean }>;
   };
 }
 
@@ -31,19 +39,50 @@ export interface Task {
   model: string;
 }
 
-export interface Provider {
-  prefix: string;
-  name: string;
-  models: number;
-  status: string;
+export interface ProviderSummary {
+  display_name: string;
+  base_url: string;
+  capabilities: string[];
+  model_count: number;
+  health_status: string;
+  credits: number | null;
   error_count: number;
+  degraded: boolean;
 }
 
 export interface GalleryItem {
   image_url: string;
+  image_mime: string | null;
   prompt: string;
   aspect_ratio: string;
   duration_sec: number | null;
+}
+
+export interface DLQItem {
+  task_id: string;
+  model: string;
+  error: string | null;
+  attempts: number;
+  last_attempt: number;
+}
+
+// ── 全局 Toast 通知 ──
+export type ToastType = 'success' | 'error' | 'info';
+export interface Toast {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+
+let toastListeners: ((toast: Toast) => void)[] = [];
+export function onToast(fn: (toast: Toast) => void) {
+  toastListeners.push(fn);
+  return () => { toastListeners = toastListeners.filter(f => f !== fn); };
+}
+let toastId = 0;
+export function notify(message: string, type: ToastType = 'info') {
+  const toast: Toast = { id: ++toastId, message, type };
+  toastListeners.forEach(f => f(toast));
 }
 
 export async function fetchStats(): Promise<Stats> {
@@ -60,13 +99,15 @@ export async function fetchTasks(params?: { limit?: number; offset?: number; sta
   return res.json();
 }
 
-export async function fetchProviders(): Promise<{ providers: Provider[] }> {
+export async function fetchProviders(): Promise<{ items: Record<string, ProviderSummary>; count: number }> {
   const res = await fetch(`${API_BASE}/v1/providers`);
   return res.json();
 }
 
-export async function fetchGallery(limit = 20): Promise<{ items: GalleryItem[] }> {
-  const res = await fetch(`${API_BASE}/v1/gallery?limit=${limit}`);
+export async function fetchGallery(limit = 20, password?: string): Promise<{ items: GalleryItem[]; count: number }> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (password) q.set('password', password);
+  const res = await fetch(`${API_BASE}/v1/gallery?${q}`);
   return res.json();
 }
 
@@ -75,7 +116,7 @@ export async function fetchLogs(lines = 100): Promise<{ logs: any[] }> {
   return res.json();
 }
 
-export async function fetchDLQ(): Promise<{ items: any[] }> {
+export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {
   const res = await fetch(`${API_BASE}/v1/dead-letter-queue`);
   return res.json();
 }
@@ -91,6 +132,6 @@ export async function retryDLQTask(taskId: string): Promise<any> {
 }
 
 export async function clearDLQ(): Promise<any> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue/clear`, { method: 'POST' });
+  const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, { method: 'DELETE' });
   return res.json();
 }

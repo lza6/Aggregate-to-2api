@@ -662,7 +662,6 @@ class Engine:
                     # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
                     log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
                                 task_id, attempt, config.IF_TXT_RETRY_MAX, e)
-                    self._finish(task_id, "error", None, str(e), t0)
                     last_error = str(e)
                     break  # 跳出循环，继续到 DLQ 推送
                 else:

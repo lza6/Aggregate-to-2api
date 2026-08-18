@@ -42,10 +42,10 @@ def imagefree_metrics(engine_snapshot: dict, stats_overview: dict, solver_snapsh
     solve_total.labels(result="success").inc(solver_snapshot.get("solve_success_total", 0))
     solve_total.labels(result="failure").inc(solver_snapshot.get("solve_failure_total", 0))
     # token 池水位（每个 pool 独立 label）
-    pools = engine_snapshot.get("token_pools", [])
+    pools = engine_snapshot.get("token_pools", {})
     pool_keys_seen: set[str] = set()
-    for p in pools:
-        key = p.get("key", "direct") if isinstance(p, dict) else "direct"
+    for label, p in pools.items() if isinstance(pools, dict) else enumerate(pools):
+        key = label if isinstance(pools, dict) else p.get("key", "direct") if isinstance(p, dict) else "direct"
         size = p.get("size", 0) if isinstance(p, dict) else 0
         token_pool_watermark.labels(pool=key).set(size)
         pool_keys_seen.add(key)

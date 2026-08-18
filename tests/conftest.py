@@ -108,13 +108,9 @@ def mock_cfsolver():
         p.kill()
 
 
-@pytest_asyncio.fixture
-async def app_with_mocks(mock_cfsolver, tmp_db, no_proxy_env):
-    """全 mock 集成测试环境：FastAPI 完整应用 + mock DB + mock cf_solver。
-
-    先设置环境变量，清除已有 api 模块缓存，再导入 api.main 获得全新 app 实例。
-    之后注入临时 DB 并使用 ASGITransport + lifespan 启动引擎。
-    """
+@pytest_asyncio.fixture(scope="session")
+async def _app_setup(mock_cfsolver):
+    """会话级：创建并缓存 FastAPI 应用实例（仅导入一次，避免 prometheus 注册冲突）。"""
     # ── 设置集成测试所需环境变量 ──
     os.environ["IF_CF_SOLVER_URL"] = mock_cfsolver
     os.environ["IF_TURNSTILE_POLL_INTERVAL"] = "0.2"
@@ -129,9 +125,7 @@ async def app_with_mocks(mock_cfsolver, tmp_db, no_proxy_env):
     os.environ["IF_PERSISTENT_QUEUE_ENABLED"] = "0"
     os.environ["IF_SOLVE_CIRCUIT_PROBE_SECONDS"] = "1"
     os.environ["IF_SOLVE_CIRCUIT_THRESHOLD"] = "3"
-    # 避免 StaticFiles 挂载报错
     os.environ["IF_GALLERY_PASSWORD"] = ""
-    # 避免 base64_store 写 data/ 目录
     os.environ["IF_BASE64_DIR"] = str(tempfile.mkdtemp())
 
     # ── 清除已有 api 模块缓存，确保全新导入 ──
@@ -139,30 +133,32 @@ async def app_with_mocks(mock_cfsolver, tmp_db, no_proxy_env):
         if mod_key.startswith("api"):
             del sys.modules[mod_key]
 
-    # ── 全新导入 api.main（触发模块级代码：app 创建、路由注册等）──
-    import importlib
-    import api.config
-    importlib.reload(api.config)
-    import api.main  # noqa: F811
-    importlib.reload(api.main)
+    import api.config  # noqa: F401
+    import api.main  # 首次导入，触发模块级代码执行
 
+    # ── 手动触发 lifespan startup ──
+    lifespan_ctx = api.main.lifespan(api.main.app)
+    await lifespan_ctx.__aenter__()
+
+    yield api.main
+
+    # ── 清理：执行 lifespan shutdown ──
+    await lifespan_ctx.__aexit__(None, None, None)
+
+
+@pytest_asyncio.fixture
+async def app_with_mocks(_app_setup, tmp_db, no_proxy_env):
+    """全 mock 集成测试环境：每测试用例独立的临时 DB + httpx.AsyncClient。
+
+    使用 _app_setup（会话级）共享同一个 FastAPI 应用实例，避免重复导入。
+    每测试用例替换 DB 并使用独立的 httpx.AsyncClient 保证隔离性。
+    """
     # ── 注入临时 DB ──
-    api.main.db = tmp_db
-    api.main.engine.db = tmp_db
+    _app_setup.db = tmp_db
+    _app_setup.engine.db = tmp_db
 
-    app = api.main.app
-
-    # ── 创建 TestClient（lifespan="on" 自动启动引擎）──
+    # ── 创建 TestClient ──
     from httpx import AsyncClient, ASGITransport
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # ── 等待服务就绪 ──
-        for _ in range(30):
-            try:
-                r = await client.get("/v1/healthz")
-                if r.json().get("status") in ("ok", "degraded"):
-                    break
-            except Exception:
-                pass
-            await asyncio.sleep(0.2)
+    async with AsyncClient(transport=ASGITransport(app=_app_setup.app), base_url="http://test") as client:
         yield client

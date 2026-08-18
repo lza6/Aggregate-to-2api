@@ -152,19 +152,20 @@ class LRUCache:
                 if key in self._data:
                     continue
                 self._data[key] = (time.monotonic() + remaining_ttl, value)
-                while len(self._data) > self._maxsize:
+                while len(self._data) >= self._maxsize:
                     self._data.popitem(last=False)
         log.info("缓存从 DB 恢复 %d 个条目", len(entries))
         return len(entries)
 
-    def _flush_pending_to_db(self) -> None:
-        """将挂起的变更 flush 到 DB（同步调用，在 _lock 外执行）。"""
+    async def _flush_pending_to_db(self) -> None:
+        """将挂起的变更 flush 到 DB（异步调用，在 _lock 外执行）。"""
         if not self._persist_db:
             return
-        upserts = list(self._pending.upserts)
-        deletes = list(self._pending.deletes)
-        self._pending.upserts.clear()
-        self._pending.deletes.clear()
+        async with self._lock:
+            upserts = list(self._pending.upserts)
+            deletes = list(self._pending.deletes)
+            self._pending.upserts.clear()
+            self._pending.deletes.clear()
         try:
             if upserts:
                 self._persist_db.save_cache_batch(upserts)
@@ -173,9 +174,9 @@ class LRUCache:
         except Exception as e:
             log.warning("缓存持久化 flush 失败: %s", e)
 
-    def flush_to_db(self) -> None:
+    async def flush_to_db(self) -> None:
         """公开方法：强制 flush 所有挂起变更到 DB（stop 时调用）。"""
-        self._flush_pending_to_db()
+        await self._flush_pending_to_db()
 
     # ── 后台 reaper ─────────────────────────────────
 
@@ -229,10 +230,10 @@ class LRUCache:
                 flush_counter += 1
                 if flush_counter >= 5 and self._persist_db:
                     flush_counter = 0
-                    self._flush_pending_to_db()
+                    await self._flush_pending_to_db()
         except asyncio.CancelledError:
             await self._purge_expired()
-            self._flush_pending_to_db()
+            await self._flush_pending_to_db()
             raise
 
     async def _purge_expired(self) -> None:
@@ -243,10 +244,8 @@ class LRUCache:
             for k, _ in expired:
                 del self._data[k]
             if expired and self._persist_db:
-                for key, value in expired:
-                    j = self._serialize(value)
-                    if j is not None:
-                        self._pending.upserts.append((key, j, self._ttl))
+                for key, _ in expired:
+                    self._pending.deletes.append(key)
             if expired:
                 log.debug("LRU 缓存清理 %d 个过期条目", len(expired))
 

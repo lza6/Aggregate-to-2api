@@ -2,23 +2,38 @@ import { useEffect, useState } from 'react';
 import { fetchGallery } from '../api';
 import type { GalleryItem } from '../api';
 
-export function Gallery({ limit = 20 }: { limit?: number }) {
+export function Gallery({ limit = 20, password }: { limit?: number; password?: string }) {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pwdInput, setPwdInput] = useState('');
+  const [pwdRequired, setPwdRequired] = useState(false);
 
   useEffect(() => {
     const load = async () => {
+      if (password === undefined) return;
+      setLoading(true);
       try {
-        const data = await fetchGallery(limit);
+        const data = await fetchGallery(limit, password);
         setItems(data.items ?? []);
-      } catch { /* ignore */ }
+        setPwdRequired(false);
+      } catch (e) {
+        if ((e as any)?.status === 403) setPwdRequired(true);
+      }
       setLoading(false);
     };
     load();
-    const timer = setInterval(load, 15000);
-    return () => clearInterval(timer);
-  }, [limit]);
+  }, [limit, password]);
 
+  const handlePwdSubmit = () => {
+    // 父组件通过回调处理密码提交
+  };
+
+  if (pwdRequired) {
+    return <div className="gallery-pwd-required">
+      <p>画廊需要密码才能查看</p>
+      <input type="password" value={pwdInput} onChange={e => setPwdInput(e.target.value)} placeholder="输入画廊密码" />
+    </div>;
+  }
   if (loading) return <div className="gallery-loading">加载中...</div>;
   if (!items.length) return <div className="gallery-empty">暂无作品</div>;
 
@@ -26,7 +41,7 @@ export function Gallery({ limit = 20 }: { limit?: number }) {
     <div className="gallery-grid">
       {items.map((item, i) => (
         <div key={i} className="gallery-cell">
-          {item.image_url && <img src={item.image_url} alt="" loading="lazy" />}
+          {item.image_url && <img src={item.image_url} alt={item.prompt} loading="lazy" />}
           <div className="gallery-overlay">
             <div className="gallery-prompt">{item.prompt}</div>
             {item.duration_sec != null && <div className="gallery-dur">{item.duration_sec.toFixed(1)}s</div>}

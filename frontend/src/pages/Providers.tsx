@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { fetchProviders } from '../api';
 import { ProviderCard } from '../components/ProviderCard';
-import type { Provider } from '../api';
+import type { ProviderSummary } from '../api';
 
 export function ProvidersPage() {
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providers, setProviders] = useState<{ prefix: string; summary: ProviderSummary }[]>([]);
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await fetchProviders();
-        setProviders(data.providers ?? []);
+        const items = Object.entries(data.items ?? {}).map(([prefix, summary]) => ({
+          prefix,
+          summary,
+        }));
+        setProviders(items);
       } catch { /* ignore */ }
     };
     load();
@@ -22,14 +26,14 @@ export function ProvidersPage() {
     <div>
       <h1 style={{ fontSize: 22, marginBottom: 20 }}>提供商状态</h1>
       <div className="prov-grid">
-        {providers.map(p => (
+        {providers.map(({ prefix, summary }) => (
           <ProviderCard
-            key={p.prefix}
-            name={p.name}
-            prefix={p.prefix}
-            models={p.models}
-            status={p.status}
-            errorCount={p.error_count}
+            key={prefix}
+            name={summary.display_name ?? prefix}
+            prefix={prefix}
+            models={summary.model_count ?? 0}
+            status={summary.health_status ?? 'unknown'}
+            errorCount={summary.error_count ?? 0}
           />
         ))}
         {!providers.length && <div className="empty">暂无数据</div>}

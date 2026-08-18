@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
+import { ProvidersPage } from './pages/Providers';
 import { TasksPage } from './pages/Tasks';
 import { AccountsPage } from './pages/Accounts';
 import { LogsPage } from './pages/Logs';
@@ -12,7 +13,7 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/providers" element={<div><h1>提供商</h1><p>建设中...</p></div>} />
+          <Route path="/providers" element={<ProvidersPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/logs" element={<LogsPage />} />

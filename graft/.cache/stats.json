@@ -1,16 +1,16 @@
 {
-  "nodeCount": 1893,
-  "edgeCount": 3388,
+  "nodeCount": 2074,
+  "edgeCount": 3673,
   "languages": [
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 1893,
+  "totalCount": 2074,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-18T22:37:52.236Z",
-  "lastFile": "pyproject.toml"
+  "syncedAt": "2026-08-18T23:19:16.614Z",
+  "lastFile": "main.py"
 }

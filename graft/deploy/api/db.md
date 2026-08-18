@@ -1,60 +1,60 @@
 # deploy/api/db.py
 
-- BatchWrite · class · L29-L35 — class BatchWrite
-- __init__ · method · L33-L35 — def __init__(self, sql: str, params: tuple)
-- DB · class · L38-L724 — class DB
-- __init__ · method · L39-L69 — def __init__(self, path: str)
-- _create_conn · method · L74-L82 — def _create_conn(path: str, timeout: int = 5) -> sqlite3.Connection
-- _health_check · method · L84-L90 — def _health_check(self, conn: sqlite3.Connection) -> bool
-- _reconnect · method · L92-L102 — def _reconnect(self, idx: int) -> sqlite3.Connection
-- _get_write_conn · method · L104-L116 — def _get_write_conn(self) -> tuple[int, sqlite3.Connection, threading.Lock]
-- close · method · L118-L128 — def close(self) -> None
-- _enqueue_write · method · L131-L141 — def _enqueue_write(self, sql: str, params: tuple) -> None
-- _flush_buffer · method · L143-L153 — def _flush_buffer(self) -> None
-- flush · method · L155-L160 — def flush(self) -> None
-- start_batch_timer · method · L162-L175 — async def start_batch_timer(self) -> None
-- stop_batch_timer · method · L177-L178 — def stop_batch_timer(self) -> None
-- _ensure_flushed · method · L181-L185 — def _ensure_flushed(self) -> None
-- _init_schema · method · L188-L261 — def _init_schema(self) -> None
-- create_request · method · L264-L276 — def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool, type_: str = "txt", model: str = "default") -> None
-- mark_started · method · L278-L282 — def mark_started(self, task_id: str) -> None
-- mark_finished · method · L284-L295 — def mark_finished(self, task_id: str, status: str, image_url: str | None, error: str | None, duration_sec: float | None, image_base64: str | None = None, image_mime: str | None = None) -> None: # IMP-26: base64 非空时写入文件缓存，DB 存 file:// 路径
-- update_upstream_task · method · L297-L302 — def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None
-- update_proxy_used · method · L304-L310 — def update_proxy_used(self, task_id: str, proxy: str | None) -> None
-- recover_stale_tasks · method · L312-L330 — def recover_stale_tasks(self, reason: str = "服务重启，任务中断", stale_after: float = 300.0) -> int
-- get · method · L356-L363 — def get(self, task_id: str) -> dict | None
-- get_public · method · L365-L374 — def get_public(self, task_id: str) -> dict | None
-- list_tasks · method · L376-L408 — def list_tasks(self, limit: int = 50, offset: int = 0, status: str | None = None, model: str | None = None, sort: str = "created_at") -> tuple[list[dict], int]
-- recent_images · method · L410-L419 — def recent_images(self, limit: int = 50) -> list[dict]
-- recent_errors · method · L421-L432 — def recent_errors(self, limit: int = 20) -> list[dict]
-- stats_overview · method · L435-L452 — def stats_overview(self) -> dict
-- stats_daily · method · L454-L468 — def stats_daily(self, days: int = 14) -> list[dict]
-- stats_monthly · method · L470-L491 — def stats_monthly(self, months: int = 12) -> list[dict]
-- cleanup · method · L494-L524 — def cleanup(self, retention_days: int) -> dict
-- count · method · L526-L531 — def count(self) -> int
-- _row_to_dict · method · L534-L559 — def _row_to_dict(row: sqlite3.Row, default: bool = True) -> dict
-- get_base64_path · method · L562-L574 — def get_base64_path(self, task_id: str) -> str | None
-- read_base64 · method · L576-L590 — def read_base64(self, task_id: str) -> str | None
-- clean_base64_files · method · L592-L594 — def clean_base64_files(self, ttl: float) -> int
-- save_idempotency · method · L597-L603 — def save_idempotency(self, key: str, task_id: str) -> None
-- get_idempotency · method · L605-L614 — def get_idempotency(self, key: str) -> dict | None
-- clean_expired_idempotency · method · L616-L624 — def clean_expired_idempotency(self) -> int
-- push_dlq · method · L627-L635 — def push_dlq(self, task_id: str, model: str | None, error: str | None, attempts: int) -> None
-- list_dlq · method · L637-L648 — def list_dlq(self, limit: int = 20) -> list[dict]
-- retry_dlq · method · L650-L654 — def retry_dlq(self, task_id: str) -> None
-- clear_dlq · method · L656-L660 — def clear_dlq(self) -> None
-- clean_expired_dlq · method · L662-L670 — def clean_expired_dlq(self) -> int
-- save_cache_batch · method · L673-L687 — def save_cache_batch(self, entries: list[tuple[str, str, float]]) -> None
-- load_cache_snapshot · method · L689-L704 — def load_cache_snapshot(self) -> list[tuple[str, str, float]]
-- delete_cache_batch · method · L706-L715 — def delete_cache_batch(self, keys: list[str]) -> None
-- clean_expired_cache · method · L717-L724 — def clean_expired_cache(self) -> int
-- QueueDB · class · L727-L805 — class QueueDB
-- __init__ · method · L733-L739 — def __init__(self, path: str)
-- _init_schema · method · L741-L754 — def _init_schema(self) -> None
-- enqueue · method · L756-L764 — def enqueue(self, task_id: str, priority: int, seq: int) -> None
-- mark_processing · method · L766-L771 — def mark_processing(self, task_id: str) -> None
-- mark_completed · method · L773-L778 — def mark_completed(self, task_id: str) -> None
-- list_pending · method · L780-L787 — def list_pending(self) -> list[tuple[int, int, str]]
-- cleanup · method · L789-L802 — def cleanup(self, retention_days: int = 7) -> dict
-- close · method · L804-L805 — def close(self) -> None
-- task_to_public · function · L808-L836 — def task_to_public(t: dict) -> dict
+- BatchWrite · class · L30-L36 — class BatchWrite
+- __init__ · method · L34-L36 — def __init__(self, sql: str, params: tuple)
+- DB · class · L39-L749 — class DB
+- __init__ · method · L40-L70 — def __init__(self, path: str)
+- _create_conn · method · L75-L83 — def _create_conn(path: str, timeout: int = 5) -> sqlite3.Connection
+- _health_check · method · L85-L91 — def _health_check(self, conn: sqlite3.Connection) -> bool
+- _reconnect · method · L93-L103 — def _reconnect(self, idx: int) -> sqlite3.Connection
+- _get_write_conn · method · L105-L117 — def _get_write_conn(self) -> tuple[int, sqlite3.Connection, threading.Lock]
+- close · method · L119-L129 — def close(self) -> None
+- _enqueue_write · method · L132-L142 — def _enqueue_write(self, sql: str, params: tuple) -> None
+- _flush_buffer · method · L144-L154 — def _flush_buffer(self) -> None
+- flush · method · L156-L161 — def flush(self) -> None
+- start_batch_timer · method · L163-L176 — async def start_batch_timer(self) -> None
+- stop_batch_timer · method · L178-L179 — def stop_batch_timer(self) -> None
+- _ensure_flushed · method · L182-L186 — def _ensure_flushed(self) -> None
+- _init_schema · method · L189-L262 — def _init_schema(self) -> None
+- create_request · method · L265-L287 — def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool, type_: str = "txt", model: str = "default") -> None
+- mark_started · method · L289-L298 — def mark_started(self, task_id: str) -> None
+- mark_finished · method · L300-L320 — def mark_finished(self, task_id: str, status: str, image_url: str | None, error: str | None, duration_sec: float | None, image_base64: str | None = None, image_mime: str | None = None) -> None
+- update_upstream_task · method · L322-L327 — def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None
+- update_proxy_used · method · L329-L335 — def update_proxy_used(self, task_id: str, proxy: str | None) -> None
+- recover_stale_tasks · method · L337-L355 — def recover_stale_tasks(self, reason: str = "服务重启，任务中断", stale_after: float = 300.0) -> int
+- get · method · L381-L388 — def get(self, task_id: str) -> dict | None
+- get_public · method · L390-L399 — def get_public(self, task_id: str) -> dict | None
+- list_tasks · method · L401-L433 — def list_tasks(self, limit: int = 50, offset: int = 0, status: str | None = None, model: str | None = None, sort: str = "created_at") -> tuple[list[dict], int]
+- recent_images · method · L435-L444 — def recent_images(self, limit: int = 50) -> list[dict]
+- recent_errors · method · L446-L457 — def recent_errors(self, limit: int = 20) -> list[dict]
+- stats_overview · method · L460-L477 — def stats_overview(self) -> dict
+- stats_daily · method · L479-L493 — def stats_daily(self, days: int = 14) -> list[dict]
+- stats_monthly · method · L495-L516 — def stats_monthly(self, months: int = 12) -> list[dict]
+- cleanup · method · L519-L549 — def cleanup(self, retention_days: int) -> dict
+- count · method · L551-L556 — def count(self) -> int
+- _row_to_dict · method · L559-L584 — def _row_to_dict(row: sqlite3.Row, default: bool = True) -> dict
+- get_base64_path · method · L587-L599 — def get_base64_path(self, task_id: str) -> str | None
+- read_base64 · method · L601-L615 — def read_base64(self, task_id: str) -> str | None
+- clean_base64_files · method · L617-L619 — def clean_base64_files(self, ttl: float) -> int
+- save_idempotency · method · L622-L628 — def save_idempotency(self, key: str, task_id: str) -> None
+- get_idempotency · method · L630-L639 — def get_idempotency(self, key: str) -> dict | None
+- clean_expired_idempotency · method · L641-L649 — def clean_expired_idempotency(self) -> int
+- push_dlq · method · L652-L660 — def push_dlq(self, task_id: str, model: str | None, error: str | None, attempts: int) -> None
+- list_dlq · method · L662-L673 — def list_dlq(self, limit: int = 20) -> list[dict]
+- retry_dlq · method · L675-L679 — def retry_dlq(self, task_id: str) -> None
+- clear_dlq · method · L681-L685 — def clear_dlq(self) -> None
+- clean_expired_dlq · method · L687-L695 — def clean_expired_dlq(self) -> int
+- save_cache_batch · method · L698-L712 — def save_cache_batch(self, entries: list[tuple[str, str, float]]) -> None
+- load_cache_snapshot · method · L714-L729 — def load_cache_snapshot(self) -> list[tuple[str, str, float]]
+- delete_cache_batch · method · L731-L740 — def delete_cache_batch(self, keys: list[str]) -> None
+- clean_expired_cache · method · L742-L749 — def clean_expired_cache(self) -> int
+- QueueDB · class · L752-L830 — class QueueDB
+- __init__ · method · L758-L764 — def __init__(self, path: str)
+- _init_schema · method · L766-L779 — def _init_schema(self) -> None
+- enqueue · method · L781-L789 — def enqueue(self, task_id: str, priority: int, seq: int) -> None
+- mark_processing · method · L791-L796 — def mark_processing(self, task_id: str) -> None
+- mark_completed · method · L798-L803 — def mark_completed(self, task_id: str) -> None
+- list_pending · method · L805-L812 — def list_pending(self) -> list[tuple[int, int, str]]
+- cleanup · method · L814-L827 — def cleanup(self, retention_days: int = 7) -> dict
+- close · method · L829-L830 — def close(self) -> None
+- task_to_public · function · L833-L861 — def task_to_public(t: dict) -> dict

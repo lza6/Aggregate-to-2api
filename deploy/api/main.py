@@ -78,6 +78,96 @@ def _uptime_human(seconds: int) -> str:
     return f"{seconds}秒"
 
 
+async def shutdown_phase(timeout: float, label: str, *coros):
+    """带超时和标签的优雅关闭阶段（A-03）。
+
+    并发执行 coros，在 timeout 秒后未完成的任务被强制取消。
+    不阻塞 shutdown 流程整体进度。
+    """
+    if not coros:
+        return
+    tasks = [asyncio.create_task(c) for c in coros]
+    done, pending = await asyncio.wait(tasks, timeout=timeout)
+    for t in pending:
+        t.cancel()
+    if pending:
+        log.warning("%s: %d 个任务超时未完成, 已强制取消", label, len(pending))
+
+
+async def _run_background_tasks():
+    """A-01: TaskGroup 统一管理所有后台循环任务，组退出时自动 cancel 所有子任务。
+
+    任一任务未捕获异常将导致整个组取消（异常传播至调用方）。
+    """
+    async def _cleanup_loop() -> None:
+        while True:
+            try:
+                await asyncio.sleep(config.DB_CLEANUP_INTERVAL)
+                r = await asyncio.to_thread(db.cleanup, config.DB_RETENTION_DAYS)
+                log.info("DB 周期清理: %s", r)
+                n = db.clean_base64_files(config.IF_BASE64_FILE_TTL)
+                if n:
+                    log.info("base64 文件周期清理: 删除 %d 个过期文件", n)
+                if config.IF_IDEMPOTENCY_ENABLED:
+                    nd = db.clean_expired_idempotency()
+                    if nd:
+                        log.info("幂等 key 周期清理: 删除 %d 个过期条目", nd)
+                if config.IF_DLQ_ENABLED:
+                    ndlq = db.clean_expired_dlq()
+                    if ndlq:
+                        log.info("死信队列周期清理: 删除 %d 个过期条目", ndlq)
+                nc = db.clean_expired_cache()
+                if nc:
+                    log.info("缓存表周期清理: 删除 %d 个过期条目", nc)
+                if config.IF_PERSISTENT_QUEUE_ENABLED and engine._queue_db:
+                    nq = engine._queue_db.cleanup()
+                    if nq.get("deleted"):
+                        log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
+                snap = engine.snapshot()
+                ssnap = solver_guard.snapshot()
+                stats = db.stats_overview()
+                ctx = {
+                    "queued": snap["queued"],
+                    "solver_circuit_open": ssnap.get("circuit_open", False),
+                    "token_pool_empty": engine.token_pool.qsize() == 0,
+                    "window_requests": stats.get("total_requests", 0),
+                    "window_errors": stats.get("total_errors", 0),
+                }
+                alert_engine.evaluate(ctx)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("DB 周期清理失败: %s", e)
+
+    async def _health_check_loop(interval: float = 60.0) -> None:
+        if not config.IF_HEALTH_CHECK_ENABLED:
+            return
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                await registry.health_check_all()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("健康探测循环异常: %s", e)
+
+    async def _provider_recover_loop() -> None:
+        while True:
+            try:
+                await asyncio.sleep(config.IF_PROVIDER_RECOVER_INTERVAL)
+                registry.try_recover_all()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("provider 恢复探测循环异常: %s", e)
+
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(_cleanup_loop())
+        if config.IF_HEALTH_CHECK_ENABLED:
+            tg.create_task(_health_check_loop(config.IF_HEALTH_CHECK_INTERVAL))
+        tg.create_task(_provider_recover_loop())
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # IMP-08: 启动 OTel 追踪（IF_OTEL_ENABLED=1 时生效）
@@ -92,6 +182,8 @@ async def lifespan(_app: FastAPI):
         log.info("缓存从 DB 恢复完成: %d 个条目", restored)
     # F-05: 启动时预热常见查询缓存（异步，不影响启动速度）
     _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
+    # A-01: 启动后台任务组（TaskGroup）
+    _background_task = asyncio.create_task(_run_background_tasks())
     # IMP-25: 启动 DB 批量写入定时器
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
@@ -127,134 +219,65 @@ async def lifespan(_app: FastAPI):
     except Exception as e:
         log.warning("base64 文件启动清理失败（可忽略）: %s", e)
     # M7: 启动时清理一次超期记录（防长时间离线后表膨胀）。
-    # H1(审计): cleanup 含 VACUUM 同步阻塞，放入线程池避免冻结事件循环。
     try:
         r = await asyncio.to_thread(db.cleanup, config.DB_RETENTION_DAYS)
         log.info("DB 启动清理: %s", r)
     except Exception as e:
         log.warning("DB 启动清理失败（可忽略）: %s", e)
-    # M7: 周期性清理任务
-    async def _cleanup_loop() -> None:
-        while True:
-            try:
-                await asyncio.sleep(config.DB_CLEANUP_INTERVAL)
-                r = await asyncio.to_thread(db.cleanup, config.DB_RETENTION_DAYS)
-                log.info("DB 周期清理: %s", r)
-                # IMP-26: 周期性清理过期 base64 文件
-                n = db.clean_base64_files(config.IF_BASE64_FILE_TTL)
-                if n:
-                    log.info("base64 文件周期清理: 删除 %d 个过期文件", n)
-                # IMP-06: 周期性清理过期幂等 key
-                if config.IF_IDEMPOTENCY_ENABLED:
-                    nd = db.clean_expired_idempotency()
-                    if nd:
-                        log.info("幂等 key 周期清理: 删除 %d 个过期条目", nd)
-                # 死信队列过期清理
-                if config.IF_DLQ_ENABLED:
-                    ndlq = db.clean_expired_dlq()
-                    if ndlq:
-                        log.info("死信队列周期清理: 删除 %d 个过期条目", ndlq)
-                # 缓存表过期清理
-                nc = db.clean_expired_cache()
-                if nc:
-                    log.info("缓存表周期清理: 删除 %d 个过期条目", nc)
-                # 持久化队列清理（超期 completed/processing）
-                if config.IF_PERSISTENT_QUEUE_ENABLED and engine._queue_db:
-                    nq = engine._queue_db.cleanup()
-                    if nq.get("deleted"):
-                        log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
-                # O-02: 内置告警引擎评估
-                snap = engine.snapshot()
-                ssnap = solver_guard.snapshot()
-                stats = db.stats_overview()
-                ctx = {
-                    "queued": snap["queued"],
-                    "solver_circuit_open": ssnap.get("circuit_open", False),
-                    "token_pool_empty": engine.token_pool.qsize() == 0,
-                    "window_requests": stats.get("total_requests", 0),
-                    "window_errors": stats.get("total_errors", 0),
-                }
-                alert_engine.evaluate(ctx)
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                log.warning("DB 周期清理失败: %s", e)
-    cleanup_task = asyncio.create_task(_cleanup_loop())
-
-    # IMP-22: 上游健康探测循环
-    async def _health_check_loop(interval: float = 60.0) -> None:
-        if not config.IF_HEALTH_CHECK_ENABLED:
-            return
-        while True:
-            try:
-                await asyncio.sleep(interval)
-                await registry.health_check_all()
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                log.warning("健康探测循环异常: %s", e)
-    _health_task = None
-    if config.IF_HEALTH_CHECK_ENABLED:
-        _health_task = asyncio.create_task(_health_check_loop(interval=config.IF_HEALTH_CHECK_INTERVAL))
-
-    # IMP-18: provider 降级恢复探测循环
-    async def _provider_recover_loop() -> None:
-        while True:
-            try:
-                await asyncio.sleep(config.IF_PROVIDER_RECOVER_INTERVAL)
-                registry.try_recover_all()
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                log.warning("provider 恢复探测循环异常: %s", e)
-    _recover_task = asyncio.create_task(_provider_recover_loop())
 
     yield
-    # F-05: 停止缓存预热任务
-    if _warmup_task and not _warmup_task.done():
-        _warmup_task.cancel()
+    log.info("优雅关闭开始: 分阶段有序停止服务")
+    # ① 停止缓存预热 + batch timer + 后台任务组
+    async def _stop_warmup() -> None:
+        if _warmup_task and not _warmup_task.done():
+            _warmup_task.cancel()
+            try:
+                await _warmup_task
+            except asyncio.CancelledError:
+                pass
+    async def _stop_batch_timer() -> None:
+        if _batch_timer_task:
+            _batch_timer_task.cancel()
+            try:
+                await _batch_timer_task
+            except asyncio.CancelledError:
+                pass
+    async def _stop_background() -> None:
+        _background_task.cancel()
         try:
-            await _warmup_task
-        except asyncio.CancelledError:
+            await _background_task
+        except ExceptionGroup:
             pass
-    # IMP-25: 停止前刷新 DB 写缓冲区
-    if _batch_timer_task:
-        _batch_timer_task.cancel()
-        try:
-            await _batch_timer_task
-        except asyncio.CancelledError:
-            pass
-    db.flush()  # 确保缓冲区数据不丢
-    cleanup_task.cancel()
-    # IMP-22: 停止健康探测循环
-    if _health_task:
-        _health_task.cancel()
-        try:
-            await _health_task
-        except asyncio.CancelledError:
-            pass
-    # IMP-18: 停止 provider 恢复探测循环
-    _recover_task.cancel()
-    try:
-        await _recover_task
-    except asyncio.CancelledError:
-        pass
-    await providers_shutdown()
+    await shutdown_phase(5.0, "① 后台任务停止",
+                         _stop_warmup(), _stop_batch_timer(), _stop_background())
+    # ② 刷新 DB 写缓冲区
+    async def _flush_db() -> None:
+        db.flush()
+    await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
+    # ③ 停止 worker 池
+    await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
+    # ④ 停止 provider
+    await shutdown_phase(8.0, "④ Provider 停止", providers_shutdown())
+    # ⑤ 停止 free_proxy_fetcher / account_pool
     from .free_proxy_fetcher import free_proxy_fetcher
-    await free_proxy_fetcher.stop()
     from .account_pool import account_pool
-    await account_pool.stop()
-    # IMP-11: 停止前 flush 缓存持久化
-    gallery_cache.flush_to_db()
-    await gallery_cache.stop_reaper()
-    await engine.stop()
-    # H2: 服务停止时关闭共享 HTTP 连接池
-    await turnstile_client.close_client()
-    await imagefree_client.close_client()
-    # IMP-08: 关闭 OTel 追踪（Flush + 反注册 Instrumentation）
-    shutdown_telemetry()
+    await shutdown_phase(5.0, "⑤ 代理/号池停止",
+                         free_proxy_fetcher.stop(), account_pool.stop())
+    # ⑥ 刷新缓存持久化
+    async def _flush_cache() -> None:
+        gallery_cache.flush_to_db()
+    await shutdown_phase(3.0, "⑥ 缓存持久化",
+                         _flush_cache(), gallery_cache.stop_reaper())
+    # ⑦ 关闭 HTTP 连接池
+    await shutdown_phase(3.0, "⑦ HTTP 连接池关闭",
+                         turnstile_client.close_client(), imagefree_client.close_client())
+    # ⑧ 关闭 OTel
+    async def _shutdown_otel() -> None:
+        shutdown_telemetry()
+    await shutdown_phase(2.0, "⑧ OTel 关闭", _shutdown_otel())
     # U-02: 移除 WebSocket 日志处理器
     logging.getLogger().removeHandler(ws_log_handler)
+    log.info("优雅关闭完成")
 
 
 db = DB(config.DB_FILE)

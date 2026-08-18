@@ -9,8 +9,7 @@ import contextvars
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 # ── ContextVar ─────────────────────────────────────────────
 request_context_var: contextvars.ContextVar[Optional["RequestContext"]] = (
@@ -60,29 +59,33 @@ class RequestContextMiddleware:
     """FastAPI/Starlette ASGI middleware：在每个请求开始时设置 context，结束时清理。
 
     用法：
-        app.add_middleware(RequestContextMiddleware)  # 标准 ASGI 方式
-        或
-        app.middleware("http")(RequestContextMiddleware())  # 装饰器方式
+        app.add_middleware(RequestContextMiddleware)
+
+    注意：此类作为 ASGI middleware 使用，__call__ 接收 (scope, receive, send) 三元组。
     """
 
-    def __init__(self, app=None):
+    def __init__(self, app):
         self.app = app
 
-    async def __call__(self, request, call_next):
-        # 提取客户端 IP（Starlette Request 对象）
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # 提取客户端 IP
         client_host = "unknown"
         try:
-            if hasattr(request, "client") and request.client:
-                client_host = request.client.host
+            client_info = scope.get("client")
+            if client_info:
+                client_host = client_info[0]
         except Exception:
             pass
 
         # 提取请求头
         headers = {}
         try:
-            if hasattr(request, "headers"):
-                for k, v in request.headers.items():
-                    headers[k.lower()] = v
+            for key, value in scope.get("headers", []):
+                headers[key.decode("latin-1").lower()] = value.decode("latin-1")
         except Exception:
             pass
 
@@ -96,14 +99,7 @@ class RequestContextMiddleware:
         )
         token = request_context_var.set(ctx)
         try:
-            response = await call_next(request)
-            # 响应头注入 request_id 方便调试
-            try:
-                if hasattr(response, "headers"):
-                    response.headers["X-Request-ID"] = ctx.request_id
-            except Exception:
-                pass
-            return response
+            await self.app(scope, receive, send)
         finally:
             request_context_var.reset(token)
 
