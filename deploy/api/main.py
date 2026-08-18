@@ -27,6 +27,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .errors import AppError, ErrorCodes, error_response, STATUS_CODE_ERROR_MAP
 from pydantic import BaseModel, Field
 
+# A-05: contextvars 请求上下文
+from .context import RequestContextMiddleware, RequestIdLogFilter
+
 from . import config
 from . import imagefree_client
 from . import turnstile_client
@@ -36,11 +39,16 @@ from .db import DB, task_to_public
 from .solver_guard import REASON_CATEGORIES, solver_guard
 from .worker import Engine, QueueFull
 from .cache import LRUCache
+from .cache_warmup import warmup_cache
 from .telemetry import init_telemetry, shutdown_telemetry
+from .alerting import alert_engine
+from .audit import audit_log
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
 from .providers.registry import shutdown_all as providers_shutdown
+
+from .metrics_ext import imagefree_metrics as metrics_v2
 
 # M3: 结构化日志格式（含 trace_id 占位，日志里以 trace=<id> 呈现）。
 # IMP-08: trace_id 由 LoggingInstrumentor + TraceIdLogFilter 动态追加到 message 末尾，
@@ -50,6 +58,8 @@ logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT,
                     datefmt="%Y-%m-%d %H:%M:%S")
 # 注入 LogBuffer 到 root logger，捕获所有模块的日志
 logging.getLogger().addHandler(log_buffer_handler)
+# A-05: 注入 RequestIdLogFilter，自动在日志消息末尾追加 [req=<request_id>]
+logging.getLogger().addFilter(RequestIdLogFilter())
 
 log = logging.getLogger("imagefree_api")
 
@@ -77,6 +87,8 @@ async def lifespan(_app: FastAPI):
     restored = await gallery_cache.restore_from_db()
     if restored:
         log.info("缓存从 DB 恢复完成: %d 个条目", restored)
+    # F-05: 启动时预热常见查询缓存（异步，不影响启动速度）
+    _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     # IMP-25: 启动 DB 批量写入定时器
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
@@ -148,6 +160,18 @@ async def lifespan(_app: FastAPI):
                     nq = engine._queue_db.cleanup()
                     if nq.get("deleted"):
                         log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
+                # O-02: 内置告警引擎评估
+                snap = engine.snapshot()
+                ssnap = solver_guard.snapshot()
+                stats = db.stats_overview()
+                ctx = {
+                    "queued": snap["queued"],
+                    "solver_circuit_open": ssnap.get("circuit_open", False),
+                    "token_pool_empty": engine.token_pool.qsize() == 0,
+                    "window_requests": stats.get("total_requests", 0),
+                    "window_errors": stats.get("total_errors", 0),
+                }
+                alert_engine.evaluate(ctx)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -183,6 +207,13 @@ async def lifespan(_app: FastAPI):
     _recover_task = asyncio.create_task(_provider_recover_loop())
 
     yield
+    # F-05: 停止缓存预热任务
+    if _warmup_task and not _warmup_task.done():
+        _warmup_task.cancel()
+        try:
+            await _warmup_task
+        except asyncio.CancelledError:
+            pass
     # IMP-25: 停止前刷新 DB 写缓冲区
     if _batch_timer_task:
         _batch_timer_task.cancel()
@@ -239,6 +270,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# A-05: contextvars 请求上下文中间件 - 在每个请求开始时设置 request context
+app.add_middleware(RequestContextMiddleware)
 
 # ── 统一错误处理 ─────────────────────────────────
 @app.exception_handler(AppError)
@@ -1165,92 +1198,15 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
 
 
 # ── M4: Prometheus 文本格式指标端点 ──────────────────
-# 不引入 prometheus_client 依赖，输出标准 text/plain exposition（Prometheus 原生可抓）。
-# 覆盖：请求/出图/失败/在途/排队/token 池水位/DB 行数/进程内存与运行时长/solver 求解质量。
+# 使用 prometheus_client 库生成标准 exposition 格式。
+# 覆盖：请求/出图/失败/在途/排队/token 池水位/DB 行数/运行时长/solver 求解质量。
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     snap = engine.snapshot()
     ov = db.stats_overview()
-    ssnap = solver_guard.snapshot()  # solver 快照只取一次，下方复用
-    success_total = ssnap["solve_success_total"]
-    # 总耗时用原始累计值（solver_guard 未取整），避免 round(avg)×count 的累计误差
-    duration_sum = ssnap["solve_total_duration"]
-    window_rate = ssnap["window_success_rate"]
-    lines = [
-        "# HELP imagefree_requests_total 累计请求数",
-        "# TYPE imagefree_requests_total counter",
-        f"imagefree_requests_total {ov['total_requests']}",
-        "# HELP imagefree_images_total 累计成功出图数",
-        "# TYPE imagefree_images_total counter",
-        f"imagefree_images_total {ov['total_images']}",
-        "# HELP imagefree_errors_total 累计失败数",
-        "# TYPE imagefree_errors_total counter",
-        f"imagefree_errors_total {ov['total_errors']}",
-        "# HELP imagefree_processing 当前生成中的任务数",
-        "# TYPE imagefree_processing gauge",
-        f"imagefree_processing {engine.processing}",
-        "# HELP imagefree_queued 当前排队任务数",
-        "# TYPE imagefree_queued gauge",
-        f"imagefree_queued {engine.queue.qsize()}",
-        "# HELP imagefree_edit_inflight 图生图在途/排队任务数",
-        "# TYPE imagefree_edit_inflight gauge",
-        f"imagefree_edit_inflight {len(_EDIT_PENDING)}",
-        "# HELP imagefree_token_pool 当前 token 池水位",
-        "# TYPE imagefree_token_pool gauge",
-        f"imagefree_token_pool {engine.token_pool.qsize()}",
-        "# HELP imagefree_db_rows 请求记录总量",
-        "# TYPE imagefree_db_rows gauge",
-        f"imagefree_db_rows {db.count()}",
-        "# HELP imagefree_uptime_seconds 服务运行时长(秒)",
-        "# TYPE imagefree_uptime_seconds counter",
-        f"imagefree_uptime_seconds {snap['uptime_seconds']}",
-        # ── solver 求解质量（M6，来自 solver_guard.snapshot()）──
-        "# HELP imagefree_solve_total Turnstile 求解成功/失败累计数",
-        "# TYPE imagefree_solve_total counter",
-        f'imagefree_solve_total{{result="success"}} {success_total}',
-        f'imagefree_solve_total{{result="failure"}} {ssnap["solve_failure_total"]}',
-        "# HELP imagefree_solve_failures_by_reason 按原因分类的求解失败累计数",
-        "# TYPE imagefree_solve_failures_by_reason counter",
-        *[f'imagefree_solve_failures_by_reason{{reason="{r}"}} {ssnap["failure_reasons"].get(r, 0)}'
-          for r in REASON_CATEGORIES if ssnap["failure_reasons"].get(r, 0)],
-        "# HELP imagefree_solve_duration_seconds 求解总耗时(秒)",
-        "# TYPE imagefree_solve_duration_seconds counter",
-        f"imagefree_solve_duration_seconds_sum {duration_sum}",
-        f"imagefree_solve_duration_seconds_count {success_total}",
-        "# HELP imagefree_solve_window_success_rate 近窗口求解成功率(0-1)",
-        "# TYPE imagefree_solve_window_success_rate gauge",
-        f"imagefree_solve_window_success_rate {window_rate if window_rate is not None else 0}",
-        "# HELP imagefree_solve_window_count 近窗口求解次数",
-        "# TYPE imagefree_solve_window_count gauge",
-        f"imagefree_solve_window_count {ssnap['window_solve_count']}",
-        "# HELP imagefree_solve_consecutive_failures 连续求解失败次数",
-        "# TYPE imagefree_solve_consecutive_failures gauge",
-        f"imagefree_solve_consecutive_failures {ssnap['consecutive_failures']}",
-        "# HELP imagefree_solver_circuit_open solver 熔断是否开启(1=开启)",
-        "# TYPE imagefree_solver_circuit_open gauge",
-        f"imagefree_solver_circuit_open {1 if ssnap['circuit_open'] else 0}",
-        "# HELP imagefree_solve_rejected_total token 被上游拒绝累计数",
-        "# TYPE imagefree_solve_rejected_total counter",
-        f"imagefree_solve_rejected_total {ssnap['rejected_total']}",
-        "# HELP imagefree_token_wait_timeout_total token 池空等待超时累计次数",
-        "# TYPE imagefree_token_wait_timeout_total counter",
-        f"imagefree_token_wait_timeout_total {engine.token_pool_manager.wait_timeout_total}",
-        "# HELP imagefree_token_pool_watermark 各 token 池水位",
-        "# TYPE imagefree_token_pool_watermark gauge",
-        f'imagefree_token_pool_watermark{{pool="direct"}} {engine.token_pool.qsize()}',
-    ]
-    # per-proxy 池水位（跳过 direct，避免与上面的 direct 系列重复）
-    pools = engine.token_pool_manager.pools_snapshot()
-    pool_items = list(pools.values()) if isinstance(pools, dict) else pools
-    for p in pool_items:
-        key = p.get("key", "") if isinstance(p, dict) else str(p)
-        if key == "direct":
-            continue
-        size = p.get("size", 0) if isinstance(p, dict) else 0
-        label = key if key.startswith("proxy:") else f"proxy:{key}"
-        lines.append(f'imagefree_token_pool_watermark{{pool="{label}"}} {size}')
-    # L1(审计): 补 charset，中文 HELP 在严格客户端才能正确解码
-    return PlainTextResponse("\n".join(lines) + "\n",
+    ssnap = solver_guard.snapshot()
+    body = metrics_v2(snap, ov, ssnap)
+    return PlainTextResponse(body,
                              media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
@@ -1268,15 +1224,19 @@ async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
 
 
 @app.post("/v1/dead-letter-queue/{task_id}/retry")
-async def retry_dlq_task(task_id: str):
+async def retry_dlq_task(task_id: str, request: Request):
     """从死信队列移除指定任务（清空记录，重新入队重试语义）。"""
+    client_ip = request.client.host if request.client else "unknown"
+    audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
     db.retry_dlq(task_id)
     return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
 
 
 @app.delete("/v1/dead-letter-queue")
-async def clear_dlq():
+async def clear_dlq(request: Request):
     """清空死信队列所有记录。"""
+    client_ip = request.client.host if request.client else "unknown"
+    audit_log.record("dlq.clear", client_ip, "dlq", "清空死信队列")
     db.clear_dlq()
     return {"status": "ok", "detail": "死信队列已清空"}
 

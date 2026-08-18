@@ -499,6 +499,8 @@
     <button class="nav-tab" data-nav="proxy-sec">🌐 代理池状态</button>
     <button class="nav-tab" data-nav="gallery-sec">🎨 画廊</button>
     <button class="nav-tab" data-nav="docs-sec">📚 API 对接文档</button>
+    <button class="nav-tab" data-nav="quickstart-sec">🚀 快速开始</button>
+    <button class="nav-tab" data-nav="playground-api-sec">🧪 API Playground</button>
     <button class="nav-tab" data-nav="task-sec">📋 任务中心</button>
     <button class="nav-tab" data-nav="stats-sec">📊 用量统计</button>
     <button class="nav-tab theme-toggle" id="theme-toggle" style="margin-left:auto" title="切换主题">🌙</button>
@@ -937,6 +939,155 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   </section>
 </main>
 
+	<!-- ── 快速开始 ── -->
+	<section class="card" id="quickstart-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+	  <h2 style="margin-top:0">🚀 快速开始</h2>
+	  <p class="muted">以下 curl 示例可直接复制使用，把 <code>YOUR-DOMAIN</code> 替换为实际服务地址。</p>
+
+	  <h3>1. 生成图片（同步）</h3>
+	  <p>提交后等待直到出图或失败，适合低频调用。</p>
+	  <pre><code>curl -X POST https://<span class="s">YOUR-DOMAIN</span>/v1/generate \
+	    -H "Content-Type: application/json" \
+	    -d '{"prompt":"a cute orange cat, soft lighting","aspect_ratio":"1:1"}'</code></pre>
+
+	  <h3>2. 异步生成（高并发推荐）</h3>
+	  <p>立即返回 task_id，用 <code>GET /v1/tasks/{id}</code> 轮询结果。</p>
+	  <pre><code><span class="c"># 提交异步任务</span>
+	curl -X POST https://<span class="s">YOUR-DOMAIN</span>/v1/generate/async \
+	  -H "Content-Type: application/json" \
+	  -d '{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'
+
+	<span class="c"># 轮询结果（返回 completed 后即可取 image_url）</span>
+	curl https://<span class="s">YOUR-DOMAIN</span>/v1/tasks/&lt;task_id&gt;</code></pre>
+
+	  <h3>3. 指定模型和分辨率</h3>
+	  <pre><code>curl -X POST https://<span class="s">YOUR-DOMAIN</span>/v1/generate/async \
+	    -H "Content-Type: application/json" \
+	    -d '{
+	      "prompt": "cyberpunk city, neon lights",
+	      "aspect_ratio": "16:9",
+	      "model": "minimaxh3/nano-banana-pro",
+	      "resolution": "2K"
+	    }'</code></pre>
+
+	  <h3>4. 图生图（AI 照片编辑）</h3>
+	  <pre><code><span class="c"># 图片 data URI 可通过 base64 编码获取</span>
+	curl -X POST https://<span class="s">YOUR-DOMAIN</span>/v1/edit \
+	  -H "Content-Type: application/json" \
+	  -d '{
+	    "image": "data:image/png;base64,iVBORw0KGgo...",
+	    "prompt": "make it a watercolor painting"
+	  }'
+
+	<span class="c"># 轮询结果</span>
+	curl https://<span class="s">YOUR-DOMAIN</span>/v1/edit/tasks/&lt;task_id&gt;</code></pre>
+
+	  <h3>5. 查询任务状态</h3>
+	  <pre><code>curl https://<span class="s">YOUR-DOMAIN</span>/v1/tasks/b0b712c0-9826-4cb1-8604-d710cc58438a</code></pre>
+
+	  <h3>6. 查询可用模型列表</h3>
+	  <pre><code>curl https://<span class="s">YOUR-DOMAIN</span>/v1/models</code></pre>
+
+	  <h3>7. 获取站点信息</h3>
+	  <pre><code>curl https://<span class="s">YOUR-DOMAIN</span>/v1/meta</code></pre>
+	</section>
+
+	<!-- ── API Playground ── -->
+	<section class="card" id="playground-api-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+	  <h2 style="margin-top:0">🧪 API Playground</h2>
+	  <p class="muted">在线测试各 API 端点，直接填写参数并发送请求，实时查看返回结果。</p>
+
+	  <div class="pg-tabs">
+	    <button class="pg-tab on" data-apipane="gen">文生图</button>
+	    <button class="pg-tab" data-apipane="query">查询任务</button>
+	    <button class="pg-tab" data-apipane="models">模型列表</button>
+	    <button class="pg-tab" data-apipane="meta">站点信息</button>
+	  </div>
+
+	  <!-- 文生图测试 -->
+	  <div class="pg-pane on" id="apipane-gen">
+	    <label style="display:block;margin-bottom:6px;font-size:14px;font-weight:600">提示词</label>
+	    <textarea id="api-prompt" class="pg-prompt" placeholder="输入提示词，例如：a cute orange cat with blue eyes" style="min-height:80px"></textarea>
+	    <div style="display:flex;flex-wrap:wrap;gap:12px;margin:12px 0">
+	      <label style="font-size:13px;color:var(--muted)">画幅
+	        <select id="api-ratio" style="border-radius:8px;padding:6px 10px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-left:6px">
+	          <option value="1:1">1:1</option>
+	          <option value="3:4">3:4</option>
+	          <option value="4:3">4:3</option>
+	          <option value="9:16">9:16</option>
+	          <option value="16:9">16:9</option>
+	        </select>
+	      </label>
+	      <label style="font-size:13px;color:var(--muted)">模型
+	        <select id="api-model" style="border-radius:8px;padding:6px 10px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-left:6px;min-width:140px"></select>
+	      </label>
+	      <label style="font-size:13px;color:var(--muted)">分辨率
+	        <select id="api-resolution" style="border-radius:8px;padding:6px 10px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-left:6px">
+	          <option value="1K">1K</option>
+	          <option value="2K">2K</option>
+	          <option value="4K">4K</option>
+	          <option value="480p">480p</option>
+	          <option value="720p">720p</option>
+	        </select>
+	      </label>
+	    </div>
+	    <div class="pg-row" style="justify-content:space-between">
+	      <label class="pg-dl"><input type="checkbox" id="api-async"> 异步模式（立即返回 task_id）</label>
+	      <button id="api-gen-btn" class="pg-btn">📤 发送请求</button>
+	    </div>
+	    <div id="api-gen-status" class="pg-status" style="margin-top:10px"></div>
+	    <div id="api-gen-request" style="display:none;margin-top:10px">
+	      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📤 请求体（JSON）：</div>
+	      <pre id="api-gen-request-body" style="font-size:12px;padding:10px 12px;margin:0"></pre>
+	    </div>
+	    <div id="api-gen-response" style="display:none;margin-top:10px">
+	      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📥 响应：</div>
+	      <pre id="api-gen-response-body" style="font-size:12px;padding:10px 12px;margin:0;max-height:300px;overflow-y:auto"></pre>
+	    </div>
+	    <div id="api-gen-result" style="display:none;margin-top:12px;text-align:center">
+	      <img id="api-gen-img" style="max-width:100%;max-height:400px;border-radius:12px;border:1px solid var(--line)" alt="生成结果">
+	      <div id="api-gen-dl" style="margin-top:8px"></div>
+	    </div>
+	  </div>
+
+	  <!-- 查询任务 -->
+	  <div class="pg-pane" id="apipane-query">
+	    <label style="display:block;margin-bottom:6px;font-size:14px;font-weight:600">任务 ID</label>
+	    <div style="display:flex;gap:10px;flex-wrap:wrap">
+	      <input type="text" id="api-task-id" placeholder="输入任务 ID，如 b0b712c0-..." style="flex:1;min-width:200px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg-soft);color:var(--text);font-size:14px">
+	      <button id="api-query-btn" class="btn secondary" style="padding:10px 20px;margin-top:0">🔍 查询</button>
+	    </div>
+	    <div id="api-query-status" class="pg-status" style="margin-top:10px"></div>
+	    <div id="api-query-response" style="display:none;margin-top:10px">
+	      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📥 响应：</div>
+	      <pre id="api-query-response-body" style="font-size:12px;padding:10px 12px;margin:0;max-height:300px;overflow-y:auto"></pre>
+	    </div>
+	    <div id="api-query-result" style="display:none;margin-top:12px;text-align:center">
+	      <img id="api-query-img" style="max-width:100%;max-height:400px;border-radius:12px;border:1px solid var(--line)" alt="任务结果">
+	    </div>
+	  </div>
+
+	  <!-- 模型列表 -->
+	  <div class="pg-pane" id="apipane-models">
+	    <button id="api-models-btn" class="btn secondary" style="margin-top:0">📦 获取模型列表</button>
+	    <div id="api-models-status" class="pg-status" style="margin-top:10px"></div>
+	    <div id="api-models-response" style="display:none;margin-top:10px">
+	      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📥 响应：</div>
+	      <pre id="api-models-body" style="font-size:12px;padding:10px 12px;margin:0;max-height:400px;overflow-y:auto"></pre>
+	    </div>
+	  </div>
+
+	  <!-- 站点信息 -->
+	  <div class="pg-pane" id="apipane-meta">
+	    <button id="api-meta-btn" class="btn secondary" style="margin-top:0">📋 获取站点信息</button>
+	    <div id="api-meta-status" class="pg-status" style="margin-top:10px"></div>
+	    <div id="api-meta-response" style="display:none;margin-top:10px">
+	      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">📥 响应：</div>
+	      <pre id="api-meta-body" style="font-size:12px;padding:10px 12px;margin:0;max-height:400px;overflow-y:auto"></pre>
+	    </div>
+	  </div>
+	</section>
+
 <footer>
   <div class="foot-brand">
     <img src="/static/logo.png" alt="听风AI">
@@ -1062,7 +1213,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     'gallery-sec': 'gallery-sec',
     'docs-sec': 'docs-sec',
     'stats-sec': 'stats-sec',
-    'task-sec': 'task-sec'
+    'task-sec': 'task-sec',
+    'quickstart-sec': 'quickstart-sec',
+    'playground-api-sec': 'playground-api-sec'
   };
   document.querySelectorAll('.nav-tab').forEach(function (tab) {
     tab.onclick = function () {
@@ -2056,7 +2209,191 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       setBtnLoading(peBtn, false);
     });
   };
-})();
+  })();
+
+  // ── API Playground ──
+  // Playground 内 tab 切换
+  document.querySelectorAll('[data-apipane]').forEach(function (tab) {
+    tab.onclick = function () {
+      document.querySelectorAll('[data-apipane]').forEach(function (t) { t.classList.remove('on'); });
+      document.querySelectorAll('[id^="apipane-"]').forEach(function (p) { p.classList.remove('on'); });
+      tab.classList.add('on');
+      var pane = document.getElementById('apipane-' + tab.dataset.apipane);
+      if (pane) pane.classList.add('on');
+    };
+  });
+
+  // 加载模型列表到 Playground 下拉
+  function loadApiModels() {
+    safeJson('/v1/models').then(function (d) {
+      var items = d.items || {};
+      var sel = document.getElementById('api-model');
+      if (!sel) return;
+      sel.innerHTML = '';
+      Object.keys(items).forEach(function (prov) {
+        var og = document.createElement('optgroup');
+        og.label = prov;
+        (items[prov] || []).forEach(function (m) {
+          if ((m.capabilities || []).indexOf('txt2img') === -1 &&
+              (m.capabilities || []).indexOf('txt2vid') === -1) return;
+          var opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.id + (m.credits != null ? ' · ' + m.credits + '积分' : '');
+          og.appendChild(opt);
+        });
+        if (og.children.length) sel.appendChild(og);
+      });
+    }).catch(function () {});
+  }
+  loadApiModels();
+
+  // 文生图 Playground
+  var apiGenBtn = document.getElementById('api-gen-btn');
+  var apiGenStatus = document.getElementById('api-gen-status');
+  if (apiGenBtn) {
+    apiGenBtn.onclick = function () {
+      var prompt = document.getElementById('api-prompt').value.trim();
+      if (!prompt) { apiGenStatus.textContent = '⚠️ 请输入提示词'; apiGenStatus.className = 'pg-status err'; return; }
+      var isAsync = document.getElementById('api-async').checked;
+      var payload = {
+        prompt: prompt,
+        aspect_ratio: document.getElementById('api-ratio').value || '1:1',
+        model: document.getElementById('api-model').value || 'imagefree/default',
+        resolution: document.getElementById('api-resolution').value || '1K'
+      };
+      // 显示请求体
+      var reqBox = document.getElementById('api-gen-request');
+      if (reqBox) {
+        reqBox.style.display = 'block';
+        document.getElementById('api-gen-request-body').textContent = JSON.stringify(payload, null, 2);
+      }
+      var respBox = document.getElementById('api-gen-response');
+      var respBody = document.getElementById('api-gen-response-body');
+      var resultBox = document.getElementById('api-gen-result');
+      var imgEl = document.getElementById('api-gen-img');
+      var dlBox = document.getElementById('api-gen-dl');
+      resultBox.style.display = 'none';
+      apiGenStatus.textContent = '📤 发送中…';
+      apiGenStatus.className = 'pg-status';
+      apiGenBtn.disabled = true;
+      apiGenBtn.textContent = '⏳ 发送中…';
+
+      var endpoint = isAsync ? '/v1/generate/async' : '/v1/generate';
+      safeJson(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function (d) {
+        apiGenBtn.disabled = false;
+        apiGenBtn.textContent = '📤 发送请求';
+        respBox.style.display = 'block';
+        respBody.textContent = JSON.stringify(d, null, 2);
+        if (d.status === 'error') {
+          apiGenStatus.textContent = '❌ ' + (d.error || '生成失败');
+          apiGenStatus.className = 'pg-status err';
+          return;
+        }
+        if (d.status === 'completed' && d.image_url) {
+          apiGenStatus.textContent = '✅ 出图完成';
+          apiGenStatus.className = 'pg-status';
+          resultBox.style.display = 'block';
+          imgEl.src = d.image_url;
+          dlBox.innerHTML = '<a href="' + d.image_url + '" target="_blank" rel="noopener" class="pg-dl-link">🔗 打开原图 ↗</a>';
+        } else if (d.status === 'queued' || d.status === 'pending') {
+          apiGenStatus.textContent = '📥 任务已提交（ID: ' + d.id + '），请在「查询任务」tab 中查看结果';
+          apiGenStatus.className = 'pg-status';
+        } else {
+          apiGenStatus.textContent = '✅ 响应已返回';
+          apiGenStatus.className = 'pg-status';
+        }
+      }).catch(function (err) {
+        apiGenBtn.disabled = false;
+        apiGenBtn.textContent = '📤 发送请求';
+        respBox.style.display = 'block';
+        respBody.textContent = '❌ ' + String(err.message || err).slice(0, 200);
+        apiGenStatus.textContent = '⚠️ 请求失败';
+        apiGenStatus.className = 'pg-status err';
+      });
+    };
+  }
+
+  // 查询任务 Playground
+  var apiQueryBtn = document.getElementById('api-query-btn');
+  if (apiQueryBtn) {
+    apiQueryBtn.onclick = function () {
+      var taskId = document.getElementById('api-task-id').value.trim();
+      if (!taskId) { document.getElementById('api-query-status').textContent = '⚠️ 请输入任务 ID'; return; }
+      var respBox = document.getElementById('api-query-response');
+      var respBody = document.getElementById('api-query-response-body');
+      var resultBox = document.getElementById('api-query-result');
+      var imgEl = document.getElementById('api-query-img');
+      resultBox.style.display = 'none';
+      respBox.style.display = 'none';
+      document.getElementById('api-query-status').textContent = '🔍 查询中…';
+      document.getElementById('api-query-status').className = 'pg-status';
+      safeJson('/v1/tasks/' + encodeURIComponent(taskId)).then(function (d) {
+        respBox.style.display = 'block';
+        respBody.textContent = JSON.stringify(d, null, 2);
+        document.getElementById('api-query-status').textContent = '✅ 查询完成';
+        document.getElementById('api-query-status').className = 'pg-status';
+        if (d.image_url) {
+          resultBox.style.display = 'block';
+          imgEl.src = d.image_url;
+        }
+      }).catch(function (err) {
+        respBox.style.display = 'block';
+        respBody.textContent = '❌ ' + String(err.message || err).slice(0, 200);
+        document.getElementById('api-query-status').textContent = '⚠️ 查询失败';
+        document.getElementById('api-query-status').className = 'pg-status err';
+      });
+    };
+  }
+
+  // 模型列表 Playground
+  var apiModelsBtn = document.getElementById('api-models-btn');
+  if (apiModelsBtn) {
+    apiModelsBtn.onclick = function () {
+      var respBox = document.getElementById('api-models-response');
+      var respBody = document.getElementById('api-models-body');
+      respBox.style.display = 'none';
+      document.getElementById('api-models-status').textContent = '📦 获取中…';
+      document.getElementById('api-models-status').className = 'pg-status';
+      safeJson('/v1/models').then(function (d) {
+        respBox.style.display = 'block';
+        respBody.textContent = JSON.stringify(d, null, 2);
+        document.getElementById('api-models-status').textContent = '✅ 获取成功（共 ' + d.count + ' 个模型）';
+        document.getElementById('api-models-status').className = 'pg-status';
+      }).catch(function (err) {
+        respBox.style.display = 'block';
+        respBody.textContent = '❌ ' + String(err.message || err).slice(0, 200);
+        document.getElementById('api-models-status').textContent = '⚠️ 获取失败';
+        document.getElementById('api-models-status').className = 'pg-status err';
+      });
+    };
+  }
+
+  // 站点信息 Playground
+  var apiMetaBtn = document.getElementById('api-meta-btn');
+  if (apiMetaBtn) {
+    apiMetaBtn.onclick = function () {
+      var respBox = document.getElementById('api-meta-response');
+      var respBody = document.getElementById('api-meta-body');
+      respBox.style.display = 'none';
+      document.getElementById('api-meta-status').textContent = '📋 获取中…';
+      document.getElementById('api-meta-status').className = 'pg-status';
+      safeJson('/v1/meta').then(function (d) {
+        respBox.style.display = 'block';
+        respBody.textContent = JSON.stringify(d, null, 2);
+        document.getElementById('api-meta-status').textContent = '✅ 获取成功';
+        document.getElementById('api-meta-status').className = 'pg-status';
+      }).catch(function (err) {
+        respBox.style.display = 'block';
+        respBody.textContent = '❌ ' + String(err.message || err).slice(0, 200);
+        document.getElementById('api-meta-status').textContent = '⚠️ 获取失败';
+        document.getElementById('api-meta-status').className = 'pg-status err';
+      });
+    };
+  }
 </script>
 </body>
 </html>
