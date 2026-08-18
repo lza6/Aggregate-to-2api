@@ -1,6 +1,6 @@
-# imagefree_api 服务器部署 — Docker Compose
+# imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 说明：东京服务器可直连 imagefree.net，无需代理；无鉴权，公益开放。
+# 版本: v2.3.0
 
 services:
   cfsolver:
@@ -11,6 +11,9 @@ services:
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1500m
+    mem_reservation: 1g
+    cpus: '2'
+    cpuset: '0-1'
     environment:
       - PYTHONUNBUFFERED=1
     healthcheck:
@@ -25,6 +28,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - imagefree
 
   api:
     build:
@@ -34,8 +39,11 @@ services:
     container_name: imagefree-api
     restart: unless-stopped
     mem_limit: 256m
+    mem_reservation: 128m
+    cpus: '1'
     depends_on:
-      - cfsolver
+      cfsolver:
+        condition: service_healthy
     ports:
       - "8100:8100"
     volumes:
@@ -54,8 +62,21 @@ services:
       - HTTP_PROXY=
       - HTTPS_PROXY=
       - NO_PROXY=*
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, json; r = urllib.request.urlopen('http://127.0.0.1:8100/v1/healthz', timeout=5); body = json.loads(r.read()); assert body.get('status') in ('ok','degraded')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - imagefree
+
+networks:
+  imagefree:
+    name: imagefree-network
+    driver: bridge
