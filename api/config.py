@@ -555,6 +555,7 @@ class Settings(BaseSettings):
         self._observability = ObservabilitySettings(
             health_check_interval=self.if_health_check_interval,
             health_check_enabled=self.if_health_check_enabled,
+            alert_check_interval=self.if_alert_check_interval,
         )
         self._edit = EditSettings(
             edit_timeout=self.edit_timeout,
@@ -761,6 +762,7 @@ IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
 # 可观测性
 IF_HEALTH_CHECK_INTERVAL = settings.if_health_check_interval
 IF_HEALTH_CHECK_ENABLED = settings.if_health_check_enabled
+IF_ALERT_CHECK_INTERVAL = settings.if_alert_check_interval
 
 # DB
 STATS_FILE = settings.stats_file
@@ -927,6 +929,7 @@ __all__ = [
     "IF_LRU_CACHE_TTL",
     "IF_HEALTH_CHECK_INTERVAL",
     "IF_HEALTH_CHECK_ENABLED",
+    "IF_ALERT_CHECK_INTERVAL",
     "STATS_FILE",
     "DB_FILE",
     "IF_BASE64_DIR",
