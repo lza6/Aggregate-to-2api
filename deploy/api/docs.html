@@ -515,7 +515,22 @@
     <div class="stat-card"><div class="label">Worker 数</div><div class="value" id="st-workers">–</div><div class="delta">并行生成通道</div></div>
     <div class="stat-card"><div class="label">运行时长</div><div class="value" id="st-up">–</div><div class="delta">服务已持续运行</div></div>
     <div class="stat-card"><div class="label">号池账号</div><div class="value small" id="st-accounts">–</div><div class="delta">minimaxh3 + nanobanana</div></div>
+    <div class="stat-card"><div class="label">CF 求解</div><div class="value" id="st-solver-status" style="font-size:18px">–</div><div class="delta" id="st-solver-rate">成功率：–</div></div>
   </div>
+</section>
+
+<!-- ── Solver 求解统计详情 ── -->
+<section class="card" id="solver-sec" style="max-width:1180px;margin:12px auto 0;padding:14px 20px;">
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:13px;color:var(--muted)">
+    <span>🔄 Window: <b id="solver-win-count" style="color:var(--text)">–</b> 次求解 | 成功率 <b id="solver-win-rate" style="color:var(--text)">–</b></span>
+    <span>⏱ 平均耗时 <b id="solver-win-avg" style="color:var(--text)">–</b></span>
+    <span>📊 累计: 成功 <b id="solver-total-ok" style="color:var(--ok)">–</b> / 失败 <b id="solver-total-err" style="color:var(--err)">–</b></span>
+    <span>🔁 连续失败 <b id="solver-consecutive" style="color:var(--text)">–</b></span>
+    <span id="solver-circuit" style="display:none">⛔ 熔断中</span>
+    <span>🚫 Token 被拒 <b id="solver-rejected" style="color:var(--warn)">–</b></span>
+    <span>🏊 Token 池: <b id="solver-token-pool" style="color:var(--text)">–</b></span>
+  </div>
+  <div id="solver-failure-reasons" style="margin-top:6px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px"></div>
 </section>
 
 <!-- ── 在线生成面板 ── -->
@@ -1121,6 +1136,45 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       document.getElementById('st-queue').textContent = '排队中：' + d.queued + '（上限 ' + d.queue_capacity + '）';
       renderBars(document.getElementById('chart-daily'), d.daily, 'images', function (x) { return x.day.slice(5); });
       renderBars(document.getElementById('chart-monthly'), d.monthly, 'images', function (x) { return x.month; });
+      // ── solver 求解统计 ──
+      var s = d.solver || {};
+      var solverStatus = document.getElementById('st-solver-status');
+      if (s.status === 'ok') {
+        solverStatus.textContent = '✅ 正常';
+        solverStatus.style.color = 'var(--ok)';
+      } else if (s.status === 'degraded') {
+        solverStatus.textContent = '⚠️ 劣化';
+        solverStatus.style.color = 'var(--warn)';
+      } else if (s.status === 'circuit_open') {
+        solverStatus.textContent = '⛔ 熔断';
+        solverStatus.style.color = 'var(--err)';
+      } else {
+        solverStatus.textContent = '–';
+      }
+      var rate = s.window_success_rate != null ? (s.window_success_rate * 100).toFixed(1) + '%' : '–';
+      document.getElementById('st-solver-rate').textContent = '成功率：' + rate;
+      document.getElementById('solver-win-count').textContent = s.window_solve_count != null ? s.window_solve_count : '–';
+      document.getElementById('solver-win-rate').textContent = rate;
+      document.getElementById('solver-win-avg').textContent = s.window_avg_seconds != null ? s.window_avg_seconds.toFixed(1) + 's' : '–';
+      document.getElementById('solver-total-ok').textContent = s.solve_success_total != null ? s.solve_success_total : '–';
+      document.getElementById('solver-total-err').textContent = s.solve_failure_total != null ? s.solve_failure_total : '–';
+      document.getElementById('solver-consecutive').textContent = s.consecutive_failures != null ? s.consecutive_failures : '–';
+      document.getElementById('solver-rejected').textContent = s.rejected_total != null ? s.rejected_total : '–';
+      var circuitEl = document.getElementById('solver-circuit');
+      circuitEl.style.display = s.circuit_open ? 'inline' : 'none';
+      // token 池水位
+      var pools = s.token_pools || {};
+      var poolText = Object.keys(pools).map(function (k) {
+        var p = pools[k];
+        return k + '=' + (p.size || 0) + '/' + (p.target || '?');
+      }).join(' | ') || '–';
+      document.getElementById('solver-token-pool').textContent = poolText;
+      // 失败原因
+      var reasons = s.failure_reasons || {};
+      var reasonsHtml = Object.keys(reasons).map(function (r) {
+        return '<span style="background:var(--err);color:#fff;padding:1px 8px;border-radius:999px">' + r + '=' + reasons[r] + '</span>';
+      }).join('');
+      document.getElementById('solver-failure-reasons').innerHTML = reasonsHtml || '';
     }).catch(function () { showToast('⚠️ 统计数据加载失败', 'warning'); });
   }
 

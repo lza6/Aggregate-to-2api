@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 
 import httpx
@@ -20,7 +19,7 @@ from .kookeey import kookeey_proxy_for
 
 log = logging.getLogger("registerer")
 
-MOCK_REGISTER = os.getenv("IF_MOCK_REGISTER", "0").strip().lower() in {"1", "true", "yes", "on"}
+MOCK_REGISTER = config.MOCK_REGISTER
 
 
 def _browser_headers(origin: str, referer: str | None = None) -> dict:

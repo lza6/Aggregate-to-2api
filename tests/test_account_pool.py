@@ -123,24 +123,26 @@ async def test_daily_checkin_updates_credits(tmp_path):
 
 # ── 邮箱池 ──────────────────────────────────────
 class TestEmailPool:
-    def test_allocate_unique_and_record(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_allocate_unique_and_record(self, tmp_path):
         from api.email_pool import EmailPool
         p = EmailPool(str(tmp_path / "email.db"))
-        a1, _s1 = p.allocate("minimaxh3")
-        a2, _s2 = p.allocate("minimaxh3")
+        a1, _s1 = await p.allocate("minimaxh3")
+        a2, _s2 = await p.allocate("minimaxh3")
         assert a1 != a2
         assert "@" in a1 and a1.split("@")[1].count(".") >= 1  # 合法邮箱（local@domain.tld）
         p.record(a1, "minimaxh3", "ok")
         assert p.registered_providers(a1) == ["minimaxh3"]
         # 已用邮箱不再分配
-        a3, _s3 = p.allocate("minimaxh3")
+        a3, _s3 = await p.allocate("minimaxh3")
         assert a3 not in (a1, a2)
         p._conn.close()
 
-    def test_stats(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_stats(self, tmp_path):
         from api.email_pool import EmailPool
         p = EmailPool(str(tmp_path / "email.db"))
-        a, _s = p.allocate("nanobanana")
+        a, _s = await p.allocate("nanobanana")
         p.record(a, "nanobanana", "ok")
         s = p.stats()
         assert s["total_registered"] == 1

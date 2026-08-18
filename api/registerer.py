@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 
 import httpx
@@ -20,7 +19,7 @@ from .kookeey import kookeey_proxy_for
 
 log = logging.getLogger("registerer")
 
-MOCK_REGISTER = os.getenv("IF_MOCK_REGISTER", "0").strip().lower() in {"1", "true", "yes", "on"}
+MOCK_REGISTER = config.MOCK_REGISTER
 
 
 def _browser_headers(origin: str, referer: str | None = None) -> dict:
@@ -80,7 +79,7 @@ class Minimaxh3Registerer:
             email = f"mock{int(time.time())}{random.randint(0,999)}@mock.com"
             return {"email": email, "cookie": "mock-session", "password": "mock123",
                     "credits": 4}
-        email, src = email_pool.allocate(self.provider, prefer_source="temp-mail")
+        email, src = await email_pool.allocate(self.provider, prefer_source="temp-mail")
         # 每号 kookeey 粘性住宅 IP（同 email 同 IP；不同 email 不同 IP）；turnstile 与提交同 IP
         self._ensure_client(email)
         kk = kookeey_proxy_for(email)
@@ -102,7 +101,7 @@ class Minimaxh3Registerer:
             log.warning("minimaxh3 send-verification 失败: %s", str(data)[:150])
             return None
         # 3) 邮箱收 6 位码
-        mail = await asyncio.to_thread(email_pool.wait_for_mail, email, src, 300.0, "验证码")
+        mail = await email_pool.wait_for_mail(email, src, 300.0, "验证码")
         code = _extract_code(mail)
         if not code:
             log.warning("minimaxh3 未收到验证码: %s", email)
@@ -183,7 +182,7 @@ class NanobananaRegisterer:
             import random
             email = f"mocknb{int(time.time())}{random.randint(0,999)}@mock.com"
             return {"email": email, "cookie": "mock-session", "password": "mock123", "credits": 4}
-        email, src = email_pool.allocate(self.provider, prefer_source="temp-mail")
+        email, src = await email_pool.allocate(self.provider, prefer_source="temp-mail")
         # 每号 kookeey 粘性住宅 IP；turnstile 与 sign-up 同 IP
         self._ensure_client(email)
         kk = kookeey_proxy_for(email)
@@ -206,7 +205,7 @@ class NanobananaRegisterer:
             email_pool.record(email, self.provider, "error", "signup_fail")
             return None
         # 2) 邮箱收验证链接
-        mail = await asyncio.to_thread(email_pool.wait_for_mail, email, src, 300.0, "Verify")
+        mail = await email_pool.wait_for_mail(email, src, 300.0, "Verify")
         link = _extract_verify_link(mail)
         if not link:
             # verify 邮件未到（temp-mail 限流/延迟）→ 账号已创建，仍尝试登录拿 cookie（未验证可登录则入池）

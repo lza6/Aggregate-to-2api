@@ -27,7 +27,7 @@ from .retry_policy import RetryPolicy
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
 from .solver_guard import solver_guard
-from .telemetry import get_tracer, is_otel_enabled
+from .telemetry import get_tracer
 
 log = logging.getLogger("engine")
 
@@ -380,7 +380,7 @@ class Engine:
     # ── 生命周期 ──────────────────────────────────
     async def start(self) -> None:
         # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
-        recovered = self.db.recover_stale_tasks()
+        recovered = self.db.recover_stale_tasks(stale_after=config.TASK_HARD_TIMEOUT + 60)
         if recovered:
             log.info("已回收 %d 条孤儿任务（上次进程遗留的 pending/processing）", recovered)
         self._started = True
@@ -454,7 +454,11 @@ class Engine:
                 return t
             await asyncio.sleep(0.5)
         t = self.db.get(task_id)
-        return t or {"id": task_id, "status": "error", "error": "查询失败"}
+        if t is None:
+            return {"id": task_id, "status": "error", "error": "查询失败",
+                    "image_url": None, "image_base64": None, "image_mime": None,
+                    "duration_sec": None, "type": "txt", "model": "default"}
+        return t
 
     def _resume_from_queue(self) -> int:
         """持久化队列恢复：从 task_queue 读取 pending 任务，按 priority/seq 排序后重新入队。
@@ -681,10 +685,14 @@ class Engine:
         if self._persistent_queue and self._queue_db:
             self._queue_db.mark_completed(task_id)
         # IMP-11: 出图成功 → 失效画廊缓存，下次请求重新查询 DB
+        # 使用懒导入避免循环依赖（worker → main → worker）
         if status == "completed" and image_url:
-            import asyncio
-            from .main import gallery_cache
-            asyncio.ensure_future(gallery_cache.invalidate_prefix("gallery:"))
+            try:
+                from .main import gallery_cache as _gc
+                import asyncio
+                asyncio.create_task(_gc.invalidate_prefix("gallery:"))
+            except Exception as exc:
+                log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 
     async def _generate_once(self, row: dict, token: str) -> dict:
         """提交生成并轮询到出图。

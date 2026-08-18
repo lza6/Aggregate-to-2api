@@ -78,6 +78,7 @@ class DB:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA wal_autocheckpoint=1000")
         return conn
 
     def _health_check(self, conn: sqlite3.Connection) -> bool:
@@ -217,6 +218,7 @@ class DB:
                     task_id TEXT NOT NULL,
                     created_at REAL
                 );
+                CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_keys(created_at);
                 """
             )
             # IMP-21: dead_letter_queue 表
@@ -231,6 +233,18 @@ class DB:
                     created_at REAL,
                     last_attempt_at REAL,
                     raw_log TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_dlq_created ON dead_letter_queue(created_at);
+                """
+            )
+            # IMP-11: 缓存持久化表
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS cache_store (
+                    key         TEXT PRIMARY KEY,
+                    value       TEXT NOT NULL,
+                    ttl         REAL NOT NULL,
+                    cached_at   REAL NOT NULL
                 );
                 """
             )
@@ -645,6 +659,70 @@ class DB:
             "DELETE FROM dead_letter_queue", (),
         )
 
+    def clean_expired_dlq(self) -> int:
+        """清理超期死信队列记录，返回删除数。"""
+        cutoff = time.time() - config.IF_DLQ_RETENTION_DAYS * 86400
+        _, conn, conn_lock = self._get_write_conn()
+        with conn_lock:
+            cur = conn.execute(
+                "DELETE FROM dead_letter_queue WHERE created_at < ?", (cutoff,))
+            conn.commit()
+            return cur.rowcount
+
+    # ── IMP-11: 缓存持久化 ─────────────────────────────
+    def save_cache_batch(self, entries: list[tuple[str, str, float]]) -> None:
+        """批量写入缓存条目到 cache_store 表（upsert 语义）。
+        entries: [(key, json_value, remaining_ttl), ...]
+        """
+        if not entries:
+            return
+        now = time.time()
+        _, conn, conn_lock = self._get_write_conn()
+        with conn_lock:
+            conn.executemany(
+                "INSERT OR REPLACE INTO cache_store (key, value, ttl, cached_at)"
+                " VALUES (?, ?, ?, ?)",
+                [(k, v, ttl, now) for k, v, ttl in entries],
+            )
+            conn.commit()
+
+    def load_cache_snapshot(self) -> list[tuple[str, str, float]]:
+        """从 cache_store 表读取所有未过期的缓存条目。
+        返回: [(key, value_json, remaining_ttl), ...]
+        """
+        self._ensure_flushed()
+        now = time.time()
+        rows = self._read_conn.execute(
+            "SELECT key, value, ttl, cached_at FROM cache_store"
+        ).fetchall()
+        result: list[tuple[str, str, float]] = []
+        for row in rows:
+            deadline = row["cached_at"] + row["ttl"]
+            remaining = deadline - now
+            if remaining > 0:
+                result.append((row["key"], row["value"], remaining))
+        return result
+
+    def delete_cache_batch(self, keys: list[str]) -> None:
+        """批量删除指定缓存 key。"""
+        if not keys:
+            return
+        _, conn, conn_lock = self._get_write_conn()
+        with conn_lock:
+            conn.executemany(
+                "DELETE FROM cache_store WHERE key=?", [(k,) for k in keys],
+            )
+            conn.commit()
+
+    def clean_expired_cache(self) -> int:
+        """清理过期缓存条目（TTL 到期），返回删除数。"""
+        _, conn, conn_lock = self._get_write_conn()
+        with conn_lock:
+            cur = conn.execute(
+                "DELETE FROM cache_store WHERE cached_at + ttl < ?", (time.time(),))
+            conn.commit()
+            return cur.rowcount
+
 
 class QueueDB:
     """持久化队列 DB（IMP-29）：独立 SQLite 文件，记录待消费任务。
@@ -707,6 +785,21 @@ class QueueDB:
                 " WHERE status='pending' ORDER BY priority, seq"
             ).fetchall()
             return [(r[0], r[1], r[2]) for r in rows]
+
+    def cleanup(self, retention_days: int = 7) -> dict:
+        """清理超期 completed/processing 记录，返回删除数。"""
+        cutoff = time.time() - retention_days * 86400
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM task_queue WHERE status IN ('completed','processing') AND created_at < ?",
+                (cutoff,),
+            )
+            self._conn.commit()
+            try:
+                self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except sqlite3.OperationalError:
+                pass
+            return {"deleted": cur.rowcount}
 
     def close(self) -> None:
         self._conn.close()

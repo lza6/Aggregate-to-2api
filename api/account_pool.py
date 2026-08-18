@@ -199,7 +199,7 @@ class AccountPool:
                             log.info("号池补号暂停 %s：无住宅代理（配 IF_KOOKEEY 或 IF_PROXY_FILE；批量可用 inject_accounts --real）", provider)
                             await asyncio.sleep(REGISTER_COOLDOWN)
                             continue
-                    reg.proxy = proxy_pool.acquire(prefer_source="residential")
+                    reg.proxy = await proxy_pool.acquire(prefer_source="residential")
                     acc = await reg.register_one()
                     if acc:
                         self.add(provider, acc["email"], acc["cookie"], acc.get("password"),

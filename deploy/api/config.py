@@ -35,7 +35,7 @@ TURNSTILE_TIMEOUT = int(os.getenv("IF_TURNSTILE_TIMEOUT", "90"))
 TURNSTILE_POLL_INTERVAL = float(os.getenv("IF_TURNSTILE_POLL_INTERVAL", "2.0"))
 
 GENERATE_TIMEOUT = int(os.getenv("IF_GENERATE_TIMEOUT", "300"))
-GENERATE_POLL_INTERVAL = 2.0
+GENERATE_POLL_INTERVAL = float(os.getenv("IF_GENERATE_POLL_INTERVAL", "2.0"))
 
 # 图生图（ai-photo-editor）上游排队较慢，且实测部分任务在上游全局队列可卡 20 分钟以上。
 # 轮询超时必须给足，避免我们中途放弃 → 孤儿上游任务永久占用同 IP 并发槽（下次提交必 429）。
@@ -242,6 +242,8 @@ MINIMAXH3_ACCOUNT_TARGET = int(os.getenv("IF_MINIMAXH3_ACCOUNT_TARGET", "500"))
 NANOBANANA_ACCOUNT_TARGET = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "500"))
 # 自动注册/签到开关（测试可关）
 ACCOUNT_AUTO = os.getenv("IF_ACCOUNT_AUTO", "1").strip().lower() in {"1", "true", "yes", "on"}
+# 自动注册返回 mock 账号（测试/E2E，不碰上游）
+MOCK_REGISTER = os.getenv("IF_MOCK_REGISTER", "0").strip().lower() in {"1", "true", "yes", "on"}
 # DB 请求记录保留天数：超期清理（DELETE + WAL checkpoint + VACUUM），防表无限增长。
 # 默认 365 天以保留近 12 个月统计（monthly 跨 12 月）。
 DB_RETENTION_DAYS = int(os.getenv("IF_DB_RETENTION_DAYS", "365"))
@@ -274,6 +276,8 @@ IF_IDEMPOTENCY_TTL = int(os.getenv("IF_IDEMPOTENCY_TTL", "900"))
 # ── 死信队列（IMP-21）───────────────────────────────────
 IF_DLQ_ENABLED = os.getenv("IF_DLQ_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 IF_DLQ_MAX_RETRIES = int(os.getenv("IF_DLQ_MAX_RETRIES", "3"))
+# 死信队列保留天数：超期自动清理，默认 7 天
+IF_DLQ_RETENTION_DAYS = int(os.getenv("IF_DLQ_RETENTION_DAYS", "7"))
 
 # ── 健康探测（IMP-22）───────────────────────────────────
 # 上游健康检查间隔（秒）

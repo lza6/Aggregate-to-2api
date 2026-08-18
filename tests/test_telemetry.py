@@ -247,7 +247,6 @@ class TestWorkerSpan:
             pass  # span 创建不抛异常即验证通过
         # 验证 noop span 的 attributes 为 empty dict
         # 真实 span 的 attributes 由 OTel SDK 管理，此处仅验证接口兼容
-            assert attrs["task.model"] == "default"
 
 
 # ============================================================

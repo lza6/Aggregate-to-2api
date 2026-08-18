@@ -7,6 +7,7 @@
 import asyncio
 import base64
 import hashlib
+import hmac
 import ipaddress
 import logging
 import os
@@ -18,9 +19,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from .errors import AppError, ErrorCodes, error_response
 from pydantic import BaseModel, Field
 
 from . import config
@@ -32,13 +36,15 @@ from .db import DB, task_to_public
 from .solver_guard import REASON_CATEGORIES, solver_guard
 from .worker import Engine, QueueFull
 from .cache import LRUCache
+from .telemetry import init_telemetry, shutdown_telemetry
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
 from .providers.registry import shutdown_all as providers_shutdown
 
 # M3: 结构化日志格式（含 trace_id 占位，日志里以 trace=<id> 呈现）。
-# 统一格式，避免各模块 basicConfig 各自为政。
+# IMP-08: trace_id 由 LoggingInstrumentor + TraceIdLogFilter 动态追加到 message 末尾，
+# 不再需要占位符；保持格式不变以兼容旧有日志解析。
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 logging.basicConfig(level=logging.INFO, format=_LOG_FORMAT,
                     datefmt="%Y-%m-%d %H:%M:%S")
@@ -63,8 +69,14 @@ def _uptime_human(seconds: int) -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # IMP-08: 启动 OTel 追踪（IF_OTEL_ENABLED=1 时生效）
+    init_telemetry()
     await engine.start()
     gallery_cache.start_reaper()
+    # IMP-11: 启动时从 DB 恢复缓存
+    restored = await gallery_cache.restore_from_db()
+    if restored:
+        log.info("缓存从 DB 恢复完成: %d 个条目", restored)
     # IMP-25: 启动 DB 批量写入定时器
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
@@ -122,6 +134,20 @@ async def lifespan(_app: FastAPI):
                     nd = db.clean_expired_idempotency()
                     if nd:
                         log.info("幂等 key 周期清理: 删除 %d 个过期条目", nd)
+                # 死信队列过期清理
+                if config.IF_DLQ_ENABLED:
+                    ndlq = db.clean_expired_dlq()
+                    if ndlq:
+                        log.info("死信队列周期清理: 删除 %d 个过期条目", ndlq)
+                # 缓存表过期清理
+                nc = db.clean_expired_cache()
+                if nc:
+                    log.info("缓存表周期清理: 删除 %d 个过期条目", nc)
+                # 持久化队列清理（超期 completed/processing）
+                if config.IF_PERSISTENT_QUEUE_ENABLED and engine._queue_db:
+                    nq = engine._queue_db.cleanup()
+                    if nq.get("deleted"):
+                        log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -184,16 +210,21 @@ async def lifespan(_app: FastAPI):
     await free_proxy_fetcher.stop()
     from .account_pool import account_pool
     await account_pool.stop()
+    # IMP-11: 停止前 flush 缓存持久化
+    gallery_cache.flush_to_db()
     await gallery_cache.stop_reaper()
     await engine.stop()
     # H2: 服务停止时关闭共享 HTTP 连接池
     await turnstile_client.close_client()
     await imagefree_client.close_client()
+    # IMP-08: 关闭 OTel 追踪（Flush + 反注册 Instrumentation）
+    shutdown_telemetry()
 
 
 db = DB(config.DB_FILE)
 engine = Engine(db)
-gallery_cache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.IF_LRU_CACHE_TTL)
+gallery_cache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.IF_LRU_CACHE_TTL,
+                          persist_db=db)
 
 app = FastAPI(
     title="imagefree API",
@@ -209,6 +240,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── 统一错误处理 ─────────────────────────────────
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    """AppError → 统一错误响应格式。"""
+    return error_response(exc.code, exc.message, exc.status_code, exc.details)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """HTTPException → 统一错误响应格式（状态码/SQL/业务），映射到标准错误码。"""
+    _status_code = exc.status_code
+    _message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    # 状态码 → 错误码映射
+    _code_map = {
+        400: ErrorCodes.BAD_REQUEST,
+        401: ErrorCodes.UNAUTHORIZED,
+        403: ErrorCodes.UNAUTHORIZED,
+        404: ErrorCodes.NOT_FOUND,
+        408: ErrorCodes.TASK_TIMEOUT,
+        409: ErrorCodes.IDEMPOTENCY_KEY_EXISTS,
+        413: ErrorCodes.BAD_REQUEST,
+        422: ErrorCodes.BAD_REQUEST,
+        429: ErrorCodes.RATE_LIMITED,
+        500: ErrorCodes.INTERNAL_ERROR,
+        503: ErrorCodes.PROVIDER_DOWN,
+    }
+    return error_response(
+        _code_map.get(_status_code, ErrorCodes.BAD_REQUEST),
+        _message,
+        _status_code,
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """未捕获的异常 → 500（避免栈溢出到客户端）。"""
+    log.exception("未捕获的异常: %s", exc)
+    return error_response(
+        ErrorCodes.INTERNAL_ERROR,
+        "服务器内部错误",
+        status_code=500,
+    )
+
 _DOCS_PAGE = Path(__file__).parent / "docs.html"
 
 
@@ -218,8 +292,9 @@ class GenerateRequest(BaseModel):
     download: bool = Field(False, description="是否同时下载图片并返回 base64")
     model: str = Field("imagefree/default",
                        description="模型 id，见 GET /v1/models（格式：<提供商>/<真实模型名>，如 minimaxh3/nano-banana-pro）")
-    resolution: str = Field("1K", description="分辨率（提供商支持时生效）：1K/2K/4K 或视频 480p/720p")
-    duration: int | None = Field(None, description="视频时长秒数（视频模型生效）：4/8/12/15")
+    resolution: str = Field("1K", description="分辨率：1K/2K/4K 或视频 480p/720p")
+    duration: int | None = Field(None, ge=4, le=15,
+                                  description="视频时长秒数：4/8/12/15")
     priority: int | None = Field(None, ge=0, le=2,
                                   description="优先级：0=admin, 1=paid, 2=normal；不传默认 normal")
     idempotency_key: str | None = Field(None, max_length=128,
@@ -270,7 +345,8 @@ def _edit_mutex_stale(path: str) -> bool:
     if time.time() - ts > config.EDIT_LOCK_MAX_AGE:
         return True
     if os.name == "nt":
-        # Windows 无 psutil 时保守不删（防误删活锁），靠超时兜底
+        # Windows 无 os.kill(pid,0) 替代方案，但时间超时（EDIT_LOCK_MAX_AGE）已在上方判定，
+        # 锁文件 mtime 超时后 _acquire_edit_mutex 会竞争中清理，不会永久死锁。
         return False
     try:
         os.kill(pid, 0)
@@ -403,10 +479,13 @@ def _validate_model(model: str, kind: str = "txt2img") -> None:
     model = _normalize_model(model)
     spec = registry.model(model)
     if spec is None:
-        raise HTTPException(422, f"未知 model: {model}，可选见 GET /v1/models")
-    cap = {"txt2img": "txt2img", "img2img": "img2img", "txt2vid": "txt2vid"}[kind]
+        raise AppError(ErrorCodes.INVALID_MODEL, f"未知 model: {model}，可选见 GET /v1/models", 422)
+    cap_map = {"txt2img": "txt2img", "img2img": "img2img", "txt2vid": "txt2vid"}
+    cap = cap_map.get(kind)
+    if cap is None:
+        raise AppError(ErrorCodes.BAD_REQUEST, f"不支持的生成类型: {kind}", 422)
     if cap not in spec.capabilities:
-        raise HTTPException(422, f"model {model} 不支持 {kind}，仅支持 {list(spec.capabilities)}")
+        raise AppError(ErrorCodes.INVALID_MODEL, f"model {model} 不支持 {kind}，仅支持 {list(spec.capabilities)}", 422)
 
 
 def _normalize_model(model: str) -> str:
@@ -417,16 +496,10 @@ def _normalize_model(model: str) -> str:
     return f"imagefree/{model}"
 
 
-def _apply_model(prompt: str, model: str) -> str:
-    """模型风格预设 → prompt 前缀注入（default 不加前缀）。"""
-    return config.apply_model(prompt, model)
-
-
 def _validate_ratio(ratio: str) -> None:
     """比例校验：仅格式校验（各提供商按自己的能力面在生成时校验）。"""
-    import re
     if not re.fullmatch(r"\d+:\d+", ratio):
-        raise HTTPException(422, f"不支持的 aspect_ratio: {ratio}（格式需 N:N，如 1:1、16:9）")
+        raise AppError(ErrorCodes.INVALID_RATIO, f"不支持的 aspect_ratio: {ratio}（格式需 N:N，如 1:1、16:9）", 422)
 
 
 def _parse_input_image(image: str) -> tuple[bytes | None, str | None]:
@@ -438,32 +511,32 @@ def _parse_input_image(image: str) -> tuple[bytes | None, str | None]:
     if image.startswith("data:"):
         m = re.match(r"data:([^;,]+);base64,(.*)", image, re.S)
         if not m:
-            raise HTTPException(422, "data URI 格式错误（需 data:image/*;base64,...）")
+            raise AppError(ErrorCodes.BAD_REQUEST, "data URI 格式错误（需 data:image/*;base64,...）", 422)
         ctype, b64 = m.group(1), m.group(2)
         try:
             data = base64.b64decode(b64)
         except Exception:
-            raise HTTPException(422, "base64 解码失败")
+            raise AppError(ErrorCodes.BAD_REQUEST, "base64 解码失败", 422)
         if len(data) > config.MAX_IMAGE_BYTES:
-            raise HTTPException(413, f"图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限")
+            raise AppError(ErrorCodes.BAD_REQUEST, f"图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限", 413)
         return data, ctype
 
     if image.startswith("http://") or image.startswith("https://"):
         host = urlsplit(image).hostname
         if not host:
-            raise HTTPException(422, "图片 URL 无效")
+            raise AppError(ErrorCodes.BAD_REQUEST, "图片 URL 无效", 422)
         # SSRF 防护：目标解析到私网/回环/链路本地地址一律拒绝
         try:
-            addrs = {ipaddress.ip_address(i[4][0])
-                     for i in socket.getaddrinfo(host, 80, proto=socket.IPPROTO_TCP)}
+            results = socket.getaddrinfo(host, 0, proto=socket.IPPROTO_TCP)
         except OSError:
-            raise HTTPException(422, "图片 URL 无法解析")
-        for a in addrs:
+            raise AppError(ErrorCodes.BAD_REQUEST, "图片 URL 无法解析", 422)
+        for i in results:
+            a = ipaddress.ip_address(i[4][0])
             if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast:
-                raise HTTPException(400, "不允许访问内网/本地/保留地址的图片")
+                raise AppError(ErrorCodes.BAD_REQUEST, "不允许访问内网/本地/保留地址的图片", 400)
         return None, image
 
-    raise HTTPException(422, "image 需为 data URI 或 http(s) URL")
+    raise AppError(ErrorCodes.BAD_REQUEST, "image 需为 data URI 或 http(s) URL", 422)
 
 
 def _parse_input_images(images: list[str]) -> list[bytes]:
@@ -475,20 +548,20 @@ def _parse_input_images(images: list[str]) -> list[bytes]:
     if not images:
         return []
     if len(images) > 3:
-        raise HTTPException(422, "参考图最多 3 张")
+        raise AppError(ErrorCodes.BAD_REQUEST, "参考图最多 3 张", 422)
     result = []
     for i, img in enumerate(images):
         if not img.startswith("data:"):
-            raise HTTPException(422, f"images[{i}] 需为 data URI 格式")
+            raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] 需为 data URI 格式", 422)
         m = re.match(r"data:([^;,]+);base64,(.*)", img, re.S)
         if not m:
-            raise HTTPException(422, f"images[{i}] data URI 格式错误（需 data:image/*;base64,...）")
+            raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] data URI 格式错误（需 data:image/*;base64,...）", 422)
         try:
             data = base64.b64decode(m.group(2))
         except Exception:
-            raise HTTPException(422, f"images[{i}] base64 解码失败")
+            raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] base64 解码失败", 422)
         if len(data) > config.MAX_IMAGE_BYTES:
-            raise HTTPException(413, f"images[{i}] 图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限")
+            raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] 图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限", 413)
         result.append(data)
     return result
 
@@ -498,6 +571,15 @@ def _parse_input_images(images: list[str]) -> list[bytes]:
 async def index():
     """对外中文 API 文档首页。"""
     return FileResponse(_DOCS_PAGE, media_type="text/html")
+
+
+_TERMS_PAGE = Path(__file__).parent / "static" / "terms.html"
+
+
+@app.get("/v1/terms", include_in_schema=False)
+async def terms():
+    """服务条款页面。"""
+    return FileResponse(_TERMS_PAGE, media_type="text/html")
 
 
 # M5: cf_solver 探活结果 TTL 缓存（避免每请求建 TCP 连接探测）
@@ -575,7 +657,7 @@ async def generate_sync(request: Request, req: GenerateRequest):
     try:
         task_id = await _dispatch_generate(req)
     except QueueFull as e:
-        raise HTTPException(status_code=429, detail=str(e))
+        raise AppError(ErrorCodes.QUEUE_FULL, str(e), 429)
     task = await engine.wait_result(task_id, config.SYNC_TIMEOUT)
     if task["status"] in ("completed", "error"):
         return TaskInfo(**task_to_public(task))
@@ -594,7 +676,8 @@ async def generate_async(req: GenerateRequest):
     try:
         task_id = await _dispatch_generate(req)
     except QueueFull as e:
-        raise HTTPException(status_code=429, detail=str(e))
+        raise AppError(ErrorCodes.QUEUE_FULL, str(e), 429)
+    headers = {"Location": f"/v1/tasks/{task_id}"}
     return TaskInfo(**task_to_public(db.get_public(task_id)))
 
 
@@ -622,7 +705,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                                            priority=req.priority or 2)
     provider = registry.provider_for(model)
     if provider is None:
-        raise HTTPException(429, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试")
+        raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     task_id = str(uuid.uuid4())
     db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model)
     t0 = time.monotonic()
@@ -670,7 +753,7 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
     provider = registry.provider_for(model)
     if provider is None:
         # IMP-18: provider 熔断/降级不可用 → 返回 429
-        raise HTTPException(429, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试")
+        raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     job_id = str(uuid.uuid4())
     db.create_request(job_id, prompt, "1:1", download, "img", model)
     t0 = time.monotonic()
@@ -707,7 +790,7 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
     model = _normalize_model(model)
     provider = registry.provider_for(model)
     if provider is None:
-        raise HTTPException(429, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试")
+        raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     job_id = str(uuid.uuid4())
     db.create_request(job_id, prompt, "1:1", download, "img", model)
     t0 = time.monotonic()
@@ -766,10 +849,10 @@ async def edit_image(req: EditRequest):
             image_bytes = data
             image_bytes_list = [data]
     else:
-        raise HTTPException(422, "请提供至少一张图片（image 或 images 字段）")
+        raise AppError(ErrorCodes.BAD_REQUEST, "请提供至少一张图片（image 或 images 字段）", 422)
 
     if image_bytes and imagefree_client.detect_mime(image_bytes) == "application/octet-stream":
-        raise HTTPException(422, "无法识别的图片格式（支持 PNG/JPEG/WebP/AVIF/GIF）")
+        raise AppError(ErrorCodes.BAD_REQUEST, "无法识别的图片格式（支持 PNG/JPEG/WebP/AVIF/GIF）", 422)
     _validate_model(req.model, "img2img")
 
     # 多图模式：仅支持 base64 直传的提供商（aifreeforever、minimaxh3）
@@ -898,7 +981,7 @@ async def get_edit_task(job_id: str):
     """查询图生图任务结果（持久化于 SQLite）。"""
     task = db.get_public(job_id)  # M8: 轻量投影，不读 prompt
     if not task:
-        raise HTTPException(status_code=404, detail="图生图任务不存在")
+        raise AppError(ErrorCodes.NOT_FOUND, "图生图任务不存在", 404)
     return TaskInfo(**task_to_public(task))
 
 
@@ -964,14 +1047,15 @@ async def list_tasks(
 async def get_task(task_id: str):
     task = db.get(task_id)  # 用 get 而非 get_public，返回完整字段含 prompt
     if not task:
-        raise HTTPException(status_code=404, detail="task 不存在")
+        raise AppError(ErrorCodes.NOT_FOUND, "task 不存在", 404)
     return TaskInfo(**task_to_public(task))
 
 
 @app.get("/v1/meta")
 async def meta():
     """暴露站点配置，方便调用方集成。"""
-    return {"sitekey": config.SITEKEY, "aspect_ratios": config.ASPECT_RATIOS}
+    return {"sitekey": config.SITEKEY, "aspect_ratios": config.ASPECT_RATIOS,
+            "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"]}
 
 
 # ── 品牌静态资源（听风AI logo）──────────────────
@@ -982,15 +1066,17 @@ _logo_md = Path(__file__).parent / "static" / "tingfeng-logo-md.png"
 @app.get("/static/logo.png", include_in_schema=False)
 async def logo_small():
     if _logo_sm.exists():
-        return FileResponse(_logo_sm, media_type="image/png")
-    raise HTTPException(404)
+        return FileResponse(_logo_sm, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=3600"})
+    raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)
 
 
 @app.get("/static/logo-md.png", include_in_schema=False)
 async def logo_medium():
     if _logo_md.exists():
-        return FileResponse(_logo_md, media_type="image/png")
-    raise HTTPException(404)
+        return FileResponse(_logo_md, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=3600"})
+    raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)
 
 
 @app.get("/v1/stats")
@@ -1009,6 +1095,7 @@ async def get_stats():
         monthly = db.stats_monthly(12)
         await gallery_cache.set("stats:monthly:12", monthly)
     live = engine.snapshot()
+    ssnap = solver_guard.snapshot()
     return {
         **overview,
         "processing": live["processing"],
@@ -1019,6 +1106,22 @@ async def get_stats():
         "uptime_human": _uptime_human(live["uptime_seconds"]),
         "daily": daily,
         "monthly": monthly,
+        # ── solver 求解统计 ──
+        "solver": {
+            "status": ssnap["solver_status"],
+            "solve_total": ssnap["solve_total"],
+            "solve_success_total": ssnap["solve_success_total"],
+            "solve_failure_total": ssnap["solve_failure_total"],
+            "solve_avg_seconds": ssnap["solve_avg_seconds"],
+            "window_success_rate": ssnap["window_success_rate"],
+            "window_solve_count": ssnap["window_solve_count"],
+            "window_avg_seconds": ssnap["window_avg_seconds"],
+            "consecutive_failures": ssnap["consecutive_failures"],
+            "circuit_open": ssnap["circuit_open"],
+            "failure_reasons": ssnap["failure_reasons"],
+            "rejected_total": ssnap["rejected_total"],
+            "token_pools": live["token_pools"],
+        },
     }
 
 
@@ -1031,8 +1134,8 @@ async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
     """
     pwd = config.IF_GALLERY_PASSWORD
     if pwd:
-        if not password or password != pwd:
-            raise HTTPException(status_code=403, detail="画廊密码错误")
+        if not password or not hmac.compare_digest(password, pwd):
+            raise AppError(ErrorCodes.UNAUTHORIZED, "画廊密码错误", 403)
     cache_key = f"gallery:{limit}"
     cached = await gallery_cache.get(cache_key)
     if cached is not None:
@@ -1042,6 +1145,7 @@ async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
     for t in items:
         out.append({
             "image_url": t["image_url"],
+            "image_mime": t.get("image_mime"),
             "prompt": t["prompt"],
             "aspect_ratio": t["aspect_ratio"],
             "duration_sec": t["duration_sec"],
@@ -1070,7 +1174,8 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
             "duration_sec": t["duration_sec"],
             "created_at": t["created_at"],
         })
-    return {"items": out, "count": len(out)}
+    total = len(out)
+    return {"items": out, "count": total, "total": total}
 
 
 # ── M4: Prometheus 文本格式指标端点 ──────────────────
@@ -1174,6 +1279,20 @@ async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
     """死信队列：重试耗尽的失败任务列表，支持重试与清空。"""
     items = db.list_dlq(limit)
     return {"items": items, "count": len(items)}
+
+
+@app.post("/v1/dead-letter-queue/{task_id}/retry")
+async def retry_dlq_task(task_id: str):
+    """从死信队列移除指定任务（清空记录，重新入队重试语义）。"""
+    db.retry_dlq(task_id)
+    return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
+
+
+@app.delete("/v1/dead-letter-queue")
+async def clear_dlq():
+    """清空死信队列所有记录。"""
+    db.clear_dlq()
+    return {"status": "ok", "detail": "死信队列已清空"}
 
 
 @app.get("/v1/proxy-pool")

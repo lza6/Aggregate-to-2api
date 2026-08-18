@@ -11,9 +11,12 @@ H2: 共享单个 httpx.AsyncClient（连接池/keep-alive 复用），避免每�
 """
 import asyncio
 import base64
+import ipaddress
 import logging
 import os
+import socket
 import time
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -166,9 +169,20 @@ async def download_image(
     timeout: float = 60.0,
     max_bytes: int = 4 * 1024 * 1024,
 ) -> bytes:
-    """下载图片二进制（R2 URL 公开可访问）。"""
+    """下载图片二进制（R2 URL 公开可访问）。SSRF 防护：拒绝私网/回环/链路本地地址。"""
     if MOCK_UPSTREAM:
         return b"\x89PNG\r\n\x1a\n" + b"\x00" * 64  # 最小合法 PNG 魔数（detect_mime 识别用）
+    # SSRF 防护：检查 URL 目标地址
+    host = urlsplit(image_url).hostname
+    if host:
+        try:
+            results = socket.getaddrinfo(host, 80, proto=socket.IPPROTO_TCP)
+        except OSError:
+            raise ImagefreeError(f"图片 URL 无法解析: {image_url}")
+        for i in results:
+            a = ipaddress.ip_address(i[4][0])
+            if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast:
+                raise ImagefreeError(f"不允许下载内网地址的图片: {image_url}")
     client = _get_client()
     async with client.stream("GET", image_url, timeout=httpx.Timeout(timeout)) as r:
         r.raise_for_status()

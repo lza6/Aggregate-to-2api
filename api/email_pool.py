@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -39,10 +40,14 @@ EMAIL_CREATE_BACKOFF = int(os.getenv("IF_EMAIL_CREATE_BACKOFF", "60"))
 class MailSource:
     """统一邮箱源接口。"""
     name: str
-    session: httpx.Client | None = field(default=None, repr=False)
+    session: httpx.AsyncClient | None = field(default=None, repr=False)
 
     async def new_address(self) -> tuple[str, dict]:
         """生成一个新邮箱，返回 (address, state)。state 供收件用。"""
+        raise NotImplementedError
+
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
+        """取该邮箱收到的邮件列表。"""
         raise NotImplementedError
 
 
@@ -53,18 +58,18 @@ class TempTfSource(MailSource):
 
     def __init__(self) -> None:
         super().__init__(name=self.name)
-        self.session = httpx.Client(timeout=15.0, headers={"User-Agent": config.USER_AGENT})
+        self.session = httpx.AsyncClient(timeout=15.0, headers={"User-Agent": config.USER_AGENT})
 
-    def new_address(self) -> tuple[str, dict]:
+    async def new_address(self) -> tuple[str, dict]:
         # 纯本地随机生成（无需网络），10 位小写字母数字 → 百万亿级空间
         local = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=10))
         domain = random.choice(self._domains)
         return f"{local}@{domain}", {"source": self.name, "domain": domain}
 
-    def fetch_mails(self, address: str) -> list[dict]:
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
         """POST /api/check 取该邮箱收到的邮件（data 列表，空=暂无）。"""
         try:
-            r = self.session.post("https://temp.tf/api/check", json={"email": address})
+            r = await self.session.post("https://temp.tf/api/check", json={"email": address})
             if r.status_code == 200:
                 return r.json().get("data") or []
         except Exception as e:
@@ -88,25 +93,24 @@ class TempMailSource(MailSource):
     def __init__(self) -> None:
         super().__init__(name=self.name)
         self._last_create = 0.0  # 建箱限流节流（429 防护）
-        self.session = httpx.Client(timeout=15.0,
-                                    headers={"User-Agent": config.USER_AGENT,
-                                             "Origin": "https://temp-mail.org",
-                                             "Referer": "https://temp-mail.org/"})
+        self.session = httpx.AsyncClient(timeout=15.0,
+                                         headers={"User-Agent": config.USER_AGENT,
+                                                  "Origin": "https://temp-mail.org",
+                                                  "Referer": "https://temp-mail.org/"})
 
-    def new_address(self) -> tuple[str, dict]:
+    async def new_address(self) -> tuple[str, dict]:
         # chatgpt2api 逆向确认：POST /mailbox（空 body）→ {token, mailbox}（建箱+拿 JWT）。
         # temp-mail 有建箱限流（429 Too Many Request）——加最小间隔 + 失败退避，防批量注册触发。
-        import time as _t
-        now = _t.time()
+        now = time.time()
         gap = now - self._last_create
         if gap < EMAIL_CREATE_MIN_INTERVAL:
-            _t.sleep(EMAIL_CREATE_MIN_INTERVAL - gap)
-        r = self.session.post(f"{self.API}/mailbox", json={},
-                              headers={"Content-Type": "application/json"})
-        self._last_create = _t.time()
+            await asyncio.sleep(EMAIL_CREATE_MIN_INTERVAL - gap)
+        r = await self.session.post(f"{self.API}/mailbox", json={},
+                                    headers={"Content-Type": "application/json"})
+        self._last_create = time.time()
         if r.status_code == 429:
             log.warning("temp-mail 建箱限流(429)，退避 %ds", EMAIL_CREATE_BACKOFF)
-            _t.sleep(EMAIL_CREATE_BACKOFF)
+            await asyncio.sleep(EMAIL_CREATE_BACKOFF)
             raise RuntimeError("temp-mail 建箱限流，稍后重试")
         if r.status_code != 200:
             raise RuntimeError(f"temp-mail 建箱失败 HTTP {r.status_code}")
@@ -117,14 +121,14 @@ class TempMailSource(MailSource):
             raise RuntimeError(f"temp-mail 返回异常: {str(data)[:150]}")
         return address, {"source": self.name, "token": token}
 
-    def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
         """GET /messages 带 Bearer JWT → 邮件列表（逆向确认）。"""
         token = (state or {}).get("token")
         if not token:
             return []
         try:
-            r = self.session.get(f"{self.API}/messages",
-                                 headers={"Authorization": f"Bearer {token}"})
+            r = await self.session.get(f"{self.API}/messages",
+                                       headers={"Authorization": f"Bearer {token}"})
             if r.status_code == 200:
                 msgs = r.json()
                 # 兼容响应：数组 或 {messages:[...]} 或 {data:[...]}
@@ -157,15 +161,16 @@ class Do22Source(MailSource):
 
     def __init__(self) -> None:
         super().__init__(name=self.name)
-        self.session = httpx.Client(timeout=15.0,
-                                    headers={"User-Agent": config.USER_AGENT,
-                                             "Content-Type": "application/json",
-                                             "Origin": self.BASE, "Referer": f"{self.BASE}/",
-                                             "Accept": "*/*"})
+        self.session = httpx.AsyncClient(timeout=15.0,
+                                         headers={"User-Agent": config.USER_AGENT,
+                                                  "Content-Type": "application/json",
+                                                  "Origin": self.BASE, "Referer": f"{self.BASE}/",
+                                                  "Accept": "*/*"})
 
-    def new_address(self) -> tuple[str, dict]:
-        r = self.session.post(f"{self.BASE}/action/mailbox/create",
-                              json={"type": "random"})
+    async def new_address(self) -> tuple[str, dict]:
+        import uuid
+        r = await self.session.post(f"{self.BASE}/action/mailbox/create",
+                                    json={"type": "random"})
         if r.status_code != 200:
             raise RuntimeError(f"22.do 建箱失败 HTTP {r.status_code}")
         data = (r.json() or {}).get("data") or {}
@@ -173,25 +178,24 @@ class Do22Source(MailSource):
         if "@" not in address:
             raise RuntimeError(f"22.do 返回异常: {str(data)[:150]}")
         # login 拿 email cookie（message 接口需要）
-        self.session.post(f"{self.BASE}/action/mailbox/login",
-                          json={"email": address, "language": "en-US"})
+        await self.session.post(f"{self.BASE}/action/mailbox/login",
+                                json={"email": address, "language": "en-US"})
         # applyToken 拿 JWT（message 鉴权）
-        import uuid
-        token_resp = self.session.post(f"{self.BASE}/action/mailbox/applyToken",
-                                       json={"email": address,
-                                             "uuid": uuid.uuid4().hex})
+        token_resp = await self.session.post(f"{self.BASE}/action/mailbox/applyToken",
+                                             json={"email": address,
+                                                   "uuid": uuid.uuid4().hex})
         token = ((token_resp.json() or {}).get("data") or {}).get("token") or ""
         return address, {"source": self.name, "email": address, "token": token}
 
-    def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
         email = (state or {}).get("email") or address
         token = (state or {}).get("token")
         if not token:
             return []
         try:
-            r = self.session.post(f"{self.BASE}/action/mailbox/message",
-                                  json={"email": email, "lastime": 0},
-                                  headers={"Authorization": f"Bearer {token}"})
+            r = await self.session.post(f"{self.BASE}/action/mailbox/message",
+                                        json={"email": email, "lastime": 0},
+                                        headers={"Authorization": f"Bearer {token}"})
             if r.status_code == 200:
                 return (r.json() or {}).get("data") or []
         except Exception as e:
@@ -228,9 +232,9 @@ class EmailPool:
         return {r["email"] for r in rows}
 
     # ── 分配 ──────────────────────────────────────
-    def allocate(self, provider: str, want_fresh: bool = True,
-                 prefer_source: str | None = None,
-                 prefer_domain: str | None = None) -> tuple[str, object]:
+    async def allocate(self, provider: str, want_fresh: bool = True,
+                       prefer_source: str | None = None,
+                       prefer_domain: str | None = None) -> tuple[str, object]:
         """分配一个邮箱给指定提供商。
 
         prefer_source：指定源（"temp-mail"/"temp.tf"）。nanobanana/minimaxh3 验证邮件
@@ -245,7 +249,7 @@ class EmailPool:
                 raise RuntimeError(f"邮箱源 {prefer_source} 不存在")
             # 指定源：失败即抛（不 fallback），避免给站点不接受的邮箱
             try:
-                address, st = src.new_address()
+                address, st = await src.new_address()
             except Exception as e:
                 raise RuntimeError(f"邮箱源 {prefer_source} 建箱失败: {e}")
             if not address or "@" not in address or address in self._used:
@@ -260,7 +264,7 @@ class EmailPool:
         for _ in range(15):
             src = sources[_ % len(sources)]
             try:
-                address, st = src.new_address()
+                address, st = await src.new_address()
             except Exception as e:
                 log.warning("邮箱源 %s 建箱失败: %s", src.name, e)
                 continue
@@ -270,19 +274,20 @@ class EmailPool:
         raise RuntimeError("邮箱池分配失败（15 次碰撞）")
 
     # ── 收件 ──────────────────────────────────────
-    def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0,
-                      contains: str | None = None) -> dict | None:
+    async def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0,
+                            contains: str | None = None) -> dict | None:
         """轮询直到该邮箱收到含关键词的邮件（验证码/验证链接）。source_state 携源与 token。"""
         name = (source_state or {}).get("source", "temp.tf")
         src = next((s for s in self._sources if s.name == name), self._sources[0])
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            for mail in src.fetch_mails(address, source_state):
+            mails = await src.fetch_mails(address, source_state)
+            for mail in mails:
                 blob = json.dumps(mail, ensure_ascii=False)
                 if contains and contains.lower() not in blob.lower():
                     continue
                 return mail
-            time.sleep(2.0)
+            await asyncio.sleep(2.0)
         return None
 
     # ── 记录 ──────────────────────────────────────

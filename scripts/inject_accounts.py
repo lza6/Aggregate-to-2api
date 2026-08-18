@@ -98,7 +98,7 @@ def main() -> int:
             try:
                 if args.use_proxy_pool and proxy_pool.enabled:
                     # M10(审计修复): 注册流量含邮箱/密码/验证链接，强制住宅代理，free 池空时明确报错而非静默回退
-                    reg.proxy = proxy_pool.acquire(prefer_source="residential")
+                    reg.proxy = await proxy_pool.acquire(prefer_source="residential")
                 acc = await reg.register_one()
                 if acc:
                     pool.add(args.provider, acc["email"], acc["cookie"], acc.get("password"),

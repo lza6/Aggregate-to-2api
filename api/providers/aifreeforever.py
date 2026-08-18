@@ -90,7 +90,7 @@ class AifreeforeverProvider(Provider):
         # 1) 分配出口 IP（优先代理池轮换，无代理时回退直连）
         proxy = None
         if self._proxy_pool is not None:
-            proxy = self._proxy_pool.acquire()
+            proxy = await self._proxy_pool.acquire()
         if proxy is None:
             if self.needs_proxy_per_request():
                 log.warning("aifreeforever 无可用代理，使用直连（可能受每 IP 每日限额限制）")
@@ -131,14 +131,14 @@ class AifreeforeverProvider(Provider):
                                         aspect_ratio, images, proxy)
         except ProviderRateLimited as e:
             if proxy and self._proxy_pool is not None:
-                self._proxy_pool.mark_failure(proxy, rate_limited=True)
+                await self._proxy_pool.mark_failure(proxy, rate_limited=True)
             return GenerationResult(status="error", error=str(e), proxy_used=proxy)
         except ProviderError as e:
             if proxy and self._proxy_pool is not None:
-                self._proxy_pool.mark_failure(proxy, rate_limited=False)
+                await self._proxy_pool.mark_failure(proxy, rate_limited=False)
             return GenerationResult(status="error", error=str(e), proxy_used=proxy)
         if proxy and self._proxy_pool is not None:
-            self._proxy_pool.mark_success(proxy)
+            await self._proxy_pool.mark_success(proxy)
 
         url = urls[0] if urls else None
         if not url:

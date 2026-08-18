@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -107,6 +108,7 @@ class ProxyPool:
     def __init__(self, proxy_file: str = "") -> None:
         self.entries: list[ProxyEntry] = []
         self._idx = 0
+        self._lock = asyncio.Lock()
         if proxy_file:
             self.load_file(proxy_file)
 
@@ -158,7 +160,7 @@ class ProxyPool:
     def enabled(self) -> bool:
         return bool(self.entries)
 
-    def acquire(self, force_rotate: bool = True, prefer_source: str | None = None) -> str | None:
+    async def acquire(self, force_rotate: bool = True, prefer_source: str | None = None) -> str | None:
         """分配一个可用出口代理。
 
         分配策略：
@@ -168,53 +170,56 @@ class ProxyPool:
         """
         if not self.entries:
             return None
-        now = time.time()
+        async with self._lock:
+            now = time.time()
 
-        candidates = [e for e in self.entries if e.available(now)]
-        if prefer_source and candidates:
-            pref = [e for e in candidates if e.source == prefer_source]
-            if pref:
-                candidates = pref
+            candidates = [e for e in self.entries if e.available(now)]
+            if prefer_source and candidates:
+                pref = [e for e in candidates if e.source == prefer_source]
+                if pref:
+                    candidates = pref
 
-        if candidates:
-            # 优先选从未使用过的 IP
-            unused = [e for e in candidates if e.use_count == 0]
-            if unused:
-                pick = min(unused, key=lambda e: e.last_used_at)
+            if candidates:
+                # 优先选从未使用过的 IP
+                unused = [e for e in candidates if e.use_count == 0]
+                if unused:
+                    pick = min(unused, key=lambda e: e.last_used_at)
+                else:
+                    # 全部用过一轮，选冷却最早结束的
+                    pick = min(candidates, key=lambda e: e.cooldown_until)
             else:
-                # 全部用过一轮，选冷却最早结束的
-                pick = min(candidates, key=lambda e: e.cooldown_until)
-        else:
-            # 全在冷却 → 选最早结束冷却的
-            pick = min(self.entries, key=lambda e: e.cooldown_until)
+                # 全在冷却 → 选最早结束冷却的
+                pick = min(self.entries, key=lambda e: e.cooldown_until)
 
-        # 使用后更新状态
-        pick.last_used_at = now
-        pick.use_count += 1
-        pick.daily_uses += 1
-        pick.cooldown_until = now + _cooldown_for(pick.use_count)
-        return pick.url
+            # 使用后更新状态
+            pick.last_used_at = now
+            pick.use_count += 1
+            pick.daily_uses += 1
+            pick.cooldown_until = now + _cooldown_for(pick.use_count)
+            return pick.url
 
-    def mark_failure(self, url: str, rate_limited: bool = True) -> None:
+    async def mark_failure(self, url: str, rate_limited: bool = True) -> None:
         """请求失败：冷却该 IP；失败不增加 use_count（请求没成功不计入使用次数）。
         429 时 cooldown_until 设置为当前时间 + 递增冷却时间（基于当前 use_count + 1 的冷却等级）。
         """
-        for e in self.entries:
-            if e.url == url:
-                e.consecutive_fails += 1
-                if rate_limited:
-                    # 429：用递增冷却，基于假设的"下一次使用"的冷却等级
-                    next_level = min(e.use_count + 1, max(USE_COOLDOWN_MAP.keys(), default=5))
-                    e.cooldown_until = time.time() + _cooldown_for(next_level)
-                else:
-                    e.cooldown_until = time.time() + 30
-                return
+        async with self._lock:
+            for e in self.entries:
+                if e.url == url:
+                    e.consecutive_fails += 1
+                    if rate_limited:
+                        # 429：用递增冷却，基于假设的"下一次使用"的冷却等级
+                        next_level = min(e.use_count + 1, max(USE_COOLDOWN_MAP.keys(), default=5))
+                        e.cooldown_until = time.time() + _cooldown_for(next_level)
+                    else:
+                        e.cooldown_until = time.time() + 30
+                    return
 
-    def mark_success(self, url: str) -> None:
-        for e in self.entries:
-            if e.url == url:
-                e.consecutive_fails = 0
-                return
+    async def mark_success(self, url: str) -> None:
+        async with self._lock:
+            for e in self.entries:
+                if e.url == url:
+                    e.consecutive_fails = 0
+                    return
 
     def snapshot(self) -> dict:
         now = time.time()

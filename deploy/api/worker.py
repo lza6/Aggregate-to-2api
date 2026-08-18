@@ -27,6 +27,7 @@ from .retry_policy import RetryPolicy
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
 from .solver_guard import solver_guard
+from .telemetry import get_tracer
 
 log = logging.getLogger("engine")
 
@@ -379,7 +380,7 @@ class Engine:
     # ── 生命周期 ──────────────────────────────────
     async def start(self) -> None:
         # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
-        recovered = self.db.recover_stale_tasks()
+        recovered = self.db.recover_stale_tasks(stale_after=config.TASK_HARD_TIMEOUT + 60)
         if recovered:
             log.info("已回收 %d 条孤儿任务（上次进程遗留的 pending/processing）", recovered)
         self._started = True
@@ -453,7 +454,11 @@ class Engine:
                 return t
             await asyncio.sleep(0.5)
         t = self.db.get(task_id)
-        return t or {"id": task_id, "status": "error", "error": "查询失败"}
+        if t is None:
+            return {"id": task_id, "status": "error", "error": "查询失败",
+                    "image_url": None, "image_base64": None, "image_mime": None,
+                    "duration_sec": None, "type": "txt", "model": "default"}
+        return t
 
     def _resume_from_queue(self) -> int:
         """持久化队列恢复：从 task_queue 读取 pending 任务，按 priority/seq 排序后重新入队。
@@ -611,39 +616,54 @@ class Engine:
         t0 = time.monotonic()
         last_error: str | None = None
         # IMP-05: 使用统一 RetryPolicy 处理 transient 错误重试
-        for attempt in range(1, config.IF_TXT_RETRY_MAX + 1):
-            token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
-            if token is None:
-                # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
-                last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
-                              if solver_guard.circuit_open
-                              else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
-                break
-            try:
-                result = await self._generate_once(row, token)
-            except Exception as e:
-                last_error = str(e)
-                if _is_token_rejected(e):
-                    solver_guard.record_rejected()
-                # 判断是否应重试（transient 且 attempt < max）
-                if RetryPolicy.should_retry(attempt, config.IF_TXT_RETRY_MAX, e):
-                    delay = RetryPolicy.backoff_delay(attempt, config.IF_TXT_RETRY_BACKOFF_BASE)
-                    log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
-                                task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
-                    await asyncio.sleep(delay)
-                    continue
-                # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
-                log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
-                            task_id, attempt, config.IF_TXT_RETRY_MAX, e)
-                self._finish(task_id, "error", None, str(e), t0)
-                last_error = str(e)
-                break  # 跳出循环，继续到 DLQ 推送
-            else:
-                self._finish(task_id, "completed", result["image_url"], None, t0,
-                             result.get("image_base64"), result.get("image_mime"))
-                log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
-                return
-        # 重试耗尽 → DLQ 标记
+        # IMP-08: 创建任务处理 span，trace_id 贯穿所有子操作
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            "worker.process",
+            attributes={
+                "task.id": task_id,
+                "task.prompt_preview": (row.get("prompt") or "")[:60],
+                "task.model": row.get("model", "default"),
+                "task.aspect_ratio": row.get("aspect_ratio", "1:1"),
+            },
+        ):
+            for attempt in range(1, config.IF_TXT_RETRY_MAX + 1):
+                with tracer.start_as_current_span(
+                    "worker.acquire_token",
+                    attributes={"attempt": attempt},
+                ):
+                    token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
+                if token is None:
+                    # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
+                    last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
+                                  if solver_guard.circuit_open
+                                  else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
+                    break
+                try:
+                    result = await self._generate_once(row, token)
+                except Exception as e:
+                    last_error = str(e)
+                    if _is_token_rejected(e):
+                        solver_guard.record_rejected()
+                    # 判断是否应重试（transient 且 attempt < max）
+                    if RetryPolicy.should_retry(attempt, config.IF_TXT_RETRY_MAX, e):
+                        delay = RetryPolicy.backoff_delay(attempt, config.IF_TXT_RETRY_BACKOFF_BASE)
+                        log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
+                                    task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
+                        await asyncio.sleep(delay)
+                        continue
+                    # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
+                    log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
+                                task_id, attempt, config.IF_TXT_RETRY_MAX, e)
+                    self._finish(task_id, "error", None, str(e), t0)
+                    last_error = str(e)
+                    break  # 跳出循环，继续到 DLQ 推送
+                else:
+                    self._finish(task_id, "completed", result["image_url"], None, t0,
+                                 result.get("image_base64"), result.get("image_mime"))
+                    log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
+                    return
+            # 重试耗尽 → DLQ 标记
         dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
         dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
         self._finish(task_id, "error", None, dlq_msg, t0)
@@ -664,6 +684,15 @@ class Engine:
         # IMP-29: 持久化队列标记终态
         if self._persistent_queue and self._queue_db:
             self._queue_db.mark_completed(task_id)
+        # IMP-11: 出图成功 → 失效画廊缓存，下次请求重新查询 DB
+        # 使用懒导入避免循环依赖（worker → main → worker）
+        if status == "completed" and image_url:
+            try:
+                from .main import gallery_cache as _gc
+                import asyncio
+                asyncio.create_task(_gc.invalidate_prefix("gallery:"))
+            except Exception as exc:
+                log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 
     async def _generate_once(self, row: dict, token: str) -> dict:
         """提交生成并轮询到出图。

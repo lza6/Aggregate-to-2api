@@ -17,6 +17,7 @@ from . import config
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.record_success()` 将 AttributeError）。
 from .solver_guard import solver_guard
+from .telemetry import get_tracer, is_otel_enabled
 
 log = logging.getLogger("turnstile")
 
@@ -76,28 +77,39 @@ async def solve_turnstile(
     所有求解路径在此统一上报 solver_guard（成功/失败/耗时/原因），驱动熔断与健康指标。
     返回的耗时用于 _TokenPool 的 EMA 自适应延迟计算（IMP-02）。
     """
-    t0 = time.monotonic()
-    try:
-        token = await _solve_turnstile(cf_solver_url, url, sitekey, timeout, proxy)
-    except asyncio.TimeoutError:
-        solver_guard.record_failure("timeout", time.monotonic() - t0)
-        raise
-    except _SolverRejected:
-        solver_guard.record_failure("solver_rejected", time.monotonic() - t0)
-        raise
-    except TurnstileError:
-        solver_guard.record_failure("http_error", time.monotonic() - t0)
-        raise
-    except httpx.TransportError:
-        solver_guard.record_failure("transport", time.monotonic() - t0)
-        raise
-    except Exception:
-        solver_guard.record_failure("other", time.monotonic() - t0)
-        raise
-    else:
-        duration = time.monotonic() - t0
-        solver_guard.record_success(duration)
-        return token, duration
+    # IMP-08: 创建求解 span（trace_id 贯穿全链路）
+    tracer = get_tracer()
+    with tracer.start_as_current_span(
+        "turnstile.solve",
+        attributes={
+            "cf_solver.url": cf_solver_url,
+            "target.url": url,
+            "sitekey": sitekey[:12] + "...",
+            "proxy": "yes" if proxy else "no",
+        },
+    ):
+        t0 = time.monotonic()
+        try:
+            token = await _solve_turnstile(cf_solver_url, url, sitekey, timeout, proxy)
+        except asyncio.TimeoutError:
+            solver_guard.record_failure("timeout", time.monotonic() - t0)
+            raise
+        except _SolverRejected:
+            solver_guard.record_failure("solver_rejected", time.monotonic() - t0)
+            raise
+        except TurnstileError:
+            solver_guard.record_failure("http_error", time.monotonic() - t0)
+            raise
+        except httpx.TransportError:
+            solver_guard.record_failure("transport", time.monotonic() - t0)
+            raise
+        except Exception:
+            solver_guard.record_failure("other", time.monotonic() - t0)
+            raise
+        else:
+            duration = time.monotonic() - t0
+            solver_guard.record_success(duration)
+            return token, duration
 
 
 async def _solve_turnstile(
