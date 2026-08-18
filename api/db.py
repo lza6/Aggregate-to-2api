@@ -22,6 +22,7 @@ import time
 
 from . import config
 from . import base64_store
+from .telemetry import get_tracer
 
 log = logging.getLogger("db")
 
@@ -263,36 +264,60 @@ class DB:
     # ── 写 ────────────────────────────────────────
     def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool,
                        type_: str = "txt", model: str = "default") -> None:
-        now = time.time()
-        # 预计算 day/month 列（IMP-07）
-        import datetime
-        dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
-        day = dt.strftime("%Y-%m-%d")
-        month = dt.strftime("%Y-%m")
-        self._enqueue_write(
-            "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at, type, model, day, month)"
-            " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
-            (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month),
-        )
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            "db.create_request",
+            attributes={
+                "task.id": task_id,
+                "task.type": type_,
+                "task.model": model,
+                "task.aspect_ratio": aspect_ratio,
+            },
+        ):
+            now = time.time()
+            # 预计算 day/month 列（IMP-07）
+            import datetime
+            dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
+            day = dt.strftime("%Y-%m-%d")
+            month = dt.strftime("%Y-%m")
+            self._enqueue_write(
+                "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at, type, model, day, month)"
+                " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+                (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month),
+            )
 
     def mark_started(self, task_id: str) -> None:
-        self._enqueue_write(
-            "UPDATE requests SET status='processing', started_at=? WHERE id=?",
-            (time.time(), task_id),
-        )
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            "db.mark_started",
+            attributes={"task.id": task_id},
+        ):
+            self._enqueue_write(
+                "UPDATE requests SET status='processing', started_at=? WHERE id=?",
+                (time.time(), task_id),
+            )
 
     def mark_finished(self, task_id: str, status: str, image_url: str | None,
                       error: str | None, duration_sec: float | None,
                       image_base64: str | None = None, image_mime: str | None = None) -> None:
-        # IMP-26: base64 非空时写入文件缓存，DB 存 file:// 路径
-        if image_base64 and image_mime:
-            image_base64 = base64_store.save_base64(task_id, image_base64, image_mime)
-        self._enqueue_write(
-            "UPDATE requests SET status=?, image_url=?, image_base64=?, image_mime=?,"
-            " error=?, finished_at=?, duration_sec=? WHERE id=?",
-            (status, image_url, image_base64, image_mime, error, time.time(),
-             duration_sec, task_id),
-        )
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            "db.mark_finished",
+            attributes={
+                "task.id": task_id,
+                "task.status": status,
+                "task.duration_sec": duration_sec or 0,
+            },
+        ):
+            # IMP-26: base64 非空时写入文件缓存，DB 存 file:// 路径
+            if image_base64 and image_mime:
+                image_base64 = base64_store.save_base64(task_id, image_base64, image_mime)
+            self._enqueue_write(
+                "UPDATE requests SET status=?, image_url=?, image_base64=?, image_mime=?,"
+                " error=?, finished_at=?, duration_sec=? WHERE id=?",
+                (status, image_url, image_base64, image_mime, error, time.time(),
+                 duration_sec, task_id),
+            )
 
     def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None:
         """记录上游生成任务 id（图生图/文生图均可），便于恢复孤儿槽位与排查。"""
