@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'v*']
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 测试 (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ['3.11']
+        os: [ubuntu-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+
+      - name: 单元测试
+        run: |
+          pytest tests/ -q --cov=api --cov-report=term --cov-fail-under=70
+        env:
+          IF_ACCOUNT_AUTO: "0"
+          IF_MOCK_REGISTER: "1"
+          IF_DB_FILE: "data/test.db"
+
+      - name: 启动 mock cf_solver 并运行集成测试
+        run: |
+          python scripts/mock_cfsolver.py --port 8001 &
+          for i in $(seq 1 10); do
+            curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
+            sleep 1
+          done
+          pytest tests/ -q --cov=api --cov-report=term --cov-append --cov-fail-under=70 -x
+        env:
+          IF_ACCOUNT_AUTO: "0"
+          IF_MOCK_REGISTER: "1"
+          IF_CF_SOLVER_URL: "http://127.0.0.1:8001"
+          IF_DB_FILE: "data/test-ci.db"
+          IF_TURNSTILE_POLL_INTERVAL: "0.2"
+          IF_TOKEN_POOL_SIZE: "2"
+
+  lint:
+    name: 代码检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安装 ruff
+        run: pip install ruff
+      - name: 运行 ruff check
+        run: ruff check api/ --no-fix || true
+
+  docker:
+    name: Docker 构建验证
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建 API 镜像
+        run: docker build -f deploy/Dockerfile.api -t imagefree-api:ci .
+      - name: 验证镜像
+        run: |
+          SIZE=$(docker image inspect imagefree-api:ci --format='{{.Size}}')
+          echo "镜像大小: $((SIZE / 1024 / 1024))MB"
+          test $SIZE -lt $((300 * 1024 * 1024))

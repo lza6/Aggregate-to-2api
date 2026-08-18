@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: 测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安装依赖
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+      - name: 运行测试
+        run: pytest tests/ -q --cov=api --cov-report=term --cov-fail-under=70
+        env:
+          IF_ACCOUNT_AUTO: "0"
+          IF_MOCK_REGISTER: "1"
+          IF_DB_FILE: "data/test-deploy.db"
+
+  build:
+    name: 构建 Docker 镜像
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建 API 镜像
+        run: |
+          docker build -f deploy/Dockerfile.api \
+            -t ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }} \
+            -t ghcr.io/${{ github.repository }}/imagefree-api:latest \
+            .
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 推送镜像
+        run: |
+          docker push ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }}
+          docker push ghcr.io/${{ github.repository }}/imagefree-api:latest
+
+  release:
+    name: 创建发行版
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: 生成发行版说明
+        id: release_notes
+        run: |
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "# imagefree-api ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "## 变更" >> $GITHUB_OUTPUT
+          git log --oneline --no-decorate $(git tag --sort=-creatordate | head -2 | tail -1)..HEAD 2>/dev/null || \
+            git log --oneline --no-decorate -20 >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          generate_release_notes: false
