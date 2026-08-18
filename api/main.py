@@ -41,6 +41,7 @@ from .worker import Engine, QueueFull
 from .cache import LRUCache
 from .cache_warmup import warmup_cache
 from .telemetry import init_telemetry, shutdown_telemetry
+from .alerting import alert_engine
 from .audit import audit_log
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
@@ -1295,8 +1296,10 @@ async def retry_dlq_task(task_id: str, request: Request):
 
 
 @app.delete("/v1/dead-letter-queue")
-async def clear_dlq():
+async def clear_dlq(request: Request):
     """清空死信队列所有记录。"""
+    client_ip = request.client.host if request.client else "unknown"
+    audit_log.record("dlq.clear", client_ip, "dlq", "清空死信队列")
     db.clear_dlq()
     return {"status": "ok", "detail": "死信队列已清空"}
 
