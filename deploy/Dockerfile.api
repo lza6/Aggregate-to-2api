@@ -1,16 +1,36 @@
-# imagefree_api 服务镜像
-FROM python:3.11-slim
+# ===== 第一阶段：构建依赖 =====
+FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /build
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
+# ===== 第二阶段：运行镜像 =====
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/root/.local/bin:$PATH
+
+WORKDIR /app
+
+# 仅从 builder 复制已安装的依赖
+COPY --from=builder /root/.local /root/.local
+
+# 复制应用源码
 COPY api ./api
+
+# 确保数据目录存在
 RUN mkdir -p /app/data
 
 EXPOSE 8100
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request; import json; r = urllib.request.urlopen('http://127.0.0.1:8100/v1/healthz', timeout=5); body = json.loads(r.read()); assert body.get('status') in ('ok', 'degraded'), f'healthz status: {body.get(\"status\")}'"
+
 CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8100"]
