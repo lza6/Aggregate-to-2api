@@ -43,6 +43,7 @@ from .cache_warmup import warmup_cache
 from .telemetry import init_telemetry, shutdown_telemetry
 from .alerting import alert_engine
 from .audit import audit_log
+from .health import health_registry
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
