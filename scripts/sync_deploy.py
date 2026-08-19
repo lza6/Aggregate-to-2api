@@ -24,7 +24,8 @@ FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
          "account_pool.py", "email_pool.py", "proxy_pool.py", "registerer.py",
          "free_proxy_fetcher.py", "kookeey.py",
          "semaphore_manager.py", "cache.py", "log_buffer.py", "base64_store.py",
-         "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py"]
+         "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py",
+         "context.py", "health.py", "cache_warmup.py", "errors.py"]
 # 需整体同步的目录（providers 包 / 静态资源）
 DIRS = ["providers", "static", "frontend"]
 
