@@ -41,7 +41,7 @@ async def test_set_persists_to_db(tmp_db_path):
     cache = LRUCache(maxsize=128, ttl=60, persist_db=tmp_db_path)
     await cache.set("k1", {"hello": "world"})
     await asyncio.sleep(0.05)  # 让 pending 写
-    cache.flush_to_db()
+    await cache.flush_to_db()
     entries = tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "k1" in keys
@@ -53,7 +53,7 @@ async def test_restore_from_db(tmp_db_path):
     cache = LRUCache(maxsize=128, ttl=60, persist_db=tmp_db_path)
     await cache.set("k1", "hello")
     await cache.set("k2", 42)
-    cache.flush_to_db()
+    await cache.flush_to_db()
 
     # 新建一个缓存实例，从 DB 恢复
     cache2 = LRUCache(maxsize=128, ttl=60, persist_db=tmp_db_path)
@@ -72,7 +72,7 @@ async def test_invalidate_removes_from_db(tmp_db_path):
     cache = LRUCache(maxsize=128, ttl=60, persist_db=tmp_db_path)
     await cache.set("k1", "hello")
     await cache.invalidate("k1")
-    cache.flush_to_db()
+    await cache.flush_to_db()
     entries = tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "k1" not in keys
@@ -86,7 +86,7 @@ async def test_invalidate_prefix_removes_from_db(tmp_db_path):
     await cache.set("gallery:50", "data2")
     await cache.set("stats:overview", "stats")
     await cache.invalidate_prefix("gallery:")
-    cache.flush_to_db()
+    await cache.flush_to_db()
     entries = tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "gallery:10" not in keys
@@ -114,7 +114,7 @@ async def test_restore_eliminates_reboot_gap(tmp_db_path):
     """重启后恢复缓存应消除空窗期：DB 中条目不应过期。"""
     cache = LRUCache(maxsize=128, ttl=3600, persist_db=tmp_db_path)
     await cache.set("stats:overview", {"total": 100})
-    cache.flush_to_db()
+    await cache.flush_to_db()
 
     # 模拟重启：新建缓存实例并恢复
     cache2 = LRUCache(maxsize=128, ttl=3600, persist_db=tmp_db_path)
@@ -142,7 +142,7 @@ async def test_evicted_item_persisted(tmp_db_path):
     await cache.set("a", 1)
     await cache.set("b", 2)
     await cache.set("c", 3)  # 淘汰 "a"
-    cache.flush_to_db()
+    await cache.flush_to_db()
     entries = tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "a" in keys  # 被淘汰但持久化了
@@ -158,7 +158,7 @@ async def test_serialize_deserialize_roundtrip(tmp_db_path):
         "nested": {"key": "value"},
     }
     await cache.set("complex", complex_val)
-    cache.flush_to_db()
+    await cache.flush_to_db()
 
     cache2 = LRUCache(maxsize=128, ttl=60, persist_db=tmp_db_path)
     await cache2.restore_from_db()

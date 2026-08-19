@@ -1,64 +1,72 @@
 # deploy/api/main.py
 
-- _uptime_human · function · L68-L78 — def _uptime_human(seconds: int) -> str
-- lifespan · function · L82-L257 — async def lifespan(_app: FastAPI): # IMP-08: 启动 OTel 追踪（IF_OTEL_ENABLED=1 时生效）
-- _cleanup_loop · function · L137-L181 — async def _cleanup_loop() -> None
-- _health_check_loop · function · L185-L195 — async def _health_check_loop(interval: float = 60.0) -> None
-- _provider_recover_loop · function · L201-L209 — async def _provider_recover_loop() -> None
-- app_error_handler · function · L293-L295 — async def app_error_handler(request: Request, exc: AppError)
-- starlette_http_exception_handler · function · L299-L307 — async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException)
-- generic_exception_handler · function · L311-L318 — async def generic_exception_handler(request: Request, exc: Exception)
-- GenerateRequest · class · L323-L335 — class GenerateRequest(BaseModel)
-- EditRequest · class · L338-L345 — class EditRequest(BaseModel)
-- _edit_mutex_path · function · L364-L366 — def _edit_mutex_path(key: str) -> str
-- _edit_mutex_stale · function · L369-L391 — def _edit_mutex_stale(path: str) -> bool
-- _acquire_edit_mutex · function · L394-L421 — async def _acquire_edit_mutex(key: str, timeout: float | None = None) -> str | None
-- _release_edit_mutex · function · L424-L435 — def _release_edit_mutex(key: str, token: str | None) -> None
-- _EditProxyPool · class · L438-L486 — class _EditProxyPool
-- __init__ · method · L446-L459 — def __init__(self) -> None
-- enabled · method · L462-L463 — def enabled(self) -> bool
-- acquire_proxy · method · L465-L474 — async def acquire_proxy(self) -> str | None
-- release_proxy · method · L476-L480 — def release_proxy(self, proxy: str | None) -> None
-- lock_for · method · L482-L486 — def lock_for(self, proxy: str) -> asyncio.Lock
-- TaskInfo · class · L492-L504 — class TaskInfo(BaseModel)
-- _validate_model · function · L507-L522 — def _validate_model(model: str, kind: str = "txt2img") -> None
-- _normalize_model · function · L525-L530 — def _normalize_model(model: str) -> str
-- _validate_ratio · function · L533-L536 — def _validate_ratio(ratio: str) -> None
-- _parse_input_image · function · L539-L573 — def _parse_input_image(image: str) -> tuple[bytes | None, str | None]
-- _parse_input_images · function · L576-L600 — def _parse_input_images(images: list[str]) -> list[bytes]
-- index · function · L605-L607 — async def index()
-- terms · function · L614-L616 — async def terms()
-- _probe_cf_solver · function · L623-L644 — async def _probe_cf_solver(force: bool = False) -> bool
-- healthz · function · L648-L678 — async def healthz()
-- generate_sync · function · L682-L702 — async def generate_sync(request: Request, req: GenerateRequest)
-- generate_async · function · L706-L715 — async def generate_async(req: GenerateRequest)
-- _provider_prefix · function · L722-L723 — def _provider_prefix(model: str) -> str
-- _dispatch_generate · function · L726-L774 — async def _dispatch_generate(req: GenerateRequest) -> str
-- _run · function · L751-L769 — async def _run() -> None
-- _dispatch_edit · function · L777-L816 — async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: bool) -> str
-- _run · function · L795-L811 — async def _run() -> None
-- _dispatch_edit_multi · function · L819-L852 — async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[bytes], download: bool) -> str
-- _run · function · L832-L847 — async def _run() -> None
-- edit_image · function · L856-L909 — async def edit_image(req: EditRequest)
-- _run_edit_job · function · L912-L938 — async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default") -> None
-- _is_edit_slot_wedged · function · L941-L944 — def _is_edit_slot_wedged(err: object) -> bool
-- _run_edit_chain · function · L947-L1010 — async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default", proxy: str | None = None) -> None
-- get_edit_task · function · L1014-L1019 — async def get_edit_task(job_id: str)
-- models · function · L1023-L1028 — async def models()
-- providers · function · L1032-L1043 — async def providers()
-- account_pool_dashboard · function · L1047-L1054 — async def account_pool_dashboard()
-- list_tasks · function · L1058-L1077 — async def list_tasks( limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), status: str | None = Query(None, description="筛选：pending/processing/completed/error"), model: str | None = Query(None, description="筛选：模型 id，如 imagefree/default"), sort: str = Query("created_at", description="排序字段：created_at/duration_sec"), )
-- get_task · function · L1081-L1085 — async def get_task(task_id: str)
-- meta · function · L1089-L1092 — async def meta()
-- logo_small · function · L1101-L1105 — async def logo_small()
-- logo_medium · function · L1109-L1113 — async def logo_medium()
-- get_stats · function · L1117-L1159 — async def get_stats()
-- gallery · function · L1163-L1190 — async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None, description="画廊密码（IF_GALLERY_PASSWORD 非空时必填）"))
-- errors · function · L1194-L1212 — async def errors(limit: int = Query(20, ge=1, le=100))
-- metrics · function · L1219-L1225 — async def metrics()
-- get_logs · function · L1229-L1231 — async def get_logs(lines: int = Query(50, ge=1, le=200))
-- log_websocket · function · L1235-L1250 — async def log_websocket(websocket: WebSocket)
-- dead_letter_queue · function · L1254-L1257 — async def dead_letter_queue(limit: int = Query(20, ge=1, le=100))
-- retry_dlq_task · function · L1261-L1266 — async def retry_dlq_task(task_id: str, request: Request)
-- clear_dlq · function · L1270-L1275 — async def clear_dlq(request: Request)
-- get_proxy_pool · function · L1279-L1282 — async def get_proxy_pool()
+- _uptime_human · function · L69-L79 — def _uptime_human(seconds: int) -> str
+- shutdown_phase · function · L82-L95 — async def shutdown_phase(timeout: float, label: str, *coros)
+- _run_background_tasks · function · L98-L169 — async def _run_background_tasks()
+- _cleanup_loop · function · L103-L141 — async def _cleanup_loop() -> None
+- _health_check_loop · function · L143-L153 — async def _health_check_loop(interval: float = 60.0) -> None
+- _provider_recover_loop · function · L155-L163 — async def _provider_recover_loop() -> None
+- lifespan · function · L173-L281 — async def lifespan(_app: FastAPI): # IMP-08: 启动 OTel 追踪（IF_OTEL_ENABLED=1 时生效）
+- _stop_warmup · function · L232-L238 — async def _stop_warmup() -> None
+- _stop_batch_timer · function · L239-L245 — async def _stop_batch_timer() -> None
+- _stop_background · function · L246-L251 — async def _stop_background() -> None
+- _flush_db · function · L255-L256 — async def _flush_db() -> None
+- _flush_cache · function · L268-L269 — async def _flush_cache() -> None
+- _shutdown_otel · function · L276-L277 — async def _shutdown_otel() -> None
+- app_error_handler · function · L317-L319 — async def app_error_handler(request: Request, exc: AppError)
+- starlette_http_exception_handler · function · L323-L331 — async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException)
+- generic_exception_handler · function · L335-L342 — async def generic_exception_handler(request: Request, exc: Exception)
+- GenerateRequest · class · L347-L359 — class GenerateRequest(BaseModel)
+- EditRequest · class · L362-L369 — class EditRequest(BaseModel)
+- _edit_mutex_path · function · L388-L390 — def _edit_mutex_path(key: str) -> str
+- _edit_mutex_stale · function · L393-L415 — def _edit_mutex_stale(path: str) -> bool
+- _acquire_edit_mutex · function · L418-L445 — async def _acquire_edit_mutex(key: str, timeout: float | None = None) -> str | None
+- _release_edit_mutex · function · L448-L459 — def _release_edit_mutex(key: str, token: str | None) -> None
+- _EditProxyPool · class · L462-L510 — class _EditProxyPool
+- __init__ · method · L470-L483 — def __init__(self) -> None
+- enabled · method · L486-L487 — def enabled(self) -> bool
+- acquire_proxy · method · L489-L498 — async def acquire_proxy(self) -> str | None
+- release_proxy · method · L500-L504 — def release_proxy(self, proxy: str | None) -> None
+- lock_for · method · L506-L510 — def lock_for(self, proxy: str) -> asyncio.Lock
+- TaskInfo · class · L516-L528 — class TaskInfo(BaseModel)
+- _validate_model · function · L531-L546 — def _validate_model(model: str, kind: str = "txt2img") -> None
+- _normalize_model · function · L549-L554 — def _normalize_model(model: str) -> str
+- _validate_ratio · function · L557-L560 — def _validate_ratio(ratio: str) -> None
+- _parse_input_image · function · L563-L597 — def _parse_input_image(image: str) -> tuple[bytes | None, str | None]
+- _parse_input_images · function · L600-L624 — def _parse_input_images(images: list[str]) -> list[bytes]
+- index · function · L629-L631 — async def index()
+- terms · function · L638-L640 — async def terms()
+- _probe_cf_solver · function · L647-L668 — async def _probe_cf_solver(force: bool = False) -> bool
+- healthz · function · L672-L705 — async def healthz()
+- generate_sync · function · L709-L729 — async def generate_sync(request: Request, req: GenerateRequest)
+- generate_async · function · L733-L742 — async def generate_async(req: GenerateRequest)
+- _provider_prefix · function · L749-L750 — def _provider_prefix(model: str) -> str
+- _dispatch_generate · function · L753-L801 — async def _dispatch_generate(req: GenerateRequest) -> str
+- _run · function · L778-L796 — async def _run() -> None
+- _dispatch_edit · function · L804-L843 — async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: bool) -> str
+- _run · function · L822-L838 — async def _run() -> None
+- _dispatch_edit_multi · function · L846-L879 — async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[bytes], download: bool) -> str
+- _run · function · L859-L874 — async def _run() -> None
+- edit_image · function · L883-L936 — async def edit_image(req: EditRequest)
+- _run_edit_job · function · L939-L965 — async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default") -> None
+- _is_edit_slot_wedged · function · L968-L971 — def _is_edit_slot_wedged(err: object) -> bool
+- _run_edit_chain · function · L974-L1037 — async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default", proxy: str | None = None) -> None
+- get_edit_task · function · L1041-L1046 — async def get_edit_task(job_id: str)
+- models · function · L1050-L1055 — async def models()
+- providers · function · L1059-L1070 — async def providers()
+- account_pool_dashboard · function · L1074-L1081 — async def account_pool_dashboard()
+- list_tasks · function · L1085-L1104 — async def list_tasks( limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), status: str | None = Query(None, description="筛选：pending/processing/completed/error"), model: str | None = Query(None, description="筛选：模型 id，如 imagefree/default"), sort: str = Query("created_at", description="排序字段：created_at/duration_sec"), )
+- get_task · function · L1108-L1112 — async def get_task(task_id: str)
+- meta · function · L1116-L1119 — async def meta()
+- logo_small · function · L1128-L1132 — async def logo_small()
+- logo_medium · function · L1136-L1140 — async def logo_medium()
+- get_stats · function · L1144-L1186 — async def get_stats()
+- gallery · function · L1190-L1217 — async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None, description="画廊密码（IF_GALLERY_PASSWORD 非空时必填）"))
+- errors · function · L1221-L1239 — async def errors(limit: int = Query(20, ge=1, le=100))
+- metrics · function · L1246-L1252 — async def metrics()
+- get_logs · function · L1256-L1258 — async def get_logs(lines: int = Query(50, ge=1, le=200))
+- log_websocket · function · L1262-L1277 — async def log_websocket(websocket: WebSocket)
+- dead_letter_queue · function · L1281-L1284 — async def dead_letter_queue(limit: int = Query(20, ge=1, le=100))
+- retry_dlq_task · function · L1288-L1293 — async def retry_dlq_task(task_id: str, request: Request)
+- clear_dlq · function · L1297-L1302 — async def clear_dlq(request: Request)
+- get_proxy_pool · function · L1306-L1309 — async def get_proxy_pool()

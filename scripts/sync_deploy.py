@@ -27,7 +27,8 @@ FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
          "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py",
          "context.py", "health.py", "cache_warmup.py", "errors.py"]
 # 需整体同步的目录（providers 包 / 静态资源）
-DIRS = ["providers", "static", "frontend"]
+# frontend 在项目根目录 frontend/，不在 api/ 下，由部署脚本单独处理
+DIRS = ["providers", "static"]
 
 
 def sha256(p: Path) -> str:

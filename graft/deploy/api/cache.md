@@ -2,7 +2,7 @@
 
 - _DbPending · class · L16-L22 — class _DbPending
 - __init__ · method · L20-L22 — def __init__(self) -> None
-- LRUCache · class · L25-L267 — class LRUCache
+- LRUCache · class · L25-L266 — class LRUCache
 - __init__ · method · L39-L48 — def __init__(self, maxsize: int = 128, ttl: float = 5.0, persist_db: object | None = None) -> None
 - maxsize · method · L51-L52 — def maxsize(self) -> int
 - ttl · method · L55-L56 — def ttl(self) -> float
@@ -14,12 +14,12 @@
 - invalidate_prefix · method · L119-L127 — async def invalidate_prefix(self, prefix: str) -> None
 - clear · method · L129-L132 — async def clear(self) -> None
 - restore_from_db · method · L136-L158 — async def restore_from_db(self) -> int
-- _flush_pending_to_db · method · L160-L174 — def _flush_pending_to_db(self) -> None
-- flush_to_db · method · L176-L178 — def flush_to_db(self) -> None
-- start_reaper · method · L182-L186 — def start_reaper(self) -> None
-- stop_reaper · method · L188-L199 — async def stop_reaper(self) -> None
-- _flush_all_to_db · method · L201-L220 — def _flush_all_to_db(self) -> None
-- _reaper_loop · method · L222-L236 — async def _reaper_loop(self) -> None
-- _purge_expired · method · L238-L251 — async def _purge_expired(self) -> None
-- size · method · L256-L257 — def size(self) -> int
-- snapshot · method · L259-L267 — async def snapshot(self) -> dict
+- _flush_pending_to_db · method · L160-L175 — async def _flush_pending_to_db(self) -> None
+- flush_to_db · method · L177-L179 — async def flush_to_db(self) -> None
+- start_reaper · method · L183-L187 — def start_reaper(self) -> None
+- stop_reaper · method · L189-L200 — async def stop_reaper(self) -> None
+- _flush_all_to_db · method · L202-L221 — def _flush_all_to_db(self) -> None
+- _reaper_loop · method · L223-L237 — async def _reaper_loop(self) -> None
+- _purge_expired · method · L239-L250 — async def _purge_expired(self) -> None
+- size · method · L255-L256 — def size(self) -> int
+- snapshot · method · L258-L266 — async def snapshot(self) -> dict

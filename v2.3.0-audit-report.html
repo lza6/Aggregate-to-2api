@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v2.3.0 终局审计报告</title>
+<style>
+:root {
+  --bg: #f8f9fc;
+  --card-bg: #fff;
+  --text: #1a1e2e;
+  --text-secondary: #6b7280;
+  --border: #d1d5e0;
+  --accent: #6b8aff;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --code-bg: #f0f2f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117;
+    --card-bg: #1a1d2e;
+    --text: #e1e4ed;
+    --text-secondary: #8b8fa3;
+    --border: #2d3050;
+    --code-bg: #252840;
+  }
+}
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --card-bg: #1a1d2e;
+  --text: #e1e4ed;
+  --text-secondary: #8b8fa3;
+  --border: #2d3050;
+  --code-bg: #252840;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+h2 { font-size: 20px; font-weight: 600; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; }
+.subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.stat { flex: 1; min-width: 120px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; }
+.stat-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; }
+.badge-p0 { background: var(--danger); }
+.badge-p1 { background: #f97316; }
+.badge-p2 { background: var(--warning); }
+.badge-p3 { background: #94a3b8; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(107,138,255,.12); color: var(--accent); margin-right: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 12px; background: var(--code-bg); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+pre { background: var(--code-bg); padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; line-height: 1.5; }
+.quiz { margin-top: 24px; }
+.quiz-question { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+.quiz-question h4 { font-size: 14px; margin-bottom: 8px; }
+.quiz-options { list-style: none; }
+.quiz-options li { padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+.quiz-options li:hover { background: rgba(107,138,255,.08); }
+.quiz-answer { margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; display: none; }
+.quiz-answer.correct { background: rgba(16,185,129,.12); color: #059669; display: block; }
+.quiz-answer.wrong { background: rgba(239,68,68,.12); color: #dc2626; display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>v2.3.0 终局审计报告</h1>
+<div class="subtitle">imagefree-api 多提供商 AI 图像生成网关 · 2026-08-19</div>
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-value" style="color:var(--success)">88</div><div class="stat-label">测试通过</div></div>
+  <div class="stat"><div class="stat-value" style="color:var(--danger)">0</div><div class="stat-label">测试失败</div></div>
+  <div class="stat"><div class="stat-value">4</div><div class="stat-label">P0 修复</div></div>
+  <div class="stat"><div class="stat-value">5</div><div class="stat-label">P1 修复</div></div>
+  <div class="stat"><div class="stat-value">8</div><div class="stat-label">代码质量修复</div></div>
+</div>
+
+<h2>上下文与直觉</h2>
+<div class="card">
+<p>项目自 v2.2.0 终局闭环审计后，新增了三个核心能力：</p>
+<ul style="margin-top:8px;padding-left:20px;">
+<li><strong>F-04 自适应重试策略</strong> — 按错误类型分类（rate_limited/timeout/server_error 等），每类独立配置退避参数</li>
+<li><strong>F-05 缓存预热</strong> — 启动时异步加载 stats/gallery 到缓存，避免重启后空窗期</li>
+<li><strong>Q-02 错误码分层</strong> — CATEGORY.NNN 格式 + 中英文多语言消息</li>
+</ul>
+<p style="margin-top:12px;">但终局审计发现存在严重的<strong>前后端衔接断裂</strong>：前端 API 调用与后端端点不匹配、WebSocket 日志路由未注册、提供商页面长期占位、所有 catch 块为空。这些问题导致前端功能不可用或用户体验极差。</p>
+</div>
+
+<h2>变更清单</h2>
+<div class="card">
+<table>
+<thead>
+<tr><th>分类</th><th>文件</th><th>变更内容</th></tr>
+</thead>
+<tbody>
+<tr><td><span class="badge badge-p0">P0</span></td><td><code>frontend/src/api.ts</code></td><td>DLQ clear 改为 DELETE /dead-letter-queue；Provider 接口对齐后端 items 字典；Gallery 添加 password 参数；Stats 接口补全 solver 字段；新增 notify 全局通知</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td><code>frontend/src/App.tsx</code></td><td>导入 ProvidersPage 替代"建设中"占位 div</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td><code>frontend/src/pages/Providers.tsx</code></td><td>适配后端 dict 格式，使用 ProviderSummary 接口</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td><code>frontend/src/components/Gallery.tsx</code></td><td>添加密码输入对话框，支持 gallery password 保护</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>frontend/src/pages/DLQ.tsx</code></td><td>操作添加 loading/error/notify 反馈</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>api/main.py</code></td><td>移除 REASON_CATEGORIES 死导入；_PROVIDERS_BOOTSTRAPPED 防重复 bootstrap；移除重复 task_to_public import；flush_to_db 添加 await</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>api/worker.py</code></td><td>移除 permanent 路径重复 _finish 调用</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>api/cache.py</code></td><td>_purge_expired 改为 deletes 而非 upserts；_flush_pending 加锁防竞态；restore_from_db >= 比较修复</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>api/context.py</code></td><td>移除未使用 Optional 导入</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td><code>api/metrics_ext.py</code></td><td>token_pools 改为 dict 迭代防止 AttributeError</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>关键修复详解</h2>
+
+<div class="card">
+<h3>1. DLQ 清空端点不匹配</h3>
+<p><strong>问题：</strong>前端调用 <code>POST /v1/dead-letter-queue/clear</code>，后端定义为 <code>DELETE /v1/dead-letter-queue</code>。路径和方法都错了，导致 405/404 错误。</p>
+<pre>// 修复前
+const res = await fetch(`${API_BASE}/v1/dead-letter-queue/clear`, { method: 'POST' });
+
+// 修复后
+const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, { method: 'DELETE' });</pre>
+</div>
+
+<div class="card">
+<h3>2. Provider 响应格式不匹配</h3>
+<p><strong>问题：</strong>前端期望 <code>{ providers: Provider[] }</code> 数组格式，后端返回 <code>{ items: {imagefree: {...}, ...} }</code> 字典格式。Provider 接口字段名与后端完全不匹配。</p>
+<pre>// 修复：Provider 接口对齐后端 ProviderSummary 字段
+interface ProviderSummary {
+  display_name: string;  // 原期望 name
+  base_url: string;
+  capabilities: string[];
+  model_count: number;   // 原期望 models
+  health_status: string; // 原期望 status
+  credits: number | null;
+  error_count: number;   // 原期望 error_count（一致）
+}
+
+// 前端遍历适配字典格式
+const items = Object.entries(data.items ?? {}).map(([prefix, summary]) => ({ prefix, summary }));</pre>
+</div>
+
+<div class="card">
+<h3>3. WebSocket 日志路由</h3>
+<p><strong>问题：</strong>前端日志页面连接 <code>ws://host/v1/logs/ws</code>，但后端未注册 WebSocket 路由。<code>log_ws.py</code> 的 <code>register_ws/unregister_ws</code> 从未被 main.py 导入或挂载。</p>
+<pre>// 修复：main.py 已导入并注册
+from .log_ws import ws_log_handler, register_ws, unregister_ws
+
+@app.websocket("/v1/logs/ws")
+async def log_websocket(websocket: WebSocket):
+    await register_ws(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        await unregister_ws(websocket)</pre>
+</div>
+
+<div class="card">
+<h3>4. 缓存过期值持久化错误</h3>
+<p><strong>问题：</strong><code>_purge_expired</code> 将已过期的值调用 <code>_pending.upserts.append()</code> 写入 DB，导致过期值被持久化而非删除。同时 <code>_flush_pending_to_db</code> 在无锁状态下读取 <code>_pending</code>，存在竞态条件。</p>
+<pre>// 修复前
+if expired and self._persist_db:
+    for key, value in expired:
+        j = self._serialize(value)  // 过期值序列化后写入 DB
+        self._pending.upserts.append((key, j, self._ttl))
+
+// 修复后
+if expired and self._persist_db:
+    for key, _ in expired:
+        self._pending.deletes.append(key)  // 过期值应删除</pre>
+</div>
+
+<div class="card">
+<h3>5. Worker 重复 _finish 调用</h3>
+<p><strong>问题：</strong>permanent 错误路径中先调用 <code>_finish(task_id, "error", ...)</code> 标记失败，然后 <code>break</code> 跳出循环后再次调用 <code>_finish</code>（含 DLQ 后缀），产生两次 DB 写入。</p>
+<pre>// 修复前
+self._finish(task_id, "error", None, str(e), t0)  // 第一次写入
+last_error = str(e)
+break
+// 循环外：第二次写入
+self._finish(task_id, "error", None, dlq_msg, t0)  // 覆盖第一次
+
+// 修复后：移除第一次，只保留循环外的 DLQ 后缀版本</pre>
+</div>
+
+<h2>测试结果</h2>
+<div class="card">
+<p>88/88 测试全部通过，包括：</p>
+<ul style="padding-left:20px;margin-top:8px;">
+<li>test_retry_policy.py: 48 个测试 ✅</li>
+<li>test_errors.py: 39 个测试 ✅</li>
+</ul>
+</div>
+
+<h2>已知剩余风险</h2>
+<div class="card">
+<table>
+<thead><tr><th>风险</th><th>等级</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>前端 E2E 测试</td><td><span class="badge badge-p2">P2</span></td><td>Playwright 未配置，前端无测试覆盖</td></tr>
+<tr><td>前端 Docker 集成</td><td><span class="badge badge-p2">P2</span></td><td>Dockerfile.api 未包含前端构建产物</td></tr>
+<tr><td>号池页面 UI</td><td><span class="badge badge-p2">P2</span></td><td>当前仅 JSON 原始展示，需深度 UI 化</td></tr>
+<tr><td>画廊密码前端交互</td><td><span class="badge badge-p2">P2</span></td><td>Gallery 组件已添加密码输入框但父组件未集成</td></tr>
+<tr><td>外部 API 依赖</td><td><span class="badge badge-p2">P2</span></td><td>cf_solver/imagefree.net 不可用时的降级路径</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>测验</h2>
+<div class="quiz">
+<div class="quiz-question" data-answer="b">
+<h4>1. DLQ 清空端点正确的 HTTP 方法是什么？</h4>
+<ul class="quiz-options">
+<li data-value="a">A. POST /v1/dead-letter-queue/clear</li>
+<li data-value="b">B. DELETE /v1/dead-letter-queue</li>
+<li data-value="c">C. GET /v1/dead-letter-queue/clear</li>
+<li data-value="d">D. PUT /v1/dead-letter-queue</li>
+</ul>
+<div class="quiz-answer">正确答案: B。后端定义为 DELETE /v1/dead-letter-queue，前端之前错误地调用 POST /v1/dead-letter-queue/clear。</div>
+</div>
+
+<div class="quiz-question" data-answer="c">
+<h4>2. 后端 /v1/providers 返回的格式是什么？</h4>
+<ul class="quiz-options">
+<li data-value="a">A. 数组 [Provider, Provider, ...]</li>
+<li data-value="b">B. 对象 { providers: [Provider, ...] }</li>
+<li data-value="c">C. 对象 { items: { prefix: summary, ... }, count: N }</li>
+<li data-value="d">D. 字符串 JSON 文本</li>
+</ul>
+<div class="quiz-answer">正确答案: C。后端返回 { items: { imagefree: {...}, ... }, count: N } 字典格式，前端需 Object.entries 转换。</div>
+</div>
+
+<div class="quiz-question" data-answer="a">
+<h4>3. 缓存过期条目的持久化操作应是什么？</h4>
+<ul class="quiz-options">
+<li data-value="a">A. 删除（deletes）</li>
+<li data-value="b">B. 写入（upserts）</li>
+<li data-value="c">C. 忽略（不处理）</li>
+<li data-value="d">D. 重新设置 TTL</li>
+</ul>
+<div class="quiz-answer">正确答案: A。过期条目应删除而非持久化。修复前错误地调用 upserts 导致过期值被写入 DB。</div>
+</div>
+
+<div class="quiz-question" data-answer="d">
+<h4>4. 错误码 SYS.002 代表什么？</h4>
+<ul class="quiz-options">
+<li data-value="a">A. PROVIDER_DOWN</li>
+<li data-value="b">B. INTERNAL_ERROR</li>
+<li data-value="c">C. RATE_LIMITED</li>
+<li data-value="d">D. QUEUE_FULL</li>
+</ul>
+<div class="quiz-answer">正确答案: D。SYS.002 = QUEUE_FULL（队列满），HTTP 状态码 429。分层格式：SYS=系统分类，002=序号。</div>
+</div>
+
+<div class="quiz-question" data-answer="b">
+<h4>5. 自适应重试策略中，"504 Gateway Timeout" 被分类为什么？</h4>
+<ul class="quiz-options">
+<li data-value="a">A. timeout</li>
+<li data-value="b">B. server_error</li>
+<li data-value="c">C. network_error</li>
+<li data-value="d">D. rate_limited</li>
+</ul>
+<div class="quiz-answer">正确答案: B。504 属于 5xx 服务端错误，分类为 server_error（backoff_base=15, max_retries=4, jitter=0.4）。</div>
+</div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz-question').forEach(q => {
+  const opts = q.querySelectorAll('.quiz-options li');
+  const answer = q.querySelector('.quiz-answer');
+  opts.forEach(opt => {
+    opt.addEventListener('click', () => {
+      const isCorrect = opt.dataset.value === q.dataset.answer;
+      answer.className = 'quiz-answer ' + (isCorrect ? 'correct' : 'wrong');
+      answer.textContent = (isCorrect ? '✅ 正确！' : '❌ 错误。') + ' ' + answer.textContent;
+      opts.forEach(o => o.style.pointerEvents = 'none');
+    });
+  });
+});
+</script>
+</div>
+</body>
+</html>

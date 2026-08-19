@@ -100,23 +100,29 @@ class TestRequestContextMiddleware:
         """中间件在请求处理期间设置 context。"""
         from api.context import RequestContextMiddleware
 
-        # 模拟 Starlette 的 Request 对象
         scope = {
             "type": "http",
             "client": ("10.0.0.1", 54321),
             "headers": [],
         }
-        request = _mock_request(scope)
-
         context_in_handler = None
 
-        async def handler(req):
+        async def app(scope, receive, send):
             nonlocal context_in_handler
             context_in_handler = get_current_context()
-            return _mock_response()
+            # send dummy response
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
 
-        middleware = RequestContextMiddleware()
-        await middleware(request, handler)
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, _mock_send)
 
         assert context_in_handler is not None
         assert context_in_handler.client_ip == "10.0.0.1"
@@ -134,13 +140,20 @@ class TestRequestContextMiddleware:
             "client": ("10.0.0.1", 54321),
             "headers": [],
         }
-        request = _mock_request(scope)
 
-        async def handler(req):
-            return _mock_response()
+        async def app(scope, receive, send):
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
 
-        middleware = RequestContextMiddleware()
-        await middleware(request, handler)
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, _mock_send)
 
         # 请求结束后 context 应恢复为 None
         assert get_current_context() is None
@@ -155,14 +168,13 @@ class TestRequestContextMiddleware:
             "client": ("10.0.0.1", 54321),
             "headers": [],
         }
-        request = _mock_request(scope)
 
-        async def failing_handler(req):
+        async def failing_app(scope, receive, send):
             raise ValueError("模拟异常")
 
-        middleware = RequestContextMiddleware()
+        middleware = RequestContextMiddleware(failing_app)
         with pytest.raises(ValueError):
-            await middleware(request, failing_handler)
+            await middleware(scope, _mock_receive, _mock_send)
 
         # 异常后 context 应恢复为 None
         assert get_current_context() is None
@@ -177,16 +189,30 @@ class TestRequestContextMiddleware:
             "client": ("10.0.0.1", 54321),
             "headers": [],
         }
-        request = _mock_request(scope)
+        captured_headers = []
 
-        async def handler(req):
-            return _mock_response()
+        async def send_capture(message):
+            if message["type"] == "http.response.start":
+                captured_headers.extend(message.get("headers", []))
+            await _mock_send(message)
 
-        middleware = RequestContextMiddleware()
-        response = await middleware(request, handler)
+        async def app(scope, receive, send):
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
 
-        assert "X-Request-ID" in response.headers
-        assert len(response.headers["X-Request-ID"]) > 0
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, send_capture)
+
+        # Response headers should contain X-Request-ID
+        header_keys = [k.decode().lower() for k, v in captured_headers]
+        assert "x-request-id" in header_keys
 
     @pytest.mark.asyncio
     async def test_x_request_id_changes_per_request(self):
@@ -201,14 +227,30 @@ class TestRequestContextMiddleware:
                 "client": ("10.0.0.1", 54321),
                 "headers": [],
             }
-            request = _mock_request(scope)
+            captured_headers = []
 
-            async def handler(req):
-                return _mock_response()
+            async def send_capture(message):
+                if message["type"] == "http.response.start":
+                    captured_headers.extend(message.get("headers", []))
+                await _mock_send(message)
 
-            middleware = RequestContextMiddleware()
-            response = await middleware(request, handler)
-            ids.add(response.headers["X-Request-ID"])
+            async def app(scope, receive, send):
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"",
+                })
+
+            middleware = RequestContextMiddleware(app)
+            await middleware(scope, _mock_receive, send_capture)
+
+            for k, v in captured_headers:
+                if k.decode().lower() == "x-request-id":
+                    ids.add(v.decode())
 
         assert len(ids) == 5
 
@@ -222,18 +264,24 @@ class TestRequestContextMiddleware:
             "client": ("10.0.0.1", 54321),
             "headers": [(b"x-trace-id", b"custom-trace-001")],
         }
-        request = _mock_request(scope)
-
         trace_in_handler = None
 
-        async def handler(req):
+        async def app(scope, receive, send):
             nonlocal trace_in_handler
             ctx = get_current_context()
             trace_in_handler = ctx.trace_id if ctx else None
-            return _mock_response()
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
 
-        middleware = RequestContextMiddleware()
-        await middleware(request, handler)
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, _mock_send)
 
         assert trace_in_handler == "custom-trace-001"
 
@@ -247,17 +295,26 @@ class TestRequestContextMiddleware:
             "client": ("10.0.0.1", 54321),
             "headers": [],
         }
-        request = _mock_request(scope)
+        trace_in_handler = None
 
-        async def handler(req):
+        async def app(scope, receive, send):
+            nonlocal trace_in_handler
             ctx = get_current_context()
-            return _mock_response()
+            trace_in_handler = ctx.trace_id if ctx else None
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
 
-        middleware = RequestContextMiddleware()
-        await middleware(request, handler)
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, _mock_send)
 
-        # 请求结束后检查
-        assert get_current_context() is None
+        assert trace_in_handler is None
 
     @pytest.mark.asyncio
     async def test_concurrent_requests_isolation(self):
@@ -272,26 +329,29 @@ class TestRequestContextMiddleware:
                 "client": (client_ip, 54321),
                 "headers": headers,
             }
-            request = _mock_request(scope)
 
-            async def handler(req):
-                # 模拟处理延迟
+            result = None
+
+            async def app(scope, receive, send):
+                nonlocal result
                 await asyncio.sleep(0.05)
                 ctx = get_current_context()
                 if ctx is None:
-                    return None
-                return f"{ctx.client_ip}:{ctx.trace_id}"
+                    result = None
+                else:
+                    result = f"{ctx.client_ip}:{ctx.trace_id}"
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"",
+                })
 
-            middleware = RequestContextMiddleware()
-            # 直接调用 handler 获取结果
-            result = None
-
-            async def capturing_handler(req):
-                nonlocal result
-                result = await handler(req)
-                return _mock_response()
-
-            await middleware(request, capturing_handler)
+            middleware = RequestContextMiddleware(app)
+            await middleware(scope, _mock_receive, _mock_send)
             return result
 
         # 并发发起 3 个请求
@@ -382,41 +442,10 @@ class TestLogRecordFilter:
 
 
 # ── 辅助函数 ─────────────────────────────────
-class _MockClient:
-    """模拟 Starlette 的 client 对象（含 .host 属性）。"""
 
-    def __init__(self, host: str, port: int):
-        self.host = host
-        self.port = port
+async def _mock_receive() -> dict:
+    return {"type": "http.disconnect"}
 
 
-class _MockRequest:
-    """最小 Starlette Request 模拟。"""
-
-    def __init__(self, scope: dict):
-        self.scope = scope
-        client = scope.get("client")
-        self.client = _MockClient(host=client[0], port=client[1]) if client else None
-        self._headers = {}
-        for k, v in scope.get("headers", []):
-            self._headers[k.decode().lower()] = v.decode()
-
-    @property
-    def headers(self):
-        return self._headers
-
-
-class _MockResponse:
-    """最小 Starlette Response 模拟。"""
-
-    def __init__(self):
-        self.headers = {}
-        self.status_code = 200
-
-
-def _mock_request(scope: dict) -> _MockRequest:
-    return _MockRequest(scope)
-
-
-def _mock_response() -> _MockResponse:
-    return _MockResponse()
+async def _mock_send(message: dict) -> None:
+    pass

@@ -9,7 +9,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-2.1.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-2.2.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -22,6 +22,8 @@
 - **👥 号池自动化** — 自动注册 + 每日签到，管理 1000+ 账号无需人工干预
 - **🌐 代理池轮换** — 住宅代理 + 免费代理双源，每 IP 递增冷却 + 24h 每日限额重置
 - **⚡ 高并发架构** — 有界优先级队列 + Worker 池（4-16 自适应）+ Turnstile token 预取，扛 270+ RPS
+- **🖥️ React 管理面板** — 独立 React 前端（/admin），图表化监控任务、提供商、号池、死信队列与实时日志
+- **🔍 深度可观测性** — Prometheus 指标 + 审计日志 + 内置告警引擎 + WebSocket 实时日志 + OTel 分布式追踪
 - **🔧 零鉴权部署** — 开箱即用，无需配置复杂鉴权；支持 Docker Compose 一键部署
 
 > 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
@@ -33,6 +35,7 @@
 ### 前置依赖
 
 - Python 3.11+ 或 Docker
+- Node.js 18+（仅构建 React 管理面板时需要）
 - 网络代理（访问 imagefree.net 等上游需能直连或通过代理）
 
 ### 方式一：Docker Compose（推荐）
@@ -51,14 +54,22 @@ docker compose up -d
 # 1. 安装依赖
 pip install -r requirements.txt
 
-# 2. 启动 cf_solver（Turnstile 求解服务）
+# 2. （可选）构建并挂载 React 管理面板
+cd frontend
+npm install
+npm run build          # 产物输出到 frontend/dist，API 启动时自动挂载到 /admin
+cd ..
+
+# 3. 启动 cf_solver（Turnstile 求解服务）
 python cf_solver/boterdrop_wrapper.py &
 
-# 3. 启动 API 服务
+# 4. 启动 API 服务
 uvicorn api.main:app --host 0.0.0.0 --port 8100
 ```
 
-访问 `http://localhost:8100` 查看首页仪表盘。
+访问 `http://localhost:8100` 查看首页仪表盘，`http://localhost:8100/admin` 查看 React 管理面板。
+
+> 前端开发模式（热更新）：`cd frontend && npm run dev`，Vite 代理将 `/v1` 与 `/metrics` 转发到 `127.0.0.1:8100`。
 
 ---
 
@@ -97,7 +108,8 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
                                │   ├─ 免费代理池抓取 + 住宅代理轮换               │
                                │   ├─ DB 批量写合并(0.2s窗口)                     │
                                │   ├─ 死信队列 + 重试退避 + 幂等提交              │
-                               │   └─ Prometheus 指标 + LRU 缓存                  │
+                               │   ├─ Prometheus 指标 + LRU 缓存                  │
+                               │   └─ 管理面板 (/admin) + 告警/审计/日志/OTel     │
                                └──────────────────────────────────────────────────┘
 ```
 
@@ -113,8 +125,66 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | **base64 文件分离** | 图片 base64 从 SQLite 移至本地文件，到期自动清理 |
 | **LRU 缓存** | 画廊/统计/提供商状态缓存，降低 DB 读压 |
 | **熔断降级** | solver 连续失败达阈值→熔断 OPEN；provider 限流达阈值→自动降级 |
-| **死信队列** | 重试耗尽的任务推入 DLQ，可在线查询 |
+| **死信队列** | 重试耗尽的任务推入 DLQ，可在线查询/重试/清空 |
 | **持久化队列** | 重启后未消费任务可续跑 |
+| **内置告警引擎** | 规则评估 + 冷却抑制，无需外部 AlertManager，独立部署即可告警 |
+| **审计日志** | 不可变仅追加，记录管理操作与状态变更，支持溯源 |
+
+---
+
+## ✨ 新增功能
+
+### 🖥️ React 管理面板（/admin）
+
+基于 **React 19 + TypeScript + Vite + Recharts** 的独立前端，构建产物 `frontend/dist` 由 FastAPI 自动挂载到 `/admin`（检测到目录即挂载，零额外配置）。
+
+| 页面 | 说明 |
+|------|------|
+| **Dashboard** | 核心指标卡片 + 请求/生成趋势图表 + 统计概览 |
+| **Tasks** | 任务列表（分页/筛选/排序），实时状态查看 |
+| **Providers** | 提供商状态卡片，健康度一目了然 |
+| **Accounts** | 号池看板，账号状态与配额 |
+| **DLQ** | 死信队列在线查询、重试、清空 |
+| **Logs** | WebSocket 实时日志流，浏览器直连 `/v1/logs/ws` |
+
+前端开发模式（`npm run dev`）：Vite 代理 `/v1`、`/metrics` 至 `127.0.0.1:8100`。
+
+### 📊 Prometheus 指标系统
+
+`api/metrics_ext.py` 基于 **prometheus_client** 标准化 `/metrics` 输出（替代手写文本），统一 Counter / Histogram / Gauge 语义，可直接接入 Prometheus + Grafana：
+
+- **Counter**：`imagefree_requests_total`、`imagefree_images_total`、`imagefree_errors_total`、`imagefree_solve_total`、`imagefree_solve_rejected_total`、`imagefree_token_wait_timeout_total`
+- **Histogram**：`imagefree_generate_duration_seconds`（生成耗时）、`imagefree_solve_duration_seconds`（求解耗时）
+- **Gauge**：`imagefree_processing`、`imagefree_queued`、`imagefree_token_pool_watermark`（按池）、`imagefree_db_rows`、`imagefree_edit_inflight`、`imagefree_uptime_seconds`、`imagefree_solve_window_success_rate`、`imagefree_solver_circuit_open`
+
+### 📝 审计日志
+
+`api/audit_log`（`api/audit.py`）— **不可变仅追加**审计，写入 `data/audit.log`（JSON Lines，UTC 时间戳），覆盖管理操作、配置文件变更、DLQ 重试/清空等行为，支持 `recent()` 在线回溯，满足安全溯源要求。
+
+### 🚨 告警引擎
+
+`api/alerting.py` — **内置轻量告警引擎**（无需外部 Prometheus + AlertManager），周期（`IF_ALERT_CHECK_INTERVAL`，默认 60s）评估规则，带冷却抑制（冷却期内不重复触发）与日志触达。
+
+内置默认规则（可在代码中扩展）：
+
+| 规则 | 级别 | 条件 |
+|------|------|------|
+| `queue_backlog` | warning | 排队任务数 > 1000 |
+| `high_error_rate` | critical | 近 5 分钟窗口错误率 > 20% |
+| `solver_circuit_open` | critical | 求解器熔断开启 ≥ 30s |
+| `token_pool_empty` | warning | token 池空 > 10s |
+
+### 🔌 WebSocket 实时日志
+
+`/v1/logs/ws`（`api/log_ws.py`）— WebSocket 推送实时日志流。`WsLogHandler` 注入 root logger，**任何模块的日志自动广播到所有已连接客户端**，前端 Logs 页可零刷新观测；`LogBuffer` 保留最近 1000 条供快照回放。
+
+### 🕵️ OpenTelemetry 深度追踪
+
+`api/telemetry.py` — 基于 **OpenTelemetry** 的分布式追踪，`trace_id` 贯穿请求全生命周期（安全导入，未安装依赖时零开销降级）：
+
+- **FastAPIInstrumentor** — 自动捕获 HTTP 请求→响应 span
+- **HTTPXClientInstrumentor** — 自动捕获上游调用 span（imagefree.net / cf_solver）
+- **LoggingInstrumentor** — 日志自动注入 `[trace=<hex_id>]`，日志/指标/追踪联动（O-04）
 
 ---
 
@@ -123,6 +193,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `GET /` | — | 中文仪表盘首页（统计 + 画廊 + 实时状态） |
+| `GET /admin` | — | React 管理面板（构建 dist 后可用） |
 | `POST /v1/generate` | 同步 | 文生图/文生视频，阻塞直到出图 |
 | `POST /v1/generate/async` | 异步 | 立即返回 task_id，轮询 `/v1/tasks/{id}` |
 | `POST /v1/edit` | 异步 | 图生图（AI 照片编辑） |
@@ -133,12 +204,13 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊 |
 | `GET /v1/healthz` | — | 健康检查 + solver 求解质量指标 |
-| `GET /v1/logs` | — | 实时日志（环形缓冲区，200 条） |
+| `GET /v1/logs` | — | 实时日志快照（环形缓冲区） |
+| `GET /v1/logs/ws` | WebSocket | 实时日志推送流（订阅 root logger 广播） |
 | `GET /v1/proxy-pool` | — | 代理池实时状态 |
 | `GET /v1/account-pool` | — | 号池看板 |
-| `GET /v1/dead-letter-queue` | — | 死信队列 |
+| `GET /v1/dead-letter-queue` | — | 死信队列（查询/DLQ 重试、清空记入审计） |
 | `GET /v1/meta` | — | sitekey / aspect_ratios 等元信息 |
-| `GET /metrics` | — | Prometheus 指标 |
+| `GET /metrics` | — | Prometheus 指标（prometheus_client 标准格式） |
 | `GET /docs` | — | Swagger 交互文档 |
 
 ### curl 示例
@@ -151,6 +223,12 @@ curl -X POST http://localhost:8100/v1/generate \
 
 # 查询任务
 curl http://localhost:8100/v1/tasks/{task_id}
+
+# 拉取 Prometheus 指标
+curl http://localhost:8100/metrics
+
+# WebSocket 实时日志（wscat 客户端）
+wscat -c ws://localhost:8100/v1/logs/ws
 ```
 
 ---
@@ -182,39 +260,67 @@ curl http://localhost:8100/v1/tasks/{task_id}
 | `IF_ACCOUNT_AUTO` | `1` | 号池自动注册/签到 |
 | `IF_GALLERY_PASSWORD` | 空 | 画廊密码 |
 | `IF_DLQ_ENABLED` | `1` | 死信队列开关 |
+| `IF_ALERT_CHECK_INTERVAL` | `60` | 告警引擎评估周期（秒） |
 
-> 完整配置列表见 [`api/config.py`](api/config.py) 或 `README.md` 内的配置表。
+### 可观测性配置
+
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `IF_OTEL_ENABLED` | `0` | 是否启用 OpenTelemetry 追踪（依赖见 requirements.txt） |
+| `IF_OTEL_SERVICE_NAME` | `imagefree-api` | OTel 服务名 |
+| `IF_OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | OTLP gRPC 导出目标（空 = 仅控制台输出） |
+
+> 完整配置列表见 [`api/config.py`](api/config.py) 与根目录 `.env.example`。
 
 ---
 
 ## 📁 项目结构
 
 ```
-└── api/
-    ├── main.py              # FastAPI 入口 + 端点
-    ├── config.py            # 配置（环境变量）
-    ├── worker.py            # 高并发引擎：优先级队列 + worker 池 + token 预取
-    ├── db.py                # SQLite 持久化 + 批量写合并
-    ├── turnstile_client.py  # cf_solver 客户端
-    ├── imagefree_client.py  # imagefree.net 客户端
-    ├── solver_guard.py      # 熔断器 + 求解质量统计
-    ├── proxy_pool.py        # 住宅代理池 + 冷却策略
-    ├── free_proxy_fetcher.py# 免费代理池抓取
-    ├── account_pool.py      # 号池管理
-    ├── registerer.py        # 自动注册（minimaxh3 / nanobanana）
-    ├── providers/           # 多提供商适配器
-    │   ├── base.py          # 抽象基类
-    │   ├── registry.py      # 提供商注册 + 路由 + 健康检查
-    │   ├── imagefree.py
-    │   ├── aifreeforever.py
-    │   ├── minimaxh3.py
-    │   └── nanobanana.py
-    ├── cache.py             # LRU 缓存
-    ├── retry_policy.py      # 重试策略（指数退避 + jitter）
-    ├── base64_store.py      # base64 文件缓存
-    └── docs.html            # 中文仪表盘首页
-└── tests/                   # 300+ 测试用例
-└── deploy/                  # Docker Compose 部署资产
+├── api/
+│   ├── main.py              # FastAPI 入口 + 端点 + /admin 挂载
+│   ├── config.py            # 配置（环境变量，含告警/OTel 项）
+│   ├── worker.py            # 高并发引擎：优先级队列 + worker 池 + token 预取
+│   ├── db.py                # SQLite 持久化 + 批量写合并
+│   ├── turnstile_client.py  # cf_solver 客户端
+│   ├── imagefree_client.py  # imagefree.net 客户端
+│   ├── solver_guard.py      # 熔断器 + 求解质量统计
+│   ├── proxy_pool.py        # 住宅代理池 + 冷却策略
+│   ├── free_proxy_fetcher.py# 免费代理池抓取
+│   ├── account_pool.py      # 号池管理
+│   ├── registerer.py        # 自动注册（minimaxh3 / nanobanana）
+│   ├── email_pool.py        # 注册邮箱池
+│   ├── alerting.py          # 内置告警引擎（规则 + 冷却抑制）
+│   ├── audit.py             # 不可变审计日志（JSON Lines，仅追加）
+│   ├── log_ws.py            # WebSocket 实时日志推送 + LogBuffer
+│   ├── metrics_ext.py       # prometheus_client 标准 /metrics
+│   ├── telemetry.py         # OpenTelemetry 追踪（FastAPI/HTTPX/Logging）
+│   ├── cache.py             # LRU 缓存
+│   ├── cache_warmup.py      # 缓存预热
+│   ├── errors.py            # 统一错误码体系
+│   ├── health.py            # 健康检查聚合
+│   ├── retry_policy.py      # 重试策略（指数退避 + jitter）
+│   ├── base64_store.py      # base64 文件缓存
+│   ├── log_buffer.py        # 日志环形缓冲
+│   ├── context.py           # 请求上下文中间件（contextvars）
+│   ├── providers/           # 多提供商适配器
+│   │   ├── base.py          # 抽象基类
+│   │   ├── registry.py      # 提供商注册 + 路由 + 健康检查
+│   │   ├── imagefree.py
+│   │   ├── aifreeforever.py
+│   │   ├── minimaxh3.py
+│   │   └── nanobanana.py
+│   ├── static/              # 静态资源
+│   └── docs.html            # 中文仪表盘首页
+├── frontend/                # React 管理面板（构建到 dist 后由 API 挂载）
+│   ├── src/
+│   │   ├── pages/           # Dashboard / Tasks / Providers / Accounts / DLQ / Logs
+│   │   └── components/      # StatCard / BarChart / ProviderCard / Gallery / Layout
+│   ├── package.json         # React 19 + Vite + Recharts
+│   └── vite.config.ts       # 开发代理 /v1、/metrics → 127.0.0.1:8100
+├── tests/                   # 300+ 测试用例
+├── deploy/                  # Docker Compose 部署资产
+└── scripts/                 # E2E 验证 / 运维脚本
 ```
 
 ---
@@ -230,7 +336,7 @@ curl http://localhost:8100/v1/tasks/{task_id}
 - **Token 池水位**：直连池 + per-proxy 池水位
 - **熔断状态**：连续失败达阈值自动暂停求解
 
-后端 `/v1/healthz` 和 `/metrics` 暴露完整指标，可与 Prometheus + Grafana 集成。
+后端 `/v1/healthz` 和 `/metrics` 暴露完整指标，可与 Prometheus + Grafana 集成；内置告警引擎可在无外部监控栈时独立触发告警。
 
 ---
 

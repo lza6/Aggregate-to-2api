@@ -43,6 +43,7 @@ from .cache_warmup import warmup_cache
 from .telemetry import init_telemetry, shutdown_telemetry
 from .alerting import alert_engine
 from .audit import audit_log
+from .health import health_registry
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
@@ -265,7 +266,7 @@ async def lifespan(_app: FastAPI):
                          free_proxy_fetcher.stop(), account_pool.stop())
     # ⑥ 刷新缓存持久化
     async def _flush_cache() -> None:
-        gallery_cache.flush_to_db()
+        await gallery_cache.flush_to_db()
     await shutdown_phase(3.0, "⑥ 缓存持久化",
                          _flush_cache(), gallery_cache.stop_reaper())
     # ⑦ 关闭 HTTP 连接池
@@ -669,10 +670,13 @@ async def _probe_cf_solver(force: bool = False) -> bool:
 
 @app.get("/v1/healthz")
 async def healthz():
-    """健康检查：本服务 + cf_solver 可用性 + solver 求解质量（M5：探活 TTL 缓存 + 深指标）。"""
+    """健康检查：本服务 + cf_solver 可用性 + solver 求解质量 + 统一健康视图（A-04）。"""
     cf_ok = await _probe_cf_solver()
     snap = engine.snapshot()
     ssnap = solver_guard.snapshot()
+    # A-04: 执行统一健康检查
+    await health_registry.check_all()
+    hr_snap = health_registry.snapshot()
     return {
         # solver 熔断 OPEN 或求解质量劣化（degraded）时即使 cf_solver 探活正常也按 degraded 处理
         "status": "degraded" if (not cf_ok or ssnap["solver_status"] != "ok") else "ok",

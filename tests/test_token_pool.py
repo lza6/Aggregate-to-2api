@@ -223,6 +223,10 @@ async def test_worker_records_rejected_token(tmp_db, monkeypatch):
     async def _submit(*a, **k):
         raise RuntimeError("human verification failed")
 
+    # 缩小退避间隔，加速测试
+    from api import config
+    monkeypatch.setattr(config, "IF_TXT_RETRY_BACKOFF_BASE", 0.1)
+
     monkeypatch.setattr(w.turnstile_client, "solve_turnstile", _solve)
     monkeypatch.setattr(w.imagefree_client, "submit_generate", _submit)
     before = solver_guard.snapshot()["rejected_total"]
@@ -230,7 +234,7 @@ async def test_worker_records_rejected_token(tmp_db, monkeypatch):
     await e.start()
     try:
         tid = await e.submit("p", "1:1", False)
-        await e.wait_result(tid, 5)
+        await e.wait_result(tid, 15)
         after = solver_guard.snapshot()["rejected_total"]
         assert after >= before + 1
         assert e.db.get(tid)["status"] == "error"

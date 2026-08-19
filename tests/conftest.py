@@ -17,8 +17,14 @@ if str(_ROOT) not in sys.path:
 
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """会话级事件循环，使 session-scoped async fixtures 共享同一 event loop。"""
+def event_loop(request):
+    """会话级事件循环，使 session-scoped async fixtures 与测试共享同一 event loop。
+
+    引擎 worker 是 session 级后台协程，若测试跑在独立的 function 级 loop 中，
+    提交的任务永远不会被 worker 消费。共享 loop 保证 worker 与请求处理同 loop。
+    未使用该 fixture 的 async 测试（如 token_pool）应使用 pytest-asyncio 默认
+    function 级 loop，避免 running-loop 冲突。
+    """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     yield loop
@@ -149,6 +155,15 @@ async def _app_instance(mock_cfsolver, event_loop):
     for mod_key in list(sys.modules.keys()):
         if mod_key.startswith("api"):
             del sys.modules[mod_key]
+
+    # ── 清除 prometheus 注册表，避免重复注册冲突 ──
+    try:
+        from prometheus_client import REGISTRY
+        collectors = list(REGISTRY._collector_to_names.keys())
+        for c in collectors:
+            REGISTRY.unregister(c)
+    except Exception:
+        pass
 
     import api.config  # noqa: F401
     import api.main  # 首次导入，触发模块级代码执行

@@ -4,14 +4,34 @@
 - acquire_proxy 改为 async，先获取信号量再 round-robin
 - release_proxy 释放信号量
 - 未启用代理池时信号量不限制
+
+注意：此测试独立运行，不依赖 conftest 中的集成测试 fixture。
+_EditProxyPool 在 api.main 中定义，导入 api.main 会触发模块级
+代码执行（DB 初始化、prometheus 注册等）。
 """
 import asyncio
+import os
+import sys
+import tempfile
 import time
 
 import pytest
 
-from api import config
-from api.main import _EditProxyPool
+
+def _import_pool_cls():
+    """设置临时环境变量后导入 _EditProxyPool。
+
+    仅在模块级导入成功时缓存结果，避免重复导入问题。
+    """
+    _tmp_db = tempfile.mktemp(suffix=".db")
+    os.environ["IF_DB_FILE"] = _tmp_db
+    os.environ["IF_ACCOUNT_AUTO"] = "0"
+    os.environ["IF_MOCK_REGISTER"] = "1"
+    from api.main import _EditProxyPool
+    return _EditProxyPool
+
+
+_EditProxyPool = _import_pool_cls()
 
 
 class TestEditProxyPoolInflight:
@@ -28,6 +48,7 @@ class TestEditProxyPoolInflight:
     @pytest.mark.asyncio
     async def test_sem_inflight_limits_concurrency(self, monkeypatch):
         """sem_inflight 应限制并发代理数。"""
+        from api import config
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 2)
         pool = _EditProxyPool()
         pool.proxies = ["http://proxy1:8080", "http://proxy2:8080"]
@@ -39,7 +60,6 @@ class TestEditProxyPoolInflight:
         assert p1 is not None
 
         # 第二个 acquire 应阻塞（信号量已用完）
-        t0 = time.monotonic()
         task = asyncio.create_task(pool.acquire_proxy())
         await asyncio.sleep(0.15)
         assert not task.done(), "信号量应限制并发"
@@ -54,6 +74,7 @@ class TestEditProxyPoolInflight:
     @pytest.mark.asyncio
     async def test_release_proxy_releases_semaphore(self, monkeypatch):
         """release_proxy 应释放信号量。"""
+        from api import config
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 2)
         pool = _EditProxyPool()
         pool.proxies = ["http://proxy1:8080"]
@@ -86,6 +107,7 @@ class TestEditProxyPoolInflight:
     @pytest.mark.asyncio
     async def test_round_robin_with_semaphore(self, monkeypatch):
         """信号量下 round-robin 分配仍正确。"""
+        from api import config
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 3)
         pool = _EditProxyPool()
         pool.proxies = ["http://p1", "http://p2", "http://p3"]

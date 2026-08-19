@@ -25,13 +25,22 @@ export function Gallery({ limit = 20, password }: { limit?: number; password?: s
   }, [limit, password]);
 
   const handlePwdSubmit = () => {
-    // 父组件通过回调处理密码提交
+    if (!pwdInput.trim()) return;
+    const onChange = (window as any).__galleryChangePassword;
+    if (typeof onChange === 'function') onChange(pwdInput);
   };
 
   if (pwdRequired) {
     return <div className="gallery-pwd-required">
       <p>画廊需要密码才能查看</p>
-      <input type="password" value={pwdInput} onChange={e => setPwdInput(e.target.value)} placeholder="输入画廊密码" />
+      <input
+        type="password"
+        value={pwdInput}
+        onChange={e => setPwdInput(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handlePwdSubmit(); }}
+        placeholder="输入画廊密码"
+      />
+      <button onClick={handlePwdSubmit} className="btn">提交</button>
     </div>;
   }
   if (loading) return <div className="gallery-loading">加载中...</div>;

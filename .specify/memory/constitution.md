@@ -1,32 +1,51 @@
-# imagefree-api 项目章程
+# Project Constitution: imagefree-api
 
-## 核心价值
+## Core Values
 
-1. **生产级可靠性优先**：每一行代码都要能扛住生产环境的真实压力。不追求"理论上可行"，追求"实际上可靠"。
-2. **隐式补位思维**：不仅完成显式需求，还要主动识别并补齐链路断裂、边界缺失、体验漏洞。
-3. **全链路闭环**：功能不是"有代码片段"或"有按钮"，而是前后端真实打通、可执行、可反馈、可验证。
-4. **诚实透明度**：不包装伪实现、不宣称未验证的闭环、不回避已知限制。
+1. **Production-First**: Every line of code must be deployable, observable, and recoverable. No "it works on my machine" mentality.
+2. **Complete Closure**: No half-implemented features. Every button must work, every API must return proper responses, every error must be handled.
+3. **Defense in Depth**: Assume everything fails — upstream, network, database, filesystem. Graceful degradation at every layer.
+4. **Developer Experience**: Clean code, clear docs, consistent patterns. A new contributor should be productive within 30 minutes.
 
-## 技术原则
+## Technical Principles
 
-### 架构
-- 模块边界清晰，职责单一
-- 数据流可追踪、可审计
-- 异常路径和正常路径同等关注
+### Architecture
+- **Layered Separation**: API handler → Business logic → Data access. No circular imports.
+- **Async-First**: All I/O operations use asyncio. Blocking operations go to thread pool.
+- **Fail Fast, Recover Gracefully**: Validate inputs at boundaries. Circuit breakers for upstream failures.
+- **Idempotency**: Mutating operations are idempotent where feasible.
 
-### 代码质量
-- 所有新功能必须有测试覆盖
-- 不留下"TODO"空壳或死代码
-- 错误处理必须显式、完整
+### Code Quality
+- **Type Safety**: Full type annotations on all function signatures. No `Any` without justification.
+- **Error Handling**: Every `except` must specify the exception type. Never bare `except:`.
+- **Test Coverage**: ≥80% coverage. Integration tests for all API endpoints. Chaos tests for resilience.
+- **No Dead Code**: Unused imports, variables, commented-out blocks are removed on sight.
 
-### 性能
-- 入口扛 50 RPS
-- 缓存策略合理（LRU + 持久化兜底）
-- 数据库查询有索引覆盖
+### Performance
+- **Async Concurrency**: Non-blocking I/O for all external calls. Connection pooling for HTTP clients.
+- **Resource Limits**: Memory bounds, connection limits, queue caps. System must survive traffic spikes.
+- **Latency Budget**: API submission <50ms P99. Health check <100ms. Generate completion as fast as upstream allows.
 
-## 决策框架
+### Security
+- **No Secrets in Code**: All credentials via environment variables. `.env` never committed.
+- **Input Validation**: All user input validated at the boundary. SSRF protection on URL parameters.
+- **Rate Limiting**: Queue-based backpressure prevents abuse. No unbounded resource consumption.
 
-1. 能否提高生产可靠性？
-2. 是否减少调用方和用户的困惑？
-3. 是否减少维护者的认知负担？
-4. 是否可验证、可测试？
+## Decision Framework
+
+When making decisions, prioritize:
+1. **Production stability** over feature velocity
+2. **Clear error messages** over silent fallbacks
+3. **Simple, testable code** over clever abstractions
+4. **Consistent patterns** over "better" approaches
+5. **Observability** (logs + metrics) over "it should work"
+
+## Quality Gates
+
+Before any commit to main:
+- [ ] All unit tests pass
+- [ ] Integration tests pass (if applicable)
+- [ ] No new TODO/FIXME/HACK comments
+- [ ] Type annotations on all new/modified functions
+- [ ] Error handling covers all known failure modes
+- [ ] Documentation updated (README, deploy docs, API docs)

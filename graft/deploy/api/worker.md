@@ -25,7 +25,7 @@
 - direct_pool_size · method · L344-L345 — def direct_pool_size(self) -> int
 - _WorkerHandle · class · L348-L357 — class _WorkerHandle
 - __init__ · method · L353-L357 — def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event)
-- Engine · class · L360-L742 — class Engine
+- Engine · class · L360-L741 — class Engine
 - __init__ · method · L361-L378 — def __init__(self, db)
 - start · method · L381-L398 — async def start(self) -> None: # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
 - stop · method · L400-L413 — async def stop(self) -> None
@@ -43,7 +43,7 @@
 - _auto_scale_once · method · L555-L587 — async def _auto_scale_once(self) -> None
 - _idle_workers_count · method · L589-L594 — def _idle_workers_count(self) -> int
 - _shrink_one_worker · method · L596-L606 — def _shrink_one_worker(self) -> None
-- _process · method · L608-L683 — async def _process(self, task_id: str) -> None
-- _finish · method · L685-L702 — def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
-- _generate_once · method · L704-L729 — async def _generate_once(self, row: dict, token: str) -> dict
-- snapshot · method · L732-L742 — def snapshot(self) -> dict
+- _process · method · L608-L682 — async def _process(self, task_id: str) -> None
+- _finish · method · L684-L701 — def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
+- _generate_once · method · L703-L728 — async def _generate_once(self, row: dict, token: str) -> dict
+- snapshot · method · L731-L741 — def snapshot(self) -> dict

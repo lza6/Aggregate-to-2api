@@ -266,7 +266,7 @@ async def lifespan(_app: FastAPI):
                          free_proxy_fetcher.stop(), account_pool.stop())
     # ⑥ 刷新缓存持久化
     async def _flush_cache() -> None:
-        gallery_cache.flush_to_db()
+        await gallery_cache.flush_to_db()
     await shutdown_phase(3.0, "⑥ 缓存持久化",
                          _flush_cache(), gallery_cache.stop_reaper())
     # ⑦ 关闭 HTTP 连接池

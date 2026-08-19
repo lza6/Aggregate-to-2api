@@ -9,6 +9,7 @@
 import asyncio
 
 import pytest
+import pytest_asyncio
 
 from api import config
 from api.worker import Engine, QueueFull
@@ -45,8 +46,8 @@ class _DBStub:
         return 0
 
 
-@pytest.fixture
-def engine():
+@pytest_asyncio.fixture
+async def engine():
     """Engine 实例（mock DB，不启动 worker，仅测队列行为）。"""
     e = Engine(_DBStub())
     e._started = False   # 不启动后台预取/worker，避免依赖真实网络

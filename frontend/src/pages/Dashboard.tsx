@@ -5,16 +5,24 @@ import { BarChart } from '../components/BarChart';
 import { Gallery } from '../components/Gallery';
 import type { Stats } from '../api';
 
+// 供 Gallery 组件通过 window 回调通知密码变更
+declare global { interface Window { __galleryChangePassword?: (pwd: string) => void } }
+
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    window.__galleryChangePassword = setGalleryPwd;
     const load = async () => {
       try { setStats(await fetchStats()); } catch { /* ignore */ }
     };
     load();
     const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      delete window.__galleryChangePassword;
+    };
   }, []);
 
   const dailyChart = stats?.daily?.map(d => ({
@@ -42,7 +50,12 @@ export function Dashboard() {
       )}
       <div style={{ marginTop: 20 }}>
         <h2 style={{ fontSize: 18, marginBottom: 12 }}>最近作品</h2>
-        <Gallery />
+        <Gallery password={galleryPwd} />
+        {galleryPwd === undefined && (
+          <div className="gallery-auth-hint" style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
+            若画廊需要密码，请点击下方触发
+          </div>
+        )}
       </div>
       <style>{`
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }

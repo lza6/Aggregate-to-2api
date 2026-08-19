@@ -99,7 +99,15 @@ class RequestContextMiddleware:
         )
         token = request_context_var.set(ctx)
         try:
-            await self.app(scope, receive, send)
+            # 包装 send 以注入 X-Request-ID 响应头
+            async def send_with_request_id(message):
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    headers.append((b"X-Request-ID", ctx.request_id.encode()))
+                    message["headers"] = headers
+                await send(message)
+
+            await self.app(scope, receive, send_with_request_id)
         finally:
             request_context_var.reset(token)
 

@@ -17,6 +17,6 @@
 - test_healthz_has_solver_fields · method · L175-L184 — async def test_healthz_has_solver_fields(self)
 - test_metrics_has_solver_lines · method · L187-L202 — async def test_metrics_has_solver_lines(self)
 - test_metrics_keeps_legacy_lines · method · L205-L210 — async def test_metrics_keeps_legacy_lines(self)
-- test_worker_records_rejected_token · function · L215-L238 — async def test_worker_records_rejected_token(tmp_db, monkeypatch)
+- test_worker_records_rejected_token · function · L215-L242 — async def test_worker_records_rejected_token(tmp_db, monkeypatch)
 - _solve · function · L220-L221 — async def _solve(*a, **k)
 - _submit · function · L223-L224 — async def _submit(*a, **k)
