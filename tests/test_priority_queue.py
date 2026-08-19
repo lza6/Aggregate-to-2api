@@ -9,7 +9,6 @@
 import asyncio
 
 import pytest
-import pytest_asyncio
 
 from api import config
 from api.worker import Engine, QueueFull
@@ -23,31 +22,31 @@ class _DBStub:
         self.finished: list[str] = []
         self.tasks: dict[str, dict] = {}
 
-    def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model):
+    async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model):
         self.created.append(task_id)
         self.tasks[task_id] = {
             "id": task_id, "prompt": prompt, "aspect_ratio": aspect_ratio,
             "status": "pending", "error": None,
         }
 
-    def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
+    async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
         self.finished.append(task_id)
         if task_id in self.tasks:
             self.tasks[task_id].update(status=status, error=error)
 
-    def mark_started(self, task_id):
+    async def mark_started(self, task_id):
         if task_id in self.tasks:
             self.tasks[task_id]["status"] = "processing"
 
-    def get(self, task_id):
+    async def get(self, task_id):
         return self.tasks.get(task_id)
 
-    def recover_stale_tasks(self) -> int:
+    async def recover_stale_tasks(self, **kw) -> int:
         return 0
 
 
-@pytest_asyncio.fixture
-async def engine():
+@pytest.fixture
+def engine():
     """Engine 实例（mock DB，不启动 worker，仅测队列行为）。"""
     e = Engine(_DBStub())
     e._started = False   # 不启动后台预取/worker，避免依赖真实网络
@@ -146,7 +145,7 @@ async def test_submit_priority_passthrough(engine):
     tid = await engine.submit_priority("test-prompt", "16:9", True,
                                         model="anime", priority=1)
     assert tid in engine.db.created
-    task = engine.db.get(tid)
+    task = await engine.db.get(tid)
     assert task["prompt"] == "test-prompt"
     assert task["aspect_ratio"] == "16:9"
 
@@ -155,9 +154,9 @@ async def test_submit_priority_passthrough(engine):
 async def test_submit_default_priority(engine):
     """submit（无 priority 参数）默认使用 priority=2 (normal)。"""
     tid = await engine.submit("default-prompt", "1:1", False)
-    assert engine._queue_counts[2] == 1
-    assert engine._queue_counts[0] == 0
-    assert engine._queue_counts[1] == 0
+    assert engine.queue.count(2) == 1
+    assert engine.queue.count(0) == 0
+    assert engine.queue.count(1) == 0
 
 
 @pytest.mark.asyncio

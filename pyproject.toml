@@ -10,6 +10,7 @@ testpaths = ["tests"]
 # 收集规则：默认 python_classes=Test*（pytest 8 默认）即可，无需显式覆盖
 addopts = "-p no:cacheprovider --no-header -q"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
 markers = [
     "benchmark: performance benchmark tests (pytest-benchmark).",
     "chaos: fault injection / chaos engineering tests.",

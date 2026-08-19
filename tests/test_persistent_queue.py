@@ -143,33 +143,33 @@ class TestQueueDB:
 
 
 class _DBStub:
-    """最小 DB 替身（同 test_priority_queue.py）。"""
+    """最小 DB 替身（同 test_priority_queue.py，async 化以匹配 DB 迁移）。"""
 
     def __init__(self) -> None:
         self.created: list[str] = []
         self.finished: list[str] = []
         self.tasks: dict[str, dict] = {}
 
-    def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model):
+    async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model):
         self.created.append(task_id)
         self.tasks[task_id] = {
             "id": task_id, "prompt": prompt, "aspect_ratio": aspect_ratio,
             "status": "pending", "error": None,
         }
 
-    def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
+    async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
         self.finished.append(task_id)
         if task_id in self.tasks:
             self.tasks[task_id].update(status=status, error=error)
 
-    def mark_started(self, task_id):
+    async def mark_started(self, task_id):
         if task_id in self.tasks:
             self.tasks[task_id]["status"] = "processing"
 
-    def get(self, task_id):
+    async def get(self, task_id):
         return self.tasks.get(task_id)
 
-    def recover_stale_tasks(self) -> int:
+    async def recover_stale_tasks(self) -> int:
         return 0
 
 
@@ -253,7 +253,7 @@ class TestEnginePersistentQueueIntegration:
         tid = await e.submit("test", "1:1", False)
         assert len(e._queue_db.list_pending()) == 1
 
-        e._finish(tid, "completed", "https://img.url", None, time.monotonic())
+        await e._finish(tid, "completed", "https://img.url", None, time.monotonic())
         assert len(e._queue_db.list_pending()) == 0
 
     @pytest.mark.asyncio
@@ -283,7 +283,7 @@ class TestEnginePersistentQueueIntegration:
         tid2 = await e.submit_priority("task2", "1:1", False, priority=2)
         tid1 = await e.submit_priority("task3", "1:1", False, priority=1)
         # 消费一个（标记 completed）
-        e._finish(tid0, "completed", "https://img.url", None, time.monotonic())
+        await e._finish(tid0, "completed", "https://img.url", None, time.monotonic())
         # 关闭
         e._queue_db.close()
 

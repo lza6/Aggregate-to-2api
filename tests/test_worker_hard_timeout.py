@@ -5,6 +5,10 @@
 - processing 计数器正确减回
 - upstream_task_id 保留（不因超时被清空）
 - 图生图（type='img'）不受影响
+
+注意：这些测试依赖真实 asyncio 时序（0.1s 硬超时 vs worker 调度延迟）。
+共享事件循环被其他测试占用时，固定 sleep 可能不够 worker 完成全链路，
+因此全部用「轮询直到状态变化 + 截止时间」的健壮写法，而非固定 sleep。
 """
 import asyncio
 import os
@@ -16,6 +20,18 @@ import pytest
 from api import config
 from api.db import DB
 from api.worker import Engine
+
+
+async def _wait_status(db: DB, task_id: str, expected: str,
+                       timeout: float = 5.0) -> dict | None:
+    """轮询等待任务达到期望状态，杜绝交叉污染下的固定 sleep 竞态。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        row = await db.get(task_id)
+        if row is not None and row["status"] == expected:
+            return row
+        await asyncio.sleep(0.05)
+    return await db.get(task_id)
 
 
 def _clean_db(path: str) -> None:
@@ -40,7 +56,7 @@ class _FastProcessEngine(Engine):
     """将 _process 重写为瞬间完成并标记 completed。"""
 
     async def _process(self, task_id: str) -> None:
-        self.db.mark_finished(task_id, "completed", "https://r2/img.png", None, 0.01)
+        await self.db.mark_finished(task_id, "completed", "https://r2/img.png", None, 0.01)
 
 
 @pytest.mark.asyncio
@@ -58,19 +74,15 @@ async def test_hard_timeout_marks_error():
     db._batch_enabled = False
     db._pool_size = 1
     task_id = "timeout-task-1"
-    db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
+    await db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
     e = _SlowProcessEngine(db)
     await e.start()
     try:
         e.queue.put_nowait((2, 0, task_id))
-        await asyncio.sleep(1.0)
-        db.flush()
-        row = db._connections[0].execute(
-            "SELECT status,error FROM requests WHERE id=?", (task_id,)
-        ).fetchone()
+        row = await _wait_status(db, task_id, "error")
         assert row is not None, "row not found"
-        assert row[0] == "error", f"预期 error，实际 {row[0]} err={row[1]}"
-        assert "硬超时" in (str(row[1] or ""))
+        assert row["status"] == "error", f"预期 error，实际 {row['status']} err={row['error']}"
+        assert "硬超时" in (str(row.get("error") or ""))
     finally:
         await e.stop()
         _clean_db(path)
@@ -90,13 +102,15 @@ async def test_hard_timeout_processing_decremented():
     db = DB(path)
     db._batch_enabled = False
     task_id = "timeout-task-2"
-    db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
+    await db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
     e = _SlowProcessEngine(db)
     await e.start()
     try:
         assert e.processing == 0
         e.queue.put_nowait((2, 0, task_id))
-        await asyncio.sleep(0.5)
+        row = await _wait_status(db, task_id, "error")
+        assert row is not None, "row not found"
+        await asyncio.sleep(0.1)  # 等 finally 中 processing 递减完成
         assert e.processing == 0, f"processing 应减回 0，实际 {e.processing}"
     finally:
         await e.stop()
@@ -117,9 +131,9 @@ async def test_hard_timeout_upstream_task_id_preserved():
     db = DB(path)
     db._batch_enabled = False
     task_id = "timeout-task-3"
-    db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
-    db.update_upstream_task(task_id, "upstream-12345")
-    row_before = db.get(task_id)
+    await db.create_request(task_id, "test prompt", "1:1", False, "txt", "default")
+    await db.update_upstream_task(task_id, "upstream-12345")
+    row_before = await db.get(task_id)
     assert row_before is not None
     assert row_before.get("upstream_task_id") == "upstream-12345"
 
@@ -127,8 +141,7 @@ async def test_hard_timeout_upstream_task_id_preserved():
     await e.start()
     try:
         e.queue.put_nowait((2, 0, task_id))
-        await asyncio.sleep(0.5)
-        row = db.get(task_id)
+        row = await _wait_status(db, task_id, "error")
         assert row is not None
         assert row["status"] == "error"
         assert row.get("upstream_task_id") == "upstream-12345", \
@@ -152,13 +165,12 @@ async def test_fast_task_not_timed_out():
     db = DB(path)
     db._batch_enabled = False
     task_id = "fast-task-1"
-    db.create_request(task_id, "fast prompt", "1:1", False, "txt", "default")
+    await db.create_request(task_id, "fast prompt", "1:1", False, "txt", "default")
     e = _FastProcessEngine(db)
     await e.start()
     try:
         e.queue.put_nowait((2, 0, task_id))
-        await asyncio.sleep(0.3)
-        row = db.get(task_id)
+        row = await _wait_status(db, task_id, "completed")
         assert row is not None
         assert row["status"] == "completed", f"预期 completed，实际 {row['status']}"
     finally:
@@ -180,15 +192,15 @@ async def test_img_task_not_affected():
     db = DB(path)
     db._batch_enabled = False
     txt_task = "txt-task-1"
-    db.create_request(txt_task, "txt prompt", "1:1", False, "txt", "default")
+    await db.create_request(txt_task, "txt prompt", "1:1", False, "txt", "default")
     e = _SlowProcessEngine(db)
     await e.start()
     try:
         e.queue.put_nowait((2, 0, txt_task))
-        await asyncio.sleep(0.5)
-        row = db.get(txt_task)
+        row = await _wait_status(db, txt_task, "error")
         assert row is not None
         assert row["status"] == "error", "txt 任务应被硬超时捕获"
+        await asyncio.sleep(0.1)  # 等 finally 中 processing 递减完成
         assert e.processing == 0
     finally:
         await e.stop()
