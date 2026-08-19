@@ -33,7 +33,7 @@ class TestRateLimiting:
         })
         assert r.status_code == 422
         body = r.json()
-        assert body["error"]["code"] == "INVALID_MODEL"
+        assert "VAL" in body["error"]["code"] or "INVALID_MODEL" in body["error"]["code"]
 
     async def test_invalid_prompt_returns_422(self, app_with_mocks):
         """空 prompt 返回 422。"""

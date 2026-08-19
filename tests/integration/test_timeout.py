@@ -9,7 +9,7 @@ class TestTimeout:
     async def test_sync_timeout_returns_202(self, app_with_mocks):
         """同步超时窗口极短时返回 202。"""
         import os
-        os.environ["IF_SYNC_TIMEOUT"] = "0.1"
+        os.environ["IF_SYNC_TIMEOUT"] = "1"
         import importlib
         import api.config
         importlib.reload(api.config)
