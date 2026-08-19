@@ -142,3 +142,34 @@ python3 scripts/inject_accounts.py --provider minimaxh3 --count 500 --real --use
 - nanobanana 签到奖励 7 天循环 [4,4,8,4,4,4,10]，积分 2 天过期 → 每天签到（号池自动跑），签到后尽快消费。
 - aifreeforever 每 IP 每日限额：务必开 `IF_FREE_PROXY=1`（免费代理量大兜底）或住宅代理文件；429 自动冷却递增 + 24h 重置。
 - 内存：号池/代理池在 api 容器内，cf_solver 每浏览器上下文 0.5-1GB；500 号并发注册时 Turnstile 求解是瓶颈（单槽 ~5s/次）。
+
+## v2.3.0 更新内容
+
+### 新特性
+- **多阶段构建**: Docker 镜像体积从 ~500MB 降至 ~200MB
+- **健康检查**: Docker Compose 集成 HEALTHCHECK 指令，api 等待 cfsolver 健康后才启动
+- **资源限制**: CPU/内存显式约束（mem_limit + mem_reservation + cpus），防止 OOM
+- **网络隔离**: 独立 bridge 网络，cfsolver 不暴露任何公网端口
+- **CI/CD 管线**: GitHub Actions 自动测试 + 构建 + 发行版
+- **集成测试框架**: 18 个集成测试覆盖完整流程/异步/图生图/限流/熔断/超时/降级/死信队列
+- **性能测试**: 基准测试（pytest-benchmark）+ 压力测试（50 并发）
+- **混沌测试**: 故障注入验证系统韧性（cf_solver 不可用/失败/恢复）
+- **E2E 验收**: 独立验收脚本（30 项覆盖），全 mock 模式零外部依赖
+
+### 部署方式
+```bash
+# 拉取最新代码
+cd /home/ubuntu/imagefree-api
+git pull origin main
+
+# 构建并重启
+sudo docker compose -f deploy/docker-compose.yml build
+sudo docker compose -f deploy/docker-compose.yml up -d
+
+# 验证
+curl http://127.0.0.1:8100/v1/healthz
+curl http://127.0.0.1:8100/v1/models | python3 -m json.tool
+
+# 查看容器健康状态
+sudo docker ps --filter "health=healthy"
+```

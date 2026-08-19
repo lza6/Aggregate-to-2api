@@ -16,6 +16,15 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+    """会话级事件循环，使 session-scoped async fixtures 共享同一 event loop。"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
+
+
 @pytest.fixture
 def tmp_db():
     """独立的临时 SQLite DB 实例（每用例独立）。"""
@@ -109,8 +118,12 @@ def mock_cfsolver():
 
 
 @pytest_asyncio.fixture(scope="session")
-async def _app_setup(mock_cfsolver):
-    """会话级：创建并缓存 FastAPI 应用实例（仅导入一次，避免 prometheus 注册冲突）。"""
+async def _app_instance(mock_cfsolver, event_loop):
+    """会话级：创建 FastAPI 应用实例（仅导入一次，避免 prometheus 注册冲突）。
+
+    设置环境变量 -> 导入 api.main -> 手动触发 lifespan startup。
+    会话级 fixture 确保整个测试会话只创建一次，所有测试用例共享。
+    """
     # ── 设置集成测试所需环境变量 ──
     os.environ["IF_CF_SOLVER_URL"] = mock_cfsolver
     os.environ["IF_TURNSTILE_POLL_INTERVAL"] = "0.2"
@@ -128,6 +141,10 @@ async def _app_setup(mock_cfsolver):
     os.environ["IF_GALLERY_PASSWORD"] = ""
     os.environ["IF_BASE64_DIR"] = str(tempfile.mkdtemp())
 
+    # 临时 DB 文件（会话级，共享 DB 实例）
+    _db_path = tempfile.mktemp(suffix=".db")
+    os.environ["IF_DB_FILE"] = _db_path
+
     # ── 清除已有 api 模块缓存，确保全新导入 ──
     for mod_key in list(sys.modules.keys()):
         if mod_key.startswith("api"):
@@ -136,29 +153,42 @@ async def _app_setup(mock_cfsolver):
     import api.config  # noqa: F401
     import api.main  # 首次导入，触发模块级代码执行
 
-    # ── 手动触发 lifespan startup ──
-    lifespan_ctx = api.main.lifespan(api.main.app)
-    await lifespan_ctx.__aenter__()
+    # ── 手动触发 lifespan startup（引擎启动、worker 创建等）──
+    _lifespan_ctx = api.main.lifespan(api.main.app)
+    await _lifespan_ctx.__aenter__()
 
     yield api.main
 
-    # ── 清理：执行 lifespan shutdown ──
-    await lifespan_ctx.__aexit__(None, None, None)
+    # ── 会话结束：执行 lifespan shutdown ──
+    await _lifespan_ctx.__aexit__(None, None, None)
+
+    # ── 清理临时 DB ──
+    try:
+        os.unlink(_db_path)
+        for suffix in ("-wal", "-shm"):
+            if os.path.exists(_db_path + suffix):
+                os.unlink(_db_path + suffix)
+    except OSError:
+        pass
 
 
-@pytest_asyncio.fixture
-async def app_with_mocks(_app_setup, tmp_db, no_proxy_env):
-    """全 mock 集成测试环境：每测试用例独立的临时 DB + httpx.AsyncClient。
+@pytest_asyncio.fixture(scope="session")
+async def app_with_mocks(_app_instance):
+    """会话级：集成测试 httpx.AsyncClient。
 
-    使用 _app_setup（会话级）共享同一个 FastAPI 应用实例，避免重复导入。
-    每测试用例替换 DB 并使用独立的 httpx.AsyncClient 保证隔离性。
+    共享 _app_instance 创建的应用实例，返回 httpx.AsyncClient。
+    整个测试会话只创建一个 client，所有测试用例共享。
     """
-    # ── 注入临时 DB ──
-    _app_setup.db = tmp_db
-    _app_setup.engine.db = tmp_db
-
-    # ── 创建 TestClient ──
     from httpx import AsyncClient, ASGITransport
 
-    async with AsyncClient(transport=ASGITransport(app=_app_setup.app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=_app_instance.app), base_url="http://test") as client:
+        # ── 等待服务就绪 ──
+        for _ in range(30):
+            try:
+                r = await client.get("/v1/healthz")
+                if r.json().get("status") in ("ok", "degraded"):
+                    break
+            except Exception:
+                pass
+            await asyncio.sleep(0.2)
         yield client
