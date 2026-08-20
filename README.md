@@ -9,7 +9,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-2.2.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-2.3.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -37,10 +37,28 @@
 - Python 3.11+ 或 Docker
 - Node.js 18+（仅构建 React 管理面板时需要）
 - 网络代理（访问 imagefree.net 等上游需能直连或通过代理）
+- **cf_solver（Turnstile 求解器，端口 8001）** — 见下方「外部前置依赖说明」
+
+> **外部前置依赖说明（cf_solver）**：本项目不内置 Turnstile 求解能力，cf_solver 是一个**独立复用的外部服务**，
+> 来自同一开发者（听风）的 GPT 项目（`GPT自动化注册的项目/cf_solver`），核心是一个带 **camoufox 无头浏览器**
+> 的求解服务，监听 `:8001`。它以 `boterdrop_wrapper.py` 启动（或 Docker 镜像 `imagefree-cfsolver`）。
+>
+> 没有 cf_solver 的影响：
+> - **imagefree / aifreeforever 提供商无法出图** — 它们的上游用 Cloudflare Turnstile 人机验证，
+>   token 必须由 cf_solver 实时求解
+> - **minimaxh3 / nanobanana 号池自动注册失效** — 注册器同样依赖 Turnstile 求解
+> - `/v1/healthz` 返回 `status: "degraded"`、`cf_solver: "down"`
+>
+> 启动方式（本地）：
+> ```bash
+> python cf_solver/boterdrop_wrapper.py &
+> ```
+> 或 Docker（随 compose 一起），cf_solver 需可访问目标站点（直连或代理），单浏览器槽≈5s/次求解。
 
 ### 方式一：Docker Compose（推荐）
 
 ```bash
+# 注意：本仓库本地目录名为 imagefree-2ai，公开 GitHub 仓库为 Image-to-2api（lza6/Image-to-2api）
 git clone https://github.com/lza6/Image-to-2api.git
 cd Image-to-2api/deploy
 
@@ -216,10 +234,23 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 ### curl 示例
 
 ```bash
-# 文生图
+# 文生图（同步）
 curl -X POST http://localhost:8100/v1/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt":"a red rose","aspect_ratio":"1:1","download":true}'
+
+# 文生图（异步）：立即返回 task_id，轮询 /v1/tasks/{id}
+curl -X POST http://localhost:8100/v1/generate/async \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"a red rose","aspect_ratio":"1:1"}'
+
+# 图生图（编辑，异步）
+curl -X POST http://localhost:8100/v1/edit \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"make it a sunset","image_url":"https://example.com/photo.jpg"}'
+
+# 模型列表（45+ 模型，4 提供商）
+curl http://localhost:8100/v1/models
 
 # 查询任务
 curl http://localhost:8100/v1/tasks/{task_id}
@@ -270,7 +301,10 @@ wscat -c ws://localhost:8100/v1/logs/ws
 | `IF_OTEL_SERVICE_NAME` | `imagefree-api` | OTel 服务名 |
 | `IF_OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | OTLP gRPC 导出目标（空 = 仅控制台输出） |
 
-> 完整配置列表见 [`api/config.py`](api/config.py) 与根目录 `.env.example`。
+> 上表仅为常用变量（列出的约占全量的 1/4）。**完整环境变量列表见
+> [`api/config.py`](api/config.py)（80+ 个，全部 IF_ 前缀）与
+> [`deploy/.env.example`](deploy/.env.example)（92 项模板注释）。** 配置分组：
+> 数据库 / HTTP / Turnstile 求解 / 多提供商号池 / token 池 / 队列 / 可观测性 / 图生图编辑 / 安全。
 
 ---
 
@@ -352,6 +386,82 @@ python scripts/e2e_validate.py --mode mock
 # 真实 E2E（需 cf_solver :8001 + 代理）
 python scripts/e2e_validate.py --mode real
 ```
+
+---
+## 🧯 故障排查（Troubleshooting）
+
+### healthz 返回 `status: "degraded"` 怎么办
+
+`GET /v1/healthz` 聚合了以下状态，逐项查看返回体定位：
+
+| 返回字段 | 含义 | 处理 |
+|---------|------|------|
+| `cf_solver: "down"` | cf_solver 8001 端口不通 | 见下方「cf_solver 不可用」 |
+| `solver_status: "degraded"` | 求解成功但连续失败 > 0 | 观察 `solve_rejected_total`、`solve_consecutive_failures`，多半是上游风控/求解质量差，等窗口滑动自愈 |
+| `solver_status: "circuit_open"` | 熔断开启（连续失败达阈值 `IF_SOLVE_CIRCUIT_THRESHOLD`，默认 5） | 熔断是保护性自动恢复，达 `IF_SOLVE_CIRCUIT_PROBE_SECONDS`（默认 30s）后自动探测恢复；若反复熔断需检查 cf_solver 与代理 |
+| `token_pools` 水位全空 | token 预取池空 | 求解未跟上消耗，通常伴随 solver 不可用；排队会堆积 |
+| `db_rows` 长时间不增长 | 请求没进来 | 检查队列是否满（429）或上游是否已熔断 |
+
+> `status` 判据：`cf_solver` 探活失败 **或** `solver_status != ok` → `degraded`；
+> 只有全部健康才返回 `ok`。`degraded` **不代表服务不可用**（内存/DB/worker 均正常），只是求解质量劣化。
+
+### 生成失败常见原因
+
+按 `error.code`（参见 [`api/errors.py`](api/errors.py) 错误码表）定位：
+
+| 错误码 | HTTP | 含义 | 排查 |
+|--------|------|------|------|
+| `PROV.003` (SOLVER_CIRCUIT_OPEN) | 503 | 求解器熔断 | cf_solver 状态、代理质量、`solve_rejected_total` |
+| `PROV.002` (OUT_OF_CREDITS) | 429 | 号池额度耗尽 | `/v1/account-pool` 看账号 `ok`/`credits`；minimaxh3 用完即弃，等补号循环；nanobanana 等签到 |
+| `PROV.001` (PROVIDER_DOWN) | 503 | 上游不可用 | `/v1/providers` 看健康度；上游风控/维护 |
+| `SYS.004` (TASK_TIMEOUT) | 408 | 生成超时（默认 `IF_SYNC_TIMEOUT=300s`） | 异步接口轮询 `/v1/tasks/{id}`；图生图上游极慢时调 `IF_EDIT_TIMEOUT` |
+| `SYS.002` (QUEUE_FULL) | 429 | 队列满（上限 `IF_MAX_QUEUE=2000`） | 降并发；`/v1/healthz` 看 `queued`；扩队列或缩 worker |
+| `VAL.001` (INVALID_MODEL) | 422 | model 名不对 | `GET /v1/models` 拿全量模型名，格式 `<提供商>/<模型>` |
+
+其他高频隐形失败：
+- **`Human verification failed` / `captcha_fail`**：token 与提交 IP 不匹配（带 `proxy` 求解时务必用同一代理提交；直连求解就用直连提交）或上游风控。
+- **aifreeforever 每 IP 每日限额**：报 429/风控，需确保 `IF_FREE_PROXY=1`（免费代理池）或住宅代理兜底，冷却会自动递增并 24h 重置。
+- **图生图 `edit` 卡在排队**：上游硬并发=1，`/v1/healthz` 看 `edit_inflight`；配 `IF_EDIT_PROXY_FILE` 多 IP 住宅代理 + `IF_EDIT_PROXY_PARALLEL>1` 才能绕过（免费数据中心代理会被 CF 403）。
+
+### cf_solver 不可用如何排查
+
+1. **先确认端口**：`curl http://127.0.0.1:8001/`。Docker 内用 `sudo docker logs -f imagefree-cfsolver`。
+2. **健康依赖链**：cf_solver 用 camoufox 无头浏览器模拟求解 → 必须能访问目标站点（东京直连无需代理、本机走代理约 9-14s/次）。
+3. **常见原因**：
+   - cf_solver 进程没起 / 容器崩（OOM？cf_solver 限制 1.5G，每浏览器槽 ≈0.5-1GB）
+   - 求解慢：`/v1/healthz` 的 `solve_avg_seconds` > 10s → 代理质量问题或 cf_solver 浏览器上下文被耗尽（`token_pools` 全部空）。要更高吞吐需加 cf_solver 浏览器槽（改 `cf_solver/config.json` 的 `thread`/`page_count`）
+   - 求解失败但端口通：`solve_rejected_total` 持续增长 = 上游拒绝（风控/sitekey 过期），检查 `IF_SITEKEY` 是否被上游换新
+4. **cf_solver 来源**：见「前置依赖」说明 —— 它是独立复用的外部服务（复用听风 GPT 项目的 cf_solver），不在本仓库内。
+
+### 查看日志的方式
+
+| 场景 | 命令 |
+|------|------|
+| 本地运行（前台） | 直接看终端；或 `curl 'http://127.0.0.1:8100/v1/logs?lines=200'` 拿环形缓冲快照 |
+| Docker（api） | `sudo docker logs -f imagefree-api`（`json-file` driver，10m×3 滚动） |
+| Docker（cfsolver） | `sudo docker logs -f imagefree-cfsolver` |
+| 实时流 | 浏览器访问 `ws://127.0.0.1:8100/v1/logs/ws`（或 `wscat -c ws://...`），前端 `/admin` Logs 页零刷新 |
+| 审计溯源 | 管理操作（DLQ 重试/清空/配置变更）写入 `data/audit.log`（JSON Lines，仅追加） |
+
+日志格式：`2026-08-19 12:00:00 INFO <module> message [req=<id>] [trace=<id>]`（结构化，`req` 为请求 ID、`trace` 为 OTel trace_id，全链路可串联）。
+
+### 常见 HTTP 错误码含义
+
+| HTTP | 分层错误码 | 含义 |
+|------|-----------|------|
+| `400` | `VAL.004` | 参数错误（`details` 含具体原因） |
+| `401` / `403` | `AUTH.001` | 未授权（若开启鉴权） |
+| `404` | `SYS.003` | 资源不存在（任务 ID 过期/错误） |
+| `408` | `SYS.004` | 同步等待超时（生成还在跑，用异步查任务） |
+| `409` | `SYS.005` | 幂等 Key 冲突 |
+| `413` | `VAL.004` | 请求体过大 |
+| `422` | `VAL.001/2/3` | 模型/提示词/比例校验失败（FastAPI 校验错误也可能是 422） |
+| `429` | `RATE.001` / `SYS.002` / `PROV.002` | 限流 / 队列满 / 号池额度耗尽 |
+| `500` | `SYS.001` | 服务器内部错误 |
+| `503` | `PROV.001/3` | 提供商不可用 / 求解器熔断 |
+
+> 所有错误响应统一信封：`{"error": {"code": "CATEGORY.NNN", "message": "中文消息", "details": {...}}}`。
+> 完整可重试语义：`429`/`503` 可退避重试；`4xx 校验类` 重试无意义。
 
 ---
 

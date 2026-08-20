@@ -49,3 +49,16 @@ Before any commit to main:
 - [ ] Type annotations on all new/modified functions
 - [ ] Error handling covers all known failure modes
 - [ ] Documentation updated (README, deploy docs, API docs)
+
+## Refactor Backlog (记录在案，不强制拆分)
+
+> 2026-08 终局审计：以下文件超过 500 行，为重构候选。拆分风险高
+> （模块级单例被全项目 import），**当前仅记录，不实际拆分**；确需重构时
+> 按功能拆子模块并全量跑测试（tests/ 300+ 用例）验证行为不变。
+
+| 文件 | 行数 | 建议拆分方向 |
+|------|------|-------------|
+| `api/main.py` | ~1315 | FastAPI 路由 / 中间件 / 启动关闭 / 业务编排 分离 |
+| `api/config.py` | ~967 | config/model、config/links、config/turnstile 等子模块 |
+| `api/db.py` | ~860 | requests / stats / gallery / concurrency 按表拆分仓储 |
+| `api/worker.py` | ~741 | queue / token_pool / solver_guard 联动解耦 |
