@@ -13,14 +13,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import sqlite3
 import threading
 import time
 
-from . import config
 from .proxy_pool import proxy_pool
 from .providers.base import MOCK_REGISTER
 

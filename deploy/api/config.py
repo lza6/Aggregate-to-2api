@@ -1,5 +1,8 @@
 """imagefree_api 配置。全部可用环境变量覆盖，便于部署。
 
+职责：pydantic-settings 集中管理全部 80+ 环境变量（IF_* 前缀）。
+重构候选：967 行，可按功能拆分为 config/model、config/links、config/turnstile 等子模块，
+但拆分风险高（模块级单例被全项目 import），当前仅记录不做拆分。
 使用 pydantic-settings 集中管理配置，保持 IF_ 前缀环境变量向后兼容。
 """
 from __future__ import annotations
@@ -303,6 +306,11 @@ class Settings(BaseSettings):
     if_persistent_queue_db: str = Field(
         "data/queue.db", validation_alias="IF_PERSISTENT_QUEUE_DB"
     )
+    # worker 批量调度（可选优化）：启用后 worker 按小批次消费队列减少上下文切换
+    if_worker_batch_enabled: bool = Field(
+        False, validation_alias="IF_WORKER_BATCH_ENABLED"
+    )
+    if_worker_batch_size: int = Field(5, validation_alias="IF_WORKER_BATCH_SIZE")
 
     # ── Token 池 ──
     token_pool_size: int = Field(6, validation_alias="IF_TOKEN_POOL_SIZE")
@@ -746,6 +754,8 @@ IF_WORKER_SCALE_DOWN_THRESHOLD = settings.if_worker_scale_down_threshold
 IF_WORKER_IDLE_SECONDS = settings.if_worker_idle_seconds
 IF_PERSISTENT_QUEUE_ENABLED = settings.if_persistent_queue_enabled
 IF_PERSISTENT_QUEUE_DB = settings.if_persistent_queue_db
+IF_WORKER_BATCH_ENABLED = settings.if_worker_batch_enabled
+IF_WORKER_BATCH_SIZE = settings.if_worker_batch_size
 
 # Token 池
 TOKEN_POOL_SIZE = settings.token_pool_size
@@ -763,6 +773,15 @@ IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
 IF_HEALTH_CHECK_INTERVAL = settings.if_health_check_interval
 IF_HEALTH_CHECK_ENABLED = settings.if_health_check_enabled
 IF_ALERT_CHECK_INTERVAL = settings.if_alert_check_interval
+
+# ── mock 上游开关（E2E/CI；生产留空）──────────────
+MOCK_UPSTREAM = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+# ── OpenTelemetry（IF_OTEL_*）───────────────────
+OTEL_ENABLED = os.getenv("IF_OTEL_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+OTEL_SERVICE_NAME = os.getenv("IF_OTEL_SERVICE_NAME", "imagefree-api")
+OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv("IF_OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+OTEL_CONSOLE_EXPORTER = os.getenv("IF_OTEL_CONSOLE_EXPORTER", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # DB
 STATS_FILE = settings.stats_file
@@ -930,6 +949,11 @@ __all__ = [
     "IF_HEALTH_CHECK_INTERVAL",
     "IF_HEALTH_CHECK_ENABLED",
     "IF_ALERT_CHECK_INTERVAL",
+    "MOCK_UPSTREAM",
+    "OTEL_ENABLED",
+    "OTEL_SERVICE_NAME",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_CONSOLE_EXPORTER",
     "STATS_FILE",
     "DB_FILE",
     "IF_BASE64_DIR",

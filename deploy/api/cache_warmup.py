@@ -18,7 +18,7 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
 
     # 1. 统计概览
     try:
-        overview = db.stats_overview()
+        overview = await db.stats_overview()
         await gallery_cache.set("stats:overview", overview)
         result["stats:overview"] = 1
     except Exception as e:
@@ -27,7 +27,7 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
 
     # 2. 近日统计
     try:
-        daily = db.stats_daily(14)
+        daily = await db.stats_daily(14)
         await gallery_cache.set("stats:daily:14", daily)
         result["stats:daily:14"] = 1
     except Exception as e:
@@ -36,7 +36,7 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
 
     # 3. 月度统计
     try:
-        monthly = db.stats_monthly(12)
+        monthly = await db.stats_monthly(12)
         await gallery_cache.set("stats:monthly:12", monthly)
         result["stats:monthly:12"] = 1
     except Exception as e:
@@ -47,7 +47,7 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
     for limit in (10, 20, 50):
         key = f"gallery:{limit}"
         try:
-            items = db.recent_images(limit)
+            items = await db.recent_images(limit)
             out = []
             for t in items:
                 out.append({

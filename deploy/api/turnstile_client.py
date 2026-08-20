@@ -17,7 +17,7 @@ from . import config
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.record_success()` 将 AttributeError）。
 from .solver_guard import solver_guard
-from .telemetry import get_tracer, is_otel_enabled
+from .telemetry import get_tracer
 
 log = logging.getLogger("turnstile")
 

@@ -1,10 +1,11 @@
 """SQLite 持久化：请求记录、按日/月统计、画廊、并发计数。
 
-选 SQLite（标准库，WAL 模式）而非 JSON：50 RPS 高频写 + 并发读下，
-JSON 整文件重写有锁竞争；SQLite 单行 INSERT 毫秒级，WAL 支持读写并行。
+P-01: aiosqlite 异步驱动 + 读写分离。使用 aiosqlite 替代 sqlite3，
+所有 DB 操作改为原生 async，消除 asyncio.to_thread 线程切换开销。
+读连接从单点升级为多连接读池（round-robin 分配）。
 
-IMP-20: 多连接支持。写连接池（round-robin 分配），读连接独立（WAL 快照隔离）。
-写入用连接级锁串行化，读不加锁。
+IMP-20: 多连接支持。写连接池（round-robin 分配），读连接池（round-robin 分配）。
+写入用连接级 asyncio.Lock 串行化，读不加锁。
 
 IMP-25: 写缓冲 + 批量提交。当 IF_DB_BATCH_ENABLED=1 时，写操作先入队
 _write_buffer，后台 _batch_timer 每 batch_window 秒触发一次 flush，
@@ -16,9 +17,10 @@ _write_buffer，后台 _batch_timer 每 batch_window 秒触发一次 flush，
 import asyncio
 import logging
 import os
-import sqlite3
 import threading
 import time
+
+import aiosqlite
 
 from . import config
 from . import base64_store
@@ -42,23 +44,22 @@ class DB:
         self._pool_size = max(1, config.IF_DB_POOL_SIZE)
         pool_timeout = config.IF_DB_POOL_TIMEOUT
 
-        # ── 读连接（单连接，WAL 快照隔离，无需加锁）───────────
-        self._read_conn = self._create_conn(path, pool_timeout)
+        # ── 读连接池（多连接，round-robin 分配，无需锁）──────────
+        self._read_conns: list[aiosqlite.Connection] = []
+        self._read_idx = 0
+        # 向后兼容：旧代码测试访问 db._read_conn（初始化后为 _read_conns[0]）
+        self._read_conn: aiosqlite.Connection | None = None
 
         # ── 写连接池 ─────────────────────────────────────
-        self._connections: list[sqlite3.Connection] = []
-        self._conn_locks: list[threading.Lock] = []
-        for _ in range(self._pool_size):
-            conn = self._create_conn(path, pool_timeout)
-            self._connections.append(conn)
-            self._conn_locks.append(threading.Lock())
+        self._connections: list[aiosqlite.Connection] = []
+        self._conn_locks: list[asyncio.Lock] = []
         self._next_conn_idx = 0
 
         # 向后兼容：旧代码/direct 测试访问 db._conn
-        self._conn = self._connections[0]
+        self._conn: aiosqlite.Connection | None = None
 
-        # ── 写缓冲区锁（仅保护 _write_buffer，非连接级）───
-        self._lock = threading.Lock()
+        # ── 写缓冲区锁（仅保护 _write_buffer 的 swap 操作）───
+        self._lock = asyncio.Lock()
 
         # ── 批量写入（IMP-25）─────────────────────────────
         self._batch_enabled = config.IF_DB_BATCH_ENABLED
@@ -67,98 +68,154 @@ class DB:
         self._batch_running = False
         self._commit_count = 0  # 调试计数器，仅在 _flush_buffer 中递增
 
-        self._init_schema()
+        # 惰性初始化：首次调用 _ensure_initialized 时创建连接
+        self._initialized = False
+        # 同步初始化 fallback：如果当前没有运行中的事件循环，直接跑 async init
+        # 覆盖测试等无事件循环的场景
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self._init_async(pool_timeout))
+
+    async def _init_async(self, pool_timeout: int) -> None:
+        """异步初始化：创建所有连接并运行 schema。"""
+        if self._initialized:
+            return
+        # 读连接池
+        for _ in range(self._pool_size):
+            conn = await self._create_conn(self._path, pool_timeout)
+            self._read_conns.append(conn)
+        self._read_conn = self._read_conns[0]  # 向后兼容引用
+        # 写连接池
+        for _ in range(self._pool_size):
+            conn = await self._create_conn(self._path, pool_timeout)
+            self._connections.append(conn)
+            self._conn_locks.append(asyncio.Lock())
+        self._conn = self._connections[0]
+        await self._init_schema()
+        self._initialized = True
+
+    async def _ensure_initialized(self) -> None:
+        """确保连接已初始化（惰性初始化，用于 async 上下文中的 __init__）。"""
+        if not self._initialized:
+            await self._init_async(config.IF_DB_POOL_TIMEOUT)
 
     # ── 连接管理 ─────────────────────────────────────
 
     @staticmethod
-    def _create_conn(path: str, timeout: int = 5) -> sqlite3.Connection:
-        """创建一条 SQLite 连接（WAL + NORMAL + busy_timeout + 跨线程安全）。"""
-        conn = sqlite3.connect(path, timeout=timeout, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        conn.execute("PRAGMA wal_autocheckpoint=1000")
+    async def _create_conn(path: str, timeout: int = 5) -> aiosqlite.Connection:
+        """创建一条 aiosqlite 连接（WAL + NORMAL + busy_timeout）。"""
+        conn = await aiosqlite.connect(path, timeout=timeout)
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA synchronous=NORMAL")
+        await conn.execute("PRAGMA busy_timeout=5000")
+        await conn.execute("PRAGMA wal_autocheckpoint=1000")
         return conn
 
-    def _health_check(self, conn: sqlite3.Connection) -> bool:
+    async def _health_check(self, conn: aiosqlite.Connection) -> bool:
         """健康检查：PRAGMA quick_check，返回 True 表示正常。"""
         try:
-            result = conn.execute("PRAGMA quick_check").fetchone()[0]
-            return result == "ok"
+            cursor = await conn.execute("PRAGMA quick_check")
+            row = await cursor.fetchone()
+            return row[0] == "ok"
         except Exception:
             return False
 
-    def _reconnect(self, idx: int) -> sqlite3.Connection:
+    async def _reconnect(self, idx: int) -> aiosqlite.Connection:
         """重建 idx 位置的写连接，返回新连接。"""
         try:
-            self._connections[idx].close()
+            await self._connections[idx].close()
         except Exception:
             pass
-        new_conn = self._create_conn(self._path, config.IF_DB_POOL_TIMEOUT)
+        new_conn = await self._create_conn(self._path, config.IF_DB_POOL_TIMEOUT)
         self._connections[idx] = new_conn
         if idx == 0:
             self._conn = new_conn
         return new_conn
 
-    def _get_write_conn(self) -> tuple[int, sqlite3.Connection, threading.Lock]:
+    async def _reconnect_read(self, idx: int) -> aiosqlite.Connection:
+        """重建 idx 位置的读连接，返回新连接。"""
+        try:
+            await self._read_conns[idx].close()
+        except Exception:
+            pass
+        new_conn = await self._create_conn(self._path, config.IF_DB_POOL_TIMEOUT)
+        self._read_conns[idx] = new_conn
+        return new_conn
+
+    async def _get_write_conn(self) -> tuple[int, aiosqlite.Connection, asyncio.Lock]:
         """Round-robin 分配写连接，返回 (idx, conn, lock)。
 
         分配前执行健康检查，失效则自动重建。
         """
+        await self._ensure_initialized()
         idx = self._next_conn_idx
         self._next_conn_idx = (idx + 1) % self._pool_size
         conn = self._connections[idx]
         lock = self._conn_locks[idx]
-        if not self._health_check(conn):
+        if not await self._health_check(conn):
             log.warning("DB 写连接[%d] 健康检查失败，重建", idx)
-            conn = self._reconnect(idx)
+            conn = await self._reconnect(idx)
         return idx, conn, lock
 
-    def close(self) -> None:
-        """关闭所有连接（写连接池 + 读连接）。"""
+    async def _get_read_conn(self) -> aiosqlite.Connection:
+        """Round-robin 分配读连接。"""
+        await self._ensure_initialized()
+        idx = self._read_idx
+        self._read_idx = (idx + 1) % self._pool_size
+        conn = self._read_conns[idx]
+        if not await self._health_check(conn):
+            log.warning("DB 读连接[%d] 健康检查失败，重建", idx)
+            conn = await self._reconnect_read(idx)
+        return conn
+
+    async def close(self) -> None:
+        """关闭所有连接（写连接池 + 读连接池）。"""
         for conn in self._connections:
             try:
-                conn.close()
+                await conn.close()
             except Exception:
                 pass
-        try:
-            self._read_conn.close()
-        except Exception:
-            pass
+        for conn in self._read_conns:
+            try:
+                await conn.close()
+            except Exception:
+                pass
 
     # ── 批量写入 API ─────────────────────────────────
-    def _enqueue_write(self, sql: str, params: tuple) -> None:
-        """批量模式：入队写操作；非批量模式：立即执行并 commit。"""
+    async def _enqueue_write(self, sql: str, params: tuple) -> None:
+        """批量模式：入队写操作；非批量模式：立即执行并 commit。
+
+        异步单线程环境下 append 原子安全，无需额外锁。
+        """
         if not self._batch_enabled:
-            _, conn, conn_lock = self._get_write_conn()
-            with conn_lock:
-                conn.execute(sql, params)
-                conn.commit()
+            _, conn, conn_lock = await self._get_write_conn()
+            async with conn_lock:
+                await conn.execute(sql, params)
+                await conn.commit()
                 self._commit_count += 1
             return
-        with self._lock:
-            self._write_buffer.append(BatchWrite(sql, params))
+        self._write_buffer.append(BatchWrite(sql, params))
 
-    def _flush_buffer(self) -> None:
+    async def _flush_buffer(self) -> None:
         """批量执行缓冲区所有 SQL 并 commit（需在 _lock 内调用）。"""
         if not self._write_buffer:
             return
         buf, self._write_buffer = self._write_buffer, []
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
             for bw in buf:
-                conn.execute(bw.sql, bw.params)
-            conn.commit()
+                await conn.execute(bw.sql, bw.params)
+            await conn.commit()
             self._commit_count += 1
 
-    def flush(self) -> None:
+    async def flush(self) -> None:
         """公开方法：强制刷新缓冲区到 DB（stop 时调用确保数据不丢）。"""
         if not self._batch_enabled:
             return
-        with self._lock:
-            self._flush_buffer()
+        async with self._lock:
+            await self._flush_buffer()
 
     async def start_batch_timer(self) -> None:
         """后台协程：每 batch_window 秒触发一次 flush。"""
@@ -168,28 +225,30 @@ class DB:
         try:
             while self._batch_running:
                 await asyncio.sleep(self._batch_window)
-                with self._lock:
-                    self._flush_buffer()
+                async with self._lock:
+                    await self._flush_buffer()
         except asyncio.CancelledError:
-            with self._lock:
-                self._flush_buffer()
+            async with self._lock:
+                await self._flush_buffer()
             raise
 
     def stop_batch_timer(self) -> None:
         self._batch_running = False
 
     # ── 读前自动 flush（IMP-25：批量模式下，读操作前刷新缓冲区确保数据可见）──
-    def _ensure_flushed(self) -> None:
+    async def _ensure_flushed(self) -> None:
         """批量写入模式下，读操作前刷新缓冲区，确保数据可见性。"""
+        await self._ensure_initialized()
         if self._batch_enabled and self._write_buffer:
-            with self._lock:
-                self._flush_buffer()
+            async with self._lock:
+                await self._flush_buffer()
 
     # ── 结构 ──────────────────────────────────────
-    def _init_schema(self) -> None:
+    async def _init_schema(self) -> None:
         conn = self._connections[0]
-        with self._conn_locks[0]:
-            conn.executescript(
+        conn_lock = self._conn_locks[0]
+        async with conn_lock:
+            await conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS requests (
                     id          TEXT PRIMARY KEY,
@@ -212,7 +271,7 @@ class DB:
                 """
             )
             # IMP-06: idempotency_keys 表
-            conn.executescript(
+            await conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS idempotency_keys (
                     idempotency_key TEXT PRIMARY KEY,
@@ -223,7 +282,7 @@ class DB:
                 """
             )
             # IMP-21: dead_letter_queue 表
-            conn.executescript(
+            await conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS dead_letter_queue (
                     id TEXT PRIMARY KEY,
@@ -239,7 +298,7 @@ class DB:
                 """
             )
             # IMP-11: 缓存持久化表
-            conn.executescript(
+            await conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS cache_store (
                     key         TEXT PRIMARY KEY,
@@ -250,20 +309,22 @@ class DB:
                 """
             )
             # IMP-07: 复合索引 + day/month 列
-            cols = {r[1] for r in conn.execute("PRAGMA table_info(requests)")}
+            cursor = await conn.execute("PRAGMA table_info(requests)")
+            rows = await cursor.fetchall()
+            cols = {r[1] for r in rows}
             for col, ddl in (("image_base64", "TEXT"), ("image_mime", "TEXT"),
                              ("type", "TEXT DEFAULT 'txt'"), ("model", "TEXT DEFAULT 'default'"),
                              ("upstream_task_id", "TEXT"),
                              ("day", "TEXT"), ("month", "TEXT"),
                              ("proxy_used", "TEXT")):
                 if col not in cols:
-                    conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {ddl}")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_created_status ON requests(created_at, status)")
-            conn.commit()
+                    await conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {ddl}")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_created_status ON requests(created_at, status)")
+            await conn.commit()
 
     # ── 写 ────────────────────────────────────────
-    def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool,
-                       type_: str = "txt", model: str = "default") -> None:
+    async def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool,
+                             type_: str = "txt", model: str = "default") -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.create_request",
@@ -280,26 +341,26 @@ class DB:
             dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
             day = dt.strftime("%Y-%m-%d")
             month = dt.strftime("%Y-%m")
-            self._enqueue_write(
+            await self._enqueue_write(
                 "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at, type, model, day, month)"
                 " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
                 (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month),
             )
 
-    def mark_started(self, task_id: str) -> None:
+    async def mark_started(self, task_id: str) -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.mark_started",
             attributes={"task.id": task_id},
         ):
-            self._enqueue_write(
+            await self._enqueue_write(
                 "UPDATE requests SET status='processing', started_at=? WHERE id=?",
                 (time.time(), task_id),
             )
 
-    def mark_finished(self, task_id: str, status: str, image_url: str | None,
-                      error: str | None, duration_sec: float | None,
-                      image_base64: str | None = None, image_mime: str | None = None) -> None:
+    async def mark_finished(self, task_id: str, status: str, image_url: str | None,
+                            error: str | None, duration_sec: float | None,
+                            image_base64: str | None = None, image_mime: str | None = None) -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.mark_finished",
@@ -312,30 +373,30 @@ class DB:
             # IMP-26: base64 非空时写入文件缓存，DB 存 file:// 路径
             if image_base64 and image_mime:
                 image_base64 = base64_store.save_base64(task_id, image_base64, image_mime)
-            self._enqueue_write(
+            await self._enqueue_write(
                 "UPDATE requests SET status=?, image_url=?, image_base64=?, image_mime=?,"
                 " error=?, finished_at=?, duration_sec=? WHERE id=?",
                 (status, image_url, image_base64, image_mime, error, time.time(),
                  duration_sec, task_id),
             )
 
-    def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None:
+    async def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None:
         """记录上游生成任务 id（图生图/文生图均可），便于恢复孤儿槽位与排查。"""
-        self._enqueue_write(
+        await self._enqueue_write(
             "UPDATE requests SET upstream_task_id=? WHERE id=?",
             (upstream_task_id, task_id),
         )
 
-    def update_proxy_used(self, task_id: str, proxy: str | None) -> None:
+    async def update_proxy_used(self, task_id: str, proxy: str | None) -> None:
         """记录该任务使用的出口代理（aifreeforever 等每请求轮换代理的提供商）。"""
         if proxy is not None:
-            self._enqueue_write(
+            await self._enqueue_write(
                 "UPDATE requests SET proxy_used=? WHERE id=?",
                 (proxy, task_id),
             )
 
-    def recover_stale_tasks(self, reason: str = "服务重启，任务中断",
-                            stale_after: float = 300.0) -> int:
+    async def recover_stale_tasks(self, reason: str = "服务重启，任务中断",
+                                   stale_after: float = 300.0) -> int:
         """启动时回收上次进程遗留的 pending/processing 孤儿任务（H4）。
 
         新进程内存队列为空，此刻 DB 里所有 pending/processing 都来自崩溃/重启前的旧进程，
@@ -344,14 +405,14 @@ class DB:
         误伤其它进程刚入队/正在处理的任务（MEDIUM-2）。
         """
         cutoff = time.time() - stale_after
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            cur = conn.execute(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
                 "UPDATE requests SET status='error', error=?, finished_at=? "
                 "WHERE status IN ('pending','processing') AND created_at < ?",
                 (reason, time.time(), cutoff),
             )
-            conn.commit()
+            await conn.commit()
             return cur.rowcount
 
     # ── 读 ────────────────────────────────────────
@@ -378,31 +439,35 @@ class DB:
         "prompt", "aspect_ratio",
     )
 
-    def get(self, task_id: str) -> dict | None:
-        self._ensure_flushed()
-        row = self._read_conn.execute(
+    async def get(self, task_id: str) -> dict | None:
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT * FROM requests WHERE id=?", (task_id,)
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         if not row:
             return None
         return self._row_to_dict(row)
 
-    def get_public(self, task_id: str) -> dict | None:
+    async def get_public(self, task_id: str) -> dict | None:
         """轻量查询：只取公共 API 响应字段（不含 prompt），供 /v1/tasks 等读路径。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         cols = ", ".join(self._PUBLIC_COLS)
-        row = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             f"SELECT {cols} FROM requests WHERE id=?", (task_id,)
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         if not row:
             return None
         return self._row_to_dict(row, default=False)
 
-    def list_tasks(self, limit: int = 50, offset: int = 0,
-                   status: str | None = None, model: str | None = None,
-                   sort: str = "created_at") -> tuple[list[dict], int]:
+    async def list_tasks(self, limit: int = 50, offset: int = 0,
+                          status: str | None = None, model: str | None = None,
+                          sort: str = "created_at") -> tuple[list[dict], int]:
         """任务列表查询（IMP-41）。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         where = []
         params: list = []
         if status:
@@ -412,10 +477,12 @@ class DB:
             where.append("model=?")
             params.append(model)
         where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+        conn = await self._get_read_conn()
         # 总条数
-        total_row = self._read_conn.execute(
+        total_cursor = await conn.execute(
             f"SELECT COUNT(*) FROM requests{where_clause}", params
-        ).fetchone()
+        )
+        total_row = await total_cursor.fetchone()
         total = int(total_row[0])
         # 排序方向 — 白名单校验防止 SQL 注入
         allowed_sort = {"created_at", "duration_sec", "finished_at", "status", "model"}
@@ -424,50 +491,57 @@ class DB:
         direction = "DESC" if sort in ("created_at", "finished_at") else "ASC"
         # 数据行
         cols = ", ".join(self._TASK_LIST_COLS)
-        rows = self._read_conn.execute(
+        data_cursor = await conn.execute(
             f"SELECT {cols} FROM requests{where_clause}"
             f" ORDER BY {sort} {direction} LIMIT ? OFFSET ?",
             (*params, limit, offset),
-        ).fetchall()
+        )
+        rows = await data_cursor.fetchall()
         items = [self._row_to_dict(r) for r in rows]
         return items, total
 
-    def recent_images(self, limit: int = 50) -> list[dict]:
+    async def recent_images(self, limit: int = 50) -> list[dict]:
         """画廊：最近完成的、有图的请求（IMP-26: 不含 image_base64）。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         cols = ", ".join(self._GALLERY_COLS)
-        rows = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             f"SELECT {cols} FROM requests WHERE status='completed' AND image_url IS NOT NULL"
             " ORDER BY finished_at DESC LIMIT ?",
             (limit,),
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         return [self._row_to_dict(r) for r in rows]
 
-    def recent_errors(self, limit: int = 20) -> list[dict]:
+    async def recent_errors(self, limit: int = 20) -> list[dict]:
         """最近失败的请求（含错误原因/prompt），供在线排查，无需 SSH。
         IMP-26: 不含 image_base64。
         """
-        self._ensure_flushed()
+        await self._ensure_flushed()
         cols = ", ".join(self._ERROR_COLS)
-        rows = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             f"SELECT {cols} FROM requests WHERE status='error'"
             " ORDER BY created_at DESC LIMIT ?",
             (limit,),
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         return [self._row_to_dict(r) for r in rows]
 
     # ── 统计 ──────────────────────────────────────
-    def stats_overview(self) -> dict:
+    async def stats_overview(self) -> dict:
         """总量 + 平均出图耗时。"""
-        self._ensure_flushed()
-        row = self._read_conn.execute(
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT COUNT(*) AS total, "
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors, "
             " AVG(CASE WHEN status='completed' AND duration_sec IS NOT NULL"
             "         THEN duration_sec END) AS avg_duration"
             " FROM requests"
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         total, images, errors, avg_duration = row
         return {
             "total_requests": int(total or 0),
@@ -476,25 +550,27 @@ class DB:
             "avg_duration_sec": round(float(avg_duration), 1) if avg_duration else None,
         }
 
-    def stats_daily(self, days: int = 14) -> list[dict]:
+    async def stats_daily(self, days: int = 14) -> list[dict]:
         """近 N 天：每天请求/出图/失败（IMP-07: 直接用 day 列）。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         import datetime
         cutoff_dt = datetime.date.today() - datetime.timedelta(days=days)
         cutoff = cutoff_dt.strftime("%Y-%m-%d")
-        rows = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT day, COUNT(*) AS total, "
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
             " FROM requests WHERE day >= ?"
             " GROUP BY day ORDER BY day",
             (cutoff,),
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         return [{"day": r[0], "total": r[1], "images": r[2], "errors": r[3]} for r in rows]
 
-    def stats_monthly(self, months: int = 12) -> list[dict]:
+    async def stats_monthly(self, months: int = 12) -> list[dict]:
         """近 N 月：每月请求/出图/失败（IMP-07: 直接用 month 列）。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         import datetime
         now = datetime.date.today()
         # 取 months 月前的年-月
@@ -505,58 +581,73 @@ class DB:
                 m = 12
                 y -= 1
         cutoff = f"{y:04d}-{m:02d}"
-        rows = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT month, COUNT(*) AS total, "
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
             " FROM requests WHERE month >= ?"
             " GROUP BY month ORDER BY month",
             (cutoff,),
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         return [{"month": r[0], "total": r[1], "images": r[2], "errors": r[3]} for r in rows]
 
     # ── 增长治理（M7）──────────────────────────────
-    def cleanup(self, retention_days: int) -> dict:
+    async def cleanup(self, retention_days: int) -> dict:
         """TTL 清理：删除超期请求记录，回收 WAL 并 VACUUM 压缩文件。"""
-        self._ensure_flushed()
+        await self._ensure_flushed()
         cutoff = time.time() - retention_days * 86400
         # 取任一写连接的数据库路径
-        path = self._connections[0].execute(
-            "PRAGMA database_list"
-        ).fetchone()[2]
+        conn0 = self._connections[0]
+        db_cursor = await conn0.execute("PRAGMA database_list")
+        db_row = await db_cursor.fetchone()
+        path = db_row[2]
         size_before = os.path.getsize(path) if os.path.exists(path) else 0
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            cur = conn.execute(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
                 "DELETE FROM requests WHERE created_at < ?", (cutoff,))
-            conn.commit()
+            await conn.commit()
             deleted = cur.rowcount
             try:
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except sqlite3.OperationalError:
+                await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
                 pass
             try:
-                conn.execute("VACUUM")
-            except sqlite3.OperationalError as e:
+                await conn.execute("VACUUM")
+            except Exception as e:
                 log.warning("VACUUM 失败（可忽略，稍后自动重试）: %s", e)
-            conn.commit()
+            await conn.commit()
             # IMP-07: cleanup 后触发 ANALYZE 更新查询计划
             try:
-                conn.execute("ANALYZE")
-            except sqlite3.OperationalError:
+                await conn.execute("ANALYZE")
+            except Exception:
                 pass
         size_after = os.path.getsize(path) if os.path.exists(path) else 0
         return {"deleted": deleted, "size_before": size_before, "size_after": size_after}
 
-    def count(self) -> int:
+    async def count(self) -> int:
         """总记录数（指标用）。"""
-        self._ensure_flushed()
-        return int(self._read_conn.execute(
-            "SELECT COUNT(*) FROM requests"
-        ).fetchone()[0])
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute("SELECT COUNT(*) FROM requests")
+        row = await cursor.fetchone()
+        return int(row[0])
+
+    async def count_recent_requests(self, window_seconds: float = 60.0) -> int:
+        """P-04: 统计过去 window_seconds 秒内创建的请求数（入队速率估算用）。"""
+        cutoff = time.time() - window_seconds
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM requests WHERE created_at >= ?", (cutoff,)
+        )
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0
 
     @staticmethod
-    def _row_to_dict(row: sqlite3.Row, default: bool = True) -> dict:
+    def _row_to_dict(row: aiosqlite.Row, default: bool = True) -> dict:
         keys = row.keys()
         d = dict(zip(keys, row))
         if "download" in d:
@@ -584,12 +675,14 @@ class DB:
         return d
 
     # ── IMP-26: base64 文件治理 ─────────────────────
-    def get_base64_path(self, task_id: str) -> str | None:
+    async def get_base64_path(self, task_id: str) -> str | None:
         """返回 task_id 对应的 base64 文件路径（file:// 前缀剥离），无文件时返回 None。"""
-        self._ensure_flushed()
-        row = self._read_conn.execute(
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT image_base64 FROM requests WHERE id=?", (task_id,)
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         if not row or not row[0]:
             return None
         val = str(row[0])
@@ -598,10 +691,10 @@ class DB:
         # 旧 raw base64 数据：无文件路径
         return None
 
-    def read_base64(self, task_id: str) -> str | None:
+    async def read_base64(self, task_id: str) -> str | None:
         """从文件读取 task_id 的 base64 字符串。返回 None 表示文件不存在或读取失败。
         P1: 限制最大 10MB 防 OOM。"""
-        path = self.get_base64_path(task_id)
+        path = await self.get_base64_path(task_id)
         if path is None:
             return None
         try:
@@ -619,107 +712,113 @@ class DB:
         return base64_store.clean_expired(ttl)
 
     # ── IMP-06: 幂等提交 ─────────────────────────────
-    def save_idempotency(self, key: str, task_id: str) -> None:
+    async def save_idempotency(self, key: str, task_id: str) -> None:
         """保存幂等 key → task_id 映射。"""
-        self._enqueue_write(
+        await self._enqueue_write(
             "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)"
             " VALUES (?, ?, ?)",
             (key, task_id, time.time()),
         )
 
-    def get_idempotency(self, key: str) -> dict | None:
+    async def get_idempotency(self, key: str) -> dict | None:
         """查询幂等 key，返回 {idempotency_key, task_id, created_at} 或 None。"""
-        self._ensure_flushed()
-        row = self._read_conn.execute(
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT idempotency_key, task_id, created_at FROM idempotency_keys"
             " WHERE idempotency_key=?", (key,)
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         if not row:
             return None
         return dict(zip(row.keys(), row))
 
-    def clean_expired_idempotency(self) -> int:
+    async def clean_expired_idempotency(self) -> int:
         """清理超 TTL 的幂等 key 条目，返回删除数。"""
         cutoff = time.time() - config.IF_IDEMPOTENCY_TTL
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            cur = conn.execute(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
                 "DELETE FROM idempotency_keys WHERE created_at < ?", (cutoff,))
-            conn.commit()
+            await conn.commit()
             return cur.rowcount
 
     # ── IMP-21: 死信队列（DLQ）────────────────────────────
-    def push_dlq(self, task_id: str, model: str | None, error: str | None, attempts: int) -> None:
+    async def push_dlq(self, task_id: str, model: str | None, error: str | None, attempts: int) -> None:
         """将重试耗尽的任务推入死信队列。"""
         now = time.time()
-        self._enqueue_write(
+        await self._enqueue_write(
             "INSERT OR REPLACE INTO dead_letter_queue"
             " (id, task_id, model, error, attempts, created_at, last_attempt_at, raw_log)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (task_id, task_id, model, error, attempts, now, now, error),
         )
 
-    def list_dlq(self, limit: int = 20) -> list[dict]:
+    async def list_dlq(self, limit: int = 20) -> list[dict]:
         """列出死信队列记录，按 created_at 降序（最新在前）。
 
         返回: [{id, task_id, model, error, attempts, created_at, last_attempt_at, raw_log}]
         """
-        self._ensure_flushed()
-        rows = self._read_conn.execute(
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT id, task_id, model, error, attempts, created_at, last_attempt_at, raw_log"
             " FROM dead_letter_queue ORDER BY created_at DESC LIMIT ?",
             (limit,),
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         return [dict(zip(row.keys(), row)) for row in rows]
 
-    def retry_dlq(self, task_id: str) -> None:
+    async def retry_dlq(self, task_id: str) -> None:
         """从死信队列移除指定任务（重试语义：删除记录，重新入队）。"""
-        self._enqueue_write(
+        await self._enqueue_write(
             "DELETE FROM dead_letter_queue WHERE id=?", (task_id,),
         )
 
-    def clear_dlq(self) -> None:
+    async def clear_dlq(self) -> None:
         """清空死信队列所有记录。"""
-        self._enqueue_write(
+        await self._enqueue_write(
             "DELETE FROM dead_letter_queue", (),
         )
 
-    def clean_expired_dlq(self) -> int:
+    async def clean_expired_dlq(self) -> int:
         """清理超期死信队列记录，返回删除数。"""
         cutoff = time.time() - config.IF_DLQ_RETENTION_DAYS * 86400
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            cur = conn.execute(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
                 "DELETE FROM dead_letter_queue WHERE created_at < ?", (cutoff,))
-            conn.commit()
+            await conn.commit()
             return cur.rowcount
 
     # ── IMP-11: 缓存持久化 ─────────────────────────────
-    def save_cache_batch(self, entries: list[tuple[str, str, float]]) -> None:
+    async def save_cache_batch(self, entries: list[tuple[str, str, float]]) -> None:
         """批量写入缓存条目到 cache_store 表（upsert 语义）。
         entries: [(key, json_value, remaining_ttl), ...]
         """
         if not entries:
             return
         now = time.time()
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            conn.executemany(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            await conn.executemany(
                 "INSERT OR REPLACE INTO cache_store (key, value, ttl, cached_at)"
                 " VALUES (?, ?, ?, ?)",
                 [(k, v, ttl, now) for k, v, ttl in entries],
             )
-            conn.commit()
+            await conn.commit()
 
-    def load_cache_snapshot(self) -> list[tuple[str, str, float]]:
+    async def load_cache_snapshot(self) -> list[tuple[str, str, float]]:
         """从 cache_store 表读取所有未过期的缓存条目。
         返回: [(key, value_json, remaining_ttl), ...]
         """
-        self._ensure_flushed()
+        await self._ensure_flushed()
         now = time.time()
-        rows = self._read_conn.execute(
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
             "SELECT key, value, ttl, cached_at FROM cache_store"
-        ).fetchall()
+        )
+        rows = await cursor.fetchall()
         result: list[tuple[str, str, float]] = []
         for row in rows:
             deadline = row["cached_at"] + row["ttl"]
@@ -728,24 +827,24 @@ class DB:
                 result.append((row["key"], row["value"], remaining))
         return result
 
-    def delete_cache_batch(self, keys: list[str]) -> None:
+    async def delete_cache_batch(self, keys: list[str]) -> None:
         """批量删除指定缓存 key。"""
         if not keys:
             return
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            conn.executemany(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            await conn.executemany(
                 "DELETE FROM cache_store WHERE key=?", [(k,) for k in keys],
             )
-            conn.commit()
+            await conn.commit()
 
-    def clean_expired_cache(self) -> int:
+    async def clean_expired_cache(self) -> int:
         """清理过期缓存条目（TTL 到期），返回删除数。"""
-        _, conn, conn_lock = self._get_write_conn()
-        with conn_lock:
-            cur = conn.execute(
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
                 "DELETE FROM cache_store WHERE cached_at + ttl < ?", (time.time(),))
-            conn.commit()
+            await conn.commit()
             return cur.rowcount
 
 
@@ -753,9 +852,12 @@ class QueueDB:
     """持久化队列 DB（IMP-29）：独立 SQLite 文件，记录待消费任务。
 
     重启后从未消费的 task_queue 中恢复任务，避免重启丢失队列。
+
+    保持轻量级，不改为异步 — 仅被 worker 的同步代码路径使用。
     """
 
     def __init__(self, path: str):
+        import sqlite3
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
@@ -822,7 +924,7 @@ class QueueDB:
             self._conn.commit()
             try:
                 self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except sqlite3.OperationalError:
+            except Exception:
                 pass
             return {"deleted": cur.rowcount}
 

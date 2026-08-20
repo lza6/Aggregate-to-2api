@@ -110,14 +110,14 @@ async def _run_background_tasks():
                 if n:
                     log.info("base64 文件周期清理: 删除 %d 个过期文件", n)
                 if config.IF_IDEMPOTENCY_ENABLED:
-                    nd = db.clean_expired_idempotency()
+                    nd = await db.clean_expired_idempotency()
                     if nd:
                         log.info("幂等 key 周期清理: 删除 %d 个过期条目", nd)
                 if config.IF_DLQ_ENABLED:
-                    ndlq = db.clean_expired_dlq()
+                    ndlq = await db.clean_expired_dlq()
                     if ndlq:
                         log.info("死信队列周期清理: 删除 %d 个过期条目", ndlq)
-                nc = db.clean_expired_cache()
+                nc = await db.clean_expired_cache()
                 if nc:
                     log.info("缓存表周期清理: 删除 %d 个过期条目", nc)
                 if config.IF_PERSISTENT_QUEUE_ENABLED and engine._queue_db:
@@ -126,7 +126,7 @@ async def _run_background_tasks():
                         log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
                 snap = engine.snapshot()
                 ssnap = solver_guard.snapshot()
-                stats = db.stats_overview()
+                stats = await db.stats_overview()
                 ctx = {
                     "queued": snap["queued"],
                     "solver_circuit_open": ssnap.get("circuit_open", False),
@@ -188,7 +188,7 @@ async def lifespan(_app: FastAPI):
     # IMP-25: 启动 DB 批量写入定时器
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
-        _batch_timer_task = asyncio.create_task(db.start_batch_timer())
+        _batch_timer_task = asyncio.create_task(await db.start_batch_timer())
     # 多提供商网关：注册 provider 实例 + 启动号池/注册器/代理池
     providers_bootstrap()
     imagefree_provider = registry.providers.get("imagefree")
@@ -253,7 +253,7 @@ async def lifespan(_app: FastAPI):
                          _stop_warmup(), _stop_batch_timer(), _stop_background())
     # ② 刷新 DB 写缓冲区
     async def _flush_db() -> None:
-        db.flush()
+        await db.flush()
     await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
     # ③ 停止 worker 池
     await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
@@ -266,7 +266,7 @@ async def lifespan(_app: FastAPI):
                          free_proxy_fetcher.stop(), account_pool.stop())
     # ⑥ 刷新缓存持久化
     async def _flush_cache() -> None:
-        await gallery_cache.flush_to_db()
+        gallery_cache.flush_to_db()
     await shutdown_phase(3.0, "⑥ 缓存持久化",
                          _flush_cache(), gallery_cache.stop_reaper())
     # ⑦ 关闭 HTTP 连接池
@@ -687,7 +687,7 @@ async def healthz():
         "workers": snap["workers"],
         "token_pool": engine.token_pool.qsize(),          # 深指标：token 池水位
         "edit_inflight": len(_EDIT_PENDING),              # 图生图在途/排队任务数（上游硬并发=1）
-        "db_rows": db.count(),                             # 深指标：请求记录总量
+        "db_rows": await db.count(),                             # 深指标：请求记录总量
         "uptime_seconds": snap["uptime_seconds"],
         "timestamp": int(time.time()),
         # ── solver 求解质量（来自 solver_guard.snapshot() 投影）──
@@ -739,7 +739,7 @@ async def generate_async(req: GenerateRequest):
     except QueueFull as e:
         raise AppError(ErrorCodes.QUEUE_FULL, str(e), 429)
     headers = {"Location": f"/v1/tasks/{task_id}"}
-    return TaskInfo(**task_to_public(db.get_public(task_id)))
+    return TaskInfo(**task_to_public(await db.get_public(task_id)))
 
 
 # ── 多提供商路由 ─────────────────────────────────
@@ -754,7 +754,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     """按 model 前缀路由：imagefree 走既有引擎队列；其余提供商后台直调。"""
     from .config import IF_IDEMPOTENCY_ENABLED
     if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
-        existing = db.get_idempotency(req.idempotency_key)
+        existing = await db.get_idempotency(req.idempotency_key)
         if existing is not None:
             log.info("幂等提交命中: key=%s task_id=%s", req.idempotency_key, existing["task_id"])
             return existing["task_id"]
@@ -768,12 +768,12 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     if provider is None:
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     task_id = str(uuid.uuid4())
-    db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model)
+    await db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model)
     t0 = time.monotonic()
     spec = registry.model(model)
 
     if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
-        db.save_idempotency(req.idempotency_key, task_id)
+        await db.save_idempotency(req.idempotency_key, task_id)
 
     async def _run() -> None:
         try:
@@ -783,16 +783,16 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                 duration=req.duration or (spec.meta.get("video_durations") or [4])[0],
             )
             if res.proxy_used:
-                db.update_proxy_used(task_id, res.proxy_used)
+                await db.update_proxy_used(task_id, res.proxy_used)
             if res.status == "completed":
-                db.mark_finished(task_id, "completed", res.asset_url, None,
+                await db.mark_finished(task_id, "completed", res.asset_url, None,
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 registry.record_success(provider.prefix)
             else:
-                db.mark_finished(task_id, "error", None, res.error or "生成失败",
+                await db.mark_finished(task_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
         except Exception as e:
-            db.mark_finished(task_id, "error", None, str(e), time.monotonic() - t0)
+            await db.mark_finished(task_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商生成异常 %s", task_id)
 
     t = asyncio.create_task(_run())
@@ -807,7 +807,7 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
     if _provider_prefix(model) == "imagefree":
         job_id = str(uuid.uuid4())
         ctype = imagefree_client.detect_mime(image_bytes)
-        db.create_request(job_id, prompt, "1:1", download, "img", "imagefree/default")
+        await db.create_request(job_id, prompt, "1:1", download, "img", "imagefree/default")
         asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download,
                                           model.split("/", 1)[-1]))  # H2(审计修复): 风格名传递
         return job_id
@@ -816,7 +816,7 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
         # IMP-18: provider 熔断/降级不可用 → 返回 429
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     job_id = str(uuid.uuid4())
-    db.create_request(job_id, prompt, "1:1", download, "img", model)
+    await db.create_request(job_id, prompt, "1:1", download, "img", model)
     t0 = time.monotonic()
 
     async def _run() -> None:
@@ -824,17 +824,17 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
             res = await provider.generate(model, prompt, "1:1", images=[image_bytes],
                                           resolution="1K", download=download)
             if res.proxy_used:
-                db.update_proxy_used(job_id, res.proxy_used)
+                await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
-                db.mark_finished(job_id, "completed", res.asset_url, None,
+                await db.mark_finished(job_id, "completed", res.asset_url, None,
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 # IMP-18: 生成成功 → 重置连续失败计数
                 registry.record_success(provider.prefix)
             else:
-                db.mark_finished(job_id, "error", None, res.error or "生成失败",
+                await db.mark_finished(job_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
         except Exception as e:
-            db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
+            await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商图生图异常 %s", job_id)
 
     t = asyncio.create_task(_run())
@@ -853,7 +853,7 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
     if provider is None:
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
     job_id = str(uuid.uuid4())
-    db.create_request(job_id, prompt, "1:1", download, "img", model)
+    await db.create_request(job_id, prompt, "1:1", download, "img", model)
     t0 = time.monotonic()
 
     async def _run() -> None:
@@ -861,16 +861,16 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
             res = await provider.generate(model, prompt, "1:1", images=image_bytes_list,
                                           resolution="1K", download=download)
             if res.proxy_used:
-                db.update_proxy_used(job_id, res.proxy_used)
+                await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
-                db.mark_finished(job_id, "completed", res.asset_url, None,
+                await db.mark_finished(job_id, "completed", res.asset_url, None,
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 registry.record_success(provider.prefix)
             else:
-                db.mark_finished(job_id, "error", None, res.error or "生成失败",
+                await db.mark_finished(job_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
         except Exception as e:
-            db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
+            await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商多图图生图异常 %s", job_id)
 
     t = asyncio.create_task(_run())
@@ -924,7 +924,7 @@ async def edit_image(req: EditRequest):
             # imagefree 只支持单图，降级为仅用第一张
             image_bytes = image_bytes_list[0]
             job_id = await _dispatch_edit(req.model, req.prompt, image_bytes, req.download)
-            return TaskInfo(**task_to_public(db.get_public(job_id)))
+            return TaskInfo(**task_to_public(await db.get_public(job_id)))
 
     if len(image_bytes_list) <= 1:
         # 单图模式：走既有逻辑
@@ -933,7 +933,7 @@ async def edit_image(req: EditRequest):
     else:
         # 多图模式：直调 provider（非 imagefree 路由）
         job_id = await _dispatch_edit_multi(req.model, req.prompt, image_bytes_list, req.download)
-    return TaskInfo(**task_to_public(db.get_public(job_id)))  # M8: 轻量投影
+    return TaskInfo(**task_to_public(await db.get_public(job_id)))  # M8: 轻量投影
 
 
 async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
@@ -953,7 +953,7 @@ async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
         async with local_lock:  # 进程内串行（同 key）
             token = await _acquire_edit_mutex(key)  # 跨进程串行（同 key）
             if not token:
-                db.mark_finished(job_id, "error", None,
+                await db.mark_finished(job_id, "error", None,
                                  "图生图繁忙：其他实例正在生成同一出口通道，请稍后重试", None)
                 return
             try:
@@ -986,7 +986,7 @@ async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str,
         # token 已在池侧预取时带对应代理解好，提交直接复用，无需本任务内联求解。
         token = await engine.acquire_token(key=proxy or "direct")
         if not token:
-            db.mark_finished(job_id, "error", None,
+            await db.mark_finished(job_id, "error", None,
                              "人机验证 token 暂不可用（cf_solver 不可用或熔断中），请稍后重试",
                              time.monotonic() - t0)
             return
@@ -996,7 +996,7 @@ async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str,
             tid = await imagefree_client.submit_edit(
                 config.BASE_URL, public_url, config.apply_model(prompt, model), token,
                 proxy=proxy)
-            db.update_upstream_task(job_id, tid)
+            await db.update_upstream_task(job_id, tid)
             result = await imagefree_client.poll_edit_status(
                 config.BASE_URL, tid, config.EDIT_TIMEOUT, config.GENERATE_POLL_INTERVAL,
                 proxy=proxy)
@@ -1011,36 +1011,36 @@ async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str,
                 continue
             if _is_edit_slot_wedged(e):
                 # 重试满仍是槽占用（孤儿上游任务卡住）→ 明确报错，不无限重试
-                db.mark_finished(job_id, "error", None,
+                await db.mark_finished(job_id, "error", None,
                                  f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {e}",
                                  time.monotonic() - t0)
             else:
-                db.mark_finished(job_id, "error", None, f"图生图失败: {e}",
+                await db.mark_finished(job_id, "error", None, f"图生图失败: {e}",
                                  time.monotonic() - t0)
             return
     else:  # pragma: no cover - 循环内必然 return/break，理论不可达
-        db.mark_finished(job_id, "error", None,
+        await db.mark_finished(job_id, "error", None,
                          f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {last_err}",
                          time.monotonic() - t0)
         return
     if not download:
-        db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)
+        await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)
         return
     # 需要下载结果图 base64
     try:
         raw = await imagefree_client.download_image(result["image"], 60.0, config.MAX_IMAGE_BYTES)
         mime = imagefree_client.detect_mime(raw)
-        db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0,
+        await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0,
                          imagefree_client.to_base64(raw, mime), mime)
     except Exception as e:
         log.warning("图生图结果下载失败（不影响 URL 交付）: %s", e)
-        db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)
+        await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)
 
 
 @app.get("/v1/edit/tasks/{job_id}", response_model=TaskInfo)
 async def get_edit_task(job_id: str):
     """查询图生图任务结果（持久化于 SQLite）。"""
-    task = db.get_public(job_id)  # M8: 轻量投影，不读 prompt
+    task = await db.get_public(job_id)  # M8: 轻量投影，不读 prompt
     if not task:
         raise AppError(ErrorCodes.NOT_FOUND, "图生图任务不存在", 404)
     return TaskInfo(**task_to_public(task))
@@ -1091,7 +1091,7 @@ async def list_tasks(
 ):
     """任务列表，按创建时间降序，支持分页和筛选。"""
     from .db import task_to_public
-    items, total = db.list_tasks(
+    items, total = await db.list_tasks(
         limit=limit, offset=offset,
         status=status, model=model,
         sort=sort,
@@ -1106,7 +1106,7 @@ async def list_tasks(
 
 @app.get("/v1/tasks/{task_id}", response_model=TaskInfo)
 async def get_task(task_id: str):
-    task = db.get(task_id)  # 用 get 而非 get_public，返回完整字段含 prompt
+    task = await db.get(task_id)  # 用 get 而非 get_public，返回完整字段含 prompt
     if not task:
         raise AppError(ErrorCodes.NOT_FOUND, "task 不存在", 404)
     return TaskInfo(**task_to_public(task))
@@ -1145,15 +1145,15 @@ async def get_stats():
     """总量统计 + 实时并发/排队 + 按日/月拆分 + 平均出图耗时。"""
     overview = await gallery_cache.get("stats:overview")
     if overview is None:
-        overview = db.stats_overview()
+        overview = await db.stats_overview()
         await gallery_cache.set("stats:overview", overview)
     daily = await gallery_cache.get("stats:daily:14")
     if daily is None:
-        daily = db.stats_daily(14)
+        daily = await db.stats_daily(14)
         await gallery_cache.set("stats:daily:14", daily)
     monthly = await gallery_cache.get("stats:monthly:12")
     if monthly is None:
-        monthly = db.stats_monthly(12)
+        monthly = await db.stats_monthly(12)
         await gallery_cache.set("stats:monthly:12", monthly)
     live = engine.snapshot()
     ssnap = solver_guard.snapshot()
@@ -1201,7 +1201,7 @@ async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
     cached = await gallery_cache.get(cache_key)
     if cached is not None:
         return cached
-    items = db.recent_images(limit)
+    items = await db.recent_images(limit)
     out = []
     for t in items:
         out.append({
@@ -1223,7 +1223,7 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
 
     MEDIUM-4: 不回传完整 prompt（可能含个人信息），仅截断前 60 字符用于定位。
     """
-    items = db.recent_errors(limit)
+    items = await db.recent_errors(limit)
     out = []
     for t in items:
         out.append({
@@ -1245,7 +1245,7 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     snap = engine.snapshot()
-    ov = db.stats_overview()
+    ov = await db.stats_overview()
     ssnap = solver_guard.snapshot()
     body = metrics_v2(snap, ov, ssnap)
     return PlainTextResponse(body,
@@ -1280,7 +1280,7 @@ async def log_websocket(websocket: WebSocket):
 @app.get("/v1/dead-letter-queue")
 async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
     """死信队列：重试耗尽的失败任务列表，支持重试与清空。"""
-    items = db.list_dlq(limit)
+    items = await db.list_dlq(limit)
     return {"items": items, "count": len(items)}
 
 
@@ -1289,7 +1289,7 @@ async def retry_dlq_task(task_id: str, request: Request):
     """从死信队列移除指定任务（清空记录，重新入队重试语义）。"""
     client_ip = request.client.host if request.client else "unknown"
     audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
-    db.retry_dlq(task_id)
+    await db.retry_dlq(task_id)
     return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
 
 
@@ -1298,7 +1298,7 @@ async def clear_dlq(request: Request):
     """清空死信队列所有记录。"""
     client_ip = request.client.host if request.client else "unknown"
     audit_log.record("dlq.clear", client_ip, "dlq", "清空死信队列")
-    db.clear_dlq()
+    await db.clear_dlq()
     return {"status": "ok", "detail": "死信队列已清空"}
 
 

@@ -10,10 +10,9 @@ services:
     image: imagefree-cfsolver:latest
     container_name: imagefree-cfsolver
     restart: unless-stopped
-    mem_limit: 1500m
+    mem_limit: 1024m
     mem_reservation: 1g
     cpus: '2'
-    cpuset: '0-1'
     environment:
       - PYTHONUNBUFFERED=1
     healthcheck:

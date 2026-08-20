@@ -21,8 +21,6 @@ import logging
 import os
 from urllib.parse import quote
 
-from . import config
-
 log = logging.getLogger("kookeey")
 
 
