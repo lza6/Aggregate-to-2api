@@ -133,7 +133,7 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
                                                         "download": False, "model": "imagefree/default",
                                                         "resolution": "1K", "duration": None,
                                                         "priority": None})())
-        assert tid and tmp_db.get(tid) is not None
+        assert tid and (await tmp_db.get(tid)) is not None
 
         # minimaxh3 mock 号池 → 后台任务 completed
         prov = m.registry.providers["minimaxh3"]
@@ -143,11 +143,11 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
                                                          "resolution": "1K", "duration": None,
                                                          "priority": None})())
         for _ in range(20):
-            if tmp_db.get(tid2)["status"] in ("completed", "error"):
+            if (await tmp_db.get(tid2))["status"] in ("completed", "error"):
                 break
             await asyncio.sleep(0.1)
-        assert tmp_db.get(tid2)["status"] == "completed"
-        assert tmp_db.get(tid2)["model"] == "minimaxh3/nano-banana-pro"
+        assert (await tmp_db.get(tid2))["status"] == "completed"
+        assert (await tmp_db.get(tid2))["model"] == "minimaxh3/nano-banana-pro"
     finally:
         await m.engine.stop()
 
@@ -164,11 +164,11 @@ async def test_dispatch_edit_routes(tmp_db, monkeypatch):
         monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
         tid = await m._dispatch_edit("minimaxh3/nano-banana-pro", "make red", b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, False)
         for _ in range(20):
-            if tmp_db.get(tid)["status"] in ("completed", "error"):
+            if (await tmp_db.get(tid))["status"] in ("completed", "error"):
                 break
             await asyncio.sleep(0.1)
-        assert tmp_db.get(tid)["status"] == "completed"
-        assert tmp_db.get(tid)["type"] == "img"
+        assert (await tmp_db.get(tid))["status"] == "completed"
+        assert (await tmp_db.get(tid))["type"] == "img"
     finally:
         await m.engine.stop()
 

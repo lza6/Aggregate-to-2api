@@ -10,51 +10,59 @@ from api.db import DB, task_to_public
 
 # ── M7: DB TTL 清理 ──────────────────────────────
 class TestDbCleanup:
-    def test_cleanup_deletes_old_only(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_cleanup_deletes_old_only(self, tmp_db):
         import uuid
 
         old = uuid.uuid4().hex
         new = uuid.uuid4().hex
-        tmp_db.create_request(old, "old", "1:1", False)
-        tmp_db.create_request(new, "new", "1:1", False)
-        tmp_db.flush()  # IMP-25: 批量模式下先 flush 确保数据已落盘
+        await tmp_db.create_request(old, "old", "1:1", False)
+        await tmp_db.create_request(new, "new", "1:1", False)
+        await tmp_db.flush()  # IMP-25: 批量模式下先 flush 确保数据已落盘
         # 把 old 的 created_at 改到 2 年前
-        tmp_db._conn.execute(
+        conn0 = tmp_db._connections[0]
+        await conn0.execute(
             "UPDATE requests SET created_at=? WHERE id=?",
             (time.time() - 2 * 366 * 86400, old),
         )
-        tmp_db._conn.commit()
-        r = tmp_db.cleanup(retention_days=365)
+        await conn0.commit()
+        r = await tmp_db.cleanup(retention_days=365)
         assert r["deleted"] == 1
-        assert tmp_db.get(old) is None
-        assert tmp_db.get(new) is not None
+        old_row = await tmp_db.get(old)
+        assert old_row is None
+        new_row = await tmp_db.get(new)
+        assert new_row is not None
 
-    def test_cleanup_noop_when_nothing_old(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_cleanup_noop_when_nothing_old(self, tmp_db):
         import uuid
 
-        tmp_db.create_request(uuid.uuid4().hex, "x", "1:1", False)
-        r = tmp_db.cleanup(retention_days=365)
+        await tmp_db.create_request(uuid.uuid4().hex, "x", "1:1", False)
+        r = await tmp_db.cleanup(retention_days=365)
         assert r["deleted"] == 0
 
 
 # ── M8: 轻量投影 get_public ──────────────────────
 class TestPublicProjection:
-    def test_get_public_excludes_prompt(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_get_public_excludes_prompt(self, tmp_db):
         import uuid
 
         tid = uuid.uuid4().hex
-        tmp_db.create_request(tid, "secret prompt content", "1:1", False)
-        tmp_db.mark_started(tid)
-        tmp_db.mark_finished(tid, "completed", "https://r2/x.png", None, 3.0)
-        pub = tmp_db.get_public(tid)
+        await tmp_db.create_request(tid, "secret prompt content", "1:1", False)
+        await tmp_db.mark_started(tid)
+        await tmp_db.mark_finished(tid, "completed", "https://r2/x.png", None, 3.0)
+        pub = await tmp_db.get_public(tid)
         assert "prompt" not in pub, "get_public 不应返回 prompt"
         assert "download" not in pub, "get_public 不应返回 download"
         assert pub["status"] == "completed"
         assert pub["image_url"] == "https://r2/x.png"
         assert pub["id"] == tid
 
-    def test_get_public_missing(self, tmp_db):
-        assert tmp_db.get_public("nope") is None
+    @pytest.mark.asyncio
+    async def test_get_public_missing(self, tmp_db):
+        result = await tmp_db.get_public("nope")
+        assert result is None
 
 
 # ── M4: /metrics 文本格式 ─────────────────────────

@@ -138,7 +138,7 @@ class LRUCache:
         if not self._persist_db:
             return 0
         try:
-            entries = self._persist_db.load_cache_snapshot()
+            entries = await self._persist_db.load_cache_snapshot()
         except Exception as e:
             log.warning("缓存从 DB 恢复失败: %s", e)
             return 0
@@ -168,9 +168,9 @@ class LRUCache:
             self._pending.deletes.clear()
         try:
             if upserts:
-                self._persist_db.save_cache_batch(upserts)
+                await self._persist_db.save_cache_batch(upserts)
             if deletes:
-                self._persist_db.delete_cache_batch(deletes)
+                await self._persist_db.delete_cache_batch(deletes)
         except Exception as e:
             log.warning("缓存持久化 flush 失败: %s", e)
 
@@ -196,10 +196,10 @@ class LRUCache:
         except asyncio.CancelledError:
             pass
         self._reaper_task = None
-        self._flush_all_to_db()
+        await self._flush_all_to_db()
         await self.clear()
 
-    def _flush_all_to_db(self) -> None:
+    async def _flush_all_to_db(self) -> None:
         """将内存中所有条目持久化到 DB（stop 时调用）。"""
         if not self._persist_db:
             return
@@ -215,7 +215,7 @@ class LRUCache:
         self._pending.upserts.clear()
         if entries:
             try:
-                self._persist_db.save_cache_batch(entries)
+                await self._persist_db.save_cache_batch(entries)
                 log.info("缓存全量持久化: %d 个条目", len(entries))
             except Exception as e:
                 log.warning("缓存全量持久化失败: %s", e)

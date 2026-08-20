@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 import os
 
+from . import config as app_config
+
 log = logging.getLogger("telemetry")
 
 # ── 安全导入：opentelemetry 包未安装时降级（零开销）───────
@@ -83,20 +85,21 @@ def init_telemetry() -> None:
     if not _OTEL_AVAILABLE:
         log.info("OTel 包未安装，跳过追踪初始化")
         return
-    if not _bool_env("IF_OTEL_ENABLED"):
+    # 实时读 env（A-02 后 config 缓存了 import 时的值；测试/运行时改 env 需生效）
+    if os.getenv("IF_OTEL_ENABLED", "1" if app_config.OTEL_ENABLED else "0").strip().lower() not in {"1", "true", "yes", "on"}:
         log.info("OTel 未启用（IF_OTEL_ENABLED=0），跳过追踪初始化")
         return
 
-    service_name = os.getenv("IF_OTEL_SERVICE_NAME", "imagefree-api")
+    service_name = os.getenv("IF_OTEL_SERVICE_NAME", app_config.OTEL_SERVICE_NAME)
     resource = Resource.create({SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource)
 
     # Console 导出器（调试用，需显式设置 IF_OTEL_CONSOLE_EXPORTER=1）
-    if _bool_env("IF_OTEL_CONSOLE_EXPORTER"):
+    if os.getenv("IF_OTEL_CONSOLE_EXPORTER", "1" if app_config.OTEL_CONSOLE_EXPORTER else "0").strip().lower() in {"1", "true", "yes", "on"}:
         provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
     # OTLP 导出器（生产环境对接上游追踪系统如 Jaeger、Tempo）
-    otlp_endpoint = os.getenv("IF_OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    otlp_endpoint = os.getenv("IF_OTEL_EXPORTER_OTLP_ENDPOINT", app_config.OTEL_EXPORTER_OTLP_ENDPOINT or "") or ""
     if otlp_endpoint:
         try:
             otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)

@@ -8,59 +8,68 @@ import pytest_asyncio
 class TestIdempotencyTable:
     """idempotency_keys 表结构测试。"""
 
-    def test_table_exists(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_table_exists(self, tmp_db):
         """idempotency_keys 表应存在。"""
-        _, conn, lock = tmp_db._get_write_conn()
-        with lock:
-            rows = conn.execute(
+        _, conn, lock = await tmp_db._get_write_conn()
+        async with lock:
+            cursor = await conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='idempotency_keys'"
-            ).fetchall()
+            )
+            rows = await cursor.fetchall()
         assert len(rows) == 1
 
-    def test_save_and_get(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_save_and_get(self, tmp_db):
         """保存幂等 key 后可读取。"""
         key = "idem-test-001"
         task_id = "task-abc-123"
-        tmp_db.save_idempotency(key, task_id)
-        row = tmp_db.get_idempotency(key)
+        await tmp_db.save_idempotency(key, task_id)
+        row = await tmp_db.get_idempotency(key)
         assert row is not None
         assert row["task_id"] == task_id
         assert row["idempotency_key"] == key
 
-    def test_get_nonexistent(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_get_nonexistent(self, tmp_db):
         """不存在的 key 返回 None。"""
-        assert tmp_db.get_idempotency("nonexistent-key") is None
+        result = await tmp_db.get_idempotency("nonexistent-key")
+        assert result is None
 
-    def test_overwrite(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_overwrite(self, tmp_db):
         """相同 key 再次保存应覆盖（INSERT OR REPLACE）。"""
         key = "idem-overwrite"
-        tmp_db.save_idempotency(key, "task-first")
-        tmp_db.save_idempotency(key, "task-second")
-        row = tmp_db.get_idempotency(key)
+        await tmp_db.save_idempotency(key, "task-first")
+        await tmp_db.save_idempotency(key, "task-second")
+        row = await tmp_db.get_idempotency(key)
         assert row["task_id"] == "task-second"
 
-    def test_clean_expired_only(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_clean_expired_only(self, tmp_db):
         """只清理过期条目，未过期的不影响。"""
         from api.config import IF_IDEMPOTENCY_TTL
 
         key_fresh = "idem-fresh"
         key_stale = "idem-stale"
-        tmp_db.save_idempotency(key_fresh, "task-fresh")
+        await tmp_db.save_idempotency(key_fresh, "task-fresh")
         # 手动插入旧条目（让 created_at 超 TTL）
-        _, conn, lock = tmp_db._get_write_conn()
-        with lock:
-            conn.execute(
+        _, conn, lock = await tmp_db._get_write_conn()
+        async with lock:
+            await conn.execute(
                 "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)"
                 " VALUES (?, ?, ?)",
                 (key_stale, "task-stale", time.time() - IF_IDEMPOTENCY_TTL - 60),
             )
-            conn.commit()
-        deleted = tmp_db.clean_expired_idempotency()
+            await conn.commit()
+        deleted = await tmp_db.clean_expired_idempotency()
         assert deleted >= 1
         # 新鲜 key 应仍在
-        assert tmp_db.get_idempotency(key_fresh) is not None
+        fresh = await tmp_db.get_idempotency(key_fresh)
+        assert fresh is not None
         # 过期 key 应被清理
-        assert tmp_db.get_idempotency(key_stale) is None
+        stale = await tmp_db.get_idempotency(key_stale)
+        assert stale is None
 
 
 @pytest.mark.asyncio
@@ -77,7 +86,7 @@ class TestIdempotencyDispatch:
         from api.main import GenerateRequest
         monkeypatch.setattr("api.main.db", tmp_db)
 
-        tmp_db.save_idempotency("known-key", "existing-task-999")
+        await tmp_db.save_idempotency("known-key", "existing-task-999")
 
         req = GenerateRequest(prompt="test", aspect_ratio="1:1",
                               idempotency_key="known-key")
@@ -116,10 +125,11 @@ class TestIdempotencyDisabled:
     def disable_idempotency(self, monkeypatch):
         monkeypatch.setattr("api.config.IF_IDEMPOTENCY_ENABLED", 0)
 
-    def test_db_operations_work(self, tmp_db):
+    @pytest.mark.asyncio
+    async def test_db_operations_work(self, tmp_db):
         """禁用时 idempotency 表操作正常。"""
         key = "disabled-key"
-        tmp_db.save_idempotency(key, "task-789")
-        row = tmp_db.get_idempotency(key)
+        await tmp_db.save_idempotency(key, "task-789")
+        row = await tmp_db.get_idempotency(key)
         assert row is not None
         assert row["task_id"] == "task-789"

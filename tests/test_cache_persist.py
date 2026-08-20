@@ -13,20 +13,25 @@ import tempfile
 import time
 
 import pytest
+import pytest_asyncio
 
 from api.cache import LRUCache
 
 
-@pytest.fixture
-def tmp_db_path():
+@pytest_asyncio.fixture
+async def tmp_db_path():
     """临时 SQLite 文件路径，用完后自动清理。"""
     from api.db import DB
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     db = DB(path)
+    await db._ensure_initialized()
     yield db
     try:
-        db.close()
+        await db.close()
+    except Exception:
+        pass
+    try:
         os.unlink(path)
         for suffix in ("-wal", "-shm"):
             if os.path.exists(path + suffix):
@@ -42,7 +47,7 @@ async def test_set_persists_to_db(tmp_db_path):
     await cache.set("k1", {"hello": "world"})
     await asyncio.sleep(0.05)  # 让 pending 写
     await cache.flush_to_db()
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "k1" in keys
 
@@ -73,7 +78,7 @@ async def test_invalidate_removes_from_db(tmp_db_path):
     await cache.set("k1", "hello")
     await cache.invalidate("k1")
     await cache.flush_to_db()
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "k1" not in keys
 
@@ -87,7 +92,7 @@ async def test_invalidate_prefix_removes_from_db(tmp_db_path):
     await cache.set("stats:overview", "stats")
     await cache.invalidate_prefix("gallery:")
     await cache.flush_to_db()
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "gallery:10" not in keys
     assert "gallery:50" not in keys
@@ -103,7 +108,7 @@ async def test_flush_all_to_db_on_stop(tmp_db_path):
     cache.start_reaper()
     await cache.stop_reaper()
     # 停止后 DB 应包含条目
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "k1" in keys
     assert "k2" in keys
@@ -131,7 +136,7 @@ async def test_no_persist_mode_works(tmp_db_path):
     await cache.set("k1", "hello")
     assert await cache.get("k1") == "hello"
     # 不应有 DB 条目
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     assert len(entries) == 0
 
 
@@ -143,7 +148,7 @@ async def test_evicted_item_persisted(tmp_db_path):
     await cache.set("b", 2)
     await cache.set("c", 3)  # 淘汰 "a"
     await cache.flush_to_db()
-    entries = tmp_db_path.load_cache_snapshot()
+    entries = await tmp_db_path.load_cache_snapshot()
     keys = [e[0] for e in entries]
     assert "a" in keys  # 被淘汰但持久化了
 

@@ -53,17 +53,18 @@ def temp_base64_dir(monkeypatch):
 
 
 # ── 测试 1: get_public 含 image_base64 ──────────
-def test_get_public_no_base64():
+@pytest.mark.asyncio
+async def test_get_public_no_base64():
     """get_public 返回的 dict 含 image_base64 字段（修复后）。"""
     from api import config
 
     db, path = make_db()
     try:
-        db.create_request("t1", "test prompt", "1:1", False)
+        await db.create_request("t1", "test prompt", "1:1", False)
         # 先 mark_finished 写入 base64
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.5, "dGVzdA==", "image/png")
-        pub = db.get_public("t1")
+        pub = await db.get_public("t1")
         assert pub is not None
         assert "image_base64" in pub, "get_public 应含 image_base64 字段"
         assert pub["image_base64"] is not None, "get_public 的 image_base64 不应为 None"
@@ -74,16 +75,17 @@ def test_get_public_no_base64():
 
 
 # ── 测试 2: gallery 不含 image_base64 ──────────────
-def test_gallery_no_base64():
+@pytest.mark.asyncio
+async def test_gallery_no_base64():
     """recent_images 返回结果不含 image_base64。"""
     from api import config
 
     db, path = make_db()
     try:
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.0, "ZGF0YQ==", "image/png")
-        items = db.recent_images(10)
+        items = await db.recent_images(10)
         assert len(items) == 1
         # 列名不含 image_base64（_GALLERY_COLS 不含）
         for item in items:
@@ -94,16 +96,17 @@ def test_gallery_no_base64():
 
 
 # ── 测试 3: errors 不含 image_base64 ───────────────
-def test_errors_no_base64():
+@pytest.mark.asyncio
+async def test_errors_no_base64():
     """recent_errors 返回结果不含 image_base64。"""
     from api import config
 
     db, path = make_db()
     try:
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "error", None, "some error", 0.5,
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "error", None, "some error", 0.5,
                          "ZGF0YQ==", "image/png")
-        items = db.recent_errors(10)
+        items = await db.recent_errors(10)
         assert len(items) == 1
         for item in items:
             assert "image_base64" not in item, "errors 不应含 image_base64"
@@ -113,22 +116,25 @@ def test_errors_no_base64():
 
 
 # ── 测试 4: mark_finished 写入文件 + 路径正确 ──────
-def test_mark_finished_writes_file():
+@pytest.mark.asyncio
+async def test_mark_finished_writes_file():
     """mark_finished 传入非空 base64 时写入文件，DB 存 file:// 路径。"""
     from api import config
 
     db, path = make_db()
     try:
         b64_data = "dGVzdCBiYXNlNjQgZGF0YQ=="  # "test base64 data"
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.0, b64_data, "image/png")
 
         # 验证 DB 存储的是 file:// 路径（先 flush 确保批量缓冲提交）
-        db.flush()
-        row = db._conn.execute(
+        await db.flush()
+        _conn = await db._get_read_conn()
+        _cur = await _conn.execute(
             "SELECT image_base64 FROM requests WHERE id='t1'"
-        ).fetchone()
+        )
+        row = await _cur.fetchone()
         assert row is not None
         stored = row[0]
         assert stored.startswith("file://"), f"DB 应存 file:// 路径，实际: {stored}"
@@ -140,24 +146,27 @@ def test_mark_finished_writes_file():
             assert f.read() == b64_data
 
         # 验证 get 返回还原的 base64（get 自动 flush）
-        t = db.get("t1")
+        t = await db.get("t1")
         assert t["image_base64"] == b64_data
     finally:
         cleanup_db(db, path)
 
 
 # ── 测试 5: mark_finished 无 base64 时不影响 ───────
-def test_mark_finished_no_base64():
+@pytest.mark.asyncio
+async def test_mark_finished_no_base64():
     """mark_finished 不传 base64 时 DB 存 NULL，不创建文件。"""
     db, path = make_db()
     try:
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.0)
-        db.flush()  # 确保批量缓冲提交
-        row = db._conn.execute(
+        await db.flush()  # 确保批量缓冲提交
+        _conn = await db._get_read_conn()
+        _cur = await _conn.execute(
             "SELECT image_base64 FROM requests WHERE id='t1'"
-        ).fetchone()
+        )
+        row = await _cur.fetchone()
         assert row is not None
         assert row[0] is None, "不传 base64 时 DB 应为 NULL"
     finally:
@@ -165,59 +174,62 @@ def test_mark_finished_no_base64():
 
 
 # ── 测试 6: read_base64 从文件读取 ─────────────────
-def test_read_base64():
+@pytest.mark.asyncio
+async def test_read_base64():
     """read_base64 能从文件读取 base64 字符串。"""
     db, path = make_db()
     try:
         b64_data = "YWJjMTIz"  # "abc123"
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.0, b64_data, "image/png")
 
-        read = db.read_base64("t1")
+        read = await db.read_base64("t1")
         assert read == b64_data, f"读取 base64 不匹配: {read}"
 
         # 不存在的 task_id 返回 None
-        assert db.read_base64("nonexistent") is None
+        assert await db.read_base64("nonexistent") is None
     finally:
         cleanup_db(db, path)
 
 
 # ── 测试 7: get_base64_path 返回路径 ───────────────
-def test_get_base64_path():
+@pytest.mark.asyncio
+async def test_get_base64_path():
     """get_base64_path 返回正确的文件路径。"""
     db, path = make_db()
     try:
-        db.create_request("t1", "test", "1:1", False)
-        db.mark_finished("t1", "completed", "https://example.com/img.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png",
                          None, 1.0, "ZGF0YQ==", "image/png")
 
-        p = db.get_base64_path("t1")
+        p = await db.get_base64_path("t1")
         assert p is not None, "应有文件路径"
         assert os.path.exists(p), f"路径指向的文件不存在: {p}"
         assert p.endswith(".png"), f"扩展名应为 .png，实际: {p}"
 
         # 不存在的 task_id 返回 None
-        assert db.get_base64_path("nonexistent") is None
+        assert await db.get_base64_path("nonexistent") is None
     finally:
         cleanup_db(db, path)
 
 
 # ── 测试 8: 清理过期文件 ───────────────────────────
-def test_clean_base64_files():
+@pytest.mark.asyncio
+async def test_clean_base64_files():
     """clean_base64_files 清理过期文件，保留新文件。"""
     db, path = make_db()
     try:
         b64_data = "dGVzdA=="  # "test"
-        db.create_request("t1", "test", "1:1", False)
-        db.create_request("t2", "test2", "1:1", False)
-        db.mark_finished("t1", "completed", "https://ex.com/1.png",
+        await db.create_request("t1", "test", "1:1", False)
+        await db.create_request("t2", "test2", "1:1", False)
+        await db.mark_finished("t1", "completed", "https://ex.com/1.png",
                          None, 1.0, b64_data, "image/png")
-        db.mark_finished("t2", "completed", "https://ex.com/2.png",
+        await db.mark_finished("t2", "completed", "https://ex.com/2.png",
                          None, 1.0, b64_data, "image/png")
 
         # 将 t1 文件设为过期（mtime 很久以前）
-        p1 = db.get_base64_path("t1")
+        p1 = await db.get_base64_path("t1")
         assert p1 is not None
         old_time = time.time() - 99999
         os.utime(p1, (old_time, old_time))
@@ -228,7 +240,7 @@ def test_clean_base64_files():
         assert not os.path.exists(p1), "t1 文件应被删除"
 
         # t2 文件应保留
-        p2 = db.get_base64_path("t2")
+        p2 = await db.get_base64_path("t2")
         assert p2 is not None and os.path.exists(p2), "t2 文件应保留"
     finally:
         cleanup_db(db, path)

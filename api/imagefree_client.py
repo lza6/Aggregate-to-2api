@@ -16,6 +16,7 @@ import logging
 import os
 import socket
 import time
+import weakref
 from urllib.parse import urlsplit
 
 import httpx
@@ -28,6 +29,125 @@ log = logging.getLogger("imagefree")
 # 测试钩子：IF_MOCK_UPSTREAM=1 时所有上游交互返回假数据（E2E/CI 零外部依赖、确定性）。
 # 与 scripts/mock_cfsolver.py 配合实现完整 mock 模式；生产绝不开。
 MOCK_UPSTREAM = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _shrink_buf(buf: bytearray, target: int) -> None:
+    """将扩展过大的 bytearray 缩容到 target 字节，回收扩容产生的流浪内存。
+
+    CPython 的 bytearray 切片删除（del buf[target:]）会物理 realloc 到 target
+    （实测 ob_alloc 回到 target+1）；随后 clear() 清零长度。调用方获得的仍是
+    一个已清空（len=0）的 bytearray，可继续 extend 追加。
+    """
+    if len(buf) <= target:
+        buf.clear()
+        return
+    del buf[target:]
+    buf.clear()
+
+
+class _BufferPool:
+    """大缓冲区池：复用预分配 bytearray，减少 download_image 大对象反复分配的 GC 压力。
+
+    P-05: 只对 download 专属内存做复用。bytearray 自身不可弱引用，故池中持有的是
+    可弱引用的 _Slot 包装；池用 WeakSet 登记"空闲"槽——槽的强引用常驻 _slots
+    （模块级 _buffer_pool 持有，进程存活期间不释放），弱引用仅作可用标记，
+    GC 友好：外部引用消失时弱引用失效不会残留死对象。
+
+    并发语义（与任务示例等价但修正了正确性）：
+    - 初始全部预分配槽登记为空闲；acquire 从空闲集取走一个并清除，返回内部
+      bytearray；空闲集因此随租出而动态缩小。
+    - release 按身份把槽放回空闲集；入池前判断池中空闲数量已达上限则放弃
+      该次归还（该槽仍被 _slots 强持有，随时可被再借）。
+    - acquire 时空闲集为空（全部租出）则新建临时缓冲——永不阻塞、永不抛异常。
+      扩展过大（超过预分配）的缓冲在 acquire 时用 _shrink_buf 截断回收"流浪内存"。
+    """
+
+    __slots__ = ("_slots", "_pool", "_max_size", "_prealloc_size", "_buf_size")
+
+    class _Slot:
+        """可弱引用槽位：内嵌预分配 bytearray（cpython 不支持 bytearray 弱引用）。"""
+
+        __slots__ = ("buf", "__weakref__")
+
+        def __init__(self, buf: bytearray) -> None:
+            self.buf = buf
+
+    def __init__(self, max_size: int = 10, prealloc_size: int = 64 * 1024) -> None:
+        self._slots = tuple(self._Slot(bytearray(prealloc_size)) for _ in range(max_size))
+        self._pool: weakref.WeakSet = weakref.WeakSet()
+        for slot in self._slots:
+            self._pool.add(slot)
+        self._max_size = max_size
+        self._prealloc_size = prealloc_size
+        self._buf_size = prealloc_size  # 预分配缓冲容量快照（不含扩容）
+
+    def acquire(self) -> bytearray:
+        """获取一个缓冲区：优先复用池中空闲的预分配内存，返回其内部 bytearray。
+
+        返回字节数组已清空（初始容量 = _prealloc_size 或经截断复用的容量）。
+        调用方直接对返回值做 bytearray.extend() 追加；_PoolView 仅在 Python 代码层
+        提供长度与最终字节截取。返回值仍被 _slots 强引用，调用方不得持有跨调用的
+        引用，且必须负责在 finally 中通过 release() 归还。
+        """
+        for slot in list(self._pool):  # 优先复用空闲槽
+            self._pool.discard(slot)
+            buf = slot.buf
+            if len(buf) <= self._buf_size:
+                # 未扩容缓冲：直接清空复用（保留容量）
+                buf.clear()
+                return buf
+            # 扩展过大的缓冲：截断到预分配下沿，回收扩容产生的流浪内存
+            _shrink_buf(buf, self._buf_size)
+            return buf
+        return bytearray(self._buf_size)  # 全部租出：新建临时缓冲（复用失败路径）
+
+    def release(self, buf: bytearray) -> None:
+        """归还缓冲区到池中（池中空闲已满则放弃，交给 GC 回收）。
+
+        预分配槽常驻 _slots 不会因池成员数达上限而泄漏；超出 _prealloc_size 的
+        扩容缓冲由下一次 acquire 的截断逻辑处理。
+        """
+        if len(self._pool) >= self._max_size:
+            return
+        for slot in self._slots:
+            if slot.buf is buf:
+                self._pool.add(slot)
+                return
+
+
+class _PoolView:
+    """缓冲池视图容器：为调用方提供写入 API（extend）并跟踪实时长度。
+
+    内部持有 acquire 返回的 bytearray；写入通过 bytearray 原生 extend 追加，
+    len() 反映已写入字节数。与任务契约（io.BytesIO 或 bytearray 包装）对齐。
+    """
+
+    __slots__ = ("_buf", "_len")
+
+    def __init__(self, buf: bytearray) -> None:
+        self._buf = buf
+        self._len = 0
+
+    @classmethod
+    def from_pool(cls, pool) -> "_PoolView":
+        return cls(pool.acquire())
+
+    def extend(self, data: bytes) -> None:
+        """追加字节：写到底层缓冲区，并更新已写长度。"""
+        self._buf.extend(data)
+        self._len += len(data)
+
+    def __len__(self) -> int:
+        return self._len
+
+    def __bytes__(self) -> bytes:
+        """返回截至 _len 的精确字节副本（与池内后续复用隔离）。"""
+        return bytes(self._buf[: self._len])
+
+
+# P-05: 模块级共享图像下载缓冲区池（H2 连接池之外的又一层大对象复用）
+# 预分配 10 个 64KB 槽位；模块基类天然强持有 _slots，保证复用对象常驻不失效。
+_buffer_pool = _BufferPool(max_size=10, prealloc_size=64 * 1024)
 
 
 class ImagefreeError(RuntimeError):
@@ -184,14 +304,17 @@ async def download_image(
             if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast:
                 raise ImagefreeError(f"不允许下载内网地址的图片: {image_url}")
     client = _get_client()
-    async with client.stream("GET", image_url, timeout=httpx.Timeout(timeout)) as r:
-        r.raise_for_status()
-        buf = bytearray()
-        async for chunk in r.aiter_bytes():
-            buf.extend(chunk)
-            if len(buf) > max_bytes:
-                raise ImagefreeError(f"图片超过 {max_bytes} 字节上限")
-        return bytes(buf)
+    buf = _PoolView(_buffer_pool.acquire())
+    try:
+        async with client.stream("GET", image_url, timeout=httpx.Timeout(timeout)) as r:
+            r.raise_for_status()
+            async for chunk in r.aiter_bytes():
+                buf.extend(chunk)
+                if len(buf) > max_bytes:
+                    raise ImagefreeError(f"图片超过 {max_bytes} 字节上限")
+            return bytes(buf)
+    finally:
+        _buffer_pool.release(buf._buf)
 
 
 def to_base64(data: bytes, mime: str = "image/png") -> str:
