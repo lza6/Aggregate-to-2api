@@ -14,4 +14,5 @@ asyncio_default_fixture_loop_scope = "session"
 markers = [
     "benchmark: performance benchmark tests (pytest-benchmark).",
     "chaos: fault injection / chaos engineering tests.",
+    "integration: end-to-end / cross-component integration tests.",
 ]
