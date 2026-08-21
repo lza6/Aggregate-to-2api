@@ -47,6 +47,8 @@ services:
       - "8100:8100"
     volumes:
       - ./data:/app/data
+      # 管理面板前端产物（宿主机构建 dist → 只读挂载；后端 /admin 静态出）
+      - ../frontend/dist:/app/frontend/dist:ro
     environment:
       - IF_CF_SOLVER_URL=http://cfsolver:8001
       - IF_HOST=0.0.0.0
