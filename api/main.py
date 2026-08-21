@@ -186,10 +186,10 @@ async def lifespan(_app: FastAPI):
     _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     # A-01: 启动后台任务组（TaskGroup）
     _background_task = asyncio.create_task(_run_background_tasks())
-    # IMP-25: 启动 DB 批量写入定时器
+    # IMP-25: 启动 DB 批量写入定时器（后台协程，绝不能 await——它是无限循环，await 会永久阻塞 startup）
     _batch_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
-        _batch_timer_task = asyncio.create_task(await db.start_batch_timer())
+        _batch_timer_task = asyncio.create_task(db.start_batch_timer())
     # 多提供商网关：注册 provider 实例 + 启动号池/注册器/代理池
     providers_bootstrap()
     imagefree_provider = registry.providers.get("imagefree")
