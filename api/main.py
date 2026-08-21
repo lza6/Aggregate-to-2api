@@ -44,6 +44,7 @@ from .telemetry import init_telemetry, shutdown_telemetry
 from .alerting import alert_engine
 from .audit import audit_log
 from .health import health_registry
+# A-04: 生产热修 keep：服务器已手动加 health_registry 引用；本地同步以保持漂移为零。
 from .providers import registry
 from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup

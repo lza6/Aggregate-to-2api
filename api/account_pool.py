@@ -190,13 +190,17 @@ class AccountPool:
                     # kookeey 可用时 registerer 会用 kookeey(email) 每号粘性住宅 IP，无需 proxy_pool。
                     # M99(审计修复): mock 注册（IF_MOCK_REGISTER=1）不碰真实上游 → 跳过住宅代理守卫，
                     # 任何环境下都能注册出 mock 账号，E2E 号池/路由断言才成立。
+                    # 用户决策(2026-08-22): 补号不强制住宅代理——无住宅时允许轮换免费代理（明文无认证，
+                    # 注册凭据有泄露风险，属已知权衡；kookeey 有则优先粘性住宅）。
                     if not MOCK_REGISTER:
                         from .kookeey import kookeey_enabled
                         residential = [e for e in proxy_pool.entries if e.source == "residential" and e.available(time.time())]
-                        if not (residential or kookeey_enabled()):
-                            log.info("号池补号暂停 %s：无住宅代理（配 IF_KOOKEEY 或 IF_PROXY_FILE；批量可用 inject_accounts --real）", provider)
+                        free_ok = [e for e in proxy_pool.entries if e.source == "free" and e.available(time.time())]
+                        if not (residential or free_ok or kookeey_enabled()):
+                            log.info("号池补号暂停 %s：无可用出口代理（配 IF_KOOKEEY / IF_PROXY_FILE / IF_FREE_PROXY 之一；批量可用 inject_accounts --real）", provider)
                             await asyncio.sleep(REGISTER_COOLDOWN)
                             continue
+                    # 出口代理：住宅优先（kookeey 粘性由 registerer 处理），无住宅回退免费代理轮换
                     reg.proxy = await proxy_pool.acquire(prefer_source="residential")
                     acc = await reg.register_one()
                     if acc:
