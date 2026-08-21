@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { ToastHost } from './ToastHost';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
       <main className="main-content">{children}</main>
+      <ToastHost />
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         .layout { display: flex; min-height: 100vh; }

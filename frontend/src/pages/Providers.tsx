@@ -1,26 +1,24 @@
 import { useEffect, useState } from 'react';
 import { fetchProviders } from '../api';
 import { ProviderCard } from '../components/ProviderCard';
+import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
+import { useApi } from '../hooks/useApi';
 import type { ProviderSummary } from '../api';
 
 export function ProvidersPage() {
+  const { data, loading, error, reload } = useApi(() => fetchProviders(), { intervalMs: 10000 });
   const [providers, setProviders] = useState<{ prefix: string; summary: ProviderSummary }[]>([]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchProviders();
-        const items = Object.entries(data.items ?? {}).map(([prefix, summary]) => ({
-          prefix,
-          summary,
-        }));
-        setProviders(items);
-      } catch { /* ignore */ }
-    };
-    load();
-    const timer = setInterval(load, 10000);
-    return () => clearInterval(timer);
-  }, []);
+    if (data) {
+      setProviders(Object.entries(data.items ?? {}).map(([prefix, summary]) => ({ prefix, summary })));
+    }
+  }, [data]);
+
+  if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
+  if (loading && !data) {
+    return <div className="prov-grid"><Skeleton lines={2} height={110} /><Skeleton lines={2} height={110} /></div>;
+  }
 
   return (
     <div>
@@ -36,11 +34,10 @@ export function ProvidersPage() {
             errorCount={summary.error_count ?? 0}
           />
         ))}
-        {!providers.length && <div className="empty">暂无数据</div>}
+        {!providers.length && !loading && <Empty text="暂无数据" hint="后端未注册任何提供商" />}
       </div>
       <style>{`
         .prov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-        .empty { text-align: center; color: #6b7280; padding: 40px; font-size: 13px; }
       `}</style>
     </div>
   );

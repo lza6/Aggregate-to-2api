@@ -29,6 +29,7 @@ data/stats.json
 data/queue.db
 data/account_pool.db
 data/email_registry.db
+data/logs/
 api.tar
 
 # Runtime

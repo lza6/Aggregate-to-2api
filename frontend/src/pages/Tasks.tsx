@@ -1,24 +1,18 @@
-import { useEffect, useState } from 'react';
 import { fetchTasks } from '../api';
+import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
+import { useApi } from '../hooks/useApi';
+import { useState } from 'react';
 import type { Task } from '../api';
 
 export function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [total, setTotal] = useState(0);
   const [status, setStatus] = useState('');
+  const { data, loading, error, reload } = useApi(
+    () => fetchTasks({ limit: 50, status: status || undefined }),
+    { intervalMs: 10000 },
+  );
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchTasks({ limit: 50, status: status || undefined });
-        setTasks(data.items);
-        setTotal(data.total);
-      } catch { /* ignore */ }
-    };
-    load();
-    const timer = setInterval(load, 10000);
-    return () => clearInterval(timer);
-  }, [status]);
+  const tasks: Task[] = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -28,6 +22,8 @@ export function TasksPage() {
       default: return '#6b7280';
     }
   };
+
+  if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
 
   return (
     <div>
@@ -66,7 +62,8 @@ export function TasksPage() {
             ))}
           </tbody>
         </table>
-        {!tasks.length && <div className="empty">暂无任务</div>}
+        {loading && !data && <Skeleton lines={4} height={14} />}
+        {!loading && !tasks.length && !error && <Empty text="暂无任务" hint="生成请求提交后会出现在这里" />}
       </div>
       <style>{`
         .table-wrap { overflow-x: auto; background: #fff; border-radius: 12px; border: 1px solid #d1d5e0; }
@@ -75,7 +72,6 @@ export function TasksPage() {
         td { padding: 10px 12px; border-bottom: 1px solid #d1d5e0; }
         tr:last-child td { border-bottom: none; }
         .status-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; }
-        .empty { text-align: center; color: #6b7280; padding: 40px; font-size: 13px; }
         @media (prefers-color-scheme: dark) {
           .table-wrap { background: #1e2132; border-color: #2d3050; }
           th { border-color: #2d3050; color: #8b8fa3; background: #252840; }

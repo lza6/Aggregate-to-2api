@@ -340,6 +340,13 @@ class Settings(BaseSettings):
     if_alert_check_interval: int = Field(
         60, validation_alias="IF_ALERT_CHECK_INTERVAL"
     )
+    # P13: 磁盘日志落盘（空 = 关闭；默认 data/logs）
+    if_log_dir: str = Field(
+        "data/logs", validation_alias="IF_LOG_DIR"
+    )
+    if_log_retention_days: int = Field(
+        14, validation_alias="IF_LOG_RETENTION_DAYS"
+    )
 
     # ── DB ──
     stats_file: str = Field(
@@ -773,6 +780,9 @@ IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
 IF_HEALTH_CHECK_INTERVAL = settings.if_health_check_interval
 IF_HEALTH_CHECK_ENABLED = settings.if_health_check_enabled
 IF_ALERT_CHECK_INTERVAL = settings.if_alert_check_interval
+# P13: 磁盘日志
+IF_LOG_DIR = settings.if_log_dir
+IF_LOG_RETENTION_DAYS = settings.if_log_retention_days
 
 # ── mock 上游开关（E2E/CI；生产留空）──────────────
 MOCK_UPSTREAM = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}

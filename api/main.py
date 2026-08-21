@@ -52,6 +52,8 @@ from .providers.registry import shutdown_all as providers_shutdown
 
 from .metrics_ext import imagefree_metrics as metrics_v2
 from .log_ws import ws_log_handler, register_ws, unregister_ws
+# P13: 磁盘日志落盘（按天滚动，重启可查；/v1/logs 仍走内存 buffer）
+from .disk_logger import setup_disk_logging, teardown_disk_logging
 
 # M3: 结构化日志格式（含 trace_id 占位，日志里以 trace=<id> 呈现）。
 # IMP-08: trace_id 由 LoggingInstrumentor + TraceIdLogFilter 动态追加到 message 末尾，
@@ -176,6 +178,9 @@ async def lifespan(_app: FastAPI):
     init_telemetry()
     # U-02: 注入 WebSocket 日志处理器，所有模块的日志自动广播到前端
     logging.getLogger().addHandler(ws_log_handler)
+    # P13: 磁盘日志落盘（按天滚动 + 保留 IF_LOG_RETENTION_DAYS 天）
+    _disk_log_handler = setup_disk_logging(config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)
+    log.info("磁盘日志已启用: %s（保留 %d 天）", config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)
     await engine.start()
     gallery_cache.start_reaper()
     # IMP-11: 启动时从 DB 恢复缓存
@@ -279,6 +284,8 @@ async def lifespan(_app: FastAPI):
     await shutdown_phase(2.0, "⑧ OTel 关闭", _shutdown_otel())
     # U-02: 移除 WebSocket 日志处理器
     logging.getLogger().removeHandler(ws_log_handler)
+    # P13: 关闭磁盘日志 handler（刷新缓冲）
+    teardown_disk_logging(_disk_log_handler)
     log.info("优雅关闭完成")
 
 
@@ -703,6 +710,28 @@ async def healthz():
         "solver_circuit_open": ssnap["circuit_open"],
         "solve_rejected_total": ssnap["rejected_total"],
         "token_pools": engine.token_pool_manager.pools_snapshot(),  # 各 token 池水位（含 per-proxy 池）
+        # ── P15: providers 段（每家状态 + 上次探测时间）──
+        "providers": {
+            prefix: {
+                "status": p.health_status,
+                "last_check": getattr(p, "last_health_check", None),
+            }
+            for prefix, p in registry.providers.items()
+        },
+        # ── P15: queue 段（三级队列水位 + 各自上限）──
+        "queue": {
+            "admin": engine.queue.count(0),
+            "high": engine.queue.count(1),
+            "normal": engine.queue.count(2),
+            "limits": {
+                "admin": config.ADMIN_QUEUE_MAX,
+                "high": config.HIGH_QUEUE_MAX,
+                "normal": config.NORMAL_QUEUE_MAX,
+            },
+        },
+        # ── P15: log_dir 段（磁盘日志目录与可写性）──
+        "log_dir": {"path": config.IF_LOG_DIR, "writable": os.access(config.IF_LOG_DIR, os.W_OK)
+                    if os.path.isdir(config.IF_LOG_DIR) else False},
     }
 
 
