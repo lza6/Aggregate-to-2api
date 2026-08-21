@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
 
-const BASE = 'http://localhost:4510';
+const BASE = process.env.E2E_BASE || "http://localhost:4510";
 let pass = 0, fail = 0;
 const ok = (name, cond) => { if (cond) { pass++; console.log('  ✅ ' + name); } else { fail++; console.log('  ❌ ' + name); } };
 
