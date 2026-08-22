@@ -1,9 +1,14 @@
 """imagefree_api 配置。全部可用环境变量覆盖，便于部署。
 
 职责：pydantic-settings 集中管理全部 80+ 环境变量（IF_* 前缀）。
-重构候选：967 行，可按功能拆分为 config/model、config/links、config/turnstile 等子模块，
+重构候选：1001 行，可按功能拆分为 config/model、config/links、config/turnstile 等子模块，
 但拆分风险高（模块级单例被全项目 import），当前仅记录不做拆分。
 使用 pydantic-settings 集中管理配置，保持 IF_ 前缀环境变量向后兼容。
+
+[P-SPLIT 降级批准 v3.1.0]（2026-08-22）：本文件与 main.py 均超 800 行规范，
+经评审批准**降级不拆**——模块级单例 `settings` 被全项目 import，拆分需全量回归，
+收益（可读性）< 风险（生产漂移）。拆分候选与方案记录于 计划书/审计报告/拆模块候选.md，
+仅在后续版本需要改该文件时顺手拆，绝不为拆而拆。
 """
 from __future__ import annotations
 
@@ -361,6 +366,8 @@ class Settings(BaseSettings):
     if_base64_file_ttl: int = Field(
         86400, validation_alias="IF_BASE64_FILE_TTL"
     )
+    # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80%
+    if_img_max_gb: float = Field(5.0, validation_alias="IF_IMG_MAX_GB")
     db_retention_days: int = Field(
         365, validation_alias="IF_DB_RETENTION_DAYS"
     )
@@ -430,6 +437,12 @@ class Settings(BaseSettings):
     if_dlq_retention_days: int = Field(
         7, validation_alias="IF_DLQ_RETENTION_DAYS"
     )
+    # S-9: DLQ 真重入队（默认关——重入可能被刷；开启后 retry 端点把任务放回优先级队列）
+    if_dlq_requeue: bool = Field(False, validation_alias="IF_DLQ_REQUEUE")
+    # S-4: 慢日志画像（C2/C3）——阈值/容量/开关
+    if_slow_log_enabled: bool = Field(True, validation_alias="IF_SLOW_LOG_ENABLED")
+    if_slow_request_ms: float = Field(5000.0, validation_alias="IF_SLOW_REQUEST_MS")
+    if_slow_log_size: int = Field(500, validation_alias="IF_SLOW_LOG_SIZE")
     default_model: str = Field(
         "default", validation_alias="IF_DEFAULT_MODEL"
     )
@@ -798,6 +811,7 @@ STATS_FILE = settings.stats_file
 DB_FILE = settings.db_file
 IF_BASE64_DIR = settings.if_base64_dir
 IF_BASE64_FILE_TTL = settings.if_base64_file_ttl
+IF_IMG_MAX_GB = settings.if_img_max_gb
 DB_RETENTION_DAYS = settings.db_retention_days
 DB_CLEANUP_INTERVAL = settings.db_cleanup_interval
 IF_DB_BATCH_ENABLED = settings.if_db_batch_enabled
@@ -825,6 +839,12 @@ IF_IDEMPOTENCY_TTL = settings.if_idempotency_ttl
 IF_DLQ_ENABLED = settings.if_dlq_enabled
 IF_DLQ_MAX_RETRIES = settings.if_dlq_max_retries
 IF_DLQ_RETENTION_DAYS = settings.if_dlq_retention_days
+IF_DLQ_REQUEUE = settings.if_dlq_requeue
+
+# S-4: 慢日志画像（C2/C3）
+IF_SLOW_LOG_ENABLED = settings.if_slow_log_enabled
+IF_SLOW_REQUEST_MS = settings.if_slow_request_ms
+IF_SLOW_LOG_SIZE = settings.if_slow_log_size
 DEFAULT_MODEL = settings.default_model
 
 # ── 纯常量（无环境变量映射）────────────────────────────────
@@ -968,6 +988,7 @@ __all__ = [
     "DB_FILE",
     "IF_BASE64_DIR",
     "IF_BASE64_FILE_TTL",
+    "IF_IMG_MAX_GB",
     "DB_RETENTION_DAYS",
     "DB_CLEANUP_INTERVAL",
     "IF_DB_BATCH_ENABLED",
@@ -993,6 +1014,10 @@ __all__ = [
     "IF_DLQ_ENABLED",
     "IF_DLQ_MAX_RETRIES",
     "IF_DLQ_RETENTION_DAYS",
+    "IF_DLQ_REQUEUE",
+    "IF_SLOW_LOG_ENABLED",
+    "IF_SLOW_REQUEST_MS",
+    "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",

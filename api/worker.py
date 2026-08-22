@@ -28,6 +28,9 @@ from .retry_policy import RetryPolicy
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
 from .solver_guard import solver_guard
 from .telemetry import get_tracer
+# S-4: 慢日志画像打点 + S-7: worker 心跳
+from .slow_log import SlowSample, slow_log
+from .worker_health import worker_health
 
 log = logging.getLogger("engine")
 
@@ -440,6 +443,8 @@ class Engine:
         self._started_at = time.time()
         self._workers: list[_WorkerHandle] = []
         self._auto_scaler_task: asyncio.Task | None = None
+        # S-4: 入队时刻表（task_id → monotonic），worker 取走时算 queue_ms；终态后清理
+        self._enqueued_at: dict[str, float] = {}
         # ── 持久化队列（IMP-29）─────────────────────────
         self._persistent_queue = config.IF_PERSISTENT_QUEUE_ENABLED
         self._queue_db: QueueDB | None = None
@@ -502,6 +507,7 @@ class Engine:
             seq = self._next_seq()
             self.queue.put_nowait((priority, seq, task_id))
             self._queue_counts[priority] = self._queue_counts.get(priority, 0) + 1
+            self._enqueued_at[task_id] = time.monotonic()
             # IMP-29: 持久化队列写入
             if self._persistent_queue and self._queue_db:
                 self._queue_db.enqueue(task_id, priority, seq)
@@ -513,6 +519,29 @@ class Engine:
     def _next_seq(self) -> int:
         self._seq += 1
         return self._seq
+
+    async def requeue_dlq_task(self, task_id: str) -> bool:
+        """S-9: DLQ 真重入队——把失败任务重置为 pending 并放回 normal 队列。
+
+        仅当 IF_DLQ_REQUEUE=1 时由端点调用；队列满返回 False（记录保留在 DLQ）。
+        """
+        row = await self.db.get(task_id)
+        if not row:
+            return False
+        await self.db.mark_pending_again(task_id)
+        try:
+            seq = self._next_seq()
+            self.queue.put_nowait((2, seq, task_id))
+            self._queue_counts[2] = self._queue_counts.get(2, 0) + 1
+            self._enqueued_at[task_id] = time.monotonic()
+        except asyncio.QueueFull:
+            # 队列满：回滚状态标记，保持 error，让调用方决定
+            await self.db.mark_finished(task_id, "error", None, "requeue_failed: queue_full", None)
+            return False
+        if self._persistent_queue and self._queue_db:
+            self._queue_db.enqueue(task_id, 2, seq)
+        log.info("DLQ 重入队: task %s 已放回 normal 队列", task_id)
+        return True
 
     async def wait_result(self, task_id: str, timeout: float) -> dict:
         """同步接口：轮询直到终态或超时。"""
@@ -567,6 +596,8 @@ class Engine:
             task = asyncio.create_task(self._worker_batch_loop(idx, stop_event))
         else:
             task = asyncio.create_task(self._worker_loop(idx, stop_event))
+        # S-7: 同步心跳注册表（扩缩容增减时保持一致）
+        worker_health.register([w.id for w in self._workers] + [idx])
         return _WorkerHandle(idx, task, stop_event)
 
     # ── 队列入队速率统计（P-04）─────────────────────
@@ -612,6 +643,7 @@ class Engine:
                     if w.id == idx:
                         w.last_active = time.monotonic()
                         break
+            worker_health.beat(idx)
             self.processing += len(tasks)
             # 并行处理
             try:
@@ -620,6 +652,7 @@ class Engine:
                         *(self._process(tid) for _, _, tid in tasks),
                         return_exceptions=True,
                     )
+                worker_health.add_processed(idx, len(tasks))
                 for task_item, result in zip(tasks, results):
                     _, _, tid = task_item
                     if isinstance(result, asyncio.TimeoutError):
@@ -667,10 +700,12 @@ class Engine:
                     if w.id == idx:
                         w.last_active = time.monotonic()
                         break
+            worker_health.beat(idx)
             self.processing += 1
             try:
                 async with asyncio.timeout(config.TASK_HARD_TIMEOUT):
                     await self._process(task_id)
+                worker_health.add_processed(idx)
             except asyncio.TimeoutError:
                 log.error("task %s 硬超时（%ss），强制回收", task_id, config.TASK_HARD_TIMEOUT)
                 await self.db.mark_finished(task_id, "error", None,
@@ -733,6 +768,7 @@ class Engine:
 
             if should_shrink:
                 self._shrink_one_worker()
+                worker_health.register([w.id for w in self._workers])
                 log.info("自动缩容: %d → %d（%s）",
                          current, len(self._workers), reason)
 
@@ -765,6 +801,11 @@ class Engine:
             self._queue_db.mark_processing(task_id)
         t0 = time.monotonic()
         last_error: str | None = None
+        # S-4: 慢日志画像阶段计时（queue_ms = worker 取走 → 开始处理）
+        queue_ms = (t0 - self._enqueued_at.get(task_id, t0)) * 1000.0
+        self._enqueued_at.pop(task_id, None)
+        _slow = {"queue": queue_ms, "wait_token": 0.0, "solve": 0.0,
+                 "upstream": 0.0, "retry": 0.0}
         # IMP-05: 使用统一 RetryPolicy 处理 transient 错误重试
         # IMP-08: 创建任务处理 span，trace_id 贯穿所有子操作
         tracer = get_tracer()
@@ -782,7 +823,9 @@ class Engine:
                     "worker.acquire_token",
                     attributes={"attempt": attempt},
                 ):
+                    _tk0 = time.monotonic()
                     token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
+                    _slow["wait_token"] += (time.monotonic() - _tk0) * 1000.0
                 if token is None:
                     # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
                     last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
@@ -797,7 +840,9 @@ class Engine:
                             "task.model": row.get("model", "default"),
                         },
                     ):
+                        _up0 = time.monotonic()
                         result = await self._generate_once(row, token)
+                        _slow["upstream"] += (time.monotonic() - _up0) * 1000.0
                 except Exception as e:
                     last_error = str(e)
                     if _is_token_rejected(e):
@@ -811,6 +856,7 @@ class Engine:
                         delay = RetryPolicy.backoff_delay(attempt, base)
                         log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
                                     task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
+                        _slow["retry"] += delay * 1000.0
                         await asyncio.sleep(delay)
                         continue
                     # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
@@ -822,11 +868,13 @@ class Engine:
                     await self._finish(task_id, "completed", result["image_url"], None, t0,
                                  result.get("image_base64"), result.get("image_mime"))
                     log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
+                    self._record_slow(task_id, row, _slow, t0, "completed")
                     return
             # 重试耗尽 → DLQ 标记
         dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
         dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
         await self._finish(task_id, "error", None, dlq_msg, t0)
+        self._record_slow(task_id, row, _slow, t0, "error")
         # IMP-21: 重试满后如有 DLQ 配置则推入死信队列
         if config.IF_DLQ_ENABLED:
             row = await self.db.get(task_id)
@@ -834,6 +882,25 @@ class Engine:
             await self.db.push_dlq(task_id, model, last_error, config.IF_TXT_RETRY_MAX)
             log.info("DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
                      task_id, model, last_error, config.IF_TXT_RETRY_MAX)
+
+    def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float,
+                     status: str) -> None:
+        """S-4: 任务终态时提交慢日志画像（阈值内静默忽略）。"""
+        try:
+            slow_log.record(SlowSample(
+                task_id=task_id,
+                model=row.get("model", "default"),
+                provider=row.get("model", "default").split("/", 1)[0] if row.get("model") else "imagefree",
+                queue_ms=slow["queue"],
+                wait_token_ms=slow["wait_token"],
+                solve_ms=slow["solve"],
+                upstream_ms=slow["upstream"],
+                retry_ms=slow["retry"],
+                total_ms=(time.monotonic() - t0) * 1000.0 + slow["queue"],
+                status=status,
+            ))
+        except Exception as e:  # 画像失败绝不影响主流程
+            log.debug("慢日志记录失败（可忽略）: %s", e)
 
     async def _finish(self, task_id: str, status: str, image_url: str | None,
                 error: str | None, t0: float,

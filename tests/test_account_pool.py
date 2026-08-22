@@ -148,3 +148,64 @@ class TestEmailPool:
         assert s["total_registered"] == 1
         assert s["by_provider"].get("nanobanana") == 1
         p._conn.close()
+
+
+# ── P-TEST-A7 追加：dashboard 结构与补号暂停分支 ──────────────
+
+class TestAccountPoolDashboard:
+    def test_dashboard_structure(self, pool):
+        d = pool.dashboard()
+        for prov in ("minimaxh3", "nanobanana"):
+            assert prov in d
+            entry = d[prov]
+            for key in ("total", "ok", "exhausted", "registering", "credits", "target", "auto_register"):
+                assert key in entry, f"{prov} 缺字段 {key}"
+        assert d["minimaxh3"]["target"] == 500
+        assert d["nanobanana"]["target"] == 500
+        assert d["minimaxh3"]["auto_register"] is False  # 未注入注册器
+
+    def test_dashboard_counts_reflect_state(self, pool):
+        pool.add("minimaxh3", "a@x.com", "c1", credits=4)
+        pool.add("minimaxh3", "b@x.com", "c2", credits=0)
+        pool.mark("minimaxh3", "b@x.com", "exhausted")
+        d = pool.dashboard()
+        assert d["minimaxh3"]["total"] == 2
+        assert d["minimaxh3"]["ok"] == 1
+        assert d["minimaxh3"]["exhausted"] == 1
+        assert d["minimaxh3"]["credits"] == 4
+
+
+@pytest.mark.asyncio
+async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
+    """P-TEST-A7: 无任何可用代理且非 mock → 补号循环暂停（不注册）。"""
+    from api.account_pool import AccountPool
+    from api import proxy_pool as pp_mod
+
+    # 确保代理池为空 + 非 mock 模式
+    monkeypatch.setattr(pp_mod.proxy_pool, "entries", [])
+    monkeypatch.setattr("api.providers.base.MOCK_REGISTER", False)
+    monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)
+    monkeypatch.setattr("api.account_pool.TARGET_MINIMAXH3", 1)
+
+    p = AccountPool(str(tmp_path / "acc.db"))
+    calls = []
+
+    class _Reg:
+        async def register_one(self):
+            calls.append(1)
+            return None
+
+    p.registerers["minimaxh3"] = _Reg()
+    p.proxy = None
+    task = asyncio.create_task(p._autoregister_loop("minimaxh3"))
+    try:
+        await asyncio.sleep(0.8)  # 冷却 0.1s 内应循环多次但都不注册
+        assert calls == []  # 无代理守卫生效：未触发任何注册
+        assert len(p.get("minimaxh3")) == 0
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        p._conn.close()

@@ -55,3 +55,10 @@ graft/
 
 # Claude worktrees
 .claude/worktrees/
+
+# v3.1.0 构建缓存/诊断产物（可再生成，不入库）
+frontend/tsconfig.app.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
+htmlcov/
+*.db-shm
+*.db-wal

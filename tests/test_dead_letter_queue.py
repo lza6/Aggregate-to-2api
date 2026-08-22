@@ -148,3 +148,69 @@ class TestDeadLetterQueueWorker:
             assert len(dlq_items) == 0
         finally:
             await e.stop()
+
+class TestDLQRequeueEngine:
+    """S-9: DLQ 真重入队——引擎层（mark_pending_again + requeue_dlq_task）。"""
+
+    @pytest.mark.asyncio
+    async def test_mark_pending_again_resets_fields(self, tmp_db: DB):
+        await tmp_db.create_request("t-rq", "p", "1:1", False)
+        await tmp_db.mark_started("t-rq")
+        await tmp_db.mark_finished("t-rq", "error", None, "boom", 1.0)
+        await tmp_db.mark_pending_again("t-rq")
+        row = await tmp_db.get("t-rq")
+        assert row["status"] == "pending"
+        assert row["error"] is None
+        assert row["duration_sec"] is None
+
+    @pytest.mark.asyncio
+    async def test_requeue_dlq_task_puts_back_to_queue(self, tmp_db):
+        """失败任务 → requeue → 出现在队列中且状态 pending。"""
+        from api.worker import Engine
+        eng = Engine(tmp_db)
+        await tmp_db.create_request("t-rq2", "p", "1:1", False)
+        await tmp_db.mark_finished("t-rq2", "error", None, "upstream err", 1.0)
+        ok = await eng.requeue_dlq_task("t-rq2")
+        assert ok is True
+        assert eng.queue.qsize() == 1
+        priority, seq, tid = eng.queue.get_nowait()
+        assert tid == "t-rq2"
+        assert priority == 2  # normal 队列
+        # 入队时刻已登记（S-4 打点）
+        assert "t-rq2" in eng._enqueued_at
+
+    @pytest.mark.asyncio
+    async def test_requeue_nonexistent_task(self, tmp_db):
+        from api.worker import Engine
+        eng = Engine(tmp_db)
+        ok = await eng.requeue_dlq_task("no-such-task")
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_requeue_config_flag_default_off(self):
+        from api import config
+        # 默认关：防止被刷；端点行为由集成测试覆盖
+        assert config.IF_DLQ_REQUEUE is False
+
+    @pytest.mark.asyncio
+    async def test_requeue_queue_full_rolls_back(self, tmp_db):
+        """队列满时重入队失败且状态回滚为 error。"""
+        from api.worker import Engine, QueueFull  # noqa: F401
+        eng = Engine(tmp_db)
+        # 填满 normal 队列（默认 NORMAL_QUEUE_MAX 可能很大，用 monkeypatch 缩小）
+        import api.config as cfg
+        monkey_old = cfg.NORMAL_QUEUE_MAX
+        cfg.NORMAL_QUEUE_MAX = 1
+        try:
+            eng.queue._limits[2] = 1 if hasattr(eng.queue, "_limits") else None
+            # 直接塞一个占位
+            eng.queue.put_nowait((2, 99999, "filler"))
+            await tmp_db.create_request("t-full", "p", "1:1", False)
+            await tmp_db.mark_finished("t-full", "error", None, "e", 1.0)
+            ok = await eng.requeue_dlq_task("t-full")
+            assert ok is False
+            row = await tmp_db.get("t-full")
+            assert row["status"] == "error"
+            assert "requeue_failed" in (row["error"] or "")
+        finally:
+            cfg.NORMAL_QUEUE_MAX = monkey_old

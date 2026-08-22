@@ -44,6 +44,16 @@ class TestFullFlow:
         assert "queued" in body
         assert "workers" in body
         assert "token_pool" in body
+        # P15: 新增段
+        assert "providers" in body
+        assert set(body["providers"]) >= {"imagefree", "minimaxh3", "aifreeforever", "nanobanana"}
+        for p in body["providers"].values():
+            assert "status" in p and "last_check" in p
+        assert "queue" in body
+        assert set(body["queue"]) >= {"admin", "high", "normal", "limits"}
+        assert body["queue"]["limits"]["admin"] == 200
+        assert "log_dir" in body
+        assert "path" in body["log_dir"] and "writable" in body["log_dir"]
 
     async def test_models_endpoint(self, app_with_mocks):
         """模型列表端点返回已知模型。"""
@@ -74,3 +84,25 @@ class TestFullFlow:
         body = r.json()
         assert "items" in body
         assert "count" in body
+
+@pytest.mark.integration
+class TestIdempotencyFlow:
+    """P-TEST-A8: 幂等 key 集成链路（conftest 已设 IF_IDEMPOTENCY_ENABLED=1）。"""
+
+    async def test_same_key_returns_same_task(self, app_with_mocks):
+        payload = {"prompt": "a cat", "aspect_ratio": "1:1",
+                   "model": "imagefree/default", "idempotency_key": "itg-key-001"}
+        r1 = await app_with_mocks.post("/v1/generate/async", json=payload)
+        assert r1.status_code == 200
+        r2 = await app_with_mocks.post("/v1/generate/async", json=payload)
+        assert r2.status_code == 200
+        assert r1.json()["id"] == r2.json()["id"]
+
+    async def test_different_key_different_task(self, app_with_mocks):
+        r1 = await app_with_mocks.post("/v1/generate/async", json={
+            "prompt": "a cat", "aspect_ratio": "1:1", "model": "imagefree/default",
+            "idempotency_key": "itg-key-a"})
+        r2 = await app_with_mocks.post("/v1/generate/async", json={
+            "prompt": "a cat", "aspect_ratio": "1:1", "model": "imagefree/default",
+            "idempotency_key": "itg-key-b"})
+        assert r1.json()["id"] != r2.json()["id"]

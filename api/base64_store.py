@@ -120,3 +120,84 @@ def clean_expired(ttl: float) -> int:
     if deleted:
         log.info("base64 文件清理: 删除 %d 个过期文件", deleted)
     return deleted
+
+
+# ── S-14: 配额保护 ──────────────────────────────────
+
+
+def dir_size_gb(directory: str) -> float:
+    """递归统计目录文件总体积（GB），目录不存在返回 0.0。"""
+    d = os.path.abspath(directory)
+    if not os.path.isdir(d):
+        return 0.0
+    total = 0
+    for root, _dirs, files in os.walk(d):
+        for fname in files:
+            try:
+                total += os.path.getsize(os.path.join(root, fname))
+            except OSError:
+                continue
+    return total / (1024 ** 3)
+
+
+def list_oldest_files(directory: str, n: int | None = None) -> list[str]:
+    """按 mtime 升序（旧→新）返回目录内普通文件绝对路径列表。
+
+    n 为 None 返回全部；目录不存在返回空列表。
+    """
+    d = os.path.abspath(directory)
+    if not os.path.isdir(d):
+        return []
+    files = []
+    for root, _dirs, fnames in os.walk(d):
+        for fname in fnames:
+            fpath = os.path.join(root, fname)
+            try:
+                files.append((os.path.getmtime(fpath), fpath))
+            except OSError:
+                continue
+    files.sort(key=lambda t: t[0])
+    paths = [fpath for _mtime, fpath in files]
+    if n is not None:
+        return paths[:max(0, n)]
+    return paths
+
+
+def enforce_quota(directory: str, max_gb: float,
+                  audit_fn=None) -> int:
+    """配额保护：目录超过 max_gb 上限时，按 mtime 从旧到新删除文件直至 ≤80% 上限。
+
+    audit_fn(path: str, detail: str) 可选回调（生产由 main 传入 audit_log.record）。
+    只删文件不删 DB 引用（file:// 路径失效时 _row_to_dict 返回 None，已容忍）。
+    返回删除文件数。
+    """
+    d = os.path.abspath(directory)
+    if max_gb <= 0 or not os.path.isdir(d):
+        return 0
+    size = dir_size_gb(d)
+    target_gb = max_gb * 0.8
+    if size <= target_gb:
+        return 0
+    deleted = 0
+    freed = 0.0
+    for fpath in list_oldest_files(d):
+        try:
+            fsize_gb = os.path.getsize(fpath) / (1024 ** 3)
+            os.unlink(fpath)
+            freed += fsize_gb
+            deleted += 1
+            if audit_fn is not None:
+                try:
+                    audit_fn(fpath,
+                             f"配额 {max_gb}GB 超限（当前 {size:.2f}GB），删除至 {target_gb}GB")
+                except Exception:  # 审计回调失败不阻断清理
+                    log.warning("base64 配额审计写入失败 %s", fpath)
+        except OSError as e:
+            log.warning("base64 配额清理失败 %s: %s", fpath, e)
+            continue
+        if size - freed <= target_gb:
+            break
+    if deleted:
+        log.info("base64 配额保护: 删除 %d 个文件（%s 超过 %.1fGB 上限）",
+                 deleted, config.IF_BASE64_DIR, max_gb)
+    return deleted

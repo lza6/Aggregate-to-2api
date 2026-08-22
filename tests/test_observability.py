@@ -104,3 +104,43 @@ class TestHealthz:
         assert await _probe_cf_solver() is True
         # force 刷新会真的尝试连接（结果取决于环境），只验证不抛异常
         await _probe_cf_solver(force=True)
+
+
+# ── P13/P15: 磁盘日志与 healthz 新段单测 ──────────────
+
+class TestDiskLogger:
+    def test_setup_creates_dir_and_writes(self, tmp_path):
+        import logging
+        from api.disk_logger import setup_disk_logging, teardown_disk_logging
+        log_dir = str(tmp_path / "logs")
+        h = setup_disk_logging(log_dir, retention_days=3)
+        try:
+            logging.getLogger("disk.test").info("hello-disk")
+            h.flush()
+            import os, glob
+            files = glob.glob(os.path.join(log_dir, "imagefree-api.log*"))
+            assert files, f"日志目录无文件: {os.listdir(log_dir) if os.path.isdir(log_dir) else log_dir}"
+            content = ""
+            for f in files:
+                with open(f, encoding="utf-8") as fh:
+                    content += fh.read()
+            assert "hello-disk" in content
+        finally:
+            teardown_disk_logging(h)
+
+    def test_teardown_removes_handler(self, tmp_path):
+        import logging
+        from api.disk_logger import setup_disk_logging, teardown_disk_logging
+        h = setup_disk_logging(str(tmp_path / "logs2"))
+        assert h in logging.getLogger().handlers
+        teardown_disk_logging(h)
+        assert h not in logging.getLogger().handlers
+
+    def test_rotation_keeps_backup_count(self, tmp_path):
+        """TimedRotatingFileHandler 配置了 backupCount=保留天数。"""
+        from api.disk_logger import setup_disk_logging
+        import logging
+        h = setup_disk_logging(str(tmp_path / "logs3"), retention_days=5)
+        assert h.backupCount == 5
+        logging.getLogger().removeHandler(h)
+        h.close()

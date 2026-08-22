@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>免责声明 - imagefree API</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1c23;
+            --border: #2a2d3a;
+            --text: #e4e6f0;
+            --text-secondary: #8a8fa8;
+            --accent: #6c8cff;
+            --accent-hover: #8aa4ff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.8;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 60px 24px 100px;
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .last-updated {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 40px;
+        }
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 32px;
+            margin-bottom: 12px;
+            color: var(--accent);
+        }
+        p, li {
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        ul {
+            padding-left: 20px;
+            margin-bottom: 16px;
+        }
+        li {
+            margin-bottom: 6px;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 40px 0;
+        }
+        .footer-note {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 60px;
+            opacity: 0.6;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>免责声明</h1>
+    <p class="last-updated">最后更新：2026 年 8 月 22 日</p>
+
+    <p>在适用法律允许的最大范围内，imagefree API（以下简称"本服务"）按<strong>"现状"（AS IS）</strong>提供，不作任何明示或暗示的保证。</p>
+
+    <h2>1. 服务可用性免责</h2>
+    <ul>
+        <li>本服务尽商业合理努力保障可用性，但<strong>不提供任何 SLA</strong>，不对可用时间、响应时间或故障恢复时间作出承诺。</li>
+        <li>因系统维护、升级、故障、不可抗力、网络安全事件或第三方原因导致的服务中断、延迟或数据丢失，本服务不承担责任。</li>
+        <li>本服务聚合多个第三方 AI 提供商，上游服务的不稳定或中断可能导致生成失败，本服务对此不承担责任。</li>
+    </ul>
+
+    <h2>2. 生成结果免责</h2>
+    <ul>
+        <li>AI 图像生成结果具有<strong>不确定性</strong>。我们不保证生成结果的质量、准确性、适当性或符合您的预期。</li>
+        <li>生成内容可能包含不符合预期的元素、偏差或错误，您应基于自身判断决定是否使用生成结果。</li>
+        <li>因使用生成结果而导致的任何直接或间接损失，本服务不承担责任。</li>
+    </ul>
+
+    <h2>3. 用户行为免责</h2>
+    <ul>
+        <li>本服务不承担对用户生成内容进行<strong>事前审核</strong>的义务。用户应对其提交与发布的内容独立承担全部法律责任。</li>
+        <li>因用户违规使用本服务（包括但不限于滥用、自动化刷接口、恶意攻击等）所引发的一切后果与纠纷，由用户自行承担。</li>
+        <li>禁止将本服务用于任何违反法律法规或侵犯第三方权益的场景，否则因此产生的全部责任由用户承担。</li>
+    </ul>
+
+    <h2>4. 第三方链接与内容</h2>
+    <p>本服务的文档与页面可能包含指向第三方网站或服务的链接。这些第三方内容不受本服务控制，本服务不对其可用性与真实性负责，也不对其内容作任何背书。</p>
+
+    <h2>5. 法律适用</h2>
+    <p>本免责声明及本服务相关条款适用中华人民共和国法律。因使用本服务产生的争议，双方应友好协商解决；协商不成的，提交服务提供方所在地有管辖权的人民法院解决。</p>
+
+    <hr>
+    <p class="footer-note"><a href="/v1/terms">返回条款总览</a> · 听风 AI 团队 &copy; 2026 imagefree API</p>
+</div>
+</body>
+</html>

@@ -213,3 +213,64 @@ async def test_scale_down_per_cycle_limited(auto_scale_config, tmp_db):
         assert len(e._workers) == 2  # 已达 MIN
     finally:
         await e.stop()
+
+# ── P-TEST-A3 追加：_shrink_one_worker 与 _resume_from_queue ─────────
+
+@pytest.mark.asyncio
+async def test_shrink_one_worker_removes_most_idle(auto_scale_config, tmp_db):
+    """缩容应移除 last_active 最旧（最空闲）的 worker。
+
+    不 start()（避免 auto_scaler 后台循环并发干扰），直接手动构造 worker 句柄。
+    """
+    engine = Engine(tmp_db)
+    now = time.monotonic()
+    for i in range(3):
+        engine._workers.append(engine._create_worker(i))
+    for i, w in enumerate(engine._workers):
+        w.last_active = now - (100 - i * 10)  # 第一个最空闲
+    oldest = min(engine._workers, key=lambda w: w.last_active)
+    engine._shrink_one_worker()
+    assert oldest.id not in [w.id for w in engine._workers]
+    assert len(engine._workers) == 2
+    # 清理：停掉残余 worker 协程
+    for w in engine._workers:
+        w.stop_event.set()
+        w.task.cancel()
+
+
+@pytest.mark.asyncio
+async def test_shrink_on_empty_workers_noop(tmp_db):
+    from api.worker import Engine
+    engine = Engine(tmp_db)
+    engine._shrink_one_worker()  # 空 worker 列表不抛错
+    assert engine._workers == []
+
+
+@pytest.mark.asyncio
+async def test_resume_from_queue_without_db_returns_zero(tmp_db):
+    """未启用持久化队列（_queue_db=None）→ 恢复 0 条。"""
+    from api.worker import Engine
+    engine = Engine(tmp_db)
+    assert engine._resume_from_queue() == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_scale_once_respects_upper_bound_hard(auto_scale_config, tmp_db, monkeypatch):
+    """扩容目标绝不超过 IF_WORKERS_MAX（min(current+2, MAX) 截断）。
+
+    不 start()（避免后台循环与 worker 消费干扰），手动放 1 个 worker + 排队，
+    MAX 压到 2：扩容一次后 worker 数 = 2（而非 1+2=3）。
+    """
+    monkeypatch.setattr(config, "IF_WORKERS_MAX", 2)
+    monkeypatch.setattr(config, "IF_WORKER_SCALE_UP_THRESHOLD", 0)
+    engine = Engine(tmp_db)
+    engine._workers.append(engine._create_worker(0))
+    try:
+        for i in range(3):
+            engine.queue.put_nowait((2, i, f"fake-{i}"))
+        await engine._auto_scale_once()
+        assert len(engine._workers) == 2  # min(1+2, 2) = 2
+    finally:
+        for w in engine._workers:
+            w.stop_event.set()
+            w.task.cancel()

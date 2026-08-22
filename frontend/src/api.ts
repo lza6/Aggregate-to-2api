@@ -122,6 +122,35 @@ export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {
   return res.json();
 }
 
+// ── v3.1.0 S-6/S-7: 只读诊断 + worker 健康 ──
+export interface DiagnosticsWorker {
+  id: number;
+  alive: boolean;
+  stale: boolean;
+  last_active_ago_seconds: number;
+  processed: number;
+}
+export interface Diagnostics {
+  status: string;
+  timestamp: number;
+  db: { size_mb: number | null; wal_size_mb: number; rows: number };
+  queue: { queued: number; capacity: number; admin: number; high: number; normal: number; processing: number };
+  workers: { total: number; alive: number; stale_count: number; stale_ids: number[]; detail: DiagnosticsWorker[] };
+  token_pools: Record<string, unknown>;
+  solver: { status: string; circuit_open: boolean; window_success_rate: number | null; avg_solve_seconds: number | null };
+  slow_log: { count: number; avg_total_ms: number; max_total_ms: number; slowest_stage: string | null };
+  disk: {
+    free_gb: number | null; total_gb: number | null; used_percent: number | null;
+    log_dir_writable: boolean;
+  };
+  uptime_seconds: number;
+}
+
+export async function fetchDiagnostics(): Promise<Diagnostics> {
+  const res = await fetch(`${API_BASE}/v1/diagnostics`);
+  return res.json();
+}
+
 export async function fetchAccountPool(): Promise<any> {
   const res = await fetch(`${API_BASE}/v1/account-pool`);
   return res.json();

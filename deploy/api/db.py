@@ -358,6 +358,19 @@ class DB:
                 (time.time(), task_id),
             )
 
+    async def mark_pending_again(self, task_id: str) -> None:
+        """S-9: DLQ 重入队——重置为 pending 并清空错误信息（等待 worker 重新处理）。"""
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            "db.mark_pending_again",
+            attributes={"task.id": task_id},
+        ):
+            await self._enqueue_write(
+                "UPDATE requests SET status='pending', error=NULL, started_at=NULL,"
+                " finished_at=NULL, duration_sec=NULL WHERE id=?",
+                (task_id,),
+            )
+
     async def mark_finished(self, task_id: str, status: str, image_url: str | None,
                             error: str | None, duration_sec: float | None,
                             image_base64: str | None = None, image_mime: str | None = None) -> None:

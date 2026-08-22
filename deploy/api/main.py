@@ -50,8 +50,16 @@ from .providers.registry import bootstrap as providers_bootstrap
 from .providers.registry import startup_all as providers_startup
 from .providers.registry import shutdown_all as providers_shutdown
 
+# S-3/S-4: 慢日志画像（按配置重置单例参数）
+from .slow_log import slow_log as _slow_log
+_slow_log._enabled = config.IF_SLOW_LOG_ENABLED
+_slow_log._threshold_ms = config.IF_SLOW_REQUEST_MS
+_slow_log._buf = __import__("collections").deque(maxlen=max(1, config.IF_SLOW_LOG_SIZE))
+
 from .metrics_ext import imagefree_metrics as metrics_v2
 from .log_ws import ws_log_handler, register_ws, unregister_ws
+# S-7: worker 心跳巡检单例
+from .worker_health import worker_health
 # P13: 磁盘日志落盘（按天滚动，重启可查；/v1/logs 仍走内存 buffer）
 from .disk_logger import setup_disk_logging, teardown_disk_logging
 
@@ -165,11 +173,26 @@ async def _run_background_tasks():
             except Exception as e:
                 log.warning("provider 恢复探测循环异常: %s", e)
 
+    async def _worker_sweep_loop() -> None:
+        """S-7: worker 心跳巡检（30s 一轮，标记超期未活跃 worker 为 stale）。"""
+        while True:
+            try:
+                await asyncio.sleep(30)
+                newly = worker_health.sweep()
+                if newly:
+                    log.warning("worker 卡死巡检: %d 个 worker 超期未活跃（stale）: %s",
+                                len(newly), newly)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("worker 巡检循环异常: %s", e)
+
     async with asyncio.TaskGroup() as tg:
         tg.create_task(_cleanup_loop())
         if config.IF_HEALTH_CHECK_ENABLED:
             tg.create_task(_health_check_loop(config.IF_HEALTH_CHECK_INTERVAL))
         tg.create_task(_provider_recover_loop())
+        tg.create_task(_worker_sweep_loop())
 
 
 @asynccontextmanager
@@ -296,7 +319,7 @@ gallery_cache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.IF_LRU_CAC
 
 app = FastAPI(
     title="imagefree API",
-    version="2.2.0",
+    version="3.1.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
                 "高并发异步队列，文档见首页 GET /，Swagger 见 /docs。",
     lifespan=lifespan,
@@ -1332,9 +1355,18 @@ async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
 
 @app.post("/v1/dead-letter-queue/{task_id}/retry")
 async def retry_dlq_task(task_id: str, request: Request):
-    """从死信队列移除指定任务（清空记录，重新入队重试语义）。"""
+    """死信队列重试：IF_DLQ_REQUEUE=1 时真重入队（重置 pending 放回 normal 队列）；
+    默认（0）保持旧行为——仅移除 DLQ 记录。"""
     client_ip = request.client.host if request.client else "unknown"
     audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
+    if config.IF_DLQ_REQUEUE:
+        requeued = await engine.requeue_dlq_task(task_id)
+        if not requeued:
+            raise AppError(ErrorCodes.BAD_REQUEST,
+                           f"任务 {task_id} 重入队失败（不存在或队列已满）", 409)
+        await db.retry_dlq(task_id)
+        return {"status": "ok",
+                "detail": f"任务 {task_id} 已重新入队（pending，等待 worker 处理）"}
     await db.retry_dlq(task_id)
     return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
 
@@ -1353,6 +1385,95 @@ async def get_proxy_pool():
     """代理池实时状态：住宅代理数/免费代理数/可用数/冷却数 + 前 20 条明细。"""
     from .proxy_pool import proxy_pool
     return proxy_pool.snapshot()
+
+
+# ── S-3/S-4: 慢日志画像端点（只读）──────────────────
+@app.get("/v1/slow")
+async def get_slow_requests(limit: int = Query(50, ge=1, le=500)):
+    """慢请求画像：最近超阈值样本 + 阶段聚合统计（定位慢在排队/求解/上游）。"""
+    items = _slow_log.snapshot()[-limit:]
+    return {
+        "threshold_ms": config.IF_SLOW_REQUEST_MS,
+        "enabled": config.IF_SLOW_LOG_ENABLED,
+        "stats": _slow_log.stats(),
+        "items": [
+            {
+                "task_id": s.task_id,
+                "model": s.model,
+                "provider": s.provider,
+                "queue_ms": round(s.queue_ms, 1),
+                "wait_token_ms": round(s.wait_token_ms, 1),
+                "solve_ms": round(s.solve_ms, 1),
+                "upstream_ms": round(s.upstream_ms, 1),
+                "retry_ms": round(s.retry_ms, 1),
+                "total_ms": round(s.total_ms, 1),
+                "slowest_stage": s.slowest_stage(),
+                "status": s.status,
+                "created_at": s.created_at,
+            }
+            for s in reversed(items)  # 最新在前
+        ],
+        "count": len(items),
+    }
+
+
+# ── S-6: 只读诊断端点 ──────────────────────────────
+@app.get("/v1/diagnostics")
+async def diagnostics():
+    """一键体检（零副作用只读）：DB/队列/worker/token 池/代理池/磁盘/慢日志。"""
+    import shutil as _shutil
+    # DB 文件大小与 WAL
+    db_file = Path(config.DB_FILE)
+    db_size_mb = round(db_file.stat().st_size / 1024 / 1024, 2) if db_file.exists() else None
+    wal_path = Path(str(db_file) + "-wal")
+    wal_size_mb = round(wal_path.stat().st_size / 1024 / 1024, 2) if wal_path.exists() else 0.0
+    # 磁盘余量（data 所在分区）
+    try:
+        du = _shutil.disk_usage(str(db_file.parent if db_file.exists() else Path(".")))
+        disk_free_gb = round(du.free / 1024 ** 3, 2)
+        disk_total_gb = round(du.total / 1024 ** 3, 2)
+        disk_used_pct = round((du.used / du.total) * 100, 1) if du.total else None
+    except OSError:
+        disk_free_gb = disk_total_gb = disk_used_pct = None
+    snap = engine.snapshot()
+    ssnap = solver_guard.snapshot()
+    return {
+        "status": "ok",
+        "timestamp": int(time.time()),
+        "db": {
+            "file": config.DB_FILE,
+            "size_mb": db_size_mb,
+            "wal_size_mb": wal_size_mb,
+            "rows": await db.count(),
+            "batch_enabled": config.IF_DB_BATCH_ENABLED,
+        },
+        "queue": {
+            "queued": snap["queued"],
+            "capacity": snap["queue_capacity"],
+            "admin": engine.queue.count(0),
+            "high": engine.queue.count(1),
+            "normal": engine.queue.count(2),
+            "processing": engine.processing,
+        },
+        "workers": {**worker_health.summary(), "detail": worker_health.snapshot()},
+        "token_pools": engine.token_pool_manager.pools_snapshot(),
+        "solver": {
+            "status": ssnap["solver_status"],
+            "circuit_open": ssnap["circuit_open"],
+            "window_success_rate": ssnap["window_success_rate"],
+            "avg_solve_seconds": ssnap["solve_avg_seconds"],
+        },
+        "slow_log": {"config_threshold_ms": config.IF_SLOW_REQUEST_MS,
+                     **_slow_log.stats()},
+        "disk": {
+            "free_gb": disk_free_gb,
+            "total_gb": disk_total_gb,
+            "used_percent": disk_used_pct,
+            "log_dir_writable": os.access(config.IF_LOG_DIR, os.W_OK)
+                                if os.path.isdir(config.IF_LOG_DIR) else False,
+        },
+        "uptime_seconds": snap["uptime_seconds"],
+    }
 
 
 if __name__ == "__main__":
