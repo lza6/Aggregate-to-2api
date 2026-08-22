@@ -25,7 +25,7 @@ function findChromium() {
 
   // ① 首屏：后端不可达 → ErrorRetry（P-UI-2 错误态验收）
   console.log('① 首屏 Dashboard 降级态');
-  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+  await page.goto(BASE + '/admin/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2500);
   ok('侧栏渲染', (await page.locator('.nav-link').count()) === 6);
   ok('后端不可达时显示错误+重试', (await page.locator('.fb-retry-btn').count()) === 1);
@@ -42,7 +42,7 @@ function findChromium() {
   // ③ 懒加载路由（P-UI-5）：后端不可达 → 每页渲染 ErrorRetry（降级态即懒加载成功证据）
   console.log('③ 懒加载路由');
   for (const p of ['/providers', '/tasks', '/accounts', '/dlq']) {
-    await page.goto(BASE + p, { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '/admin' + p, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1500);
     const errBox = await page.locator('.fb-error').count();
     const h1 = await page.textContent('h1').catch(() => '');
@@ -51,13 +51,13 @@ function findChromium() {
 
   // ④ 号池结构化（P-UI-4）：无 JSON pre
   console.log('④ 号池页结构化');
-  await page.goto(BASE + '/accounts', { waitUntil: 'domcontentloaded' });
+  await page.goto(BASE + '/admin/accounts', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1500);
   ok('无 JSON <pre> 渲染', (await page.locator('pre').count()) === 0);
 
   // ⑤ DLQ（P-UI-3）：后端不可达 → 错误态 + 刷新按钮（useApi reload）
   console.log('⑤ DLQ 交互');
-  await page.goto(BASE + '/dlq', { waitUntil: 'domcontentloaded' });
+  await page.goto(BASE + '/admin/dlq', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1500);
   ok('DLQ 降级态渲染', (await page.locator('.fb-error, .table-wrap').count()) >= 1);
 
