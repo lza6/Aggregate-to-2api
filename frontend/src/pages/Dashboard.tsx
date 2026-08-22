@@ -31,7 +31,7 @@ export function Dashboard() {
   const onGalleryFail = useCallback(() => sessionStorage.removeItem(PWD_KEY), []);
 
   const dailyChart = stats?.daily?.map(d => ({
-    name: d.date.slice(5),
+    name: (d.day ?? '').slice(5),
     value: d.images,
   })) ?? [];
 

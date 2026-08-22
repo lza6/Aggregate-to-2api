@@ -313,8 +313,19 @@ _FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 if _FRONTEND_DIR.exists():
     try:
         from fastapi.staticfiles import StaticFiles
-        app.mount("/admin", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
-        log.info("前端管理面板已挂载到 /admin")
+
+        class SPAStaticFiles(StaticFiles):
+            """SPA 深链回退：/admin/tasks 刷新时回退 index.html（BrowserRouter 路由接管）。"""
+            async def get_response(self, path: str, scope):
+                response = await super().get_response(path, scope)
+                if response.status_code == 404:
+                    # 资源（/admin/assets/*）404 保持 404；仅页面路径回退
+                    if not path.startswith("assets/"):
+                        response = await super().get_response("index.html", scope)
+                return response
+
+        app.mount("/admin", SPAStaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
+        log.info("前端管理面板已挂载到 /admin（含 SPA 深链回退）")
     except Exception as e:
         log.warning("前端管理面板挂载失败: %s", e)
 # A-05: contextvars 请求上下文中间件 - 在每个请求开始时设置 request context
@@ -791,9 +802,14 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
 
     model = _normalize_model(req.model)
     if _provider_prefix(model) == "imagefree":
-        return await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
-                                           model.split("/", 1)[-1],
-                                           priority=req.priority or 2)
+        task_id = await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
+                                               model.split("/", 1)[-1],
+                                               priority=req.priority or 2)
+        # 幂等 key 对 imagefree 队列路径同样生效（此前只在直调提供商路径保存，
+        # 同 key 重复提交会拿到不同 task_id —— P-TEST-A8 集成测试暴露）
+        if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
+            await db.save_idempotency(req.idempotency_key, task_id)
+        return task_id
     provider = registry.provider_for(model)
     if provider is None:
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)

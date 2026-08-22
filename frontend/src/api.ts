@@ -9,8 +9,9 @@ export interface Stats {
   queue_capacity: number;
   workers: number;
   uptime_human: string;
-  daily: { date: string; requests: number; images: number; errors: number }[];
-  monthly: { month: string; requests: number; images: number }[];
+  // 后端实际返回 { day, total, images, errors }（api/db.py stats_daily）——旧接口类型描述有误
+  daily: { day: string; total: number; images: number; errors: number }[];
+  monthly: { month: string; total: number; images: number; errors: number }[];
   solver: {
     status: string;
     solve_total: number;

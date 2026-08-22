@@ -16,8 +16,9 @@ function PageFallback() {
 }
 
 export default function App() {
+  // basename 与 vite base 一致：生产挂载于 /admin，路由需剥离该前缀才能匹配 path="/"
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <Layout>
         <Suspense fallback={<PageFallback />}>
           <Routes>
