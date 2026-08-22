@@ -116,7 +116,7 @@ async def _run_background_tasks():
         while True:
             try:
                 await asyncio.sleep(config.DB_CLEANUP_INTERVAL)
-                r = await asyncio.to_thread(db.cleanup, config.DB_RETENTION_DAYS)
+                r = await db.cleanup(config.DB_RETENTION_DAYS)  # async 方法直接 await
                 log.info("DB 周期清理: %s", r)
                 n = db.clean_base64_files(config.IF_BASE64_FILE_TTL)
                 if n:
@@ -260,8 +260,9 @@ async def lifespan(_app: FastAPI):
     except Exception as e:
         log.warning("base64 文件启动清理失败（可忽略）: %s", e)
     # M7: 启动时清理一次超期记录（防长时间离线后表膨胀）。
+    # DB.cleanup 是 async（db.py:610），直接 await——不能丢进 to_thread（协程对象会被白创建）
     try:
-        r = await asyncio.to_thread(db.cleanup, config.DB_RETENTION_DAYS)
+        r = await db.cleanup(config.DB_RETENTION_DAYS)
         log.info("DB 启动清理: %s", r)
     except Exception as e:
         log.warning("DB 启动清理失败（可忽略）: %s", e)
@@ -306,7 +307,7 @@ async def lifespan(_app: FastAPI):
                          free_proxy_fetcher.stop(), account_pool.stop())
     # ⑥ 刷新缓存持久化
     async def _flush_cache() -> None:
-        gallery_cache.flush_to_db()
+        await gallery_cache.flush_to_db()  # LRUCache.flush_to_db 是 async（cache.py:177）
     await shutdown_phase(3.0, "⑥ 缓存持久化",
                          _flush_cache(), gallery_cache.stop_reaper())
     # ⑦ 关闭 HTTP 连接池
