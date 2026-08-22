@@ -59,7 +59,12 @@ class DB:
         self._conn: aiosqlite.Connection | None = None
 
         # ── 写缓冲区锁（仅保护 _write_buffer 的 swap 操作）───
-        self._lock = asyncio.Lock()
+        # 注意：Python 3.11 起 asyncio.Lock 惰性绑定首次 await 所在 loop。
+        # DB 单例在模块导入时创建（可能无 running loop → asyncio.run 临时 loop 初始化），
+        # 若 Lock 在临时 loop 上被 await 过就会焊死在该 loop——pytest-asyncio 多 loop
+        # 会话下 flush 失效（读连接看不到写缓冲数据，任务卡 pending）。因此锁必须
+        # 延迟到首次使用时创建，且只在实际服务的 loop 上绑定一次。
+        self._lock: asyncio.Lock | None = None
 
         # ── 批量写入（IMP-25）─────────────────────────────
         self._batch_enabled = config.IF_DB_BATCH_ENABLED
@@ -70,12 +75,20 @@ class DB:
 
         # 惰性初始化：首次调用 _ensure_initialized 时创建连接
         self._initialized = False
+        # 连接池绑定的 loop（_ensure_initialized 中做漂移检测）
+        self._pool_loop: asyncio.AbstractEventLoop | None = None
         # 同步初始化 fallback：如果当前没有运行中的事件循环，直接跑 async init
         # 覆盖测试等无事件循环的场景
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             asyncio.run(self._init_async(pool_timeout))
+
+    def _get_lock(self) -> asyncio.Lock:
+        """惰性获取写缓冲锁：在首个真实使用方的 loop 上创建（一次性）。"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def _init_async(self, pool_timeout: int) -> None:
         """异步初始化：创建所有连接并运行 schema。"""
@@ -96,9 +109,38 @@ class DB:
         self._initialized = True
 
     async def _ensure_initialized(self) -> None:
-        """确保连接已初始化（惰性初始化，用于 async 上下文中的 __init__）。"""
-        if not self._initialized:
-            await self._init_async(config.IF_DB_POOL_TIMEOUT)
+        """确保连接已初始化（惰性初始化，用于 async 上下文中的 __init__）。
+
+        Loop 漂移保护：aiosqlite 连接线程绑定创建时的 loop。DB 单例在模块导入时
+        可能经 asyncio.run(临时 loop) 初始化——连接全部焊死在那个已关闭的 loop 上，
+        之后在真实 loop 使用会静默失败（execute future 永不完成 / 读到旧快照）。
+        检测到当前 loop 与连接创建 loop 不一致时，整体重建连接池（一次性）。
+        """
+        cur_loop = asyncio.get_running_loop()
+        if self._initialized:
+            if self._pool_loop is not cur_loop:
+                # 重建：旧 loop 已死，连接不可用；在新 loop 重建全部连接与锁
+                await self._rebuild_for_loop(cur_loop)
+            return
+        await self._init_async(config.IF_DB_POOL_TIMEOUT)
+        self._pool_loop = cur_loop
+
+    async def _rebuild_for_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """当前 loop 与连接池绑定 loop 不一致：关旧连接、在新 loop 重建。"""
+        log.warning("DB 连接池 loop 漂移（%s → %s），重建连接池",
+                    self._pool_loop, loop)
+        for conn in (*self._connections, *self._read_conns):
+            try:
+                conn.close()  # 同步 close：旧 loop 已死，await 会挂
+            except Exception:
+                pass
+        self._connections.clear()
+        self._read_conns.clear()
+        self._conn_locks.clear()
+        self._initialized = False
+        self._lock = None  # 写缓冲锁同样解绑，交由 _get_lock 惰性重建
+        await self._init_async(config.IF_DB_POOL_TIMEOUT)
+        self._pool_loop = loop
 
     # ── 连接管理 ─────────────────────────────────────
 
@@ -214,7 +256,7 @@ class DB:
         """公开方法：强制刷新缓冲区到 DB（stop 时调用确保数据不丢）。"""
         if not self._batch_enabled:
             return
-        async with self._lock:
+        async with self._get_lock():
             await self._flush_buffer()
 
     async def start_batch_timer(self) -> None:
@@ -225,10 +267,10 @@ class DB:
         try:
             while self._batch_running:
                 await asyncio.sleep(self._batch_window)
-                async with self._lock:
+                async with self._get_lock():
                     await self._flush_buffer()
         except asyncio.CancelledError:
-            async with self._lock:
+            async with self._get_lock():
                 await self._flush_buffer()
             raise
 
@@ -240,7 +282,7 @@ class DB:
         """批量写入模式下，读操作前刷新缓冲区，确保数据可见性。"""
         await self._ensure_initialized()
         if self._batch_enabled and self._write_buffer:
-            async with self._lock:
+            async with self._get_lock():
                 await self._flush_buffer()
 
     # ── 结构 ──────────────────────────────────────
