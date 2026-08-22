@@ -33,6 +33,7 @@ from .context import RequestContextMiddleware, RequestIdLogFilter
 from . import config
 from . import imagefree_client
 from . import turnstile_client
+from .base64_store import enforce_quota as enforce_base64_quota
 from .base64_store import ensure_dir as ensure_base64_dir
 from .log_buffer import log_buffer as log_buffer_handler
 from .db import DB, task_to_public
@@ -120,6 +121,16 @@ async def _run_background_tasks():
                 n = db.clean_base64_files(config.IF_BASE64_FILE_TTL)
                 if n:
                     log.info("base64 文件周期清理: 删除 %d 个过期文件", n)
+                # S-14: 配额保护——IF_BASE64_DIR 超过上限时按 mtime 从旧到新删至 80%
+                nq = enforce_base64_quota(
+                    config.IF_BASE64_DIR,
+                    config.IF_IMG_MAX_GB,
+                    audit_fn=lambda path, detail: audit_log.record(
+                        "img.gc.quota", "system", path, detail),
+                )
+                if nq:
+                    log.info("base64 配额保护: 删除 %d 个超限文件（上限 %.1fGB）",
+                             nq, config.IF_IMG_MAX_GB)
                 if config.IF_IDEMPOTENCY_ENABLED:
                     nd = await db.clean_expired_idempotency()
                     if nd:
@@ -305,6 +316,10 @@ async def lifespan(_app: FastAPI):
     async def _shutdown_otel() -> None:
         shutdown_telemetry()
     await shutdown_phase(2.0, "⑧ OTel 关闭", _shutdown_otel())
+    # ⑨ 关闭 DB 连接池（aiosqlite 后台线程随连接 close 退出——否则进程退出被线程 join 挂住）
+    async def _close_db() -> None:
+        await db.close()
+    await shutdown_phase(3.0, "⑨ DB 连接池关闭", _close_db())
     # U-02: 移除 WebSocket 日志处理器
     logging.getLogger().removeHandler(ws_log_handler)
     # P13: 关闭磁盘日志 handler（刷新缓冲）
@@ -384,6 +399,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 _DOCS_PAGE = Path(__file__).parent / "docs.html"
+_SLOW_PAGE = Path(__file__).parent / "static" / "slow.html"
 
 
 class GenerateRequest(BaseModel):
@@ -674,12 +690,51 @@ async def index():
 
 
 _TERMS_PAGE = Path(__file__).parent / "static" / "terms.html"
+_TERMS_DIR = Path(__file__).parent / "static" / "terms"
+_TERMS_MAP = {
+    "service": {"title": "服务条款", "url": "/v1/terms/service"},
+    "privacy": {"title": "隐私政策", "url": "/v1/terms/privacy"},
+    "content": {"title": "内容政策", "url": "/v1/terms/content"},
+    "disclaimer": {"title": "免责声明", "url": "/v1/terms/disclaimer"},
+}
 
 
 @app.get("/v1/terms", include_in_schema=False)
 async def terms():
     """服务条款页面。"""
     return FileResponse(_TERMS_PAGE, media_type="text/html")
+
+
+@app.get("/v1/terms/index", include_in_schema=False)
+async def terms_index():
+    """服务条款子页面结构化列表（供调用方发现）。"""
+    return [
+        {"slug": slug, "title": meta["title"], "url": meta["url"]}
+        for slug, meta in _TERMS_MAP.items()
+    ]
+
+
+@app.get("/v1/terms/{sub}", include_in_schema=False)
+async def terms_sub(sub: str):
+    """服务条款细分页面：service / privacy / content / disclaimer。"""
+    if sub not in _TERMS_MAP:
+        raise AppError(ErrorCodes.NOT_FOUND, f"未知的条款页面：{sub}", status_code=404)
+    return FileResponse(_TERMS_DIR / f"{sub}.html", media_type="text/html")
+
+
+@app.get("/v1/honor", include_in_schema=False)
+async def honor():
+    """捐赠页：返回公益运营说明与赞赏码落地信息。"""
+    return {
+        "status": "ok",
+        "title": "支持听风",
+        "message": ("听风AI（逆向号池）是公益运行的多提供商 AI 图像生成网关，"
+                    "提供免费、开放的高效出图服务。项目依赖个人时间与服务器成本持续运转，"
+                    "如果你觉得它对你有所帮助，欢迎扫码支持，每一份心意都是坚持下去的动力。"),
+        "qr_path": "/static/zanshang.jpg",
+        "contact_wx": "Tf00798",
+        "github": "https://github.com/lza6/",
+    }
 
 
 # M5: cf_solver 探活结果 TTL 缓存（避免每请求建 TCP 连接探测）
@@ -1388,7 +1443,7 @@ async def get_proxy_pool():
 
 
 # ── S-3/S-4: 慢日志画像端点（只读）──────────────────
-@app.get("/v1/slow")
+@app.get("/v1/slow", include_in_schema=False)
 async def get_slow_requests(limit: int = Query(50, ge=1, le=500)):
     """慢请求画像：最近超阈值样本 + 阶段聚合统计（定位慢在排队/求解/上游）。"""
     items = _slow_log.snapshot()[-limit:]
@@ -1415,6 +1470,12 @@ async def get_slow_requests(limit: int = Query(50, ge=1, le=500)):
         ],
         "count": len(items),
     }
+
+
+@app.get("/v1/slow/view", include_in_schema=False)
+async def slow_view():
+    """慢请求静态看板（纯静态，内联 CSS/JS，自动轮询 /v1/slow）。"""
+    return FileResponse(_SLOW_PAGE, media_type="text/html")
 
 
 # ── S-6: 只读诊断端点 ──────────────────────────────

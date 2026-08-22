@@ -316,6 +316,10 @@ async def lifespan(_app: FastAPI):
     async def _shutdown_otel() -> None:
         shutdown_telemetry()
     await shutdown_phase(2.0, "⑧ OTel 关闭", _shutdown_otel())
+    # ⑨ 关闭 DB 连接池（aiosqlite 后台线程随连接 close 退出——否则进程退出被线程 join 挂住）
+    async def _close_db() -> None:
+        await db.close()
+    await shutdown_phase(3.0, "⑨ DB 连接池关闭", _close_db())
     # U-02: 移除 WebSocket 日志处理器
     logging.getLogger().removeHandler(ws_log_handler)
     # P13: 关闭磁盘日志 handler（刷新缓冲）
