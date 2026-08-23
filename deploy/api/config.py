@@ -366,6 +366,8 @@ class Settings(BaseSettings):
     if_base64_file_ttl: int = Field(
         86400, validation_alias="IF_BASE64_FILE_TTL"
     )
+    # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80%
+    if_img_max_gb: float = Field(5.0, validation_alias="IF_IMG_MAX_GB")
     db_retention_days: int = Field(
         365, validation_alias="IF_DB_RETENTION_DAYS"
     )
@@ -809,6 +811,7 @@ STATS_FILE = settings.stats_file
 DB_FILE = settings.db_file
 IF_BASE64_DIR = settings.if_base64_dir
 IF_BASE64_FILE_TTL = settings.if_base64_file_ttl
+IF_IMG_MAX_GB = settings.if_img_max_gb
 DB_RETENTION_DAYS = settings.db_retention_days
 DB_CLEANUP_INTERVAL = settings.db_cleanup_interval
 IF_DB_BATCH_ENABLED = settings.if_db_batch_enabled
@@ -985,6 +988,7 @@ __all__ = [
     "DB_FILE",
     "IF_BASE64_DIR",
     "IF_BASE64_FILE_TTL",
+    "IF_IMG_MAX_GB",
     "DB_RETENTION_DAYS",
     "DB_CLEANUP_INTERVAL",
     "IF_DB_BATCH_ENABLED",
