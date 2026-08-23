@@ -1273,9 +1273,20 @@ async def meta():
             "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"]}
 
 
-# ── 品牌静态资源（听风AI logo）──────────────────
-_logo_sm = Path(__file__).parent / "static" / "tingfeng-logo-sm.png"
-_logo_md = Path(__file__).parent / "static" / "tingfeng-logo-md.png"
+# ── 品牌与赞赏静态资源 ──────────────────
+_STATIC_DIR = Path(__file__).parent / "static"
+_logo_sm = _STATIC_DIR / "tingfeng-logo-sm.png"
+_logo_md = _STATIC_DIR / "tingfeng-logo-md.png"
+_zanshang_qr = _STATIC_DIR / "zanshang.jpg"
+
+
+@app.get("/static/zanshang.jpg", include_in_schema=False)
+async def zanshang_qr():
+    """微信赞赏码图片。"""
+    if _zanshang_qr.exists():
+        return FileResponse(_zanshang_qr, media_type="image/jpeg",
+                            headers={"Cache-Control": "public, max-age=86400"})
+    raise AppError(ErrorCodes.NOT_FOUND, "赞赏码图片不存在", 404)
 
 
 @app.get("/static/logo.png", include_in_schema=False)
