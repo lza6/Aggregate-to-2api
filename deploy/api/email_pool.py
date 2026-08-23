@@ -169,14 +169,21 @@ class Do22Source(MailSource):
 
     async def new_address(self) -> tuple[str, dict]:
         import uuid
-        r = await self.session.post(f"{self.BASE}/action/mailbox/create",
-                                    json={"type": "random"})
-        if r.status_code != 200:
-            raise RuntimeError(f"22.do 建箱失败 HTTP {r.status_code}")
-        data = (r.json() or {}).get("data") or {}
-        address = str(data.get("email") or "")
-        if "@" not in address:
-            raise RuntimeError(f"22.do 返回异常: {str(data)[:150]}")
+        # 循环创建直到获得不含 '+' 别名的干净邮箱（上游 Better-Auth / Next.js 屏蔽 '+' 别名）
+        address = ""
+        for _ in range(8):
+            r = await self.session.post(f"{self.BASE}/action/mailbox/create",
+                                        json={"type": "random"})
+            if r.status_code != 200:
+                continue
+            data = (r.json() or {}).get("data") or {}
+            em = str(data.get("email") or "")
+            if em and "@" in em and "+" not in em:
+                address = em
+                break
+        if not address or "@" not in address:
+            raise RuntimeError(f"22.do 无法创建无别名干净邮箱")
+
         # login 拿 email cookie（message 接口需要）
         await self.session.post(f"{self.BASE}/action/mailbox/login",
                                 json={"email": address, "language": "en-US"})
@@ -197,7 +204,35 @@ class Do22Source(MailSource):
                                         json={"email": email, "lastime": 0},
                                         headers={"Authorization": f"Bearer {token}"})
             if r.status_code == 200:
-                return (r.json() or {}).get("data") or []
+                raw_data = (r.json() or {}).get("data")
+                if not raw_data or not isinstance(raw_data, list):
+                    return []
+                # 22.do 的 message 只给摘要，需遍历拉取 messageDetail 得到正文里的验证链接/验证码
+                out = []
+                for item in raw_data:
+                    mid = item.get("id") or item.get("messageId")
+                    if not mid:
+                        out.append(item)
+                        continue
+                    try:
+                        det = await self.session.post(
+                            f"{self.BASE}/action/mailbox/messageDetail",
+                            json={"email": email, "id": mid},
+                            headers={"Authorization": f"Bearer {token}"}
+                        )
+                        if det.status_code == 200:
+                            det_data = (det.json() or {}).get("data") or {}
+                            content = det_data.get("content") or det_data.get("html") or json.dumps(det_data)
+                            out.append({
+                                "subject": item.get("subject", ""),
+                                "bodyHtml": content,
+                                "bodyPreview": content,
+                            })
+                        else:
+                            out.append(item)
+                    except Exception:
+                        out.append(item)
+                return out
         except Exception as e:
             log.warning("22.do 收件失败 %s: %s", address, e)
         return []
