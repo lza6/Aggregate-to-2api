@@ -168,17 +168,16 @@ class Do22Source(MailSource):
                                                   "Accept": "*/*"})
 
     async def new_address(self) -> tuple[str, dict]:
-        import uuid
-        # 循环创建直到获得不含 '+' 别名的干净邮箱（上游 Better-Auth / Next.js 屏蔽 '+' 别名）
+        # 循环创建直到获得不含 '+' 别名且不含过多 '.' 的干净邮箱（上游 Better-Auth 屏蔽此类邮箱）
         address = ""
-        for _ in range(8):
+        for _ in range(12):
             r = await self.session.post(f"{self.BASE}/action/mailbox/create",
                                         json={"type": "random"})
             if r.status_code != 200:
                 continue
             data = (r.json() or {}).get("data") or {}
             em = str(data.get("email") or "")
-            if em and "@" in em and "+" not in em:
+            if em and "@" in em and "+" not in em and em.count(".") == 1:
                 address = em
                 break
         if not address or "@" not in address:
@@ -187,10 +186,12 @@ class Do22Source(MailSource):
         # login 拿 email cookie（message 接口需要）
         await self.session.post(f"{self.BASE}/action/mailbox/login",
                                 json={"email": address, "language": "en-US"})
-        # applyToken 拿 JWT（message 鉴权）
+        # applyToken 拿 JWT（message 鉴权）——必须固定 32 位 hex 格式 uuid
+        import hashlib
+        uuid_hex = hashlib.md5(f"22do_{address}_{time.time()}".encode()).hexdigest()
         token_resp = await self.session.post(f"{self.BASE}/action/mailbox/applyToken",
                                              json={"email": address,
-                                                   "uuid": uuid.uuid4().hex})
+                                                   "uuid": uuid_hex})
         token = ((token_resp.json() or {}).get("data") or {}).get("token") or ""
         return address, {"source": self.name, "email": address, "token": token}
 
