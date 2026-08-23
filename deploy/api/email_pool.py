@@ -203,10 +203,12 @@ class Do22Source(MailSource):
         return []
 
 
+from .email_sources_linshi import LinshiEmailSource
+
 # ── 邮箱池管理器 ──────────────────────────────────
 class EmailPool:
     def __init__(self, db_path: str = DB_FILE) -> None:
-        self._sources = [TempTfSource(), TempMailSource(), Do22Source()]
+        self._sources = [TempTfSource(), TempMailSource(), Do22Source(), LinshiEmailSource()]
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
@@ -256,11 +258,8 @@ class EmailPool:
                 raise RuntimeError(f"邮箱源 {prefer_source} 返回异常邮箱")
             self._used.add(address)
             return address, st
-        # 默认：优先能收 verify 的源（temp-mail 限流时 22.do 顶替），temp.tf 兜底（仅不需收件场景）
-        # 22.do 实测无限流且能收站验证邮件（服务器实测建箱 200）
-        sources = sorted(self._sources,
-                         key=lambda s: {0: 0, 1: 1, 2: 1}.get({n: i for i, n in
-                             enumerate(["temp-mail", "22.do", "temp.tf"])}.get(s.name, 9), 9))
+        # 默认：优先能收 verify 的源（temp-mail / 22.do / linshi-email 轮询容错），temp.tf 兜底（仅不需收件场景）
+        sources = [s for s in self._sources if s.name in ("temp-mail", "22.do", "linshi-email")] + [s for s in self._sources if s.name == "temp.tf"]
         for _ in range(15):
             src = sources[_ % len(sources)]
             try:

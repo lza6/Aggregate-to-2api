@@ -79,7 +79,7 @@ class Minimaxh3Registerer:
             email = f"mock{int(time.time())}{random.randint(0,999)}@mock.com"
             return {"email": email, "cookie": "mock-session", "password": "mock123",
                     "credits": 4}
-        email, src = await email_pool.allocate(self.provider, prefer_source="temp-mail")
+        email, src = await email_pool.allocate(self.provider)
         # 每号 kookeey 粘性住宅 IP（同 email 同 IP；不同 email 不同 IP）；turnstile 与提交同 IP
         self._ensure_client(email)
         kk = kookeey_proxy_for(email)
@@ -182,7 +182,7 @@ class NanobananaRegisterer:
             import random
             email = f"mocknb{int(time.time())}{random.randint(0,999)}@mock.com"
             return {"email": email, "cookie": "mock-session", "password": "mock123", "credits": 4}
-        email, src = await email_pool.allocate(self.provider, prefer_source="temp-mail")
+        email, src = await email_pool.allocate(self.provider)
         # 每号 kookeey 粘性住宅 IP；turnstile 与 sign-up 同 IP
         self._ensure_client(email)
         kk = kookeey_proxy_for(email)
