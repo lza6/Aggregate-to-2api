@@ -47,7 +47,6 @@ deploy/data/
 test-results/
 
 # Seal
-计划书/
 所有用到的提供商/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
