@@ -146,8 +146,15 @@ class DB:
 
     @staticmethod
     async def _create_conn(path: str, timeout: int = 5) -> aiosqlite.Connection:
-        """创建一条 aiosqlite 连接（WAL + NORMAL + busy_timeout）。"""
-        conn = await aiosqlite.connect(path, timeout=timeout)
+        """创建一条 aiosqlite 连接（WAL + NORMAL + busy_timeout + autocommit）。
+
+        isolation_level=None（autocommit）：WAL 模式下若保持默认延迟事务，
+        读连接的 SELECT 会开启隐式只读事务且不自动结束——该连接从此固定在
+        旧快照上，永远看不到其他连接的 commit（读池 round-robin 时表现为
+        「刚写入的数据随机读不到」）。autocommit 让每次 SELECT 都是独立
+        快照，读写分离语义才成立。
+        """
+        conn = await aiosqlite.connect(path, timeout=timeout, isolation_level=None)
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA synchronous=NORMAL")
