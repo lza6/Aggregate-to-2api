@@ -126,12 +126,22 @@ class DB:
         self._pool_loop = cur_loop
 
     async def _rebuild_for_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """当前 loop 与连接池绑定 loop 不一致：关旧连接、在新 loop 重建。"""
+        """当前 loop 与连接池绑定 loop 不一致：关旧连接、在新 loop 重建。
+
+        旧 loop 已死 → await conn.close() 会挂（aiosqlite future 永不完成），
+        必须同步 close。旧 loop 还活着（如测试会话内模块重建）→ 正常 await，
+        同步 close 会泄漏 aiosqlite 后台线程导致后续操作挂死。
+        """
         log.warning("DB 连接池 loop 漂移（%s → %s），重建连接池",
                     self._pool_loop, loop)
+        old_loop = self._pool_loop
+        old_alive = old_loop is not None and not old_loop.is_closed()
         for conn in (*self._connections, *self._read_conns):
             try:
-                conn.close()  # 同步 close：旧 loop 已死，await 会挂
+                if old_alive:
+                    await conn.close()
+                else:
+                    conn.close()  # 同步 close：loop 已死，await 会挂
             except Exception:
                 pass
         self._connections.clear()
