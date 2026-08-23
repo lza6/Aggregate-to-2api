@@ -1,4 +1,10 @@
-"""pytest 共享 fixtures：环境隔离 + 临时 DB + 集成测试支持。"""
+"""pytest 共享 fixtures：环境隔离 + 临时 DB + 集成测试支持。
+
+loop 约定（pytest-asyncio 1.4+）：不再自定义 event_loop fixture——它已被弃用且会在
+asyncio_default_test_loop_scope/ fixture_loop_scope 之外另起 session loop，
+导致 app 内部 worker/DB 与测试函数跨 loop 死锁（txt2img 集成测试卡 pending 的历史根因）。
+统一交由 pytest-asyncio 的 session scope 管理，测试与 session fixture 共享同一 loop。
+"""
 import asyncio
 import os
 import socket
@@ -14,15 +20,6 @@ import pytest_asyncio
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """会话级事件循环，使 session-scoped async fixtures 共享同一 event loop。"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture
@@ -123,11 +120,12 @@ def mock_cfsolver():
 
 
 @pytest_asyncio.fixture(scope="session")
-async def _app_instance(mock_cfsolver, event_loop):
+async def _app_instance(mock_cfsolver):
     """会话级：创建 FastAPI 应用实例（仅导入一次，避免 prometheus 注册冲突）。
 
     设置环境变量 -> 导入 api.main -> 手动触发 lifespan startup。
     会话级 fixture 确保整个测试会话只创建一次，所有测试用例共享。
+    不依赖自定义 event_loop——统一走 pytest-asyncio 的 session loop。
     """
     # ── 设置集成测试所需环境变量 ──
     os.environ["IF_CF_SOLVER_URL"] = mock_cfsolver
