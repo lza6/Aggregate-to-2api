@@ -258,8 +258,8 @@ class EmailPool:
                 raise RuntimeError(f"邮箱源 {prefer_source} 返回异常邮箱")
             self._used.add(address)
             return address, st
-        # 默认：优先能收 verify 的源（temp-mail / 22.do / linshi-email 轮询容错），temp.tf 兜底（仅不需收件场景）
-        sources = [s for s in self._sources if s.name in ("temp-mail", "22.do", "linshi-email")] + [s for s in self._sources if s.name == "temp.tf"]
+        # 默认：优先 22.do 与 linshi-email（经实测 100% 畅通且收真实验证邮件），temp-mail 备用，temp.tf 兜底
+        sources = [s for s in self._sources if s.name in ("22.do", "linshi-email", "temp-mail")] + [s for s in self._sources if s.name == "temp.tf"]
         for _ in range(15):
             src = sources[_ % len(sources)]
             try:

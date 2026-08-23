@@ -216,9 +216,18 @@ class NanobananaRegisterer:
                 await _th(self.client.get, link, headers={"User-Agent": config.USER_AGENT})
             except Exception as e:
                 log.warning("nanobanana 验证链接失败 %s: %s", email, e)
-        # 4) 登录拿 session cookie
+        # 4) 登录拿 session cookie（带上登录 turnstile token，防 CAPTCHA_REQUIRED）
+        try:
+            login_captcha, _ = await turnstile_client.solve_turnstile(
+                config.CF_SOLVER_URL, self.turnstile_page, self.SITEKEY, config.TURNSTILE_TIMEOUT,
+                proxy=kk)
+        except Exception as e:
+            log.warning("nanobanana 登录求解失败: %s", e)
+            login_captcha = ""
+
         login = await _th(self.client.post, f"{self.base}/api/auth/sign-in/email",
-                          headers=_browser_headers(self.base, f"{self.base}/zh"),
+                          headers={**_browser_headers(self.base, f"{self.base}/zh"),
+                                   "x-turnstile-token": login_captcha},
                           json={"email": email, "password": password, "callbackURL": "/zh"})
         cookie = "; ".join(f"{k}={v}" for k, v in login.cookies.items())
         # 400 Bad Request（wrong_credentials）说明邮箱未激活/验证失败——该号不可能签到入池，
