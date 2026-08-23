@@ -233,6 +233,9 @@ async def lifespan(_app: FastAPI):
     providers_bootstrap()
     imagefree_provider = registry.providers.get("imagefree")
     if imagefree_provider:
+        # 记录注入前的值，shutdown 还原——registry 单例被测试/多 lifespan 共享时
+        # 不残留上一轮的 engine（测试间污染源：单测期望「未注册」却拿到已注入的 engine）
+        _prev_engine = getattr(imagefree_provider, "engine", None)
         imagefree_provider.engine = engine
     from .proxy_pool import proxy_pool
     if config.PROXY_FILE:
@@ -298,8 +301,20 @@ async def lifespan(_app: FastAPI):
     await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
     # ③ 停止 worker 池
     await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
-    # ④ 停止 provider
-    await shutdown_phase(8.0, "④ Provider 停止", providers_shutdown())
+    # ④ 停止 provider（并还原 lifespan 注入的 engine，防共享单例残留）
+    async def _restore_engine() -> None:
+        await providers_shutdown()
+        _imgf = registry.providers.get("imagefree")
+        if _imgf is not None:
+            if _prev_engine is not None:
+                _imgf.engine = _prev_engine
+            else:
+                _imgf.engine = None
+                try:
+                    delattr(_imgf, "engine")
+                except AttributeError:
+                    pass
+    await shutdown_phase(8.0, "④ Provider 停止", _restore_engine())
     # ⑤ 停止 free_proxy_fetcher / account_pool
     from .free_proxy_fetcher import free_proxy_fetcher
     from .account_pool import account_pool
