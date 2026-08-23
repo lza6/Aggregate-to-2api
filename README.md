@@ -222,6 +222,11 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊 |
 | `GET /v1/healthz` | — | 健康检查 + solver 求解质量指标 |
+| `GET /v1/diagnostics` | — | 只读一键体检（DB/队列/worker/磁盘/慢日志，无副作用） |
+| `GET /v1/slow` | — | 慢请求分阶段画像（JSON） |
+| `GET /v1/slow/view` | — | 慢请求看板（静态 HTML） |
+| `GET /v1/honor` | — | 捐赠说明 + 赞赏码路径 |
+| `GET /v1/terms` | — | 服务条款总览；`/v1/terms/{service,privacy,content,disclaimer}` 细分 |
 | `GET /v1/logs` | — | 实时日志快照（环形缓冲区） |
 | `GET /v1/logs/ws` | WebSocket | 实时日志推送流（订阅 root logger 广播） |
 | `GET /v1/proxy-pool` | — | 代理池实时状态 |
@@ -422,6 +427,7 @@ python scripts/e2e_validate.py --mode real
 - **`Human verification failed` / `captcha_fail`**：token 与提交 IP 不匹配（带 `proxy` 求解时务必用同一代理提交；直连求解就用直连提交）或上游风控。
 - **aifreeforever 每 IP 每日限额**：报 429/风控，需确保 `IF_FREE_PROXY=1`（免费代理池）或住宅代理兜底，冷却会自动递增并 24h 重置。
 - **图生图 `edit` 卡在排队**：上游硬并发=1，`/v1/healthz` 看 `edit_inflight`；配 `IF_EDIT_PROXY_FILE` 多 IP 住宅代理 + `IF_EDIT_PROXY_PARALLEL>1` 才能绕过（免费数据中心代理会被 CF 403）。
+- **任务一直 `pending`**：先 `GET /v1/diagnostics` 看 worker `stale`、队列深度、磁盘。v3.1.0 已修三类根因：① WAL 读连接隐式事务固定旧快照（连接必须 autocommit）；② 批量写 flush 与 worker 读竞态（读必须拿同一把 flush 锁）；③ worker 未消费（`/v1/slow` 看 queue_ms）。仍 pending 再查 cf_solver 与 token 池。
 
 ### cf_solver 不可用如何排查
 

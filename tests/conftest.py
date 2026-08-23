@@ -188,23 +188,48 @@ async def _app_instance(mock_cfsolver):
         pass
 
 
-@pytest_asyncio.fixture(scope="session")
-async def app_with_mocks(_app_instance):
-    """会话级：集成测试 httpx.AsyncClient。
+def pytest_sessionfinish(session, exitstatus):
+    """会话结束：同步回收所有 aiosqlite 工作线程，避免 pytest 全绿后卡 threading shutdown。"""
+    try:
+        from api import db as dbmod
+        dbmod._atexit_stop_db_threads()
+    except Exception:
+        pass
 
-    共享 _app_instance 创建的应用实例，返回 httpx.AsyncClient。
-    整个测试会话只创建一个 client，所有测试用例共享。
+
+@pytest_asyncio.fixture
+async def app_with_mocks(_app_instance):
+    """集成测试 httpx.AsyncClient（每用例独立 client，应用/DB 会话级共享）。
+
+    每个用例开始重新把 imagefree provider 绑定到当前 Engine，结束后还原。
+    这样集成 lifespan 的共享 registry 单例不会污染后续单元测试（单元测试
+    需要验证 provider 未绑定 engine 的分支），同时保留 session DB/worker 性能。
     """
     from httpx import AsyncClient, ASGITransport
 
-    async with AsyncClient(transport=ASGITransport(app=_app_instance.app), base_url="http://test") as client:
-        # ── 等待服务就绪 ──
-        for _ in range(30):
-            try:
-                r = await client.get("/v1/healthz")
-                if r.json().get("status") in ("ok", "degraded"):
-                    break
-            except Exception:
-                pass
-            await asyncio.sleep(0.2)
-        yield client
+    imagefree_provider = _app_instance.registry.providers.get("imagefree")
+    sentinel = object()
+    previous_engine = getattr(imagefree_provider, "engine", sentinel) if imagefree_provider else sentinel
+    if imagefree_provider:
+        imagefree_provider.engine = _app_instance.engine
+    try:
+        async with AsyncClient(transport=ASGITransport(app=_app_instance.app), base_url="http://test") as client:
+            # ── 等待服务就绪 ──
+            for _ in range(30):
+                try:
+                    r = await client.get("/v1/healthz")
+                    if r.json().get("status") in ("ok", "degraded"):
+                        break
+                except Exception:
+                    pass
+                await asyncio.sleep(0.2)
+            yield client
+    finally:
+        if imagefree_provider:
+            if previous_engine is sentinel:
+                try:
+                    delattr(imagefree_provider, "engine")
+                except AttributeError:
+                    pass
+            else:
+                imagefree_provider.engine = previous_engine

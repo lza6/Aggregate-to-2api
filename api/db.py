@@ -15,10 +15,12 @@ _write_buffer，后台 _batch_timer 每 batch_window 秒触发一次 flush，
 时间戳用 Unix 秒（UTC）；日/月分组用 'localtime' 适配服务器本地时区。
 """
 import asyncio
+import atexit
 import logging
 import os
 import threading
 import time
+import weakref
 
 import aiosqlite
 
@@ -27,6 +29,41 @@ from . import base64_store
 from .telemetry import get_tracer
 
 log = logging.getLogger("db")
+
+# 进程内所有 DB 实例（弱引用）+ 全部 aiosqlite 连接（强引用，直到显式 stop）。
+# WeakSet 不够：DB 被 GC 后连接线程仍活着，pytest 退出卡在 threading._shutdown。
+_LIVE_DBS: weakref.WeakSet = weakref.WeakSet()
+_LIVE_CONNS: list = []
+
+
+def _force_stop_aiosqlite(conn) -> None:
+    """loop 已死或不走 await close 时：关底层 sqlite + 停 aiosqlite 工作线程。"""
+    try:
+        raw = getattr(conn, "_connection", None)
+        if raw is not None:
+            raw.close()
+    except Exception:
+        pass
+    stop = getattr(conn, "_stop_running", None)
+    if stop is not None:
+        try:
+            stop()
+        except Exception:
+            pass
+
+
+def _atexit_stop_db_threads() -> None:
+    for db in list(_LIVE_DBS):
+        try:
+            db.stop_threads_now()
+        except Exception:
+            pass
+    for conn in list(_LIVE_CONNS):
+        _force_stop_aiosqlite(conn)
+    _LIVE_CONNS.clear()
+
+
+atexit.register(_atexit_stop_db_threads)
 
 
 class BatchWrite:
@@ -42,7 +79,6 @@ class DB:
     def __init__(self, path: str):
         self._path = path
         self._pool_size = max(1, config.IF_DB_POOL_SIZE)
-        pool_timeout = config.IF_DB_POOL_TIMEOUT
 
         # ── 读连接池（多连接，round-robin 分配，无需锁）──────────
         self._read_conns: list[aiosqlite.Connection] = []
@@ -59,11 +95,8 @@ class DB:
         self._conn: aiosqlite.Connection | None = None
 
         # ── 写缓冲区锁（仅保护 _write_buffer 的 swap 操作）───
-        # 注意：Python 3.11 起 asyncio.Lock 惰性绑定首次 await 所在 loop。
-        # DB 单例在模块导入时创建（可能无 running loop → asyncio.run 临时 loop 初始化），
-        # 若 Lock 在临时 loop 上被 await 过就会焊死在该 loop——pytest-asyncio 多 loop
-        # 会话下 flush 失效（读连接看不到写缓冲数据，任务卡 pending）。因此锁必须
-        # 延迟到首次使用时创建，且只在实际服务的 loop 上绑定一次。
+        # Python 3.11 起 asyncio.Lock 惰性绑定首次 await 所在 loop。
+        # 连接与锁都延迟到首次真实使用，禁止导入期 asyncio.run 临时 loop。
         self._lock: asyncio.Lock | None = None
 
         # ── 批量写入（IMP-25）─────────────────────────────
@@ -73,16 +106,21 @@ class DB:
         self._batch_running = False
         self._commit_count = 0  # 调试计数器，仅在 _flush_buffer 中递增
 
-        # 惰性初始化：首次调用 _ensure_initialized 时创建连接
+        # 惰性初始化：首次 await _ensure_initialized 时才建连接。
+        # 禁止在 __init__ 里 asyncio.run——那会把 aiosqlite 线程焊死在临时 loop 上，
+        # 进程退出时 join 这些线程会挂死（pytest 全绿后卡 shutdown 的根因）。
         self._initialized = False
-        # 连接池绑定的 loop（_ensure_initialized 中做漂移检测）
         self._pool_loop: asyncio.AbstractEventLoop | None = None
-        # 同步初始化 fallback：如果当前没有运行中的事件循环，直接跑 async init
-        # 覆盖测试等无事件循环的场景
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(self._init_async(pool_timeout))
+        _LIVE_DBS.add(self)
+
+    def stop_threads_now(self) -> None:
+        """同步停掉本实例全部 aiosqlite 线程（进程退出 / pytest sessionfinish 用）。"""
+        for conn in list(self._connections) + list(self._read_conns):
+            _force_stop_aiosqlite(conn)
+        self._connections.clear()
+        self._read_conns.clear()
+        self._initialized = False
+        self._lock = None
 
     def _get_lock(self) -> asyncio.Lock:
         """惰性获取写缓冲锁：在首个真实使用方的 loop 上创建（一次性）。"""
@@ -107,6 +145,10 @@ class DB:
         self._conn = self._connections[0]
         await self._init_schema()
         self._initialized = True
+        try:
+            self._pool_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._pool_loop = None
 
     async def _ensure_initialized(self) -> None:
         """确保连接已初始化（惰性初始化，用于 async 上下文中的 __init__）。
@@ -141,7 +183,13 @@ class DB:
                 if old_alive:
                     await conn.close()
                 else:
-                    conn.close()  # 同步 close：loop 已死，await 会挂
+                    # 旧 loop 已关闭，aiosqlite.close() 返回协程但其 future 无法
+                    # 回到旧 loop；直接关闭底层 sqlite 连接并发送线程停止哨兵，
+                    # 避免未 await 协程与后台线程泄漏。
+                    raw_conn = getattr(conn, "_connection", None)
+                    if raw_conn is not None:
+                        raw_conn.close()
+                    conn._stop_running()  # aiosqlite 私有生命周期 API，旧 loop 专用分支
             except Exception:
                 pass
         self._connections.clear()
@@ -170,6 +218,7 @@ class DB:
         await conn.execute("PRAGMA synchronous=NORMAL")
         await conn.execute("PRAGMA busy_timeout=5000")
         await conn.execute("PRAGMA wal_autocheckpoint=1000")
+        _LIVE_CONNS.append(conn)
         return conn
 
     async def _health_check(self, conn: aiosqlite.Connection) -> bool:
@@ -231,16 +280,14 @@ class DB:
 
     async def close(self) -> None:
         """关闭所有连接（写连接池 + 读连接池）。"""
-        for conn in self._connections:
+        for conn in list(self._connections) + list(self._read_conns):
             try:
                 await conn.close()
             except Exception:
-                pass
-        for conn in self._read_conns:
-            try:
-                await conn.close()
-            except Exception:
-                pass
+                _force_stop_aiosqlite(conn)
+        self._connections.clear()
+        self._read_conns.clear()
+        self._initialized = False
 
     # ── 批量写入 API ─────────────────────────────────
     async def _enqueue_write(self, sql: str, params: tuple) -> None:
@@ -298,7 +345,10 @@ class DB:
     async def _ensure_flushed(self) -> None:
         """批量写入模式下，读操作前刷新缓冲区，确保数据可见性。"""
         await self._ensure_initialized()
-        if self._batch_enabled and self._write_buffer:
+        if self._batch_enabled:
+            # 即使当前 buffer 为空也必须拿锁：另一个协程可能已经 swap 出 buffer、
+            # 正在执行 SQL + commit。只检查 buffer 会在该窗口读到旧快照，任务被 worker
+            # 取走后永久停在 pending。
             async with self._get_lock():
                 await self._flush_buffer()
 

@@ -148,6 +148,28 @@ class TestBatchWriteEnabled:
             await _cleanup(db, path)
 
     @pytest.mark.asyncio
+    async def test_reads_wait_for_inflight_flush_lock_even_when_buffer_empty(self):
+        """读不能绕过 flush 锁：buffer 已 swap 为空但 commit 尚未完成时也必须等待。"""
+        db, path = await _make_db(enabled=True)
+        lock = None
+        try:
+            await db.create_request("t-lock-read", "p", "1:1", False)
+            await db.flush()
+            lock = db._get_lock()
+            await lock.acquire()
+            reader = asyncio.create_task(db.get("t-lock-read"))
+            await asyncio.sleep(0)
+            assert not reader.done(), "读操作绕过了正在进行的 flush 临界区"
+            lock.release()
+            row = await reader
+            assert row is not None
+            assert row["status"] == "pending"
+        finally:
+            if lock is not None and lock.locked():
+                lock.release()
+            await _cleanup(db, path)
+
+    @pytest.mark.asyncio
     async def test_concurrent_append_and_flush(self):
         """多协程并发 enqueue + flush 不崩溃（竞态模拟）。"""
         db, path = await _make_db(enabled=True)

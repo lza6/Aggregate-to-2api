@@ -886,12 +886,17 @@ def _provider_prefix(model: str) -> str:
 
 
 async def _dispatch_generate(req: GenerateRequest) -> str:
-    """按 model 前缀路由：imagefree 走既有引擎队列；其余提供商后台直调。"""
+    """按 model 前缀路由：imagefree 走既有引擎队列；其余提供商后台直调。
+
+    内部测试/第三方适配器可能传入结构兼容对象而非完整 Pydantic 模型，
+    可选字段统一用 getattr 读取，避免因缺少未参与本次路由的字段而抛 AttributeError。
+    """
     from .config import IF_IDEMPOTENCY_ENABLED
-    if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
-        existing = await db.get_idempotency(req.idempotency_key)
+    idempotency_key = getattr(req, "idempotency_key", None)
+    if IF_IDEMPOTENCY_ENABLED and idempotency_key:
+        existing = await db.get_idempotency(idempotency_key)
         if existing is not None:
-            log.info("幂等提交命中: key=%s task_id=%s", req.idempotency_key, existing["task_id"])
+            log.info("幂等提交命中: key=%s task_id=%s", idempotency_key, existing["task_id"])
             return existing["task_id"]
 
     model = _normalize_model(req.model)
@@ -901,8 +906,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                                                priority=req.priority or 2)
         # 幂等 key 对 imagefree 队列路径同样生效（此前只在直调提供商路径保存，
         # 同 key 重复提交会拿到不同 task_id —— P-TEST-A8 集成测试暴露）
-        if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
-            await db.save_idempotency(req.idempotency_key, task_id)
+        if IF_IDEMPOTENCY_ENABLED and idempotency_key:
+            await db.save_idempotency(idempotency_key, task_id)
         return task_id
     provider = registry.provider_for(model)
     if provider is None:
@@ -912,8 +917,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     t0 = time.monotonic()
     spec = registry.model(model)
 
-    if IF_IDEMPOTENCY_ENABLED and req.idempotency_key:
-        await db.save_idempotency(req.idempotency_key, task_id)
+    if IF_IDEMPOTENCY_ENABLED and idempotency_key:
+        await db.save_idempotency(idempotency_key, task_id)
 
     async def _run() -> None:
         try:

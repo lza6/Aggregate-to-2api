@@ -400,7 +400,7 @@ class TestConnectionLeak:
             cfg.IF_DB_POOL_SIZE = old_size
             db_temp = DB(path)
             await db_temp.close()
-            _cleanup(db_temp, path)
+            await _cleanup(db_temp, path)
 
 
 class TestBatchWriteWithPool:

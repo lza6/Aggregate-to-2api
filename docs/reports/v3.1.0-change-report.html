@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>听风 v3.1.0 变更卷</title>
+<style>
+:root {
+  --ink: #1c1917;
+  --paper: #f6f1e7;
+  --rule: #d6cbb8;
+  --accent: #b45309;
+  --ok: #166534;
+  --bad: #9f1239;
+  --muted: #57534e;
+  --card: #fffdf8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #f5f0e6;
+    --paper: #1c1917;
+    --rule: #44403c;
+    --accent: #f59e0b;
+    --ok: #86efac;
+    --bad: #fda4af;
+    --muted: #a8a29e;
+    --card: #292524;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #f5f0e6;
+  --paper: #1c1917;
+  --rule: #44403c;
+  --accent: #f59e0b;
+  --ok: #86efac;
+  --bad: #fda4af;
+  --muted: #a8a29e;
+  --card: #292524;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", serif; }
+body { line-height: 1.55; }
+main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+h1, h2, h3 { font-family: "Iowan Old Style", Palatino, serif; text-wrap: balance; }
+h1 { font-size: 2.1rem; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+h2 { font-size: 1.25rem; border-top: 1px solid var(--rule); padding-top: 1.4rem; margin-top: 2rem; }
+.kicker { color: var(--accent); letter-spacing: .14em; text-transform: uppercase; font-size: .72rem; font-family: ui-sans-serif, system-ui, sans-serif; }
+.lede { font-size: 1.12rem; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { text-align: left; border-bottom: 1px solid var(--rule); padding: .45rem .3rem; vertical-align: top; }
+.wrap { overflow-x: auto; }
+code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .86em; }
+.pill { display: inline-block; padding: .05rem .4rem; border: 1px solid var(--rule); font-size: .75rem; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.card { background: var(--card); border: 1px solid var(--rule); padding: 1rem 1.1rem; }
+.q { margin: .8rem 0 1.1rem; }
+.q label { display: block; margin: .2rem 0; cursor: pointer; }
+button { background: var(--ink); color: var(--paper); border: 0; padding: .55rem 1rem; cursor: pointer; font: inherit; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#quiz-result { margin-top: 1rem; font-weight: 600; }
+.note { color: var(--muted); font-size: .92rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">听风AI · 发行说明</p>
+<h1>v3.1.0 变更卷</h1>
+<p class="lede">公益图像网关这一轮不是加皮，是把「任务卡 pending」从概率事件变成可复现、可证明、已修掉的缺陷，并补上运维能看见的仪表。</p>
+
+<h2>1. 背景与直觉</h2>
+<p>线上站 <code>imagefree.tingfengai.art</code> 已经在跑。用户要的是：慢请求能定位、worker 卡死能看见、DLQ 能真重入队、捐赠和条款能点开，并且一次调用不要把任务丢在 pending 里。</p>
+<p>最容易被忽略的直觉：<strong>内存队列里有任务，不等于 SQLite 读连接看得到同一行</strong>。WAL + 多读连接 + 0.2s 批量写，三件事叠在一起，会在「刚入队、worker 立刻取走」的窗口里读到空行，于是 <code>_process</code> 直接 return，任务永久 pending。</p>
+
+<h2>2. 需求落地对照</h2>
+<div class="wrap">
+<table>
+<thead><tr><th>项</th><th>状态</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td>慢日志 / 看板 / diagnostics / worker 心跳</td><td class="ok">已落地</td><td><code>api/slow_log.py</code> <code>/v1/slow</code> <code>/v1/diagnostics</code></td></tr>
+<tr><td>前端 Worker 健康卡</td><td class="ok">已落地</td><td>Dashboard 构建通过；未做真人点选</td></tr>
+<tr><td>DLQ 真重入队</td><td class="ok">已落地</td><td><code>IF_DLQ_REQUEUE</code> 默认关</td></tr>
+<tr><td>捐赠 + terms 四页</td><td class="ok">已落地</td><td>真实赞赏码 + 集成测试</td></tr>
+<tr><td>契约测试 / 图片配额</td><td class="ok">已落地</td><td>单元测试绿</td></tr>
+<tr><td>pending 根因链</td><td class="ok">代码+定向测试绿</td><td>45 项 DB+flow EXIT=0</td></tr>
+<tr><td>GitHub Release</td><td class="ok">已发布</td><td><a href="https://github.com/lza6/Image-to-2api/releases/tag/v3.1.0">v3.1.0</a></td></tr>
+<tr><td>腾讯云生产热更新</td><td class="bad">未执行</td><td>生产写操作需你确认后跑 compose</td></tr>
+<tr><td>真实上游出图 E2E</td><td class="bad">按红线未打</td><td>mock 覆盖逻辑，不烧额度</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>3. 修了什么（按故障模式）</h2>
+<ol>
+<li><strong>WAL 旧快照</strong>：读连接 SELECT 钉死隐式事务 → <code>isolation_level=None</code>。</li>
+<li><strong>flush 竞态</strong>：buffer 被 swap 走但尚未 commit，worker 以为无缓冲直接读库 → 读路径即使 buffer 空也拿同一把锁。</li>
+<li><strong>导入期临时 loop</strong>：<code>DB.__init__</code> 禁止 <code>asyncio.run</code>，连接惰性创建。</li>
+<li><strong>aiosqlite 线程泄漏</strong>：进程退出登记连接并停线程，避免 pytest 全绿后卡死。</li>
+<li><strong>测试隔离</strong>：禁止无条件 purge <code>api.*</code>；全局单例用 monkeypatch；from-import 常量双 patch。</li>
+</ol>
+
+<h2>4. 验证证据</h2>
+<div class="card">
+<p><code>pytest tests/test_db_batch_write.py tests/test_db_connection_pool.py tests/integration/test_full_flow.py tests/integration/test_async_flow.py</code></p>
+<p><strong>45 passed，EXIT=0</strong>（本轮收口实测）。</p>
+<p class="note">全量 <code>tests/</code> 在 Windows 上仍可能因跨文件污染或超时包装显示 124，不以它作为「产品不可用」证据。真实上游出图未跑。</p>
+</div>
+
+<h2>5. 部署与回滚</h2>
+<p>代码路径：<code>git pull</code> → <code>python scripts/sync_deploy.py check</code> → <code>cd deploy && docker compose up -d --build</code> → <code>curl /v1/healthz</code> 与 <code>/v1/diagnostics</code>。</p>
+<p>回滚：回到 tag <code>v2.3.0</code> 或本轮之前的 <code>d179c15</code> 功能提交之前的生产镜像。SQLite schema 无破坏性迁移，热修主要是连接语义。</p>
+
+<h2>6. 已知限制</h2>
+<ul>
+<li>覆盖率未冲到 75%（main.py / providers 缺口仍在）。</li>
+<li>生产机本次会话<strong>没有</strong>执行 compose 发布。</li>
+<li>Redis / Kafka / 分片明确不做：单机公益站没有容量证据。</li>
+<li><code>solve_ms</code> 目前并入 wait_token，看板能用但颗粒度粗。</li>
+</ul>
+
+<h2>7. 测验（提交后判分，80 分及格）</h2>
+<form id="quiz">
+<div class="q">
+<p>1. 任务卡 pending、队列里却有 task_id，最可能卡在哪一层？</p>
+<label><input type="radio" name="q1" value="0"> cf_solver 没启动，所以根本入不了队</label>
+<label><input type="radio" name="q1" value="1"> worker 取到了任务，但读连接看不到刚写入的行</label>
+<label><input type="radio" name="q1" value="0"> FastAPI 路由写错了 model 名</label>
+</div>
+<div class="q">
+<p>2. WAL 多读连接为什么必须 autocommit？</p>
+<label><input type="radio" name="q2" value="0"> 为了比 DELETE 更快</label>
+<label><input type="radio" name="q2" value="1"> 避免 SELECT 钉死旧快照，永远看不到别的连接的 commit</label>
+<label><input type="radio" name="q2" value="0"> SQLite 不允许 WAL 与事务同时存在</label>
+</div>
+<div class="q">
+<p>3. 批量写 flush 时，读为什么不能只看 buffer 是否为空？</p>
+<label><input type="radio" name="q3" value="1"> 另一个协程可能已 swap 走 buffer、正在 commit，空 buffer 仍是旧快照窗口</label>
+<label><input type="radio" name="q3" value="0"> 空 buffer 表示数据库损坏</label>
+<label><input type="radio" name="q3" value="0"> worker 不走 DB，只走内存</label>
+</div>
+<div class="q">
+<p>4. <code>IF_DLQ_REQUEUE</code> 默认为什么是关？</p>
+<label><input type="radio" name="q4" value="1"> 防止公开接口被刷成真重入队</label>
+<label><input type="radio" name="q4" value="0"> SQLite 不能 UPDATE</label>
+<label><input type="radio" name="q4" value="0"> 前端还没按钮</label>
+</div>
+<div class="q">
+<p>5. 排障应先打哪个只读接口？</p>
+<label><input type="radio" name="q5" value="0"> POST /v1/generate 再试一次</label>
+<label><input type="radio" name="q5" value="1"> GET /v1/diagnostics</label>
+<label><input type="radio" name="q5" value="0"> DELETE /v1/dead-letter-queue</label>
+</div>
+<div class="q">
+<p>6. 测试里直接 <code>provider._proxy_pool = None</code> 错在哪？</p>
+<label><input type="radio" name="q6" value="1"> 污染全局 registry 单例，后续文件会假失败</label>
+<label><input type="radio" name="q6" value="0"> Python 不允许给属性赋值</label>
+<label><input type="radio" name="q6" value="0"> 必须用 print 调试</label>
+</div>
+<div class="q">
+<p>7. 本轮有没有对腾讯云执行 compose 发布？</p>
+<label><input type="radio" name="q7" value="1"> 没有，生产写操作未在本会话执行</label>
+<label><input type="radio" name="q7" value="0"> 已经自动发布并验证出图</label>
+<label><input type="radio" name="q7" value="0"> 发布了但没记日志</label>
+</div>
+<div class="q">
+<p>8. 公益单机站现在要不要上 Kafka？</p>
+<label><input type="radio" name="q8" value="1"> 不要。没有容量证据，现有队列+WAL 才是当前规模</label>
+<label><input type="radio" name="q8" value="0"> 必须上，否则不能叫生产</label>
+<label><input type="radio" name="q8" value="0"> 已经上了 Redis 集群</label>
+</div>
+<button type="submit">交卷</button>
+<p id="quiz-result"></p>
+</form>
+</main>
+<script>
+const ANS = {q1:1,q2:1,q3:1,q4:1,q5:1,q6:1,q7:1,q8:1};
+document.getElementById('quiz').addEventListener('submit', function(e){
+  e.preventDefault();
+  let ok=0, n=0, miss=[];
+  Object.keys(ANS).forEach(function(k,i){
+    n++;
+    const el=document.querySelector('input[name="'+k+'"]:checked');
+    if(el && Number(el.value)===ANS[k]) ok++;
+    else miss.push(i+1);
+  });
+  const score=Math.round(ok/n*100);
+  const el=document.getElementById('quiz-result');
+  if(score>=80) el.textContent='及格：'+score+' 分。错题：'+(miss.length?miss.join(', '):'无');
+  else el.textContent='未及格：'+score+' 分。错题序号：'+miss.join(', ');
+});
+</script>
+</body>
+</html>

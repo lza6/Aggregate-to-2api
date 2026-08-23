@@ -212,3 +212,15 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 ## 附：imagefree-rules.md
 
 代码规范、命名约定、错误处理模式、测试要求详见同目录 [imagefree-rules.md](./imagefree-rules.md)。
+
+## Do-Not-Repeat（v3.1.0 已验证，勿再盲目优化）
+
+1. **SQLite WAL + 多读连接必须 `isolation_level=None`（autocommit）**。默认延迟事务会让 SELECT 钉死旧快照，round-robin 读池表现为「刚写入的任务随机 pending」。已在 `api/db.py:_create_conn`。
+2. **批量写 flush 与 worker 读必须同一把锁**。`_ensure_flushed` 即使 buffer 为空也要 `async with lock`，否则 swap 后未 commit 的窗口会被 worker 读穿。
+3. **禁止 `DB.__init__` 里 `asyncio.run`**。会把 aiosqlite 线程焊死在临时 loop，pytest 全绿后卡 shutdown。连接只在首次 `_ensure_initialized` 创建。
+4. **测试污染三源**：全局单例直接赋值、`from x import CONST` 值拷贝、`os.environ.setdefault`。一律 monkeypatch 使用方模块。conftest 不得无条件 `del sys.modules['api*']`。
+5. **不要为公益单机站引入 Redis/Kafka/分片**，除非有实测容量证据。现有 WAL + 连接池 + 0.2s 批量写是当前正确规模。
+
+新增运维端点：`GET /v1/diagnostics`、`GET /v1/slow`、`GET /v1/slow/view`、`GET /v1/honor`、`GET /v1/terms/{sub}`。
+
+last_verified: 2026-08-23 / 仓库版本 v3.1.0
