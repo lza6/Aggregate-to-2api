@@ -12,6 +12,19 @@ import pytest
 
 os.environ.setdefault("IF_FREE_PROXY", "0")
 
+def _live_mod():
+    """conftest._app_instance 会清 api.* 模块缓存——顶部 import 绑定的可能是
+    收集期旧对象。测试运行期一律取 sys.modules 中的活跃版本。"""
+    import sys as _sys
+    return _sys.modules["api.free_proxy_fetcher"]
+
+def _live_fetcher(pool):
+    """用 sys.modules 活跃模块的 FreeProxyFetcher 构造实例。"""
+    return _live_mod().FreeProxyFetcher(pool)
+
+
+
+
 from api.free_proxy_fetcher import (  # noqa: E402
     FREE_PROXY_SOURCES,
     FreeProxyFetcher,
@@ -97,17 +110,17 @@ class TestParseSource:
 class TestFetcherLifecycle:
     @pytest.mark.asyncio
     async def test_start_skips_when_disabled(self, monkeypatch):
-        monkeypatch.setattr("api.free_proxy_fetcher.config.FREE_PROXY_ENABLED", False)
-        f = FreeProxyFetcher(ProxyPool())
+        monkeypatch.setattr(_live_mod().config, "FREE_PROXY_ENABLED", False)
+        f = _live_fetcher(ProxyPool())
         await f.start()
         assert f.task is None
         assert f._client is None
 
     @pytest.mark.asyncio
     async def test_start_creates_task_and_stop_cancels(self, monkeypatch):
-        monkeypatch.setattr("api.free_proxy_fetcher.config.FREE_PROXY_ENABLED", True)
-        monkeypatch.setattr("api.free_proxy_fetcher.config.PROXY", None)
-        f = FreeProxyFetcher(ProxyPool())
+        monkeypatch.setattr(_live_mod().config, "FREE_PROXY_ENABLED", True)
+        monkeypatch.setattr(_live_mod().config, "PROXY", None)
+        f = _live_fetcher(ProxyPool())
         await f.start()
         assert f.task is not None
         assert f._client is not None
@@ -125,13 +138,13 @@ class TestFetchOnce:
     @pytest.mark.asyncio
     async def test_injects_parsed_free_proxies(self, monkeypatch):
         pool = ProxyPool()
-        f = FreeProxyFetcher(pool)
+        f = _live_fetcher(pool)
         fake_client = _FakeAsyncClient({
             "proxyscrape.com/v2/": "8.8.8.8:80\n8.8.4.4:443\n",
             "proxylist.geonode.com": json.dumps({"data": [{"ip": "9.9.9.9", "port": "8080"}]}),
         })
         f._client = fake_client
-        monkeypatch.setattr("api.free_proxy_fetcher._precheck", _precheck_ok)
+        monkeypatch.setattr(_live_mod(), "_precheck", _precheck_ok)
         stats = await f._fetch_once()
         assert stats["sources_ok"] == 2
         assert stats["fetched"] == 3
@@ -143,13 +156,13 @@ class TestFetchOnce:
     @pytest.mark.asyncio
     async def test_dedupe_across_sources(self, monkeypatch):
         pool = ProxyPool()
-        f = FreeProxyFetcher(pool)
+        f = _live_fetcher(pool)
         # 两个源都返回同一代理 → 只注入一次
         f._client = _FakeAsyncClient({
             "proxyscrape.com/v2/": "8.8.8.8:80\n",
             "githubusercontent.com": "8.8.8.8:80\n7.7.7.7:88\n",
         })
-        monkeypatch.setattr("api.free_proxy_fetcher._precheck", _precheck_ok)
+        monkeypatch.setattr(_live_mod(), "_precheck", _precheck_ok)
         stats = await f._fetch_once()
         assert stats["injected"] == 2
         assert len(pool.entries) == 2
@@ -158,16 +171,16 @@ class TestFetchOnce:
     async def test_already_injected_skipped(self, monkeypatch):
         pool = ProxyPool()
         pool.add_free(["http://8.8.8.8:80"])
-        f = FreeProxyFetcher(pool)
+        f = _live_fetcher(pool)
         f._client = _FakeAsyncClient({"proxyscrape.com/v2/": "8.8.8.8:80\n"})
-        monkeypatch.setattr("api.free_proxy_fetcher._precheck", _precheck_ok)
+        monkeypatch.setattr(_live_mod(), "_precheck", _precheck_ok)
         stats = await f._fetch_once()
         assert stats["injected"] == 0  # 已存在 → 不重复注入
 
     @pytest.mark.asyncio
     async def test_precheck_fail_targets_dropped(self, monkeypatch):
         pool = ProxyPool()
-        f = FreeProxyFetcher(pool)
+        f = _live_fetcher(pool)
         f._client = _FakeAsyncClient({"proxyscrape.com/v2/": "8.8.8.8:80\n9.9.9.9:8080\n"})
         monkeypatch.setattr("api.free_proxy_fetcher._precheck", _precheck_fail)
         stats = await f._fetch_once()
@@ -177,7 +190,7 @@ class TestFetchOnce:
     @pytest.mark.asyncio
     async def test_stats_refresh_interval_constant(self):
         import api.free_proxy_fetcher as fmod
-        f = FreeProxyFetcher(ProxyPool())
+        f = _live_fetcher(ProxyPool())
         # FREE_PROXY_REFRESH_MIN × 60 是 _loop 的休眠值（周期控制）
         assert fmod.config.FREE_PROXY_REFRESH_MIN >= 0
         assert isinstance(fmod.config.FREE_PROXY_REFRESH_MIN, int)

@@ -148,10 +148,17 @@ async def _app_instance(mock_cfsolver):
     _db_path = tempfile.mktemp(suffix=".db")
     os.environ["IF_DB_FILE"] = _db_path
 
-    # ── 清除已有 api 模块缓存，确保全新导入 ──
-    for mod_key in list(sys.modules.keys()):
-        if mod_key.startswith("api"):
-            del sys.modules[mod_key]
+    # ── 清除已有 api 模块缓存，确保 env 生效的全新导入 ──
+    # 注意：purge 会让「收集期已 import 的测试文件」持有的旧 api 类/常量与
+    # 新模块对象分叉（双版本问题：旧 FreeProxyFetcher 读旧 config → 开关失效）。
+    # 因此 purge 仅在【尚未有任何 api 模块被导入】时执行；若已导入（收集期被
+    # 测试文件触发），说明 env 尚未被集成 fixture 修改——此时直接沿用现有模块，
+    # 由下方环境变量在进程级生效即可（Settings 单例已在 import 时固化，但集成
+    # 关心的运行期开关均经 config.<NAME> 属性访问，purge 与否行为一致）。
+    if not any(m == "api" or m.startswith("api.") for m in sys.modules):
+        for mod_key in list(sys.modules.keys()):
+            if mod_key.startswith("api"):
+                del sys.modules[mod_key]
 
     import api.config  # noqa: F401
     import api.main  # 首次导入，触发模块级代码执行
