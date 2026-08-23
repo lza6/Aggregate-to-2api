@@ -112,6 +112,11 @@ class TestDiskLogger:
     def test_setup_creates_dir_and_writes(self, tmp_path):
         import logging
         from api.disk_logger import setup_disk_logging, teardown_disk_logging
+        # 单元测试不 import api.main（无 basicConfig），裸进程 root level=WARNING
+        # 会把 info 记录在 handler 之前过滤掉——生产服务 root 是 INFO，测试对齐该前提
+        root = logging.getLogger()
+        saved_level = root.level
+        root.setLevel(logging.INFO)
         log_dir = str(tmp_path / "logs")
         h = setup_disk_logging(log_dir, retention_days=3)
         try:
@@ -127,6 +132,7 @@ class TestDiskLogger:
             assert "hello-disk" in content
         finally:
             teardown_disk_logging(h)
+            root.setLevel(saved_level)
 
     def test_teardown_removes_handler(self, tmp_path):
         import logging

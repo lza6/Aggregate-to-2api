@@ -124,9 +124,14 @@ async def test_daily_checkin_updates_credits(tmp_path):
 # ── 邮箱池 ──────────────────────────────────────
 class TestEmailPool:
     @pytest.mark.asyncio
-    async def test_allocate_unique_and_record(self, tmp_path):
+    async def test_allocate_unique_and_record(self, tmp_path, monkeypatch):
         from api.email_pool import EmailPool
         p = EmailPool(str(tmp_path / "email.db"))
+        # 网络源打桩：temp-mail/22.do 建箱是真实 HTTP 调用（无 mock 会挂测试），
+        # 本用例只验证分配唯一性与记录逻辑——本地 temp.tf 随机源足够
+        monkeypatch.setattr(
+            p, "_sources",
+            [s for s in p._sources if s.name == "temp.tf"])
         a1, _s1 = await p.allocate("minimaxh3")
         a2, _s2 = await p.allocate("minimaxh3")
         assert a1 != a2
@@ -139,9 +144,13 @@ class TestEmailPool:
         p._conn.close()
 
     @pytest.mark.asyncio
-    async def test_stats(self, tmp_path):
+    async def test_stats(self, tmp_path, monkeypatch):
         from api.email_pool import EmailPool
         p = EmailPool(str(tmp_path / "email.db"))
+        # 同上：打桩网络源，只留本地 temp.tf
+        monkeypatch.setattr(
+            p, "_sources",
+            [s for s in p._sources if s.name == "temp.tf"])
         a, _s = await p.allocate("nanobanana")
         p.record(a, "nanobanana", "ok")
         s = p.stats()
