@@ -6,15 +6,23 @@ import pytest
 class TestHonor:
     """捐赠通道端点 + 首页 footer 落地。"""
 
-    async def test_honor_returns_donation_info(self, app_with_mocks):
-        """GET /v1/honor 返回捐赠二维码路径与文案。"""
+    async def test_honor_returns_donation_page(self, app_with_mocks):
+        """GET /v1/honor 返回渲染好的独立 HTML 页面。"""
         client = app_with_mocks
         r = await client.get("/v1/honor")
+        assert r.status_code == 200
+        assert r.headers.get("content-type", "").startswith("text/html")
+        assert "支持听风AI" in r.text
+        assert "/static/zanshang.jpg" in r.text
+
+    async def test_honor_data_returns_json(self, app_with_mocks):
+        """GET /v1/honor/data 返回 JSON 数据。"""
+        client = app_with_mocks
+        r = await client.get("/v1/honor/data")
         assert r.status_code == 200
         body = r.json()
         assert body.get("status") == "ok"
         assert body.get("qr_path") == "/static/zanshang.jpg"
-        assert body.get("donate") is not None or "donate" in body or "title" in body
         assert body.get("contact_wx") == "Tf00798"
         assert body.get("title") == "支持听风"
 

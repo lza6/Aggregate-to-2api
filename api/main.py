@@ -738,9 +738,18 @@ async def terms_sub(sub: str):
     return FileResponse(_TERMS_DIR / f"{sub}.html", media_type="text/html")
 
 
+_HONOR_PAGE = Path(__file__).parent / "static" / "honor.html"
+
+
 @app.get("/v1/honor", include_in_schema=False)
 async def honor():
-    """捐赠页：返回公益运营说明与赞赏码落地信息。"""
+    """捐赠页：返回独立漂亮的赞赏页面（HTML 直出）。"""
+    return FileResponse(_HONOR_PAGE, media_type="text/html")
+
+
+@app.get("/v1/honor/data", include_in_schema=False)
+async def honor_data():
+    """捐赠数据接口（JSON 格式，供集成方调用）。"""
     return {
         "status": "ok",
         "title": "支持听风",
