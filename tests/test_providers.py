@@ -104,9 +104,11 @@ class TestProviderGenerate:
         assert "余额" in res.error
 
     @pytest.mark.asyncio
-    async def test_aifreeforever_no_proxy_pool(self):
+    async def test_aifreeforever_no_proxy_pool(self, monkeypatch):
         p = registry.providers["aifreeforever"]
-        p._proxy_pool = None
+        # monkeypatch 恢复原值——直接赋 None 会污染全局 registry 单例，
+        # 导致后续文件（如 test_account_pool 的无代理守卫用例）拿到 None 池
+        monkeypatch.setattr(p, "_proxy_pool", None)
         res = await p.generate("aifreeforever/gpt-image-2", "cat", "1:1")
         # 无代理池时回退直连，可能因 cf_solver 不可用而失败
         assert res.status in ("error",)

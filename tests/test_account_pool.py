@@ -192,7 +192,10 @@ async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
 
     # 确保代理池为空 + 非 mock 模式
     monkeypatch.setattr(pp_mod.proxy_pool, "entries", [])
+    # account_pool.py 是 from-import 值拷贝——必须 patch 它那份才生效（patch base 无用）
     monkeypatch.setattr("api.providers.base.MOCK_REGISTER", False)
+    import api.account_pool as ap_mod
+    monkeypatch.setattr(ap_mod, "MOCK_REGISTER", False)
     monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)
     monkeypatch.setattr("api.account_pool.TARGET_MINIMAXH3", 1)
 
