@@ -165,3 +165,32 @@ export async function clearDLQ(): Promise<any> {
   const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, { method: 'DELETE' });
   return res.json();
 }
+
+// ── v3.2: 自适应路由记录 ──
+export interface RoutingRecord {
+  ts: number;
+  request_id: string;
+  model: string;
+  requested_provider: string;
+  selected_provider: string;
+  score: number;
+  scores: Record<string, number>;
+  latency_ms: number;
+  success: boolean | null;
+  reason: string;
+}
+
+export interface RoutingNode {
+  provider_id: string;
+  success_count: number;
+  failure_count: number;
+  ewma_latency_ms: number;
+  in_flight_requests: number;
+  circuit_state: string;
+  score: number;
+}
+
+export async function fetchRoutingRecords(limit = 50): Promise<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }> {
+  const res = await fetch(`${API_BASE}/v1/routing/records?limit=${limit}`);
+  return res.json();
+}

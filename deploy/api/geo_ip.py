@@ -104,19 +104,19 @@ def guess_country(ip: str) -> dict:
 
 
 def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict, latency_ms: int = 0) -> dict:
-    """将代理转换为多种常用客户端（V2Ray, Clash, Shadowrocket 等）支持的链接格式。"""
+    """将代理转换为多种常用客户端（V2Ray, Clash, Shadowrocket 等）支持的链接格式。
+
+    注意：不再输出纯 http:// 链接（V2Ray 等客户端因 HTTP 不安全拒绝导入）。
+    """
     cname = country_info.get("name", "全球")
     emoji = country_info.get("emoji", "🌐")
     node_name = f"{emoji} {cname}-{ip}:{port} ({latency_ms}ms)"
     enc_name = urllib.parse.quote(node_name)
 
-    # 1. HTTP 格式
-    http_link = f"http://{ip}:{port}#{enc_name}"
-
-    # 2. SOCKS5 格式
+    # 1. SOCKS5 格式（V2Ray/Clash 通用）
     socks5_link = f"socks5://{ip}:{port}#{enc_name}"
 
-    # 3. V2Ray 标准 VMess 配置 (严格 RFC 规范)
+    # 2. V2Ray 标准 VMess 配置 (严格 RFC 规范)
     vmess_dict = {
         "v": "2",
         "ps": node_name,
@@ -135,6 +135,12 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
     }
     vmess_b64 = base64.b64encode(json.dumps(vmess_dict).encode("utf-8")).decode("utf-8")
     vmess_link = f"vmess://{vmess_b64}"
+
+    # 3. Shadowsocks 格式 (ss://) — V2Ray/Clash 最广泛支持的协议
+    ss_method = "chacha20-ietf-poly1305"
+    ss_password = "freeProxy"
+    ss_userinfo = base64.b64encode(f"{ss_method}:{ss_password}".encode()).decode().rstrip("=")
+    ss_link = f"ss://{ss_userinfo}@{ip}:{port}#{enc_name}"
 
     # 4. Clash 标准代理节点配置字典
     clash_proxy = {
@@ -157,8 +163,8 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
         "country_code": country_info.get("code", "UN"),
         "country_emoji": emoji,
         "latency_ms": latency_ms,
-        "http_link": http_link,
         "socks5_link": socks5_link,
+        "ss_link": ss_link,
         "vmess_link": vmess_link,
         "clash_proxy": clash_proxy,
         "v2ray_import": v2ray_import,
@@ -167,7 +173,11 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
 
 
 def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
-    """生成一键订阅文本（支持 raw / base64 / clash yaml 格式，纯标准库无 pyyaml 依赖）。"""
+    """生成一键订阅文本（支持 raw / base64 / clash yaml 格式，纯标准库无 pyyaml 依赖）。
+
+    v3.2: 不再输出 http:// 链接（V2Ray 等客户端因 HTTP 不安全拒绝导入），
+    优先输出 ss:// (Shadowsocks) + vmess:// + socks5:// 混合格式。
+    """
     if fmt == "clash":
         lines = [
             "port: 7890",
@@ -211,11 +221,14 @@ def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
         return "\n".join(lines)
 
     links = []
+    # 订阅头部注释：让客户端知道这是代理池订阅
+    links.append("# 听风AI免费代理池 - 支持 V2Ray/Clash/Socks5/Shadowsocks")
+    links.append("# 订阅地址: https://imagefree.tingfengai.art/v1/proxy-pool/subscribe?format=base64")
     for p in proxies:
+        if p.get("ss_link"):
+            links.append(p.get("ss_link"))
         if p.get("socks5_link"):
             links.append(p.get("socks5_link"))
-        if p.get("http_link"):
-            links.append(p.get("http_link"))
         if p.get("vmess_link"):
             links.append(p.get("vmess_link"))
     links = [l for l in links if l]

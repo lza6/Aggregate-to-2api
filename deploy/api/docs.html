@@ -2073,9 +2073,38 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   document.getElementById('pp-prev').onclick = function () { if (proxyPage > 1) loadProxy(proxyPage - 1); };
   document.getElementById('pp-next').onclick = function () { loadProxy(proxyPage + 1); };
   document.getElementById('pm-close').onclick = function () { document.getElementById('proxy-modal').style.display = 'none'; };
-  document.getElementById('pm-copy-socks5').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-socks5').value); showToast('✅ Socks5 链接已复制', 'success'); };
-  document.getElementById('pm-copy-http').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-http').value); showToast('✅ HTTP 链接已复制', 'success'); };
-  document.getElementById('pm-copy-vmess').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-vmess').value); showToast('✅ V2Ray 链接已复制', 'success'); };
+  // ── HTML 复制 fallback（HTTP/权限受限时自动降级，不再静默失败）──
+  function copyTextSafe(text, successMsg) {
+    if (!text) { showToast('⚠️ 没有可复制内容', 'warning'); return; }
+    function done() { showToast(successMsg || '✅ 已复制', 'success'); }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) { done(); }
+        else {
+          // 最后兜底：弹窗让用户手动复制
+          window.prompt('请手动复制：', text);
+          showToast('ℹ️ 已为你打开复制框', 'info');
+        }
+      } catch (e) { window.prompt('请手动复制：', text); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      var p = navigator.clipboard.writeText(text);
+      if (p && p.then) { p.then(done).catch(fallback); }
+      else { try { done(); } catch (e) { fallback(); } }
+    } else { fallback(); }
+  }
+
+  document.getElementById('pm-copy-socks5').onclick = function () { copyTextSafe(document.getElementById('pm-socks5').value, '✅ Socks5 链接已复制'); };
+  document.getElementById('pm-copy-http').onclick = function () { copyTextSafe(document.getElementById('pm-http').value, '✅ HTTP 链接已复制'); };
+  document.getElementById('pm-copy-vmess').onclick = function () { copyTextSafe(document.getElementById('pm-vmess').value, '✅ V2Ray 链接已复制'); };
 
   // ── 在线生成面板 ──
   var pgTimer = null, pgRatio = '1:1';
@@ -2618,8 +2647,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     if (lbCopy) {
       lbCopy.onclick = function () {
         if (lbImg.src) {
-          navigator.clipboard.writeText(lbImg.src);
-          showToast('✅ 图片直链已复制', 'success');
+          copyTextSafe(lbImg.src, '✅ 图片直链已复制');
+        } else {
+          showToast('⚠️ 没有可复制的图片链接', 'warning');
         }
       };
     }
