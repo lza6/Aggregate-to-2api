@@ -541,7 +541,7 @@
   <p class="muted">选模型 → 输提示词 → 出图/出视频。模型 id 格式：<code>&lt;提供商&gt;/&lt;上游真实模型名&gt;</code>（如 <code>nanobanana/nano-banana-pro</code> 或 <code>imagefree/default</code>）。自动调度长效号池与高并发队列。</p>
 
   <div class="aifree-notice" id="aifree-notice" style="display:none">
-    <strong>⚠ aifreeforever 直连模式</strong> — 当前未配置住宅代理池，使用直连（可能受每 IP 每日限额限制）。若遇 429 限流，请配置 <code>IF_PROXY_FILE</code> 或开启 <code>IF_FREE_PROXY=1</code>。
+    <strong>💡 aifreeforever 代理轮换</strong> — 自动从免费代理池中轮换出口 IP（每 IP 每日限额独立计算）。
   </div>
 
   <div class="pg-tabs">
@@ -1254,6 +1254,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   }
 
   // ── 安全 fetch JSON 工具：try/catch + Content-Type 检查 + 兜底 .text() + 超时
+  window.safeJson = safeJson;
   function safeJson(url, opts) {
     var timeout = 30000;
     if (opts && opts.timeout) timeout = opts.timeout;
