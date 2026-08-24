@@ -616,8 +616,44 @@
 
 <!-- ── 号池看板 ── -->
 <section class="card" id="pool-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
-  <h2 style="margin-top:0">👥 号池看板</h2>
-  <p class="muted">长效长生型提供商（nanobanana 每日自动签到领 4 积分续额，账号越多可用并发越高）的账号池实时状态。</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div>
+      <h2 style="margin:0 0 4px">👥 号池与自动注号全链路看板</h2>
+      <p class="muted" style="margin:0">长效长生型提供商（nanobanana 每日自动签到领 4 积分续额）的全链路自动化节点状态流转。</p>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">⚡ 7×24h 智能常驻守护</div>
+  </div>
+
+  <!-- 节点式注册/签到流水线可视化 -->
+  <div style="background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-bottom:20px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text)">🚀 nanobanana 全自动补号与签到工作流节点：</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px">
+      <div style="background:var(--card);border:1px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#10b981">●</span> <span>1. 多源邮箱分配 (22.do/linshi)</span>
+      </div>
+      <span style="color:var(--muted)">➔</span>
+      <div style="background:var(--card);border:1px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#10b981">●</span> <span>2. Turnstile 求解器 (8001)</span>
+      </div>
+      <span style="color:var(--muted)">➔</span>
+      <div style="background:var(--card);border:1px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#10b981">●</span> <span>3. Sign-up 提交 (HTTP 200)</span>
+      </div>
+      <span style="color:var(--muted)">➔</span>
+      <div style="background:var(--card);border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#f59e0b">●</span> <span>4. 邮件激活 / 提取 Token</span>
+      </div>
+      <span style="color:var(--muted)">➔</span>
+      <div style="background:var(--card);border:1px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#10b981">●</span> <span>5. Session 换取与号池入库</span>
+      </div>
+      <span style="color:var(--muted)">➔</span>
+      <div style="background:var(--card);border:1px solid #10b981;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:6px">
+        <span style="color:#10b981">●</span> <span>6. 每日定时 Claim 签到 (+4分)</span>
+      </div>
+    </div>
+  </div>
+
   <div class="pool-grid" id="pool-grid"><div class="empty">⏳ 加载中…</div></div>
   <div id="email-pool-box" style="margin-top:16px"></div>
 </section>
@@ -644,7 +680,8 @@
       <p class="muted" style="margin:0">住宅代理 + 免费代理双源实时监控 · 支持全量分页、延迟检测、国家地区与一键订阅。</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a href="/v1/proxy-pool/subscribe?format=base64" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">📥 Base64 订阅</a>
+      <a href="/v1/proxy-pool/subscribe?format=base64" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">📥 Base64 订阅 (V2Ray/Clash)</a>
+      <a href="/v1/proxy-pool/subscribe?format=clash" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">⚡ Clash 规则配置</a>
       <a href="/v1/proxy-pool/subscribe?format=raw" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">📋 节点列表</a>
     </div>
   </div>

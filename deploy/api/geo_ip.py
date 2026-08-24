@@ -116,22 +116,38 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
     # 2. SOCKS5 格式
     socks5_link = f"socks5://{ip}:{port}#{enc_name}"
 
-    # 3. V2Ray VMess 模拟配置 (针对 http/socks5 代理的通用包装)
+    # 3. V2Ray 标准 VMess 配置 (严格 RFC 规范)
     vmess_dict = {
         "v": "2",
         "ps": node_name,
         "add": ip,
-        "port": str(port),
-        "id": "00000000-0000-0000-0000-000000000000",
-        "aid": "0",
+        "port": port,
+        "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
+        "aid": 0,
+        "scy": "auto",
         "net": "tcp",
         "type": "none",
         "host": "",
         "path": "",
-        "tls": ""
+        "tls": "",
+        "sni": "",
+        "alpn": ""
     }
     vmess_b64 = base64.b64encode(json.dumps(vmess_dict).encode("utf-8")).decode("utf-8")
     vmess_link = f"vmess://{vmess_b64}"
+
+    # 4. Clash 标准代理节点配置字典
+    clash_proxy = {
+        "name": node_name,
+        "type": "socks5",
+        "server": ip,
+        "port": port,
+        "udp": True
+    }
+
+    # 5. 一键导入 Scheme (支持一键拉起 V2RayN / Clash / Shadowrocket)
+    v2ray_import = vmess_link
+    clash_import = f"clash://install-config?url={urllib.parse.quote('https://imagefree.tingfengai.art/v1/proxy-pool/subscribe?format=clash')}&name={urllib.parse.quote('听风AI免费代理池')}"
 
     return {
         "node_name": node_name,
@@ -144,16 +160,55 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
         "http_link": http_link,
         "socks5_link": socks5_link,
         "vmess_link": vmess_link,
+        "clash_proxy": clash_proxy,
+        "v2ray_import": v2ray_import,
+        "clash_import": clash_import,
     }
 
 
 def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
-    """生成一键订阅文本（支持 raw/base64 或 clash yaml 格式）。"""
+    """生成一键订阅文本（支持 raw / base64 / clash yaml 格式）。"""
+    if fmt == "clash":
+        import yaml
+        proxies_list = [p.get("clash_proxy") for p in proxies if p.get("clash_proxy")]
+        proxy_names = [p["name"] for p in proxies_list]
+        clash_config = {
+            "port": 7890,
+            "socks-port": 7891,
+            "allow-lan": True,
+            "mode": "rule",
+            "log-level": "info",
+            "proxies": proxies_list,
+            "proxy-groups": [
+                {
+                    "name": "🚀 节点选择",
+                    "type": "select",
+                    "proxies": ["♻️ 自动选择", "DIRECT"] + proxy_names
+                },
+                {
+                    "name": "♻️ 自动选择",
+                    "type": "url-test",
+                    "url": "http://www.gstatic.com/generate_204",
+                    "interval": 300,
+                    "proxies": proxy_names
+                }
+            ],
+            "rules": [
+                "GEOIP,LAN,DIRECT",
+                "GEOIP,CN,DIRECT",
+                "MATCH,🚀 节点选择"
+            ]
+        }
+        return yaml.dump(clash_config, allow_unicode=True, sort_keys=False)
+
     links = []
     for p in proxies:
-        # 默认优先输出 socks5 与 http 链接
-        links.append(p.get("http_link", ""))
-        links.append(p.get("socks5_link", ""))
+        if p.get("socks5_link"):
+            links.append(p.get("socks5_link"))
+        if p.get("http_link"):
+            links.append(p.get("http_link"))
+        if p.get("vmess_link"):
+            links.append(p.get("vmess_link"))
     links = [l for l in links if l]
 
     raw_text = "\n".join(links)
