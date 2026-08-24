@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v2.3.0
+# 版本: v4.2.1
 
 services:
   cfsolver:
