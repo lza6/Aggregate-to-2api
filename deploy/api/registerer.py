@@ -313,6 +313,5 @@ def _extract_verify_link(mail: dict | None) -> str | None:
 # ── 注册器注册表 ─────────────────────────────────
 def build_registerers() -> dict[str, object]:
     out: dict[str, object] = {}
-    out["minimaxh3"] = Minimaxh3Registerer()
-    out["nanobanana"] = NanobananaRegisterer()
+    out["nanobanana"] = NanobananaRegisterer()  # 仅保留长期签到型长效提供商
     return out

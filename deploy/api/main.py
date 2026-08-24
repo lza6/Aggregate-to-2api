@@ -1477,10 +1477,23 @@ async def clear_dlq(request: Request):
 
 
 @app.get("/v1/proxy-pool")
-async def get_proxy_pool():
-    """代理池实时状态：住宅代理数/免费代理数/可用数/冷却数 + 前 20 条明细。"""
+async def get_proxy_pool(page: int = Query(1, ge=1),
+                         page_size: int = Query(20, ge=1, le=500)):
+    """代理池实时状态：住宅/免费代理数/可用数/冷却数 + 支持全量分页与国家地理位置信息。"""
     from .proxy_pool import proxy_pool
-    return proxy_pool.snapshot()
+    return proxy_pool.snapshot(page=page, page_size=page_size)
+
+
+@app.get("/v1/proxy-pool/subscribe", include_in_schema=False)
+async def get_proxy_subscription(format: str = Query("base64", description="订阅格式：base64 或 raw")):
+    """代理订阅一键生成：供 V2Ray / Clash / 爬虫工具一键订阅导入当前所有抓取到的可用代理。"""
+    from .proxy_pool import proxy_pool
+    from .geo_ip import generate_subscription_text
+    snap = proxy_pool.snapshot(page=1, page_size=1000)
+    items = snap.get("items") or []
+    sub_text = generate_subscription_text([item.get("protocols") for item in items if item.get("protocols")], fmt=format)
+    media_type = "text/plain; charset=utf-8"
+    return Response(content=sub_text, media_type=media_type)
 
 
 # ── S-3/S-4: 慢日志画像端点（只读）──────────────────

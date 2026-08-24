@@ -244,11 +244,15 @@ registry = Registry()
 
 
 def bootstrap() -> None:
-    """创建并注册全部提供商实例（幂等）。"""
+    """创建并注册全部提供商实例（幂等）。
+
+    架构优化：已移除用完即丢且不可签到的冗余提供商（minimaxh3），
+    将所有算力与号池集中在支持每日自动签到续额的长效提供商（nanobanana）
+    以及主力提供商（imagefree, aifreeforever）。
+    """
     if registry.providers:
         return
     registry.register(imagefree.ImagefreeProvider())
-    registry.register(minimaxh3.Minimaxh3Provider())
     registry.register(aifreeforever.AifreeforeverProvider())
     registry.register(nanobanana.NanobananaProvider())
 

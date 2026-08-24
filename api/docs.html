@@ -638,21 +638,76 @@
 
 <!-- ── 代理池状态 ── -->
 <section class="card" id="proxy-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
-  <h2 style="margin-top:0">🌐 代理池状态</h2>
-  <p class="muted">住宅代理 + 免费代理双源实时状态（每 15 秒自动刷新）。</p>
-  <div class="proxy-stats" id="proxy-stats">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <h2 style="margin:0 0 6px">🌐 代理池状态</h2>
+      <p class="muted" style="margin:0">住宅代理 + 免费代理双源实时监控 · 支持全量分页、延迟检测、国家地区与一键订阅。</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="/v1/proxy-pool/subscribe?format=base64" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">📥 Base64 订阅</a>
+      <a href="/v1/proxy-pool/subscribe?format=raw" target="_blank" class="btn secondary" style="font-size:12px;padding:6px 12px;margin:0;text-decoration:none">📋 节点列表</a>
+    </div>
+  </div>
+
+  <div class="proxy-stats" id="proxy-stats" style="margin-top:16px">
     <div class="stat-card"><div class="label">代理总数</div><div class="value small" id="px-total">–</div></div>
     <div class="stat-card"><div class="label">住宅代理</div><div class="value small" id="px-res">–</div></div>
     <div class="stat-card"><div class="label">免费代理</div><div class="value small" id="px-free">–</div></div>
     <div class="stat-card"><div class="label">可用</div><div class="value small" id="px-avail">–</div></div>
   </div>
-  <div class="proxy-table-wrap">
+
+  <div class="proxy-table-wrap" style="margin-top:16px">
     <table class="proxy-table" id="proxy-table">
-      <thead><tr><th>代理 (脱敏)</th><th>来源</th><th>今日使用</th><th>冷却(秒)</th><th>连续失败</th></tr></thead>
-      <tbody id="proxy-tbody"><tr><td colspan="5" class="empty">⏳ 加载中…</td></tr></tbody>
+      <thead><tr>
+        <th>地区 / 国家</th>
+        <th>代理地址 (脱敏)</th>
+        <th>来源</th>
+        <th>检测延迟</th>
+        <th>检测时间</th>
+        <th>今日使用</th>
+        <th>冷却(秒)</th>
+        <th>操作 / 链接</th>
+      </tr></thead>
+      <tbody id="proxy-tbody"><tr><td colspan="8" class="empty">⏳ 加载中…</td></tr></tbody>
     </table>
   </div>
+
+  <div id="proxy-pagination" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;font-size:13px">
+    <button id="pp-prev" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:13px" disabled>← 上一页</button>
+    <span id="pp-info" style="color:var(--muted)">第 1 页 / 共 1 页</span>
+    <button id="pp-next" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:13px" disabled>下一页 →</button>
+  </div>
 </section>
+
+<!-- ── 代理协议详情模态框 ── -->
+<div id="proxy-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px 28px;max-width:540px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0;font-size:16px" id="pm-title">🌐 代理节点链接</h3>
+      <button id="pm-close" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px">&times;</button>
+    </div>
+    <div style="font-size:13px;line-height:1.7">
+      <div style="margin-bottom:12px"><span style="color:var(--muted)">Socks5 链接：</span>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input type="text" id="pm-socks5" readonly style="flex:1;padding:6px 8px;font-family:monospace;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">
+          <button class="btn secondary" id="pm-copy-socks5" style="padding:6px 10px;font-size:12px">复制</button>
+        </div>
+      </div>
+      <div style="margin-bottom:12px"><span style="color:var(--muted)">HTTP 链接：</span>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input type="text" id="pm-http" readonly style="flex:1;padding:6px 8px;font-family:monospace;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">
+          <button class="btn secondary" id="pm-copy-http" style="padding:6px 10px;font-size:12px">复制</button>
+        </div>
+      </div>
+      <div><span style="color:var(--muted)">V2Ray (VMess 格式)：</span>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <input type="text" id="pm-vmess" readonly style="flex:1;padding:6px 8px;font-family:monospace;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">
+          <button class="btn secondary" id="pm-copy-vmess" style="padding:6px 10px;font-size:12px">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── 用量统计 ── -->
 <section class="card" id="stats-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
@@ -1879,43 +1934,80 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   // ── 代理池状态 ──
   var proxyTimer = null;
   var proxyLastData = '';
+  var proxyPage = 1;
+  var proxyPageSize = 20;
 
   function startProxyPolling() {
     if (proxyTimer) return;
-    loadProxy();
-    proxyTimer = setInterval(loadProxy, 15000);
+    loadProxy(1);
+    proxyTimer = setInterval(function () { loadProxy(proxyPage); }, 15000);
   }
 
-  function loadProxy() {
-    safeJson('/v1/proxy-pool').then(function (d) {
-      var data = JSON.stringify(d);
-      if (data === proxyLastData) return;
-      proxyLastData = data;
-
+  function loadProxy(page) {
+    proxyPage = page || 1;
+    safeJson('/v1/proxy-pool?page=' + proxyPage + '&page_size=' + proxyPageSize).then(function (d) {
       document.getElementById('px-total').textContent = d.total != null ? d.total : '–';
       document.getElementById('px-res').textContent = d.residential != null ? d.residential : '–';
       document.getElementById('px-free').textContent = d.free != null ? d.free : '–';
       document.getElementById('px-avail').textContent = d.available != null ? d.available : '–';
 
-      var top = d.top || [];
+      var totalPages = d.total_pages || 1;
+      document.getElementById('pp-info').textContent = '第 ' + proxyPage + ' 页 / 共 ' + totalPages + ' 页 (总 ' + (d.total || 0) + ' 条)';
+      document.getElementById('pp-prev').disabled = (proxyPage <= 1);
+      document.getElementById('pp-next').disabled = (proxyPage >= totalPages);
+
+      var items = d.items || d.top || [];
       var tbody = document.getElementById('proxy-tbody');
-      if (!top.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty">🌐 暂无代理配置</td></tr>';
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">🌐 暂无代理数据</td></tr>';
         return;
       }
-      tbody.innerHTML = top.map(function (e) {
+      tbody.innerHTML = items.map(function (e) {
         var srcClass = e.source === 'residential' ? 'source-res' : 'source-free';
         var srcLabel = e.source === 'residential' ? '住宅' : '免费';
-        return '<tr><td class="url-safe">' + esc(e.url) + '</td>' +
+        var countryTag = '<span style="display:inline-flex;align-items:center;gap:4px"><span>' + (e.country_emoji || '🌐') + '</span><span>' + esc(e.country || '海外') + '</span></span>';
+        var latencyColor = (e.latency_ms || 0) < 100 ? '#10b981' : ((e.latency_ms || 0) < 200 ? '#f59e0b' : '#ef4444');
+        var latencyTag = '<span style="color:' + latencyColor + ';font-weight:600;font-size:12px">' + (e.latency_ms ? e.latency_ms + ' ms' : '–') + '</span>';
+        var checkedAgo = (e.checked_ago_seconds != null ? e.checked_ago_seconds + ' 秒前' : '刚才');
+
+        var protoBtn = '<button class="btn secondary px-proto-btn" style="padding:3px 8px;font-size:11px;margin:0" data-proto="' + esc(JSON.stringify(e.protocols || {})) + '">📋 链接</button>';
+
+        return '<tr>' +
+          '<td>' + countryTag + '</td>' +
+          '<td class="url-safe" style="font-family:monospace;font-size:12px">' + esc(e.url) + '</td>' +
           '<td class="' + srcClass + '">' + srcLabel + '</td>' +
+          '<td>' + latencyTag + '</td>' +
+          '<td style="color:var(--muted);font-size:12px">' + checkedAgo + '</td>' +
           '<td>' + (e.daily_uses || 0) + '</td>' +
           '<td>' + (e.cooldown_seconds || 0) + '</td>' +
-          '<td>' + (e.fails || 0) + '</td></tr>';
+          '<td>' + protoBtn + '</td>' +
+          '</tr>';
       }).join('');
+
+      // 绑定模态框点击
+      document.querySelectorAll('.px-proto-btn').forEach(function (btn) {
+        btn.onclick = function () {
+          try {
+            var proto = JSON.parse(this.dataset.proto || '{}');
+            document.getElementById('pm-title').textContent = '🌐 ' + (proto.node_name || '代理节点链接');
+            document.getElementById('pm-socks5').value = proto.socks5_link || '';
+            document.getElementById('pm-http').value = proto.http_link || '';
+            document.getElementById('pm-vmess').value = proto.vmess_link || '';
+            document.getElementById('proxy-modal').style.display = 'flex';
+          } catch (err) {}
+        };
+      });
     }).catch(function () {
-      document.getElementById('proxy-tbody').innerHTML = '<tr><td colspan="5" class="empty">代理池数据加载失败</td></tr>';
+      document.getElementById('proxy-tbody').innerHTML = '<tr><td colspan="8" class="empty">代理池数据加载失败</td></tr>';
     });
   }
+
+  document.getElementById('pp-prev').onclick = function () { if (proxyPage > 1) loadProxy(proxyPage - 1); };
+  document.getElementById('pp-next').onclick = function () { loadProxy(proxyPage + 1); };
+  document.getElementById('pm-close').onclick = function () { document.getElementById('proxy-modal').style.display = 'none'; };
+  document.getElementById('pm-copy-socks5').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-socks5').value); showToast('✅ Socks5 链接已复制', 'success'); };
+  document.getElementById('pm-copy-http').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-http').value); showToast('✅ HTTP 链接已复制', 'success'); };
+  document.getElementById('pm-copy-vmess').onclick = function () { navigator.clipboard.writeText(document.getElementById('pm-vmess').value); showToast('✅ V2Ray 链接已复制', 'success'); };
 
   // ── 在线生成面板 ──
   var pgTimer = null, pgRatio = '1:1';

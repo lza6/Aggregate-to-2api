@@ -128,12 +128,11 @@ class AccountPool:
 
     # ── 自动补号 / 签到循环 ────────────────────────
     async def start(self) -> None:
-        # 补号循环按配置开关；minimaxh3 若 turnstile 被站点拒（外部求解兼容）可经 IF_MINIMAXH3_AUTOREG=0 关闭，
-        # 避免无谓消耗 cf_solver 单槽（主站 token 预取优先）。nanobanana 每日签到续额。
-        auto_provs = [p for p in ("minimaxh3", "nanobanana") if self._autoreg_enabled(p)]
+        # 仅为长效签到型提供商（nanobanana）开启自动补号与每日签到循环
+        auto_provs = [p for p in ("nanobanana",) if self._autoreg_enabled(p)]
         for prov in auto_provs:
             self.checkin_tasks[f"register:{prov}"] = asyncio.create_task(self._autoregister_loop(prov))
-        # 每日签到（nanobanana 续额）
+        # 每日签到（nanobanana 每日自动领取 4 积分续额，账号越多总可用并发越大）
         self.checkin_tasks["nanobanana"] = asyncio.create_task(self._daily_checkin_loop("nanobanana"))
         log.info("号池启动：自动补号 %s + 每日签到循环已就绪", auto_provs)
 
