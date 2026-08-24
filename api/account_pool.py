@@ -33,6 +33,33 @@ TARGET_NANOBANANA = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "500"))
 REGISTER_COOLDOWN = int(os.getenv("IF_REGISTER_COOLDOWN", "120"))
 
 
+class AdaptiveAccountScore:
+    """MAB (Multi-Armed Bandit) 动态评分账号选择器 (基于 EMA 延迟与成功率)。"""
+    def __init__(self, email: str):
+        self.email = email
+        self.ema_latency_ms = 1200.0
+        self.success_count = 0
+        self.fail_count = 0
+        self.consecutive_errors = 0
+
+    def update_result(self, duration_ms: float, is_success: bool):
+        alpha = 0.2
+        if is_success:
+            self.ema_latency_ms = alpha * duration_ms + (1 - alpha) * self.ema_latency_ms
+            self.success_count += 1
+            self.consecutive_errors = 0
+        else:
+            self.fail_count += 1
+            self.consecutive_errors += 1
+            self.ema_latency_ms = max(5000.0, self.ema_latency_ms * 1.5)
+
+    def score(self) -> float:
+        total = self.success_count + self.fail_count
+        sr = (self.success_count + 1) / (total + 2)  # Laplace 平滑
+        latency_score = 1000.0 / max(100.0, self.ema_latency_ms)
+        return sr * 50.0 + latency_score * 50.0 - (self.consecutive_errors * 20.0)
+
+
 class AccountPool:
     def __init__(self, db_path: str = DB_FILE) -> None:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -42,8 +69,31 @@ class AccountPool:
         # 注册器/签到器注入（避免循环 import）
         self.registerers: dict[str, object] = {}
         self.checkin_tasks: dict[str, asyncio.Task] = {}
+        self._scores: dict[str, AdaptiveAccountScore] = {}
         # 看板状态
         self.stats: dict[str, dict] = {}
+
+    def get_adaptive(self, provider: str) -> dict | None:
+        """基于 Epsilon-Greedy MAB 动态评分返回综合最优账号。"""
+        accs = self.get(provider)
+        if not accs:
+            return None
+        import random
+        # 10% 概率探索
+        if random.random() < 0.1:
+            return random.choice(accs)
+        # 90% 概率选择最高分账号
+        best_acc = max(accs, key=lambda a: self._get_or_create_score(a["email"]).score())
+        return best_acc
+
+    def _get_or_create_score(self, email: str) -> AdaptiveAccountScore:
+        if email not in self._scores:
+            self._scores[email] = AdaptiveAccountScore(email)
+        return self._scores[email]
+
+    def report_result(self, email: str, duration_ms: float, is_success: bool) -> None:
+        sc = self._get_or_create_score(email)
+        sc.update_result(duration_ms, is_success)
 
     def _init_schema(self) -> None:
         with self._lock:

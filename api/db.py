@@ -216,7 +216,10 @@ class DB:
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA synchronous=NORMAL")
-        await conn.execute("PRAGMA busy_timeout=5000")
+        await conn.execute("PRAGMA busy_timeout=10000")
+        await conn.execute("PRAGMA cache_size=-64000")
+        await conn.execute("PRAGMA mmap_size=268435456")
+        await conn.execute("PRAGMA temp_store=MEMORY")
         await conn.execute("PRAGMA wal_autocheckpoint=1000")
         _LIVE_CONNS.append(conn)
         return conn

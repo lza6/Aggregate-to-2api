@@ -1869,6 +1869,16 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         } else {
           creditsHtml = p.credits + ' 积分';
         }
+        // 探针响应数据
+        var probeHtml = '';
+        if (p.probe) {
+          var pb = p.probe;
+          var pbColor = pb.http_code === 200 ? '#10b981' : (pb.http_code === 403 ? '#f59e0b' : '#ef4444');
+          probeHtml = '<div class="pool-stat" style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)">' +
+            '<span>上游探测</span>' +
+            '<b><span style="color:' + pbColor + ';font-weight:600">HTTP ' + pb.http_code + '</span> · ' + pb.latency_ms + 'ms</b></div>';
+        }
+
         cardsHtml += '<div class="prov-card" data-prov="' + esc(prov) + '">' +
           '<h3>' + esc(p.display_name || prov) + ' <span class="pill ok">' + esc(prov) + '</span></h3>' +
           '<div class="prov-base">' + esc(p.base_url || '') + '</div>' +
@@ -1878,8 +1888,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           (p.needs_account ? '<span>👥 需号池</span>' : '<span>🚫 无需账号</span>') +
           (p.needs_proxy_per_request ? '<span>🔄 每请求换 IP</span>' : '') +
           '</div>' +
-          '<div class="pool-stat"><span>健康状态</span><b><span class="health-dot ' + healthDot + '"></span><span class="health-label ' + healthDot + '">' + healthLabel + '</span></b></div>' +
+          '<div class="pool-stat"><span>服务状态</span><b><span class="health-dot ' + healthDot + '"></span><span class="health-label ' + healthDot + '">' + healthLabel + '</span></b></div>' +
           '<div class="pool-stat"><span>实时余额</span><b>' + creditsHtml + '</b></div>' +
+          probeHtml +
           '</div>';
       });
       updateCardGrid('prov-grid', cardsHtml, 'data-prov');
@@ -2076,10 +2087,43 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
   function pgPoll(id) {
     var rounds = 0;
+    // 优先开启 SSE 实时主动推流监听（淘汰短轮询，极速零网络开销）
+    var sse = null;
+    try {
+      sse = new EventSource('/v1/events/tasks');
+      sse.addEventListener('task_update', function (e) {
+        try {
+          var payload = JSON.parse(e.data);
+          if (payload.task_id === id) {
+            sse.close();
+            clearTimeout(pgTimer);
+            if (payload.status === 'completed') {
+              safeJson('/v1/tasks/' + id).then(function (d) {
+                var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + ' 秒' : '完成';
+                pgStatus.textContent = '✅ 出图完成 (SSE实时推流)，耗时 ' + dur;
+                showToast('✅ 出图完成', 'success');
+                pgStatus.className = 'pg-status';
+                pgResult.style.display = 'block';
+                pgResult.innerHTML = '';
+                renderResultInfo(pgResult, d, false);
+                var guide = document.getElementById('pg-guide');
+                if (guide) guide.style.display = 'none';
+                setBtnLoading(pgBtn, false);
+              });
+            } else if (payload.status === 'error') {
+              pgShowErr(pgStatus, (payload.data && payload.data.error) || '生成失败');
+              setBtnLoading(pgBtn, false);
+            }
+          }
+        } catch (err) {}
+      });
+    } catch (e) { sse = null; }
+
     (function tick() {
       safeJson('/v1/tasks/' + id).then(function (d) {
         rounds++;
         if (d.status === 'completed') {
+          if (sse) sse.close();
           var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + ' 秒' : '未知';
           pgStatus.textContent = '✅ 出图完成，耗时 ' + dur;
           showToast('✅ 出图完成', 'success');
@@ -2093,14 +2137,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           setBtnLoading(pgBtn, false);
           return;
         }
-        if (d.status === 'error') { pgShowErr(pgStatus, d.error || '生成失败'); showToast('❌ ' + (d.error || '生成失败'), 'error'); setBtnLoading(pgBtn, false); return; }
-        pgStatus.textContent = rounds % 2 ? '⏳ 排队/生成中…' : '⏳ 排队/生成中…';
+        if (d.status === 'error') { if (sse) sse.close(); pgShowErr(pgStatus, d.error || '生成失败'); showToast('❌ ' + (d.error || '生成失败'), 'error'); setBtnLoading(pgBtn, false); return; }
+        pgStatus.textContent = '⏳ 上游模型推理计算中（SSE 实时流监听已就绪）…';
         pgStatus.className = 'pg-status';
         clearTimeout(pgTimer);
-        pgTimer = setTimeout(tick, 2000);
+        pgTimer = setTimeout(tick, 3000);
       }).catch(function (err) {
         clearTimeout(pgTimer);
-        pgTimer = setTimeout(tick, 2500);
+        pgTimer = setTimeout(tick, 3500);
       });
     })();
   }

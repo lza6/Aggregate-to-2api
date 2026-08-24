@@ -27,7 +27,7 @@ FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
          "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py",
          "context.py", "health.py", "cache_warmup.py", "errors.py",
          # v3.1.0: 慢日志画像 + worker 心跳（补齐历史遗漏的 disk_logger/telemetry）
-         "slow_log.py", "worker_health.py", "disk_logger.py", "telemetry.py", "email_sources_linshi.py", "geo_ip.py"]
+         "slow_log.py", "worker_health.py", "disk_logger.py", "telemetry.py", "email_sources_linshi.py", "geo_ip.py", "provider_probe.py"]
 # 需整体同步的目录（providers 包 / 静态资源）
 # frontend 在项目根目录 frontend/，不在 api/ 下，由部署脚本单独处理
 DIRS = ["providers", "static"]

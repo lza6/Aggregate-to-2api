@@ -270,8 +270,13 @@ async def lifespan(_app: FastAPI):
     except Exception as e:
         log.warning("DB 启动清理失败（可忽略）: %s", e)
 
+    # 启动上游提供商自动探针
+    from .provider_probe import provider_probe
+    await provider_probe.start(interval_seconds=180)
+
     yield
     log.info("优雅关闭开始: 分阶段有序停止服务")
+    await provider_probe.stop()
     # ① 停止缓存预热 + batch timer + 后台任务组
     async def _stop_warmup() -> None:
         if _warmup_task and not _warmup_task.done():
@@ -886,6 +891,42 @@ async def generate_async(req: GenerateRequest):
     return TaskInfo(**task_to_public(await db.get_public(task_id)))
 
 
+# ── 全局实时任务广播通道 (SSE 零轮询架构) ──
+_SSE_SUBSCRIBERS: set[asyncio.Queue] = set()
+
+
+def broadcast_task_event(task_id: str, status: str, data: dict | None = None) -> None:
+    """向所有在线 SSE 客户端主动推送任务状态变迁（零轮询架构）。"""
+    payload = json.dumps({"task_id": task_id, "status": status, "data": data or {}, "ts": time.time()})
+    msg = f"event: task_update\ndata: {payload}\n\n"
+    for q in list(_SSE_SUBSCRIBERS):
+        try:
+            q.put_nowait(msg)
+        except Exception:
+            pass
+
+
+@app.get("/v1/events/tasks", include_in_schema=False)
+async def sse_task_events():
+    """Server-Sent Events 任务实时流：客户端连接后自动接收服务端主动 Push 的任务终态/状态流转。"""
+    from fastapi.responses import StreamingResponse
+    q: asyncio.Queue = asyncio.Queue(maxsize=100)
+    _SSE_SUBSCRIBERS.add(q)
+
+    async def event_generator():
+        try:
+            yield "event: connected\ndata: {\"status\":\"ready\"}\n\n"
+            while True:
+                msg = await q.get()
+                yield msg
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _SSE_SUBSCRIBERS.discard(q)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 # ── 多提供商路由 ─────────────────────────────────
 _PROVIDER_TASKS: set[asyncio.Task] = set()  # 持有 provider 后台任务引用，防 GC
 
@@ -1211,17 +1252,28 @@ async def models():
 
 @app.get("/v1/providers")
 async def providers():
-    """提供商看板：能力/模型数/账号需求/每请求代理需求/实时余额。"""
+    """提供商看板：能力/模型数/账号需求/每请求代理需求/实时余额 + 上游真实探针状态。"""
+    from .provider_probe import provider_probe
     providers_bootstrap()
     summary = registry.provider_summary()
-    # 实时额度（尽力，不阻塞）
+    probes = provider_probe.snapshot().get("providers") or {}
+
+    # 实时额度与上游 HTTP 探活结果合并
     for prefix, p in registry.providers.items():
         try:
             c = await p.credits()
             summary[prefix]["credits"] = c
         except Exception:
             summary[prefix]["credits"] = None
-    return {"items": summary, "count": len(summary)}
+
+        if prefix in probes:
+            summary[prefix]["probe"] = probes[prefix]
+
+    return {
+        "items": summary,
+        "count": len(summary),
+        "last_probe_time": provider_probe.last_probe_time,
+    }
 
 
 @app.get("/v1/account-pool")
