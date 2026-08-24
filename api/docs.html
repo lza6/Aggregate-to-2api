@@ -538,7 +538,7 @@
 <!-- ── 在线生成面板 ── -->
 <section class="card" id="playground" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;">
   <h2 style="margin-top:0">🖼️ 在线使用</h2>
-  <p class="muted">选模型 → 输提示词 → 出图/出视频。模型 id 格式：<code>&lt;提供商&gt;/&lt;上游真实模型名&gt;</code>（如 <code>minimaxh3/nano-banana-pro</code>）。积分制提供商由号池自动分配账号。</p>
+  <p class="muted">选模型 → 输提示词 → 出图/出视频。模型 id 格式：<code>&lt;提供商&gt;/&lt;上游真实模型名&gt;</code>（如 <code>nanobanana/nano-banana-pro</code> 或 <code>imagefree/default</code>）。自动调度长效号池与高并发队列。</p>
 
   <div class="aifree-notice" id="aifree-notice" style="display:none">
     <strong>⚠ aifreeforever 直连模式</strong> — 当前未配置住宅代理池，使用直连（可能受每 IP 每日限额限制）。若遇 429 限流，请配置 <code>IF_PROXY_FILE</code> 或开启 <code>IF_FREE_PROXY=1</code>。
@@ -617,7 +617,7 @@
 <!-- ── 号池看板 ── -->
 <section class="card" id="pool-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
   <h2 style="margin-top:0">👥 号池看板</h2>
-  <p class="muted">积分制提供商（minimaxh3 用完即丢 / nanobanana 每日签到续额）的账号池实时状态：自动补号、自动注册、每日签到是否在运行。</p>
+  <p class="muted">长效长生型提供商（nanobanana 每日自动签到领 4 积分续额，账号越多可用并发越高）的账号池实时状态。</p>
   <div class="pool-grid" id="pool-grid"><div class="empty">⏳ 加载中…</div></div>
   <div id="email-pool-box" style="margin-top:16px"></div>
 </section>
@@ -728,9 +728,28 @@
 
 <!-- ── 画廊 ── -->
 <section class="card" id="gallery-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
-  <h2 style="margin-top:0">🎨 画廊</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="margin:0 0 4px">🎨 画廊</h2>
+      <p class="muted" style="margin:0">最近成功生成的作品展示，点击可打开高清大图灯箱并支持快捷导出与下载。</p>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">💡 点击卡片进入无级高清灯箱查看细节</div>
+  </div>
   <div id="gallery-content"><div class="empty" style="padding:30px 0">🎨 暂无作品，去在线使用生成第一张图吧！</div></div>
 </section>
+
+<!-- ── 高清灯箱模态框 (Lightbox) ── -->
+<div id="gallery-lightbox" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.85);align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div style="position:relative;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;align-items:center">
+    <button id="glb-close" style="position:absolute;top:-36px;right:0;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;line-height:1">&times;</button>
+    <img id="glb-img" src="" style="max-width:90vw;max-height:78vh;border-radius:12px;box-shadow:0 25px 50px -12px rgba(0,0,0,.7);object-fit:contain;border:1px solid rgba(255,255,255,.15)">
+    <div id="glb-info" style="color:#f1f5f9;margin-top:12px;font-size:13px;text-align:center;max-width:600px;line-height:1.6"></div>
+    <div style="display:flex;gap:12px;margin-top:10px">
+      <a id="glb-download" href="" download="image.png" class="btn secondary" style="font-size:12px;padding:6px 14px;text-decoration:none;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">⬇️ 导出高清原图</a>
+      <button id="glb-copy-link" class="btn secondary" style="font-size:12px;padding:6px 14px;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">🔗 复制图片链接</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── 任务中心 ── -->
 <section class="card" id="task-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
@@ -2532,6 +2551,41 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       });
     };
   }
+  // ── 画廊无级高清灯箱交互 ──
+  (function initGalleryLightbox() {
+    var gal = document.getElementById('gallery-content');
+    var lb = document.getElementById('gallery-lightbox');
+    var lbImg = document.getElementById('glb-img');
+    var lbInfo = document.getElementById('glb-info');
+    var lbDl = document.getElementById('glb-download');
+    var lbCopy = document.getElementById('glb-copy-link');
+    var lbClose = document.getElementById('glb-close');
+
+    if (!gal || !lb) return;
+
+    gal.onclick = function (e) {
+      var target = e.target.closest('.gallery-item, .item, img');
+      if (!target) return;
+      var img = target.tagName === 'IMG' ? target : target.querySelector('img');
+      if (!img || !img.src) return;
+
+      lbImg.src = img.src;
+      lbDl.href = img.src;
+      lbInfo.textContent = img.alt || '听风AI 高清作品详情';
+      lb.style.display = 'flex';
+    };
+
+    if (lbClose) lbClose.onclick = function () { lb.style.display = 'none'; };
+    lb.onclick = function (e) { if (e.target === lb) lb.style.display = 'none'; };
+    if (lbCopy) {
+      lbCopy.onclick = function () {
+        if (lbImg.src) {
+          navigator.clipboard.writeText(lbImg.src);
+          showToast('✅ 图片直链已复制', 'success');
+        }
+      };
+    }
+  })();
 </script>
 </body>
 </html>
