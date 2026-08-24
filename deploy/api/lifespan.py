@@ -26,6 +26,10 @@ from .worker_health import worker_health
 log = logging.getLogger("imagefree_api")
 
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
 async def lifespan(_app):
     # IMP-08: 启动 OTel 追踪
     init_telemetry()

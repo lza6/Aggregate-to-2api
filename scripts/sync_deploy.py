@@ -26,11 +26,13 @@ FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
          "semaphore_manager.py", "cache.py", "log_buffer.py", "base64_store.py",
          "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py",
          "context.py", "health.py", "cache_warmup.py", "errors.py",
-         # v3.1.0: 慢日志画像 + worker 心跳（补齐历史遗漏的 disk_logger/telemetry）
-         "slow_log.py", "worker_health.py", "disk_logger.py", "telemetry.py", "email_sources_linshi.py", "geo_ip.py", "provider_probe.py", "adaptive_router.py"]
-# 需整体同步的目录（providers 包 / 静态资源）
-# frontend 在项目根目录 frontend/，不在 api/ 下，由部署脚本单独处理
-DIRS = ["providers", "static"]
+         "slow_log.py", "worker_health.py", "disk_logger.py", "telemetry.py",
+         "email_sources_linshi.py", "geo_ip.py", "provider_probe.py",
+         "adaptive_router.py", "dispatch.py", "dispatch_edit.py",
+         "lifespan.py", "handlers.py", "bg_tasks.py", "models.py", "meta.py", "sse_events.py",
+         "contracts.py"]
+# 需整体同步的目录（providers 包 / 静态资源 / 路由子包）
+DIRS = ["providers", "static", "routes"]
 
 
 def sha256(p: Path) -> str:

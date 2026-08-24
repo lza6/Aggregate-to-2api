@@ -1500,7 +1500,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         var dur = item.duration_sec != null ? item.duration_sec.toFixed(1) + 's' : '';
         var imgUrl = item.image_base64 || item.image_url || '';
         // v4.2: alt 携带 prompt → 灯箱可复制/重填
-        html += '<div class="cell"><img src="' + imgUrl + '" alt="' + prompt + '" loading="lazy" data-prompt="' + prompt + '"><div class="meta"><div class="prompt">' + prompt + '</div><div class="dur">' + dur + '</div></div></div>';
+        html += '<div class="cell"><img src="' + esc(imgUrl) + '" alt="' + encodeURI(prompt) + '" loading="lazy" data-prompt="' + encodeURI(prompt) + '"><div class="meta"><div class="prompt">' + prompt + '</div><div class="dur">' + dur + '</div></div></div>';
       });
       html += '</div>';
       el.innerHTML = html;
