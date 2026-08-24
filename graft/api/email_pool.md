@@ -11,16 +11,16 @@
 - __init__ · method · L93-L99 — def __init__(self) -> None
 - new_address · method · L101-L122 — async def new_address(self) -> tuple[str, dict]: # chatgpt2api 逆向确认：POST /mailbox（空 body）→ {token, mailbox}（建箱+拿 JWT）。 # temp-mail 有建箱限流（429 Too Many Request）——加最小间隔 + 失败退避，防批量注册触发。
 - fetch_mails · method · L124-L145 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- Do22Source · class · L149-L203 — class Do22Source(MailSource)
+- Do22Source · class · L149-L240 — class Do22Source(MailSource)
 - __init__ · method · L162-L168 — def __init__(self) -> None
-- new_address · method · L170-L188 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L190-L203 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L207-L310 — class EmailPool
-- __init__ · method · L208-L214 — def __init__(self, db_path: str = DB_FILE) -> None
-- _init_schema · method · L216-L228 — def _init_schema(self) -> None
-- _load_used · method · L230-L232 — def _load_used(self) -> set[str]
-- allocate · method · L235-L274 — async def allocate(self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None) -> tuple[str, object]
-- wait_for_mail · method · L277-L291 — async def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0, contains: str | None = None) -> dict | None
-- record · method · L294-L300 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
-- registered_providers · method · L302-L304 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L306-L310 — def stats(self) -> dict
+- new_address · method · L170-L197 — async def new_address(self) -> tuple[str, dict]: # 循环创建直到获得目标站放行且可收件的干净域名（tnbeta.com, colaname.com, colabeta.com, usdtbeta.com）
+- fetch_mails · method · L199-L240 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- EmailPool · class · L246-L346 — class EmailPool
+- __init__ · method · L247-L253 — def __init__(self, db_path: str = DB_FILE) -> None
+- _init_schema · method · L255-L267 — def _init_schema(self) -> None
+- _load_used · method · L269-L271 — def _load_used(self) -> set[str]
+- allocate · method · L274-L310 — async def allocate(self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None) -> tuple[str, object]
+- wait_for_mail · method · L313-L327 — async def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0, contains: str | None = None) -> dict | None
+- record · method · L330-L336 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
+- registered_providers · method · L338-L340 — def registered_providers(self, email: str) -> list[str]
+- stats · method · L342-L346 — def stats(self) -> dict

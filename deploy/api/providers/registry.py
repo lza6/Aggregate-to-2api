@@ -2,6 +2,9 @@
 
 命名契约：外部模型 id = "<provider前缀>/<上游真实模型名>"，让 API/前端用户一目了然
 上游来源。例：minimaxh3/nano-banana-pro、aifreeforever/gpt-image-2、nanobanana/nano-banana-pro。
+
+路由：自 v3.2 起 provider_for() 结合自适应路由引擎（MAB-EWMA）在候选内实时打分，
+不再"只看健康不看实时质量"。降级/熔断仍旧优先。
 """
 from __future__ import annotations
 
@@ -29,6 +32,9 @@ class Registry:
         self._last_recover_at: dict[str, float] = {}
         # IMP-18: 已耗尽的账号集合（provider → set of account identifiers）
         self._exhausted_accounts: dict[str, set[str]] = {}
+        # v3.2: MAB-EWMA 自适应路由引擎
+        from ..adaptive_router import adaptive_router
+        self.adaptive_router = adaptive_router
 
     def _ensure_booted(self) -> None:
         if not self._booted:
@@ -49,10 +55,18 @@ class Registry:
         self._ensure_booted()
         return self._models.get(model_id)
 
+    def get_routing_records(self, limit: int = 50) -> list[dict]:
+        """返回最近 limit 条自适应路由决策记录（供 /v1/routing/records 端点）。"""
+        return self.adaptive_router.records(limit=limit)
+
     def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None:
         """返回 model_id 对应的提供商。
 
-        prefer_healthy=True 时，如果首选提供商为 down，自动选择能力相同的备用提供商。
+        路由逻辑（v3.2）：
+        1. 首选 provider down → find_alternative（静态能力匹配回退）
+        2. 首选 provider healthy/degraded → 在候选（首+备）中用自适应路由打分发流量
+        3. 全都不行 → 回退首选（最坏也只是慢，不 429）
+        路由决策会写入 adaptive_router 的路由记录，供 /v1/routing/records 展示。
         """
         self._ensure_booted()
         spec = self._models.get(model_id)
@@ -65,17 +79,38 @@ class Registry:
         health = self.provider_health.get(spec.provider, "healthy")
         if provider and provider.health_status == "down":
             health = "down"
+
         if health == "down":
-            # provider 为 down → 尝试找备用
+            # provider 为 down → 尝试找备用（静态回退，不参与自适应打分）
             if not prefer_healthy:
                 return provider
-            alt_provider, _ = self.find_alternative(model_id)
+            alt_provider, alt_model_id = self.find_alternative(model_id)
+            if alt_provider:
+                self.adaptive_router.record_inflight(alt_provider.prefix)
             return alt_provider or provider
-        if not prefer_healthy or health in ("healthy", "unknown"):
-            return provider
-        # 首选 provider 降级（degraded），尝试备用
-        alt_provider, _ = self.find_alternative(model_id)
-        return alt_provider or provider
+
+        # 首选 healthy/degraded → 组装候选（首选 + 各能力匹配的备用）交给自适应路由
+        candidates = [spec.provider]
+        for prefix, p in self.providers.items():
+            if prefix == spec.provider:
+                continue
+            if p.health_status == "down":
+                continue  # 熔断/不可用不参与
+            for mid, ms in p.models.items():
+                if set(spec.capabilities) & set(ms.capabilities):
+                    candidates.append(prefix)
+                    break
+        # 去重保序，交给 MAB-EWMA 打分
+        seen: set[str] = set()
+        uniq = [c for c in candidates if not (c in seen or seen.add(c))]
+
+        selected = self.adaptive_router.select_best(
+            uniq,
+            model=model_id,
+            requested_provider=spec.provider,
+        )
+        chosen = self.providers.get(selected) or provider
+        return chosen
 
     def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]:
         """查找 model_id 的备用提供商。

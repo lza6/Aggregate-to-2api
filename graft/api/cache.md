@@ -18,7 +18,7 @@
 - flush_to_db · method · L177-L179 — async def flush_to_db(self) -> None
 - start_reaper · method · L183-L187 — def start_reaper(self) -> None
 - stop_reaper · method · L189-L200 — async def stop_reaper(self) -> None
-- _flush_all_to_db · method · L202-L221 — def _flush_all_to_db(self) -> None
+- _flush_all_to_db · method · L202-L221 — async def _flush_all_to_db(self) -> None
 - _reaper_loop · method · L223-L237 — async def _reaper_loop(self) -> None
 - _purge_expired · method · L239-L250 — async def _purge_expired(self) -> None
 - size · method · L255-L256 — def size(self) -> int

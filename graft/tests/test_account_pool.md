@@ -12,6 +12,12 @@
 - test_autoregister_loop_fills_to_target · function · L74-L99 — async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch)
 - test_daily_checkin_updates_credits · function · L104-L121 — async def test_daily_checkin_updates_credits(tmp_path)
 - _checkin · function · L111-L112 — async def _checkin(acc)
-- TestEmailPool · class · L125-L150 — class TestEmailPool
-- test_allocate_unique_and_record · method · L127-L139 — async def test_allocate_unique_and_record(self, tmp_path)
-- test_stats · method · L142-L150 — async def test_stats(self, tmp_path)
+- TestEmailPool · class · L125-L159 — class TestEmailPool
+- test_allocate_unique_and_record · method · L127-L144 — async def test_allocate_unique_and_record(self, tmp_path, monkeypatch)
+- test_stats · method · L147-L159 — async def test_stats(self, tmp_path, monkeypatch)
+- TestAccountPoolDashboard · class · L164-L184 — class TestAccountPoolDashboard
+- test_dashboard_structure · method · L165-L174 — def test_dashboard_structure(self, pool)
+- test_dashboard_counts_reflect_state · method · L176-L184 — def test_dashboard_counts_reflect_state(self, pool)
+- test_autoregister_pauses_without_proxy · function · L188-L223 — async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch)
+- _Reg · class · L205-L208 — class _Reg
+- register_one · method · L206-L208 — async def register_one(self)

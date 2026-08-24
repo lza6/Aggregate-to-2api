@@ -1,21 +1,21 @@
 # tests/test_priority_queue.py
 
-- _DBStub · class · L18-L46 — class _DBStub
-- __init__ · method · L21-L24 — def __init__(self) -> None
-- create_request · method · L26-L31 — def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model)
-- mark_finished · method · L33-L36 — def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
-- mark_started · method · L38-L40 — def mark_started(self, task_id)
-- get · method · L42-L43 — def get(self, task_id)
-- recover_stale_tasks · method · L45-L46 — def recover_stale_tasks(self) -> int
-- engine · function · L50-L54 — async def engine()
-- test_priority_order · function · L58-L88 — async def test_priority_order(engine)
-- test_normal_queue_full · function · L92-L101 — async def test_normal_queue_full(engine)
-- test_admin_queue_full · function · L105-L113 — async def test_admin_queue_full(engine)
-- test_high_queue_full · function · L117-L125 — async def test_high_queue_full(engine)
-- test_qsize_correct · function · L129-L140 — async def test_qsize_correct(engine)
-- test_submit_priority_passthrough · function · L144-L151 — async def test_submit_priority_passthrough(engine)
-- test_submit_default_priority · function · L155-L160 — async def test_submit_default_priority(engine)
-- test_worker_decrements_count · function · L164-L194 — async def test_worker_decrements_count(engine)
-- _single_consume · function · L170-L175 — async def _single_consume(idx)
-- test_priority_queue_type · function · L198-L201 — async def test_priority_queue_type(engine)
-- test_element_format · function · L205-L214 — async def test_element_format(engine)
+- _DBStub · class · L17-L45 — class _DBStub
+- __init__ · method · L20-L23 — def __init__(self) -> None
+- create_request · method · L25-L30 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model)
+- mark_finished · method · L32-L35 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
+- mark_started · method · L37-L39 — async def mark_started(self, task_id)
+- get · method · L41-L42 — async def get(self, task_id)
+- recover_stale_tasks · method · L44-L45 — async def recover_stale_tasks(self, **kw) -> int
+- engine · function · L49-L53 — def engine()
+- test_priority_order · function · L57-L87 — async def test_priority_order(engine)
+- test_normal_queue_full · function · L91-L100 — async def test_normal_queue_full(engine)
+- test_admin_queue_full · function · L104-L112 — async def test_admin_queue_full(engine)
+- test_high_queue_full · function · L116-L124 — async def test_high_queue_full(engine)
+- test_qsize_correct · function · L128-L139 — async def test_qsize_correct(engine)
+- test_submit_priority_passthrough · function · L143-L150 — async def test_submit_priority_passthrough(engine)
+- test_submit_default_priority · function · L154-L159 — async def test_submit_default_priority(engine)
+- test_worker_decrements_count · function · L163-L193 — async def test_worker_decrements_count(engine)
+- _single_consume · function · L169-L174 — async def _single_consume(idx)
+- test_priority_queue_type · function · L197-L200 — async def test_priority_queue_type(engine)
+- test_element_format · function · L204-L213 — async def test_element_format(engine)

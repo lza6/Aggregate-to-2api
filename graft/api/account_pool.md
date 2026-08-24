@@ -1,19 +1,26 @@
 # api/account_pool.py
 
-- AccountPool · class · L38-L260 — class AccountPool
-- __init__ · method · L39-L48 — def __init__(self, db_path: str = DB_FILE) -> None
-- _init_schema · method · L50-L68 — def _init_schema(self) -> None
-- add · method · L71-L82 — def add(self, provider: str, email: str, cookie: str, password: str | None = None, credits: int = 0, status: str = "ok", note: str = "") -> None
-- list · method · L84-L94 — def list(self, provider: str | None = None, status: str | None = None) -> list[dict]
-- get · method · L96-L98 — def get(self, provider: str) -> list[dict]
-- update_credits · method · L100-L104 — def update_credits(self, provider: str, email: str, credits: int) -> None
-- mark · method · L106-L110 — def mark(self, provider: str, email: str, status: str, note: str = "") -> None
-- set_checkin · method · L112-L116 — def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
-- counts · method · L118-L124 — def counts(self) -> dict
-- total_credits · method · L126-L129 — def total_credits(self, provider: str) -> int
-- start · method · L132-L140 — async def start(self) -> None: # 补号循环按配置开关；minimaxh3 若 turnstile 被站点拒（外部求解兼容）可经 IF_MINIMAXH3_AUTOREG=0 关闭， # 避免无谓消耗 cf_solver 单槽（主站 token 预取优先）。nanobanana 每日签到续额。
-- _autoreg_enabled · method · L143-L146 — def _autoreg_enabled(provider: str) -> bool
-- stop · method · L148-L153 — async def stop(self) -> None
-- _autoregister_loop · method · L155-L219 — async def _autoregister_loop(self, provider: str) -> None
-- _daily_checkin_loop · method · L221-L243 — async def _daily_checkin_loop(self, provider: str) -> None
-- dashboard · method · L245-L260 — def dashboard(self) -> dict
+- AdaptiveAccountScore · class · L36-L60 — class AdaptiveAccountScore
+- __init__ · method · L38-L43 — def __init__(self, email: str)
+- update_result · method · L45-L54 — def update_result(self, duration_ms: float, is_success: bool)
+- score · method · L56-L60 — def score(self) -> float
+- AccountPool · class · L63-L311 — class AccountPool
+- __init__ · method · L64-L74 — def __init__(self, db_path: str = DB_FILE) -> None
+- get_adaptive · method · L76-L87 — def get_adaptive(self, provider: str) -> dict | None
+- _get_or_create_score · method · L89-L92 — def _get_or_create_score(self, email: str) -> AdaptiveAccountScore
+- report_result · method · L94-L96 — def report_result(self, email: str, duration_ms: float, is_success: bool) -> None
+- _init_schema · method · L98-L116 — def _init_schema(self) -> None
+- add · method · L119-L130 — def add(self, provider: str, email: str, cookie: str, password: str | None = None, credits: int = 0, status: str = "ok", note: str = "") -> None
+- list · method · L132-L142 — def list(self, provider: str | None = None, status: str | None = None) -> list[dict]
+- get · method · L144-L146 — def get(self, provider: str) -> list[dict]
+- update_credits · method · L148-L152 — def update_credits(self, provider: str, email: str, credits: int) -> None
+- mark · method · L154-L158 — def mark(self, provider: str, email: str, status: str, note: str = "") -> None
+- set_checkin · method · L160-L164 — def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
+- counts · method · L166-L172 — def counts(self) -> dict
+- total_credits · method · L174-L177 — def total_credits(self, provider: str) -> int
+- start · method · L180-L187 — async def start(self) -> None: # 仅为长效签到型提供商（nanobanana）开启自动补号与每日签到循环
+- _autoreg_enabled · method · L190-L193 — def _autoreg_enabled(provider: str) -> bool
+- stop · method · L195-L200 — async def stop(self) -> None
+- _autoregister_loop · method · L202-L270 — async def _autoregister_loop(self, provider: str) -> None
+- _daily_checkin_loop · method · L272-L294 — async def _daily_checkin_loop(self, provider: str) -> None
+- dashboard · method · L296-L311 — def dashboard(self) -> dict

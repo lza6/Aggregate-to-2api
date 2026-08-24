@@ -11,3 +11,7 @@
 - test_worker_loop_stops_via_event · function · L163-L174 — async def test_worker_loop_stops_via_event(auto_scale_config, tmp_db)
 - test_scale_up_per_cycle_limited · function · L178-L198 — async def test_scale_up_per_cycle_limited(auto_scale_config, tmp_db)
 - test_scale_down_per_cycle_limited · function · L202-L215 — async def test_scale_down_per_cycle_limited(auto_scale_config, tmp_db)
+- test_shrink_one_worker_removes_most_idle · function · L220-L238 — async def test_shrink_one_worker_removes_most_idle(auto_scale_config, tmp_db)
+- test_shrink_on_empty_workers_noop · function · L242-L246 — async def test_shrink_on_empty_workers_noop(tmp_db)
+- test_resume_from_queue_without_db_returns_zero · function · L250-L254 — async def test_resume_from_queue_without_db_returns_zero(tmp_db)
+- test_auto_scale_once_respects_upper_bound_hard · function · L258-L276 — async def test_auto_scale_once_respects_upper_bound_hard(auto_scale_config, tmp_db, monkeypatch)

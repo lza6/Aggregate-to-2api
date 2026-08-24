@@ -12,11 +12,11 @@
 - test_mark_completed_removes_from_pending · method · L129-L142 — def test_mark_completed_removes_from_pending(self)
 - _DBStub · class · L145-L173 — class _DBStub
 - __init__ · method · L148-L151 — def __init__(self) -> None
-- create_request · method · L153-L158 — def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model)
-- mark_finished · method · L160-L163 — def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
-- mark_started · method · L165-L167 — def mark_started(self, task_id)
-- get · method · L169-L170 — def get(self, task_id)
-- recover_stale_tasks · method · L172-L173 — def recover_stale_tasks(self) -> int
+- create_request · method · L153-L158 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model)
+- mark_finished · method · L160-L163 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
+- mark_started · method · L165-L167 — async def mark_started(self, task_id)
+- get · method · L169-L170 — async def get(self, task_id)
+- recover_stale_tasks · method · L172-L173 — async def recover_stale_tasks(self) -> int
 - TestEnginePersistentQueueIntegration · class · L176-L355 — class TestEnginePersistentQueueIntegration
 - engine_with_persistent · method · L180-L205 — def engine_with_persistent(self)
 - engine_without_persistent · method · L208-L220 — def engine_without_persistent(self)

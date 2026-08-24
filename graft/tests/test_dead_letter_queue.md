@@ -1,18 +1,24 @@
 # tests/test_dead_letter_queue.py
 
-- TestDeadLetterQueueDB · class · L15-L77 — class TestDeadLetterQueueDB
-- test_push_and_list_dlq · method · L18-L25 — def test_push_and_list_dlq(self, tmp_db: DB)
-- test_list_dlq_limit · method · L27-L32 — def test_list_dlq_limit(self, tmp_db: DB)
-- test_list_dlq_ordered_by_created_at · method · L34-L44 — def test_list_dlq_ordered_by_created_at(self, tmp_db: DB)
-- test_retry_dlq · method · L46-L51 — def test_retry_dlq(self, tmp_db: DB)
-- test_clear_dlq · method · L53-L59 — def test_clear_dlq(self, tmp_db: DB)
-- test_retry_nonexistent · method · L61-L63 — def test_retry_nonexistent(self, tmp_db: DB)
-- test_clear_empty · method · L65-L67 — def test_clear_empty(self, tmp_db: DB)
-- test_push_dlq_duplicate_task_id · method · L69-L77 — def test_push_dlq_duplicate_task_id(self, tmp_db: DB)
-- TestDeadLetterQueueWorker · class · L80-L139 — class TestDeadLetterQueueWorker
-- test_worker_pushes_dlq_on_retry_exhaustion · method · L84-L112 — async def test_worker_pushes_dlq_on_retry_exhaustion(self, tmp_db, monkeypatch)
-- _solve · function · L90-L91 — async def _solve(*a, **k)
-- _submit · function · L94-L95 — async def _submit(*a, **k)
-- test_worker_skip_dlq_when_disabled · method · L115-L139 — async def test_worker_skip_dlq_when_disabled(self, tmp_db, monkeypatch)
-- _solve · function · L120-L121 — async def _solve(*a, **k)
-- _submit · function · L123-L124 — async def _submit(*a, **k)
+- TestDeadLetterQueueDB · class · L15-L85 — class TestDeadLetterQueueDB
+- test_push_and_list_dlq · method · L19-L26 — async def test_push_and_list_dlq(self, tmp_db: DB)
+- test_list_dlq_limit · method · L29-L34 — async def test_list_dlq_limit(self, tmp_db: DB)
+- test_list_dlq_ordered_by_created_at · method · L37-L47 — async def test_list_dlq_ordered_by_created_at(self, tmp_db: DB)
+- test_retry_dlq · method · L50-L55 — async def test_retry_dlq(self, tmp_db: DB)
+- test_clear_dlq · method · L58-L64 — async def test_clear_dlq(self, tmp_db: DB)
+- test_retry_nonexistent · method · L67-L69 — async def test_retry_nonexistent(self, tmp_db: DB)
+- test_clear_empty · method · L72-L74 — async def test_clear_empty(self, tmp_db: DB)
+- test_push_dlq_duplicate_task_id · method · L77-L85 — async def test_push_dlq_duplicate_task_id(self, tmp_db: DB)
+- TestDeadLetterQueueWorker · class · L88-L150 — class TestDeadLetterQueueWorker
+- test_worker_pushes_dlq_on_retry_exhaustion · method · L93-L123 — async def test_worker_pushes_dlq_on_retry_exhaustion(self, tmp_db, monkeypatch)
+- _solve · function · L99-L100 — async def _solve(*a, **k)
+- _submit · function · L103-L104 — async def _submit(*a, **k)
+- test_worker_skip_dlq_when_disabled · method · L126-L150 — async def test_worker_skip_dlq_when_disabled(self, tmp_db, monkeypatch)
+- _solve · function · L131-L132 — async def _solve(*a, **k)
+- _submit · function · L134-L135 — async def _submit(*a, **k)
+- TestDLQRequeueEngine · class · L152-L216 — class TestDLQRequeueEngine
+- test_mark_pending_again_resets_fields · method · L156-L164 — async def test_mark_pending_again_resets_fields(self, tmp_db: DB)
+- test_requeue_dlq_task_puts_back_to_queue · method · L167-L180 — async def test_requeue_dlq_task_puts_back_to_queue(self, tmp_db)
+- test_requeue_nonexistent_task · method · L183-L187 — async def test_requeue_nonexistent_task(self, tmp_db)
+- test_requeue_config_flag_default_off · method · L190-L193 — async def test_requeue_config_flag_default_off(self)
+- test_requeue_queue_full_rolls_back · method · L196-L216 — async def test_requeue_queue_full_rolls_back(self, tmp_db)

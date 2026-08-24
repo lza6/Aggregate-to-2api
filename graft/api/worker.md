@@ -1,49 +1,61 @@
 # api/worker.py
 
-- _safe_proxy_label · function · L35-L47 — def _safe_proxy_label(key: str) -> str
-- QueueFull · class · L50-L51 — class QueueFull(RuntimeError)
-- _is_token_rejected · function · L59-L62 — def _is_token_rejected(err: object) -> bool
-- _TokenPool · class · L65-L229 — class _TokenPool
-- __init__ · method · L73-L94 — def __init__(self, key: str, target_getter, maxsize: int, idle_ttl: float, proxy: str | None): # key: "direct" 或代理 URL；target_getter: () -> int 动态目标水位
-- acquire · method · L96-L126 — async def acquire(self, timeout: float) -> str | None
-- _signal_if_empty · method · L128-L131 — def _signal_if_empty(self) -> None
-- update_solve_time · method · L133-L136 — def update_solve_time(self, duration: float) -> None
-- _get_prefetch_delay · method · L138-L142 — def _get_prefetch_delay(self) -> float
-- prefetch_loop · method · L144-L196 — async def prefetch_loop(self) -> None
-- _prune_expired · method · L198-L212 — def _prune_expired(self) -> None
-- size · method · L214-L215 — def size(self) -> int
-- snapshot · method · L217-L229 — def snapshot(self) -> dict
-- TokenPoolManager · class · L232-L345 — class TokenPoolManager
-- __init__ · method · L235-L240 — def __init__(self, engine)
-- start · method · L242-L245 — async def start(self) -> None
-- stop · method · L247-L257 — async def stop(self) -> None
-- acquire · method · L259-L272 — async def acquire(self, key: str, timeout: float) -> str | None
-- _ensure_pool · method · L274-L308 — def _ensure_pool(self, key: str) -> _TokenPool
-- _reap_idle_proxy_pools · method · L310-L327 — async def _reap_idle_proxy_pools(self) -> None
-- pools_snapshot · method · L329-L338 — def pools_snapshot(self) -> dict
-- direct_queue · method · L340-L342 — def direct_queue(self) -> asyncio.Queue
-- direct_pool_size · method · L344-L345 — def direct_pool_size(self) -> int
-- _WorkerHandle · class · L348-L357 — class _WorkerHandle
-- __init__ · method · L353-L357 — def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event)
-- Engine · class · L360-L741 — class Engine
-- __init__ · method · L361-L378 — def __init__(self, db)
-- start · method · L381-L398 — async def start(self) -> None: # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
-- stop · method · L400-L413 — async def stop(self) -> None
-- submit · method · L416-L419 — async def submit(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default") -> str
-- submit_priority · method · L421-L442 — async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default", priority: int = 2) -> str
-- _next_seq · method · L444-L446 — def _next_seq(self) -> int
-- wait_result · method · L448-L461 — async def wait_result(self, task_id: str, timeout: float) -> dict
-- _resume_from_queue · method · L463-L477 — def _resume_from_queue(self) -> int
-- token_pool · method · L481-L483 — def token_pool(self) -> asyncio.Queue
-- _acquire_token · method · L485-L487 — async def _acquire_token(self, timeout: float) -> str | None
-- acquire_token · method · L489-L492 — async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None
-- _create_worker · method · L495-L499 — def _create_worker(self, idx: int) -> _WorkerHandle
-- _worker_loop · method · L501-L541 — async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
-- _auto_scale_loop · method · L544-L553 — async def _auto_scale_loop(self) -> None
-- _auto_scale_once · method · L555-L587 — async def _auto_scale_once(self) -> None
-- _idle_workers_count · method · L589-L594 — def _idle_workers_count(self) -> int
-- _shrink_one_worker · method · L596-L606 — def _shrink_one_worker(self) -> None
-- _process · method · L608-L682 — async def _process(self, task_id: str) -> None
-- _finish · method · L684-L701 — def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
-- _generate_once · method · L703-L728 — async def _generate_once(self, row: dict, token: str) -> dict
-- snapshot · method · L731-L741 — def snapshot(self) -> dict
+- _safe_proxy_label · function · L38-L50 — def _safe_proxy_label(key: str) -> str
+- QueueFull · class · L53-L54 — class QueueFull(RuntimeError)
+- _is_token_rejected · function · L62-L65 — def _is_token_rejected(err: object) -> bool
+- CountedPriorityQueue · class · L68-L103 — class CountedPriorityQueue(asyncio.PriorityQueue)
+- __init__ · method · L75-L78 — def __init__(self, maxsize=0, limits=None)
+- put_nowait · method · L80-L85 — def put_nowait(self, item)
+- get_nowait · method · L87-L90 — def get_nowait(self)
+- get · method · L92-L95 — async def get(self)
+- count · method · L97-L100 — def count(self, priority=None)
+- is_full · method · L102-L103 — def is_full(self, priority)
+- _TokenPool · class · L106-L293 — class _TokenPool
+- __init__ · method · L114-L137 — def __init__(self, key: str, target_getter, maxsize: int, idle_ttl: float, proxy: str | None, engine=None): # key: "direct" 或代理 URL；target_getter: () -> int 动态目标水位
+- acquire · method · L139-L169 — async def acquire(self, timeout: float) -> str | None
+- _signal_if_empty · method · L171-L174 — def _signal_if_empty(self) -> None
+- update_solve_time · method · L176-L179 — def update_solve_time(self, duration: float) -> None
+- _target_watermark · method · L181-L200 — def _target_watermark(self) -> int
+- _get_prefetch_delay · method · L202-L206 — def _get_prefetch_delay(self) -> float
+- prefetch_loop · method · L208-L260 — async def prefetch_loop(self) -> None
+- _prune_expired · method · L262-L276 — def _prune_expired(self) -> None
+- size · method · L278-L279 — def size(self) -> int
+- snapshot · method · L281-L293 — def snapshot(self) -> dict
+- TokenPoolManager · class · L296-L411 — class TokenPoolManager
+- __init__ · method · L299-L304 — def __init__(self, engine)
+- start · method · L306-L309 — async def start(self) -> None
+- stop · method · L311-L321 — async def stop(self) -> None
+- acquire · method · L323-L336 — async def acquire(self, key: str, timeout: float) -> str | None
+- _ensure_pool · method · L338-L374 — def _ensure_pool(self, key: str) -> _TokenPool
+- _reap_idle_proxy_pools · method · L376-L393 — async def _reap_idle_proxy_pools(self) -> None
+- pools_snapshot · method · L395-L404 — def pools_snapshot(self) -> dict
+- direct_queue · method · L406-L408 — def direct_queue(self) -> asyncio.Queue
+- direct_pool_size · method · L410-L411 — def direct_pool_size(self) -> int
+- _WorkerHandle · class · L414-L423 — class _WorkerHandle
+- __init__ · method · L419-L423 — def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event)
+- Engine · class · L426-L968 — class Engine
+- __init__ · method · L427-L452 — def __init__(self, db)
+- start · method · L455-L472 — async def start(self) -> None: # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
+- stop · method · L474-L487 — async def stop(self) -> None
+- submit · method · L490-L493 — async def submit(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default") -> str
+- submit_priority · method · L495-L517 — async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default", priority: int = 2) -> str
+- _next_seq · method · L519-L521 — def _next_seq(self) -> int
+- requeue_dlq_task · method · L523-L544 — async def requeue_dlq_task(self, task_id: str) -> bool
+- wait_result · method · L546-L559 — async def wait_result(self, task_id: str, timeout: float) -> dict
+- _resume_from_queue · method · L561-L574 — def _resume_from_queue(self) -> int
+- token_pool · method · L578-L580 — def token_pool(self) -> asyncio.Queue
+- _acquire_token · method · L582-L584 — async def _acquire_token(self, timeout: float) -> str | None
+- acquire_token · method · L586-L589 — async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None
+- _create_worker · method · L592-L601 — def _create_worker(self, idx: int) -> _WorkerHandle
+- queue_in_rate · method · L604-L614 — async def queue_in_rate(self, window: float = 60.0) -> float
+- _worker_batch_loop · method · L617-L682 — async def _worker_batch_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
+- _worker_loop · method · L684-L726 — async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
+- _auto_scale_loop · method · L729-L738 — async def _auto_scale_loop(self) -> None
+- _auto_scale_once · method · L740-L773 — async def _auto_scale_once(self) -> None
+- _idle_workers_count · method · L775-L780 — def _idle_workers_count(self) -> int
+- _shrink_one_worker · method · L782-L792 — def _shrink_one_worker(self) -> None
+- _process · method · L794-L884 — async def _process(self, task_id: str) -> None
+- _record_slow · method · L886-L903 — def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float, status: str) -> None
+- _finish · method · L905-L927 — async def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
+- _generate_once · method · L929-L954 — async def _generate_once(self, row: dict, token: str) -> dict
+- snapshot · method · L957-L968 — def snapshot(self) -> dict

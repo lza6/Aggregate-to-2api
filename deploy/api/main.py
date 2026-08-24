@@ -983,9 +983,19 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                 await db.mark_finished(task_id, "completed", res.asset_url, None,
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 registry.record_success(provider.prefix)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                except Exception:
+                    pass
             else:
                 await db.mark_finished(task_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                except Exception:
+                    pass
         except Exception as e:
             await db.mark_finished(task_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商生成异常 %s", task_id)
@@ -1025,9 +1035,19 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 # IMP-18: 生成成功 → 重置连续失败计数
                 registry.record_success(provider.prefix)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                except Exception:
+                    pass
             else:
                 await db.mark_finished(job_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                except Exception:
+                    pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商图生图异常 %s", job_id)
@@ -1061,9 +1081,19 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
                 await db.mark_finished(job_id, "completed", res.asset_url, None,
                                  time.monotonic() - t0, res.asset_bytes, res.asset_mime)
                 registry.record_success(provider.prefix)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                except Exception:
+                    pass
             else:
                 await db.mark_finished(job_id, "error", None, res.error or "生成失败",
                                  time.monotonic() - t0)
+                try:
+                    registry.adaptive_router.record_result(
+                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                except Exception:
+                    pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             log.exception("提供商多图图生图异常 %s", job_id)
@@ -1546,6 +1576,16 @@ async def get_proxy_subscription(format: str = Query("base64", description="订�
     sub_text = generate_subscription_text([item.get("protocols") for item in items if item.get("protocols")], fmt=format)
     media_type = "text/plain; charset=utf-8"
     return Response(content=sub_text, media_type=media_type)
+
+
+# ── v4.1: 自适应路由记录（只读）────────────────────
+@app.get("/v1/routing/records", include_in_schema=False)
+async def get_routing_records(limit: int = Query(50, ge=1, le=200)):
+    """自适应路由记录：最近 N 条路由决策（MAB-EWMA 引擎），展示每次请求被路由到哪个 provider 及打分。"""
+    return {
+        "records": registry.get_routing_records(limit=limit),
+        "nodes": registry.adaptive_router.node_snapshot(),
+    }
 
 
 # ── S-3/S-4: 慢日志画像端点（只读）──────────────────

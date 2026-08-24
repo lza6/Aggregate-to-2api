@@ -1,16 +1,17 @@
 {
-  "nodeCount": 2157,
-  "edgeCount": 3821,
+  "nodeCount": 2885,
+  "edgeCount": 5027,
   "languages": [
+    "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 2157,
+  "totalCount": 2885,
   "readyCount": 0,
-  "staleCount": 0,
+  "staleCount": 10,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-19T05:10:46.105Z",
-  "lastFile": "Dashboard.tsx"
+  "syncedAt": "2026-08-24T08:05:28.580Z",
+  "lastFile": "main.py"
 }
