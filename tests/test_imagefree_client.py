@@ -317,7 +317,7 @@ class _FakeClient:
             return item
         return _Resp(200, {}, None)
 
-    def stream(self, method, url, timeout=None):
+    def stream(self, method, url, timeout=None, headers=None):
         # httpx stream 上下文管理器；raise_for_status + aiter_bytes
         return _StreamCtx(self)
 

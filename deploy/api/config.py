@@ -162,6 +162,7 @@ class SecuritySettings(BaseModel):
     """安全 / 鉴权配置组。"""
 
     gallery_password: str = ""
+    cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
 
 
 # ── 顶层 Settings 类 ──────────────────────────────────────
@@ -326,6 +327,8 @@ class Settings(BaseSettings):
     if_gallery_password: str = Field(
         "", validation_alias="IF_GALLERY_PASSWORD"
     )
+    # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
+    if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
 
     # ── 缓存 ──
     if_lru_cache_size: int = Field(
@@ -608,7 +611,11 @@ class Settings(BaseSettings):
         )
         self._security = SecuritySettings(
             gallery_password=self.if_gallery_password,
+            cors_origins=self.if_cors_origins,
         )
+        # 模块级便捷引用（供 main.py 读取）
+        global CORS_ORIGINS
+        CORS_ORIGINS = self.if_cors_origins or "*"
         return self
 
     @property

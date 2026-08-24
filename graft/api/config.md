@@ -9,21 +9,21 @@
 - QueueSettings · class · L108-L126 — class QueueSettings(BaseModel)
 - ObservabilitySettings · class · L129-L134 — class ObservabilitySettings(BaseModel)
 - EditSettings · class · L137-L158 — class EditSettings(BaseModel)
-- SecuritySettings · class · L161-L164 — class SecuritySettings(BaseModel)
-- Settings · class · L170-L709 — class Settings(BaseSettings)
-- _proxy_empty_is_none · method · L464-L468 — def _proxy_empty_is_none(cls, v: str | None) -> str | None
-- _bool_str_coerce · method · L484-L488 — def _bool_str_coerce(cls, v: str | bool) -> bool
-- _resolve_proxy_and_init_groups · method · L491-L612 — def _resolve_proxy_and_init_groups(self) -> "Settings"
-- db · method · L615-L617 — def db(self) -> DBSettings
-- http · method · L620-L622 — def http(self) -> HTTPSettings
-- solver · method · L625-L627 — def solver(self) -> SolverSettings
-- cache · method · L630-L632 — def cache(self) -> CacheSettings
-- provider · method · L635-L637 — def provider(self) -> ProviderSettings
-- pool · method · L640-L642 — def pool(self) -> PoolSettings
-- queue · method · L645-L647 — def queue(self) -> QueueSettings
-- observability · method · L650-L652 — def observability(self) -> ObservabilitySettings
-- edit · method · L655-L657 — def edit(self) -> EditSettings
-- security · method · L660-L662 — def security(self) -> SecuritySettings
-- settings_json · method · L664-L677 — def settings_json(self) -> dict
-- validate · method · L679-L709 — def validate(self) -> list[str]
-- apply_model · function · L902-L905 — def apply_model(prompt: str, model: str) -> str
+- SecuritySettings · class · L161-L165 — class SecuritySettings(BaseModel)
+- Settings · class · L171-L716 — class Settings(BaseSettings)
+- _proxy_empty_is_none · method · L467-L471 — def _proxy_empty_is_none(cls, v: str | None) -> str | None
+- _bool_str_coerce · method · L487-L491 — def _bool_str_coerce(cls, v: str | bool) -> bool
+- _resolve_proxy_and_init_groups · method · L494-L619 — def _resolve_proxy_and_init_groups(self) -> "Settings"
+- db · method · L622-L624 — def db(self) -> DBSettings
+- http · method · L627-L629 — def http(self) -> HTTPSettings
+- solver · method · L632-L634 — def solver(self) -> SolverSettings
+- cache · method · L637-L639 — def cache(self) -> CacheSettings
+- provider · method · L642-L644 — def provider(self) -> ProviderSettings
+- pool · method · L647-L649 — def pool(self) -> PoolSettings
+- queue · method · L652-L654 — def queue(self) -> QueueSettings
+- observability · method · L657-L659 — def observability(self) -> ObservabilitySettings
+- edit · method · L662-L664 — def edit(self) -> EditSettings
+- security · method · L667-L669 — def security(self) -> SecuritySettings
+- settings_json · method · L671-L684 — def settings_json(self) -> dict
+- validate · method · L686-L716 — def validate(self) -> list[str]
+- apply_model · function · L909-L912 — def apply_model(prompt: str, model: str) -> str

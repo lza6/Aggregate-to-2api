@@ -292,21 +292,32 @@ async def download_image(
     """下载图片二进制（R2 URL 公开可访问）。SSRF 防护：拒绝私网/回环/链路本地地址。"""
     if MOCK_UPSTREAM:
         return b"\x89PNG\r\n\x1a\n" + b"\x00" * 64  # 最小合法 PNG 魔数（detect_mime 识别用）
-    # SSRF 防护：检查 URL 目标地址
+    # SSRF 防护：检查 URL 目标地址，并绑定 IP 连接防止 DNS rebinding（P0-4）
     host = urlsplit(image_url).hostname
-    if host:
-        try:
-            results = socket.getaddrinfo(host, 80, proto=socket.IPPROTO_TCP)
-        except OSError:
-            raise ImagefreeError(f"图片 URL 无法解析: {image_url}")
-        for i in results:
-            a = ipaddress.ip_address(i[4][0])
-            if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast:
-                raise ImagefreeError(f"不允许下载内网地址的图片: {image_url}")
+    if not host:
+        raise ImagefreeError(f"图片 URL 无效: {image_url}")
+    try:
+        results = socket.getaddrinfo(host, 80, proto=socket.IPPROTO_TCP)
+    except OSError:
+        raise ImagefreeError(f"图片 URL 无法解析: {image_url}")
+    # 使用解析后的 IP 地址连接，而非主机名，防止 DNS rebinding（TOCTOU）
+    first_ip = None
+    for i in results:
+        a = ipaddress.ip_address(i[4][0])
+        if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved or a.is_multicast:
+            raise ImagefreeError(f"不允许下载内网地址的图片: {image_url}")
+        if first_ip is None:
+            first_ip = i[4][0]
+    # 用 IP 替换主机名（保持端口和路径不变）
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(image_url)
+    ip_port = f"{first_ip}:{parsed.port}" if parsed.port else first_ip
+    safe_url = urlunparse((parsed.scheme, ip_port, parsed.path, parsed.params, parsed.query, parsed.fragment))
     client = _get_client()
     buf = _PoolView(_buffer_pool.acquire())
     try:
-        async with client.stream("GET", image_url, timeout=httpx.Timeout(timeout)) as r:
+        async with client.stream("GET", safe_url, timeout=httpx.Timeout(timeout),
+                                 headers={"Host": host}) as r:
             r.raise_for_status()
             async for chunk in r.aiter_bytes():
                 buf.extend(chunk)
