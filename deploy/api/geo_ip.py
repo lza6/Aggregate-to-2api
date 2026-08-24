@@ -167,39 +167,48 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
 
 
 def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
-    """生成一键订阅文本（支持 raw / base64 / clash yaml 格式）。"""
+    """生成一键订阅文本（支持 raw / base64 / clash yaml 格式，纯标准库无 pyyaml 依赖）。"""
     if fmt == "clash":
-        import yaml
-        proxies_list = [p.get("clash_proxy") for p in proxies if p.get("clash_proxy")]
-        proxy_names = [p["name"] for p in proxies_list]
-        clash_config = {
-            "port": 7890,
-            "socks-port": 7891,
-            "allow-lan": True,
-            "mode": "rule",
-            "log-level": "info",
-            "proxies": proxies_list,
-            "proxy-groups": [
-                {
-                    "name": "🚀 节点选择",
-                    "type": "select",
-                    "proxies": ["♻️ 自动选择", "DIRECT"] + proxy_names
-                },
-                {
-                    "name": "♻️ 自动选择",
-                    "type": "url-test",
-                    "url": "http://www.gstatic.com/generate_204",
-                    "interval": 300,
-                    "proxies": proxy_names
-                }
-            ],
-            "rules": [
-                "GEOIP,LAN,DIRECT",
-                "GEOIP,CN,DIRECT",
-                "MATCH,🚀 节点选择"
-            ]
-        }
-        return yaml.dump(clash_config, allow_unicode=True, sort_keys=False)
+        lines = [
+            "port: 7890",
+            "socks-port: 7891",
+            "allow-lan: true",
+            "mode: rule",
+            "log-level: info",
+            "proxies:"
+        ]
+        proxy_names = []
+        for p in proxies:
+            cp = p.get("clash_proxy") if p else None
+            if not cp:
+                continue
+            name = cp["name"]
+            proxy_names.append(name)
+            lines.append(f"  - name: \"{name}\"")
+            lines.append(f"    type: {cp.get('type', 'socks5')}")
+            lines.append(f"    server: {cp['server']}")
+            lines.append(f"    port: {cp['port']}")
+            lines.append("    udp: true")
+
+        quoted_names = [f"\"{n}\"" for n in proxy_names]
+        names_str = ", ".join(quoted_names)
+
+        lines.extend([
+            "proxy-groups:",
+            "  - name: \"🚀 节点选择\"",
+            "    type: select",
+            f"    proxies: [\"♻️ 自动选择\", \"DIRECT\", {names_str}]",
+            "  - name: \"♻️ 自动选择\"",
+            "    type: url-test",
+            "    url: http://www.gstatic.com/generate_204",
+            "    interval: 300",
+            f"    proxies: [{names_str}]",
+            "rules:",
+            "  - GEOIP,LAN,DIRECT",
+            "  - GEOIP,CN,DIRECT",
+            "  - MATCH,\"🚀 节点选择\""
+        ])
+        return "\n".join(lines)
 
     links = []
     for p in proxies:
