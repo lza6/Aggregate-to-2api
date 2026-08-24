@@ -1,55 +1,65 @@
-# workflow_status.md — 终局闭环总审计工作流
+# workflow_status.md — 终局闭环总审计工作流（v2）
 
-## 项目状态总览
-- 当前版本: v4.2.1
-- 最近提交: 6e952f5 (UI 精简 + 画廊 Prompt + SSE 事件钩子)
-- 生产状态: imagefree.tingfengai.art 运行中 (healthz ok, workers 10)
-- 生产部署: Docker Compose (cfsolver + api + Caddy)
+> 更新日期：2026-08-24 · 当前版本：v4.2.1 · 生产：imagefree.tingfengai.art (ok)
 
-## 任务追踪矩阵
+## 三项并行的只读深度审计已完成
 
-### ✅ 已闭环（v4.0-v4.2.1）
-| 任务 | 证据 | 验证 |
-|------|------|------|
-| MAB-EWMA 自适应路由 | api/adaptive_router.py | 14 项单元测试通过，生产 /v1/routing/records 可用 |
-| SS 订阅格式 | api/geo_ip.py | 生产 curl /v1/proxy-pool/subscribe 输出 ss:// |
-| 复制按钮 fallback | api/docs.html copyTextSafe() | 三级 fallback 实现 |
-| main.py 拆分 (1689→72) | api/main.py + api/routes/ + 6 个新模块 | 42 路由全部注册，集成测试通过 |
-| SSE 每任务事件流 | api/sse_events.py + /v1/tasks/{id}/events | 生产 curl 验证，worker 4 处 hook |
-| 路由记录全覆盖 | api/dispatch.py _dispatch_generate() | imagefree 也走路由记录 |
-| 导航精简 12→8 | api/docs.html | 验证无误 |
-| 画廊 Prompt 复制 | api/docs.html glb-copy-prompt/fill-prompt | 按钮存在，文案正常 |
+已启动 3 个子代理（Backend / Frontend-Security / Deploy-Docs-Tests）完成全量只读审计，结果如下。
 
-### 🔄 部分闭环（待补齐）
-| 任务 | 当前状态 | 缺口 | 优先级 |
-|------|---------|------|--------|
-| 号池自动化注册 | 脚本存在 (batch_register.py, nanobanana_loop.py) | 生产号池 0/500 | P0 |
-| SSRF 防护 | api/dispatch.py _parse_input_image() | 仅 IP 级别检查，无 URL 来源白名单 | P1 |
-| API 速率限制 | api/retry_policy.py 有限流分类 | 无全局 rate limiter 中间件 | P1 |
-| 前端路由记录面板 | Dashboard.tsx 底部有路由记录 | 无节点状态卡片 | P2 |
-| 前端画廊复制 | docs.html 有，React Gallery.tsx 无 | 前端组件无复制按钮 | P2 |
-| README.md | 498 行 | 未更新 v4.2 架构变更 | P1 |
-| .env.example | 无 | 缺少环境变量模板 | P1 |
-| 文档 | 各文件内嵌 docstring | 缺少独立 API 文档 | P2 |
+### 审计结论汇总
 
-### ❌ 未闭环
-| 任务 | 原因 | 优先级 |
-|------|------|--------|
-| 10k 账号注入 | 需外部 cf_solver + 邮箱源 + 代理 | P0 (长期) |
-| CDN 配置 | 静态资源未走 CDN | P3 |
-| Rate Limiter 中间件 | 需添加 FastAPI 中间件 | P1 |
-| 前端测试 | 无 React 测试 | P2 |
-| 契约测试 | api/contracts.py 存在但不作为运行时校验 | P2 |
+| 审计 | P0 | P1 | P2 | P3 |
+|------|----|----|----|----|
+| 后端逻辑 | 8 | 10 | 10 | 10 |
+| 前端/安全 | 4 | 10 | 7 | 1 |
+| 部署/文档/测试 | 0 | 10 | 12 | 0 |
+| **合计** | **12** | **30** | **29** | **11** |
 
-## 当前修复优先级
-1. P0: 号池生产补号（启动 batch_register 后台监控）
-2. P1: README.md 更新 + .env.example 创建
-3. P1: 全局 Rate Limiter 中间件
-4. P1: API 文档同步
-5. P2: 前端 Gallery.tsx 复制按钮
-6. P2: 路由面板加强
-7. P3: 架构文档 + CDN + 高可用
+## P0 阻塞问题清单（须全部修复）
 
-## 依赖关系
-- 号池补号依赖 cf_solver 运行、邮箱源可用、代理池可用
-- 其他任务无强依赖，可并行
+### 后端（backend audit）
+| # | 文件 | 问题 | 状态 |
+|---|------|------|------|
+| P0-1 | dispatch.py:127 | `_SSE_SUBSCRIBERS` 无锁并发读写 + QueueFull 静默吞 | 待修 |
+| P0-2 | dispatch_edit.py:248-257 | **URL 图片下载后未回填 image_bytes/image_bytes_list → None 提交崩溃** | ✅ 已修 |
+| P0-3 | dispatch_edit.py:152 | imagefree 图生图 task 未加入 _PROVIDER_TASKS 托盘（shutdown 无法优雅取消） | 待修 |
+| P0-4 | dispatch_edit.py:267-270 | imagefree 多图静默丢弃第 2/3 张（应明确报错不支持） | 待修 |
+| P0-5 | worker.py:199 | 动态水位 `0.0 * solve_time` 恒为 0 → dynamic watermark 失效 | 待修 |
+| P0-6 | dispatch.py:196 | `req.priority or 2` 吞掉 admin 优先级 0 | 待修 |
+| P0-7 | sse_events.py:156 | `asyncio.ensure_future` 孤儿 task 不持有引用，shutdown 丢事件 | 待修 |
+| P0-8 | worker.py _finish + dispatch.py broadcast | **终态事件双重发布（publish 两遍）** | 待修 |
+
+### 前端/安全（frontend-security audit）
+| # | 位置 | 问题 | 状态 |
+|---|------|------|------|
+| P0-1 | deploy/.env.example + git历史 | **Kookeey 住宅代理真实凭据入库**（metric 风险，须轮换+清历史） | 待修 |
+| P0-2 | docs.html:1455 | **画廊密码硬编码 `tfadmin2024` 明文** | 待修 |
+| P0-3 | main.py CORS | `allow_origins=["*"]` 全开 | 待修（收敛为配置） |
+| P0-4 | dispatch.py + imagefree_client.py | SSRF DNS rebinding 窗口（解析后重连主机名） | 待修 |
+
+## P1 高优先级（择要）
+- 前后端契约不对齐（api.ts 6 处字段缺失/错位、DLQ message vs detail、Tasks 无分页）
+- README 版本 3.1.0→4.2.1 + 架构图/目录结构/端点表过时
+- sync_deploy.py 白名单缺 9 个新模块（✅ 已修）+ contracts.py
+- requirements.txt 缺 prometheus-client
+- docker-compose 版本号 v2.3.0→v4.2.1、cfsolver 端口未映射 host 导致脚本无法连
+- 8+ 新模块无测试（sse/dispatch/dispatch_edit/meta/handlers/bg_tasks/models/contracts）
+- test_async_submit_and_poll 整组跑 fail 单独 pass（session scope 共享污染）
+- CI 三处问题：-x 跑两遍、`|| true` 使 ruff 形同虚设、无 sync_deploy 校验
+
+## 修复顺序（按影响）
+1. ✅ P0-2 URL 图片下载回填（已修）
+2. P0-6 admin 优先级 0 被吞 → 改为 `2 if priority is None else priority`
+3. P0-8 SSE 终态双发 → _finish 去掉 publish，bcast 全权
+4. P0-3 imagefree edit task 托盘
+5. P0-4 imagefree 多图明确报错
+6. P0-5 worker dynamic watermark
+7. P0-1 _SSE_SUBSCRIBERS 加锁
+8. P0-2 画廊密码：docs.html 去除硬编码 → 服务端 /v1/meta 下发
+9. P0-3 CORS 收敛
+10. P0-4 SSRF DNS rebinding
+11. P0-1 Kookeey 凭据：占位符替换 + README 提示轮换 + git filter 清理说明
+12. P1 契约/测试/README/CI 修复
+
+## 节点验收标准
+每修复一个 P0/P1，须：代码证据 + 相关测试通过 + 前端若涉及则重新 build + 部署 smoke。

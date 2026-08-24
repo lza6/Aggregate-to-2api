@@ -12,3 +12,4 @@ opentelemetry-instrumentation>=0.40b0
 opentelemetry-instrumentation-fastapi>=0.40b0
 opentelemetry-instrumentation-httpx>=0.40b0
 opentelemetry-instrumentation-logging>=0.40b0
+prometheus-client>=0.21

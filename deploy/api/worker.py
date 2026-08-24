@@ -196,7 +196,9 @@ class _TokenPool:
         if qsize > 0:
             # 有排队：直接补满池上限（预取循环按 need 消费，避免欠补）
             return self.maxsize
-        expected = max(1, 0.0 * solve_time * 1.5)
+        # P0-5: 空闲水位 = 保底 1 个 token（原公式 0.0*solve_time 恒为 0 导致动态水位失效）
+        # 空闲时维持 1 个新鲜 token，有排队时自然补满 maxsize
+        expected = 1.0
         return min(int(expected), self.maxsize)
 
     def _get_prefetch_delay(self) -> float:
@@ -929,17 +931,8 @@ class Engine:
         """终态落库（统一累计耗时）。"""
         await self.db.mark_finished(task_id, status, image_url, error, time.monotonic() - t0,
                               image_base64, image_mime)
-        # v4.2: SSE 事件 - 终态（result/error，自动结束事件流）
-        try:
-            from .sse_events import publish_task_event
-            event_type = "result" if status == "completed" else "error"
-            publish_task_event(task_id, event_type, {
-                "task_id": task_id, "status": status, "image_url": image_url,
-                "error": error,
-                "duration_sec": round(time.monotonic() - t0, 1),
-            })
-        except Exception:
-            pass
+        # 注：终态 SSE 事件由 broadcast_task_event 统一发布（含 per-task 流），
+        # _finish 不再直接调用 publish_task_event，避免 worker.py:936 与 dispatch.py:140 双重发布。
         # IMP-29: 持久化队列标记终态
         if self._persistent_queue and self._queue_db:
             self._queue_db.mark_completed(task_id)

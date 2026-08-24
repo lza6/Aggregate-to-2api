@@ -125,18 +125,30 @@ def _parse_input_images(images: list[str]) -> list[bytes]:
 
 # ── 全局 SSE 广播（向后兼容 /v1/events/tasks）──
 _SSE_SUBSCRIBERS: set[asyncio.Queue] = set()
+_SSE_LOCK = asyncio.Lock()  # P0-1: 保护订阅者集合的并发安全
 
 
 def broadcast_task_event(task_id: str, status: str, data: dict | None = None) -> None:
-    """向所有在线 SSE 客户端主动推送任务状态变迁（全局广播兼容层）。"""
+    """向所有在线 SSE 客户端主动推送任务状态变迁（全局广播兼容层）。
+
+    注意：_finish（worker.py）不再调用 publish_task_event，避免双重发布。
+    """
     payload = json.dumps({"task_id": task_id, "status": status, "data": data or {}, "ts": time.time()})
     msg = f"event: task_update\ndata: {payload}\n\n"
-    for q in list(_SSE_SUBSCRIBERS):
+    # P0-1: 快照订阅者集合（list 化防迭代中修改）
+    subs = list(_SSE_SUBSCRIBERS)
+    for q in subs:
         try:
             q.put_nowait(msg)
+        except asyncio.QueueFull:
+            # 队列满 → 移除该慢客户端，不阻塞广播
+            try:
+                _SSE_SUBSCRIBERS.discard(q)
+            except Exception:
+                pass
         except Exception:
             pass
-    # v4.2: 同时发布到 per-task 事件流
+    # v4.2: 同时发布到 per-task 事件流（仅发布一次，非双重）
     try:
         publish_task_event(task_id, "result" if status == "completed" else "error",
                            {"task_id": task_id, "status": status, ** (data or {})})
@@ -147,7 +159,8 @@ def broadcast_task_event(task_id: str, status: str, data: dict | None = None) ->
 async def sse_task_events():
     """全局 SSE（向后兼容）：所有任务状态广播。"""
     q: asyncio.Queue = asyncio.Queue(maxsize=100)
-    _SSE_SUBSCRIBERS.add(q)
+    async with _SSE_LOCK:
+        _SSE_SUBSCRIBERS.add(q)
 
     async def event_generator():
         try:
@@ -158,7 +171,8 @@ async def sse_task_events():
         except asyncio.CancelledError:
             pass
         finally:
-            _SSE_SUBSCRIBERS.discard(q)
+            async with _SSE_LOCK:
+                _SSE_SUBSCRIBERS.discard(q)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -189,11 +203,14 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     except Exception as e:
         log.warning("路由决策异常，回退默认路径: %s", e)
 
+    # P0-6: priority=0 是 admin 级别，不可用 or 2 判定
+    priority = req.priority if req.priority is not None else 2
+
     if provider is None or provider.prefix == "imagefree":
         # imagefree 主路径：走既有引擎队列（高性能）
         task_id = await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
                                                model.split("/", 1)[-1],
-                                               priority=req.priority or 2)
+                                               priority=priority)
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)

@@ -149,8 +149,12 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
         job_id = str(uuid.uuid4())
         ctype = imagefree_client.detect_mime(image_bytes)
         await db.create_request(job_id, prompt, "1:1", download, "img", "imagefree/default")
-        asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download,
+        # P0-3: imagefree 图生图 task 加入 _PROVIDER_TASKS 托盘，确保 shutdown 可优雅取消
+        t = asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download,
                                           model.split("/", 1)[-1]))
+        from .dispatch import _PROVIDER_TASKS
+        _PROVIDER_TASKS.add(t)
+        t.add_done_callback(_PROVIDER_TASKS.discard)
         return job_id
     provider = registry.provider_for(model)
     if provider is None:
@@ -247,8 +251,11 @@ async def edit_image(req: EditRequest):
     elif req.image:
         data, ctype = _parse_input_image(req.image)
         if data is None:
+            # URL 图片：下载字节后必须回填 image_bytes/image_bytes_list，否则后续全部用 None 提交
             data = await imagefree_client.download_image(req.image, 60.0, config.MAX_IMAGE_BYTES)
             ctype = imagefree_client.detect_mime(data)
+            image_bytes = data
+            image_bytes_list = [data]
         else:
             detected = imagefree_client.detect_mime(data)
             if detected != "application/octet-stream":
@@ -265,9 +272,12 @@ async def edit_image(req: EditRequest):
     if len(image_bytes_list) > 1:
         model = _normalize_model(req.model)
         if _provider_prefix(model) == "imagefree":
-            image_bytes = image_bytes_list[0]
-            job_id = await _dispatch_edit(req.model, req.prompt, image_bytes, req.download)
-            return TaskInfo(**task_to_public(await db.get_public(job_id)))
+            # P0-4: imagefree 上游只支持单图 → 明确报错，不静默丢弃额外图
+            raise AppError(
+                ErrorCodes.BAD_REQUEST,
+                "imagefree 上游仅支持单图参考（多图请使用 aifreeforever / nanobanana）",
+                422,
+            )
 
     if len(image_bytes_list) <= 1:
         image_bytes = image_bytes_list[0] if image_bytes_list else image_bytes

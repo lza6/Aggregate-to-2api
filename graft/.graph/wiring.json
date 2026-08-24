@@ -1,8 +1,8 @@
 {
   "meta": {
     "version": 1,
-    "nodeCount": 2954,
-    "edgeCount": 5284,
+    "nodeCount": 2963,
+    "edgeCount": 5269,
     "languages": [
       "javascript",
       "python",
@@ -3308,12 +3308,12 @@
       "name": "dispatch_edit.py",
       "kind": "file",
       "path": "api/dispatch_edit.py",
-      "span": "L1-L365",
+      "span": "L1-L368",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "dea0a83421149037f63955ca44cc450e398d63075533a8e1c88625236635b26b",
-      "chars": 15061,
+      "body_hash": "f86495f84a1c3efaa293085ff7367d3f46fc53113816f6249285ba38a74d13a5",
+      "chars": 15209,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -3510,7 +3510,7 @@
       "name": "_is_edit_slot_wedged",
       "kind": "function",
       "path": "api/dispatch_edit.py",
-      "span": "L304-L307",
+      "span": "L307-L310",
       "signature": "def _is_edit_slot_wedged(err: object) -> bool",
       "exported": false,
       "origin": "ast",
@@ -3538,7 +3538,7 @@
       "name": "_run_edit_chain",
       "kind": "function",
       "path": "api/dispatch_edit.py",
-      "span": "L310-L365",
+      "span": "L313-L368",
       "signature": "async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = \"default\", proxy: str | None = None) -> None",
       "exported": false,
       "origin": "ast",
@@ -3552,7 +3552,7 @@
       "name": "_run_edit_job",
       "kind": "function",
       "path": "api/dispatch_edit.py",
-      "span": "L281-L301",
+      "span": "L284-L304",
       "signature": "async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = \"default\") -> None",
       "exported": false,
       "origin": "ast",
@@ -3566,11 +3566,11 @@
       "name": "edit_image",
       "kind": "function",
       "path": "api/dispatch_edit.py",
-      "span": "L238-L277",
+      "span": "L238-L280",
       "signature": "async def edit_image(req: EditRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "404036916614f5afbbbb5a42a988d089287e52ff1cdf5de3340951486ef8bfbe",
+      "body_hash": "de491e37b49b75c7db0c09a446724615e6733d1bad6860a69ebac114e109bcba",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -12575,6 +12575,134 @@
       "owner": "RequestIdLogFilter"
     },
     {
+      "id": "deploy/api/contracts.py",
+      "name": "contracts.py",
+      "kind": "file",
+      "path": "deploy/api/contracts.py",
+      "span": "L1-L142",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "6a4a69cfae2d9a7fe62406733dafd324144e03b2aab5994a0b42ef6598a095ca",
+      "chars": 4882,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#EditResponse",
+      "name": "EditResponse",
+      "kind": "class",
+      "path": "deploy/api/contracts.py",
+      "span": "L49-L56",
+      "signature": "class EditResponse(BaseModel)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "682f605ff90af770b32f74a16c12041734b46de1f5ef2318d901bdbc73dfee8c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#exact_contract_error",
+      "name": "exact_contract_error",
+      "kind": "function",
+      "path": "deploy/api/contracts.py",
+      "span": "L140-L142",
+      "signature": "def exact_contract_error(model: type[BaseModel], data: dict) -> str | None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "57f387dee7b8719ac3ed8aefaa49c220cbb1ea2aec6869a68ba35c325e3f1398",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#ImageGenerationResponse",
+      "name": "ImageGenerationResponse",
+      "kind": "class",
+      "path": "deploy/api/contracts.py",
+      "span": "L27-L46",
+      "signature": "class ImageGenerationResponse(BaseModel)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0bd86b4a997a5cd4ff7078fbe64449b2ce5e4f84b00fa8bc21d24508e07b5128",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#ImageGenerationResponse._image_must_be_url",
+      "name": "_image_must_be_url",
+      "kind": "method",
+      "path": "deploy/api/contracts.py",
+      "span": "L42-L46",
+      "signature": "def _image_must_be_url(cls, v: str) -> str",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "3858fdaab6e858c9b4d051b2a3b025b8e397aecc44a5154b3504b3119f240c7f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ImageGenerationResponse"
+    },
+    {
+      "id": "deploy/api/contracts.py#parse_contract",
+      "name": "parse_contract",
+      "kind": "function",
+      "path": "deploy/api/contracts.py",
+      "span": "L116-L137",
+      "signature": "def parse_contract(model: type[BaseModel], data: dict) -> str | None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "4e372d41d34849fa698a1dc6d47f1d081836bf56c365b44e7cc2fb7f85833744",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#probe_imagefree_poll",
+      "name": "probe_imagefree_poll",
+      "kind": "function",
+      "path": "deploy/api/contracts.py",
+      "span": "L73-L83",
+      "signature": "def probe_imagefree_poll(data: dict) -> dict | None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "96a95a35b8d4b5088c2339555eb4a322d2832825edb90ecdd0224fed0a23a554",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#probe_nanobanana_poll",
+      "name": "probe_nanobanana_poll",
+      "kind": "function",
+      "path": "deploy/api/contracts.py",
+      "span": "L86-L98",
+      "signature": "def probe_nanobanana_poll(data: dict) -> str | None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "edf7792eb17648a89380acc1274333d40c9d676a8bb31c858e9b242362e01e75",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/contracts.py#validate_contract",
+      "name": "validate_contract",
+      "kind": "function",
+      "path": "deploy/api/contracts.py",
+      "span": "L101-L113",
+      "signature": "def validate_contract(model: type[BaseModel], data: dict) -> bool",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b479dcd6c08662039045d07b64bcf128c7d780efb434dd8bef54ccccabb8a434",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/db.py",
       "name": "db.py",
       "kind": "file",
@@ -15574,12 +15702,12 @@
       "name": "lifespan.py",
       "kind": "file",
       "path": "deploy/api/lifespan.py",
-      "span": "L1-L164",
+      "span": "L1-L168",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "23f1c35756dc9d19a71b2056d6375064c4b1d55a780f683dee79602c527f7653",
-      "chars": 5583,
+      "body_hash": "179f704b71f325a7977fd878cca3f459ce1034156febc0f0b738b6adb919b709",
+      "chars": 5649,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -15589,7 +15717,7 @@
       "name": "lifespan",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L29-L164",
+      "span": "L33-L168",
       "signature": "async def lifespan(_app): # IMP-08: 启动 OTel 追踪",
       "exported": true,
       "origin": "ast",
@@ -15603,7 +15731,7 @@
       "name": "_close_db",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L158-L159",
+      "span": "L162-L163",
       "signature": "async def _close_db() -> None",
       "exported": false,
       "origin": "ast",
@@ -15617,7 +15745,7 @@
       "name": "_flush_cache",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L146-L147",
+      "span": "L150-L151",
       "signature": "async def _flush_cache() -> None",
       "exported": false,
       "origin": "ast",
@@ -15631,7 +15759,7 @@
       "name": "_flush_db",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L122-L123",
+      "span": "L126-L127",
       "signature": "async def _flush_db() -> None",
       "exported": false,
       "origin": "ast",
@@ -15645,7 +15773,7 @@
       "name": "_restore_engine",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L127-L138",
+      "span": "L131-L142",
       "signature": "async def _restore_engine() -> None",
       "exported": false,
       "origin": "ast",
@@ -15659,7 +15787,7 @@
       "name": "_shutdown_otel",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L154-L155",
+      "span": "L158-L159",
       "signature": "async def _shutdown_otel() -> None",
       "exported": false,
       "origin": "ast",
@@ -15673,7 +15801,7 @@
       "name": "_stop_background",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L112-L117",
+      "span": "L116-L121",
       "signature": "async def _stop_background() -> None",
       "exported": false,
       "origin": "ast",
@@ -15687,7 +15815,7 @@
       "name": "_stop_batch_timer",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L104-L110",
+      "span": "L108-L114",
       "signature": "async def _stop_batch_timer() -> None",
       "exported": false,
       "origin": "ast",
@@ -15701,7 +15829,7 @@
       "name": "_stop_warmup",
       "kind": "function",
       "path": "deploy/api/lifespan.py",
-      "span": "L96-L102",
+      "span": "L100-L106",
       "signature": "async def _stop_warmup() -> None",
       "exported": false,
       "origin": "ast",
@@ -25549,12 +25677,12 @@
       "name": "sync_deploy.py",
       "kind": "file",
       "path": "scripts/sync_deploy.py",
-      "span": "L1-L115",
+      "span": "L1-L117",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "68293fb8f515e0d351293ea1bd2abfc29c59c1422c88d40fae401211c482ca98",
-      "chars": 3833,
+      "body_hash": "31815e3df4585ee016afb74607240ce5a8f4dd2921bbab7f06e182c3df6e344c",
+      "chars": 3909,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -25564,7 +25692,7 @@
       "name": "diff",
       "kind": "function",
       "path": "scripts/sync_deploy.py",
-      "span": "L40-L68",
+      "span": "L42-L70",
       "signature": "def diff() -> list[str]",
       "exported": true,
       "origin": "ast",
@@ -25578,7 +25706,7 @@
       "name": "main",
       "kind": "function",
       "path": "scripts/sync_deploy.py",
-      "span": "L71-L110",
+      "span": "L73-L112",
       "signature": "def main() -> int",
       "exported": true,
       "origin": "ast",
@@ -25592,7 +25720,7 @@
       "name": "sha256",
       "kind": "function",
       "path": "scripts/sync_deploy.py",
-      "span": "L36-L37",
+      "span": "L38-L39",
       "signature": "def sha256(p: Path) -> str",
       "exported": true,
       "origin": "ast",
@@ -53086,6 +53214,84 @@
       "confidence": "extracted"
     },
     {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#EditResponse",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#exact_contract_error",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#ImageGenerationResponse",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#parse_contract",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#probe_imagefree_poll",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#probe_nanobanana_poll",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "deploy/api/contracts.py#validate_contract",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "pydantic",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py",
+      "target": "typing",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py#EditResponse",
+      "target": "BaseModel",
+      "relation": "extends",
+      "confidence": "inferred"
+    },
+    {
+      "source": "deploy/api/contracts.py#exact_contract_error",
+      "target": "deploy/api/contracts.py#parse_contract",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py#ImageGenerationResponse",
+      "target": "deploy/api/contracts.py#ImageGenerationResponse._image_must_be_url",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/contracts.py#ImageGenerationResponse",
+      "target": "BaseModel",
+      "relation": "extends",
+      "confidence": "inferred"
+    },
+    {
       "source": "deploy/api/db.py",
       "target": "deploy/api/db.py#_atexit_stop_db_threads",
       "relation": "contains",
@@ -55800,6 +56006,12 @@
     {
       "source": "deploy/api/lifespan.py",
       "target": "asyncio",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/lifespan.py",
+      "target": "contextlib",
       "relation": "imports",
       "confidence": "extracted"
     },
@@ -72376,102 +72588,6 @@
       "confidence": "extracted"
     },
     {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_edit_missing_image",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_edit_missing_image",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_edit_wrong_status",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_empty_dict",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_empty_dict",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_image_not_url",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_image_not_url",
-      "target": "api/contracts.py#probe_imagefree_poll",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_image_not_url",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_missing_image",
-      "target": "api/contracts.py#exact_contract_error",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_missing_image",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_missing_image",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_nanobanana_poll_breaks",
-      "target": "api/contracts.py#probe_nanobanana_poll",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_not_a_dict",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_not_a_dict",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_status_wrong_enum",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestBrokenSamplesFail.test_status_wrong_enum",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
       "source": "tests/test_providers_contract.py#TestValidSamplesPass",
       "target": "tests/test_providers_contract.py#TestValidSamplesPass.test_aifreeforever_images",
       "relation": "contains",
@@ -72524,84 +72640,6 @@
       "target": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_submit_shape",
       "relation": "contains",
       "confidence": "extracted"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_edit",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_edit",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_mock",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_mock",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_real",
-      "target": "api/contracts.py#probe_imagefree_poll",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_imagefree_real",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_minimaxh3_poll",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_minimaxh3_submit_shape",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_poll",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_poll",
-      "target": "api/contracts.py#probe_nanobanana_poll",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_poll_assets",
-      "target": "api/contracts.py#probe_nanobanana_poll",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_submit_shape",
-      "target": "api/contracts.py#parse_contract",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "tests/test_providers_contract.py#TestValidSamplesPass.test_nanobanana_submit_shape",
-      "target": "api/contracts.py#validate_contract",
-      "relation": "calls",
-      "confidence": "inferred"
     },
     {
       "source": "tests/test_providers.py",
