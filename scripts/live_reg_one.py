@@ -69,29 +69,45 @@ async def run_and_save_one():
     # 4. 轮询收信并拉取详情
     print("[4] Polling for email...")
     link = None
-    for _ in range(12):
-        await asyncio.sleep(5)
+    for i in range(15):
+        await asyncio.sleep(4)
         mr = await client_22do.post(
             "https://22.do/action/mailbox/message",
             json={"email": email, "lastime": 0},
             headers={"Authorization": f"Bearer {jwt}"},
         )
-        data = mr.json().get("data")
+        try:
+            data = (mr.json() or {}).get("data")
+        except Exception:
+            continue
+        print(f"    [T+{(i+1)*4}s] message list: {data}")
         if isinstance(data, list) and len(data) > 0:
-            mid = data[0].get("id") or data[0].get("messageId")
-            det = await client_22do.post(
-                "https://22.do/action/mailbox/messageDetail",
-                json={"email": email, "id": mid},
-                headers={"Authorization": f"Bearer {jwt}"},
-            )
-            html = (det.json().get("data") or {}).get("content") or ""
-            m = re.search(
-                r"https://[^\s\"\'<>]+/api/auth/verify-email\?token=[^&\s\"\'<>]+",
-                html,
-            )
-            if m:
-                link = m.group(0).replace("&amp;", "&")
-                print(f"[4] Got link: {link}")
+            # 优先从列表直接看有没有 content/html，否则拉 messageDetail
+            for item in data:
+                raw_str = json.dumps(item, ensure_ascii=False)
+                m = re.search(r"https://[^\s\"\'<>]+/api/auth/verify-email\?token=[^&\s\"\'<>]+", raw_str)
+                if m:
+                    link = m.group(0).replace("&amp;", "&")
+                    print(f"[4] Got link directly from list: {link}")
+                    break
+                mid = item.get("id") or item.get("messageId")
+                if mid:
+                    try:
+                        det = await client_22do.post(
+                            "https://22.do/action/mailbox/messageDetail",
+                            json={"email": email, "id": mid},
+                            headers={"Authorization": f"Bearer {jwt}"},
+                        )
+                        det_json = det.json() or {}
+                        det_str = json.dumps(det_json, ensure_ascii=False)
+                        m2 = re.search(r"https://[^\s\"\'<>]+/api/auth/verify-email\?token=[^&\s\"\'<>]+", det_str)
+                        if m2:
+                            link = m2.group(0).replace("&amp;", "&")
+                            print(f"[4] Got link from detail: {link}")
+                            break
+                    except Exception as e:
+                        print("detail error:", e)
+            if link:
                 break
     if not link:
         return "FAIL: no verify link"
