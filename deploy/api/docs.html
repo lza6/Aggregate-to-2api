@@ -1451,8 +1451,23 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     }).catch(function () { showToast('⚠️ 统计数据加载失败', 'warning'); });
   }
 
-  // ── 画廊密码保护（后端鉴权 P1） ──
-  const GALLERY_PASSWORD = "tfadmin2024";
+  // ── 画廊密码保护（v4.2.1: 从后端 /v1/meta 获取，不再硬编码）──
+  var GALLERY_PASSWORD = "";
+  // 加载时从后端获取密码要求
+  (function initGalleryAuth() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/v1/meta', true);
+    xhr.onload = function () {
+      try {
+        var meta = JSON.parse(xhr.responseText);
+        if (meta && meta.gallery_requires_password) {
+          // 有密码要求，pw 从用户输入而非硬编码
+          GALLERY_PASSWORD = null; // 标记为需用户输入
+        }
+      } catch (e) {}
+    };
+    xhr.send();
+  })();
 
   function checkGalleryAuth() {
     try {
@@ -1470,12 +1485,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   function requireGalleryAuth() {
     if (checkGalleryAuth()) return true;
     var pwd = prompt('请输入画廊密码：');
-    if (pwd === GALLERY_PASSWORD) {
+    if (pwd && pwd.trim()) {
+      // 把用户输入的密码设为 GALLERY_PASSWORD，供后续 /v1/gallery 用
+      GALLERY_PASSWORD = pwd.trim();
       localStorage.setItem('gallery_auth', JSON.stringify({ authed: true, at: Date.now() }));
       return true;
     }
     if (pwd !== null) {
-      alert('密码错误');
+      alert('密码不能为空');
     }
     return false;
   }

@@ -172,7 +172,8 @@ async def healthz():
 async def meta():
     """暴露站点配置，方便调用方集成。"""
     return {"sitekey": config.SITEKEY, "aspect_ratios": config.ASPECT_RATIOS,
-            "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"]}
+            "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"],
+            "gallery_requires_password": bool(config.IF_GALLERY_PASSWORD)}
 
 
 @router.get("/static/zanshang.jpg", include_in_schema=False)
