@@ -482,7 +482,7 @@
     </div>
     <div class="brand-tags">
       <span class="brand-tag"><span class="dot"></span>服务运行中</span>
-      <span class="brand-tag">4 大提供商 · 45+ 模型</span>
+      <span class="brand-tag">3 大提供商 · 33+ 模型</span>
       <span class="brand-tag">公开访问 · 无需鉴权</span>
       <span class="brand-tag">微信 Tf00798</span>
     </div>
@@ -1208,7 +1208,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         <span>GitHub：<a href="https://github.com/lza6/" target="_blank" rel="noopener">github.com/lza6</a></span>
         <span>慢请求看板：<a href="/v1/slow/view" target="_blank" rel="noopener">打开</a></span>
         <span>开放接口 · 无鉴权 · 请合理使用</span>
-        <span><a href="/v1/honor" style="text-decoration:none">☕ 请我喝咖啡</a> · <span style="font-size:11px;opacity:.6">v3.1.0</span></span>
+        <span><a href="/v1/honor" style="text-decoration:none">☕ 请我喝咖啡</a> · <span style="font-size:11px;opacity:.6">v4.2.1</span></span>
       </div>
     </div>
   </div>
@@ -1995,6 +1995,13 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     if (logTimer) return;
     loadLogs();
     logTimer = setInterval(loadLogs, 3000);
+    // v4.2.1: 首页直达日志 tab 时若首次加载超时，5s 兜底显示空态而非无限"加载中"
+    setTimeout(function () {
+      var box = document.getElementById('log-box');
+      if (box && box.textContent.indexOf('加载中') !== -1) {
+        box.innerHTML = '<div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">📭 暂无日志记录</div>';
+      }
+    }, 5000);
   }
 
   function loadLogs() {

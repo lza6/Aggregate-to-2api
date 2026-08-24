@@ -94,6 +94,8 @@ class TestDeadLetterQueueWorker:
         """worker 重试满后应 push_dlq。"""
         import api.worker as w
         from api.worker import Engine
+        from api import turnstile_client as w_turnstile
+        from api import imagefree_client as w_imagefree
 
         # Mock solve 始终返回 token
         async def _solve(*a, **k):
@@ -103,8 +105,8 @@ class TestDeadLetterQueueWorker:
         async def _submit(*a, **k):
             raise RuntimeError("timeout")
 
-        monkeypatch.setattr(w.turnstile_client, "solve_turnstile", _solve)
-        monkeypatch.setattr(w.imagefree_client, "submit_generate", _submit)
+        monkeypatch.setattr(w_turnstile, "solve_turnstile", _solve)
+        monkeypatch.setattr(w_imagefree, "submit_generate", _submit)
         monkeypatch.setattr(config, "IF_TXT_RETRY_MAX", 2)
         monkeypatch.setattr(config, "IF_DLQ_ENABLED", True)
 
@@ -127,6 +129,8 @@ class TestDeadLetterQueueWorker:
         """IF_DLQ_ENABLED=0 时重试耗尽也不 push_dlq。"""
         import api.worker as w
         from api.worker import Engine
+        from api import turnstile_client as w_turnstile
+        from api import imagefree_client as w_imagefree
 
         async def _solve(*a, **k):
             return ("mock-token", 0.03)
@@ -134,8 +138,8 @@ class TestDeadLetterQueueWorker:
         async def _submit(*a, **k):
             raise RuntimeError("timeout")
 
-        monkeypatch.setattr(w.turnstile_client, "solve_turnstile", _solve)
-        monkeypatch.setattr(w.imagefree_client, "submit_generate", _submit)
+        monkeypatch.setattr(w_turnstile, "solve_turnstile", _solve)
+        monkeypatch.setattr(w_imagefree, "submit_generate", _submit)
         monkeypatch.setattr(config, "IF_TXT_RETRY_MAX", 2)
         monkeypatch.setattr(config, "IF_DLQ_ENABLED", False)
 

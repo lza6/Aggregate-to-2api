@@ -1,17 +1,17 @@
 {
-  "nodeCount": 2964,
-  "edgeCount": 5269,
+  "nodeCount": 2977,
+  "edgeCount": 5287,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 2964,
+  "totalCount": 2977,
   "readyCount": 0,
-  "staleCount": 0,
+  "staleCount": 108,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-24T14:00:48.867Z",
-  "lastFile": "docker-compose.yml"
+  "syncedAt": "2026-08-24T15:07:09.659Z",
+  "lastFile": "batch_register_nb.py"
 }

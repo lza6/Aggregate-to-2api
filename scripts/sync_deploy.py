@@ -19,7 +19,7 @@ SRC = ROOT / "api"
 DST = ROOT / "deploy" / "api"
 
 # 需保持一致的源码文件（.py 服务代码 + 首页文档）。不含 __pycache__。
-FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
+FILES = ["__init__.py", "main.py",
          "imagefree_client.py", "turnstile_client.py", "solver_guard.py", "docs.html",
          "account_pool.py", "email_pool.py", "proxy_pool.py", "registerer.py",
          "free_proxy_fetcher.py", "kookeey.py",
@@ -32,7 +32,7 @@ FILES = ["__init__.py", "config.py", "db.py", "main.py", "worker.py",
          "lifespan.py", "handlers.py", "bg_tasks.py", "models.py", "meta.py", "sse_events.py",
          "contracts.py"]
 # 需整体同步的目录（providers 包 / 静态资源 / 路由子包）
-DIRS = ["providers", "static", "routes"]
+DIRS = ["providers", "static", "routes", "config", "db", "worker"]
 
 
 def sha256(p: Path) -> str:

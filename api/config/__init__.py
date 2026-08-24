@@ -1,168 +1,33 @@
-"""imagefree_api 配置。全部可用环境变量覆盖，便于部署。
+"""imagefree_api 配置包。全部可用环境变量覆盖，便于部署。
 
-职责：pydantic-settings 集中管理全部 80+ 环境变量（IF_* 前缀）。
-重构候选：1001 行，可按功能拆分为 config/model、config/links、config/turnstile 等子模块，
-但拆分风险高（模块级单例被全项目 import），当前仅记录不做拆分。
+由原单体 api/config.py 拆分而来：
+- 子配置类（DBSettings 等）各放入独立子模块。
+- Settings 类、模块级单例 `settings`、全部模块级常量与 `apply_model` 保留在本模块
+  （`from api.config import Settings / settings / BASE_URL ...` 完全向后兼容）。
+- `from api.config import config` 兼容：config 指向本包模块本身。
+- `from api.config.settings import ...` 兼容：见 api/config/settings.py。
+
 使用 pydantic-settings 集中管理配置，保持 IF_ 前缀环境变量向后兼容。
-
-[P-SPLIT 降级批准 v3.1.0]（2026-08-22）：本文件与 main.py 均超 800 行规范，
-经评审批准**降级不拆**——模块级单例 `settings` 被全项目 import，拆分需全量回归，
-收益（可读性）< 风险（生产漂移）。拆分候选与方案记录于 计划书/审计报告/拆模块候选.md，
-仅在后续版本需要改该文件时顺手拆，绝不为拆而拆。
 """
 from __future__ import annotations
 
 import os
+import sys
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-# ── 子配置类（按功能分组）──────────────────────────────────
-
-
-class DBSettings(BaseModel):
-    """数据库配置组。"""
-
-    file: str = "data/imagefree.db"
-    stats_file: str = "data/stats.json"
-    retention_days: int = 365
-    cleanup_interval: int = 21600
-    batch_enabled: bool = True
-    batch_window: float = 0.2
-    pool_size: int = 3
-    pool_timeout: int = 5
-    base64_dir: str = "data/imgs"
-    base64_file_ttl: int = 86400
-    idempotency_enabled: bool = False
-    idempotency_ttl: int = 900
-
-
-class HTTPSettings(BaseModel):
-    """HTTP 连接配置组。"""
-
-    host: str = "127.0.0.1"
-    port: int = 8100
-    proxy: str | None = None
-    user_agent: str = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-    )
-    max_connections: int = 100
-    keepalive: int = 20
-    upstream_max_inflight: int = 30
-
-
-class SolverSettings(BaseModel):
-    """CF solver / Turnstile 求解配置组。"""
-
-    base_url: str = "https://imagefree.net"
-    sitekey: str = "0x4AAAAAACE-XLGoQUckKKm_"
-    cf_solver_url: str = "http://127.0.0.1:8001"
-    turnstile_timeout: int = 90
-    turnstile_poll_interval: float = 2.0
-    solve_circuit_threshold: int = 5
-    solve_circuit_probe_seconds: int = 30
-    solve_stats_window_seconds: int = 300
-    healthz_cache_ttl: int = 5
-    token_prefetch_concurrency: int = 1
-    prefetch_after_solve_delay: float = 0.0
-    prefetch_ema_alpha: float = 0.3
-
-
-class CacheSettings(BaseModel):
-    """LRU 缓存配置组。"""
-
-    size: int = 128
-    ttl: int = 5
-
-
-class ProviderSettings(BaseModel):
-    """多提供商 / 号池 / 邮箱池 / 代理池配置组。"""
-
-    proxy_file: str = ""
-    free_proxy_enabled: bool = False
-    free_proxy_refresh_min: int = 30
-    proxy_cooldown_seconds: int = 120
-    proxy_max_use_per_day: int = 1
-    proxy_use_cooldown_map: str = "0,30,90,300,900"
-    account_db_file: str = "data/account_pool.db"
-    email_db_file: str = "data/email_registry.db"
-    minimaxh3_account_target: int = 500
-    nanobanana_account_target: int = 500
-    account_auto: bool = True
-    mock_register: bool = False
-    degrade_threshold: int = 3
-    recover_interval: int = 300
-    default_model: str = "default"
-
-
-class PoolSettings(BaseModel):
-    """Token 池配置组。"""
-
-    token_pool_size: int = 6
-    token_ttl: int = 90
-    token_wait_timeout: int = 30
-
-
-class QueueSettings(BaseModel):
-    """队列 / Worker 配置组。"""
-
-    max_queue: int = 2000
-    admin_queue_max: int = 200
-    high_queue_max: int = 500
-    normal_queue_max: int = 1500
-    workers: int = 10
-    worker_auto: bool = False
-    workers_min: int = 4
-    workers_max: int = 16
-    worker_scale_up_threshold: int = 200
-    worker_scale_down_threshold: int = 20
-    worker_idle_seconds: int = 90
-    persistent_queue_enabled: bool = False
-    persistent_queue_db: str = "data/queue.db"
-    dlq_enabled: bool = True
-    dlq_max_retries: int = 3
-    dlq_retention_days: int = 7
-
-
-class ObservabilitySettings(BaseModel):
-    """可观测性 / 治理配置组。"""
-
-    health_check_interval: int = 60
-    health_check_enabled: bool = True
-    alert_check_interval: int = 60
-
-
-class EditSettings(BaseModel):
-    """图生图编辑配置组。"""
-
-    edit_timeout: int = 3600
-    task_hard_timeout: int = 480
-    edit_concurrency_wait: int = 60
-    edit_mutex_enabled: bool = True
-    edit_lock_max_age: int = 1500
-    edit_retry_max: int = 30
-    edit_retry_interval: int = 20
-    edit_proxy_file: str = ""
-    edit_proxy_parallel: int = 1
-    edit_proxy_max_inflight: int = 2
-    edit_proxy_pool_size: int = 1
-    edit_proxy_pool_idle_ttl: int = 180
-    generate_timeout: int = 300
-    generate_poll_interval: float = 2.0
-    generate_max_attempts: int = 2
-    txt_retry_max: int = 3
-    txt_retry_backoff_base: int = 5
-    sync_timeout: int = 300
-    max_image_bytes: int = 4 * 1024 * 1024
-
-
-class SecuritySettings(BaseModel):
-    """安全 / 鉴权配置组。"""
-
-    gallery_password: str = ""
-    cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
+from .base import _env_bool, _env_str
+from .db import DBSettings
+from .http import HTTPSettings
+from .solver import SolverSettings
+from .cache import CacheSettings
+from .provider import ProviderSettings
+from .pool import PoolSettings
+from .queue import QueueSettings
+from .observability import ObservabilitySettings
+from .edit import EditSettings
+from .security import SecuritySettings
 
 
 # ── 顶层 Settings 类 ──────────────────────────────────────
@@ -854,6 +719,10 @@ IF_SLOW_REQUEST_MS = settings.if_slow_request_ms
 IF_SLOW_LOG_SIZE = settings.if_slow_log_size
 DEFAULT_MODEL = settings.default_model
 
+# ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
+CORS_ORIGINS = "*"
+
+
 # ── 纯常量（无环境变量映射）────────────────────────────────
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PROMPT_LEN = 2000
@@ -910,6 +779,10 @@ def apply_model(prompt: str, model: str) -> str:
     """模型风格预设 → prompt 前缀注入（default 不加前缀）。供 worker/main 共用。"""
     prefix = MODEL_PRESETS.get(model, {}).get("prefix", "")
     return prefix + prompt if prefix else prompt
+
+
+# ── 兼容：`from api.config import config` 使 config 指代包模块本身 ──
+config = sys.modules[__name__]
 
 
 # ── 导出所有模块级变量名 ──────────────────────────────────
@@ -977,6 +850,8 @@ __all__ = [
     "IF_WORKER_IDLE_SECONDS",
     "IF_PERSISTENT_QUEUE_ENABLED",
     "IF_PERSISTENT_QUEUE_DB",
+    "IF_WORKER_BATCH_ENABLED",
+    "IF_WORKER_BATCH_SIZE",
     "TOKEN_POOL_SIZE",
     "TOKEN_TTL",
     "GALLERY_LIMIT",
@@ -986,6 +861,8 @@ __all__ = [
     "IF_HEALTH_CHECK_INTERVAL",
     "IF_HEALTH_CHECK_ENABLED",
     "IF_ALERT_CHECK_INTERVAL",
+    "IF_LOG_DIR",
+    "IF_LOG_RETENTION_DAYS",
     "MOCK_UPSTREAM",
     "OTEL_ENABLED",
     "OTEL_SERVICE_NAME",
@@ -1026,9 +903,11 @@ __all__ = [
     "IF_SLOW_REQUEST_MS",
     "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
+    "CORS_ORIGINS",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",
     "ASPECT_RATIOS",
     "MODEL_PRESETS",
     "apply_model",
+    "config",
 ]

@@ -37,9 +37,9 @@ jobs:
           pip install --no-cache-dir -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov httpx
 
-      - name: 单元测试
+      - name: 单元测试（排除集成/混沌）
         run: |
-          pytest tests/ -q --cov=api --cov-report=term --cov-fail-under=70
+          pytest tests/ -q -m "not integration and not chaos" --cov=api --cov-report=term --cov-fail-under=70
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
@@ -52,7 +52,7 @@ jobs:
             curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
             sleep 1
           done
-          pytest tests/ -q --cov=api --cov-report=term --cov-append --cov-fail-under=70 -x
+          pytest tests/ -q -m "integration or chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=70 -x
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
@@ -71,13 +71,17 @@ jobs:
           python-version: '3.11'
       - name: 安装 ruff
         run: pip install ruff
-      - name: 运行 ruff check
-        run: ruff check api/ --no-fix || true
+      - name: 运行 ruff check（失败则 CI 失败）
+        run: ruff check api/ --no-fix
+      - name: 校验 deploy/api 与 api 同步
+        run: |
+          python scripts/sync_deploy.py sync
+          python scripts/sync_deploy.py check
 
   docker:
     name: Docker 构建验证
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, lint]
     steps:
       - uses: actions/checkout@v4
       - name: 构建 API 镜像
