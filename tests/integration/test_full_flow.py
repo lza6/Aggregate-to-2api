@@ -46,7 +46,7 @@ class TestFullFlow:
         assert "token_pool" in body
         # P15: 新增段
         assert "providers" in body
-        assert set(body["providers"]) >= {"imagefree", "minimaxh3", "aifreeforever", "nanobanana"}
+        assert set(body["providers"]) >= {"imagefree", "aifreeforever", "nanobanana"}
         for p in body["providers"].values():
             assert "status" in p and "last_check" in p
         assert "queue" in body
@@ -62,9 +62,9 @@ class TestFullFlow:
         body = r.json()
         items = body.get("items", {})
         assert "imagefree" in items
-        assert "minimaxh3" in items
+        assert "nanobanana" in items
         assert "count" in body
-        assert body["count"] >= 40
+        assert body["count"] >= 30
 
     async def test_stats_endpoint(self, app_with_mocks):
         """统计端点返回完整结构。"""

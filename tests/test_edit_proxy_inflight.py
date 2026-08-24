@@ -6,7 +6,7 @@
 - 未启用代理池时信号量不限制
 
 注意：此测试独立运行，不依赖 conftest 中的集成测试 fixture。
-_EditProxyPool 在 api.main 中定义，导入 api.main 会触发模块级
+_EditProxyPool 在 api.dispatch_edit 中定义，导入会触发 meta 模块级
 代码执行（DB 初始化、prometheus 注册等）。
 """
 import asyncio

@@ -69,7 +69,7 @@ class TestPublicProjection:
 class TestMetrics:
     @pytest.mark.asyncio
     async def test_metrics_returns_prometheus_text(self):
-        from api.main import metrics
+        from api.routes.admin import metrics
 
         resp = await metrics()
         assert resp.status_code == 200
@@ -84,7 +84,7 @@ class TestMetrics:
 class TestHealthz:
     @pytest.mark.asyncio
     async def test_healthz_has_deep_metrics(self):
-        from api.main import healthz
+        from api.routes.health import healthz
 
         h = await healthz()
         assert "token_pool" in h
@@ -96,7 +96,8 @@ class TestHealthz:
     @pytest.mark.asyncio
     async def test_cf_probe_cache_ttl(self):
         """TTL 内二次调用不重复探测（缓存命中），force=True 强制刷新。"""
-        from api.main import _probe_cf_solver, _cf_probe_cache, config
+        from api.routes.health import _probe_cf_solver, _cf_probe_cache
+        from api import config
 
         config.HEALTHZ_CACHE_TTL = 5
         _cf_probe_cache.update(ok=True, at=time.time())

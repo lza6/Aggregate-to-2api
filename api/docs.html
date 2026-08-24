@@ -498,11 +498,7 @@
     <button class="nav-tab" data-nav="logs-sec">📋 实时日志</button>
     <button class="nav-tab" data-nav="proxy-sec">🌐 代理池状态</button>
     <button class="nav-tab" data-nav="gallery-sec">🎨 画廊</button>
-    <button class="nav-tab" data-nav="docs-sec">📚 API 对接文档</button>
-    <button class="nav-tab" data-nav="quickstart-sec">🚀 快速开始</button>
-    <button class="nav-tab" data-nav="playground-api-sec">🧪 API Playground</button>
-    <button class="nav-tab" data-nav="task-sec">📋 任务中心</button>
-    <button class="nav-tab" data-nav="stats-sec">📊 用量统计</button>
+    <button class="nav-tab" data-nav="docs-sec">📚 文档与任务</button>
     <button class="nav-tab theme-toggle" id="theme-toggle" style="margin-left:auto" title="切换主题">🌙</button>
   </div>
 </nav>
@@ -784,6 +780,8 @@
     <div style="display:flex;gap:12px;margin-top:10px">
       <a id="glb-download" href="" download="image.png" class="btn secondary" style="font-size:12px;padding:6px 14px;text-decoration:none;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">⬇️ 导出高清原图</a>
       <button id="glb-copy-link" class="btn secondary" style="font-size:12px;padding:6px 14px;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">🔗 复制图片链接</button>
+      <button id="glb-copy-prompt" class="btn secondary" style="font-size:12px;padding:6px 14px;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">📋 复制 Prompt</button>
+      <button id="glb-fill-prompt" class="btn secondary" style="font-size:12px;padding:6px 14px;margin:0;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)">🔁 复制 Prompt 并重填</button>
     </div>
   </div>
 </div>
@@ -1051,7 +1049,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 </main>
 
 	<!-- ── 快速开始 ── -->
-	<section class="card" id="quickstart-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+	<section class="card" id="quickstart-sec" style="display:none">
 	  <h2 style="margin-top:0">🚀 快速开始</h2>
 	  <p class="muted">以下 curl 示例可直接复制使用，把 <code>YOUR-DOMAIN</code> 替换为实际服务地址。</p>
 
@@ -1316,7 +1314,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     });
   }
 
-  // ── 顶部 tab 导航 ──
+  // ── 顶部 tab 导航（v4.2: 精简为 8 tabs，docs-sec 聚合文档/任务/用量）──
   var NAV_SECTIONS = {
     'playground': 'playground',
     'models-sec': 'models-sec',
@@ -1326,6 +1324,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     'proxy-sec': 'proxy-sec',
     'gallery-sec': 'gallery-sec',
     'docs-sec': 'docs-sec',
+    // 聚合页：docs-sec 点击同时展示 stats-sec 与 task-sec
     'stats-sec': 'stats-sec',
     'task-sec': 'task-sec',
     'quickstart-sec': 'quickstart-sec',
@@ -1338,7 +1337,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       var target = tab.dataset.nav;
       Object.keys(NAV_SECTIONS).forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.style.display = (id === target) ? '' : 'none';
+        if (el) {
+          // docs-sec 点击时同时显示 stats-sec + task-sec（聚合页）
+          if (target === 'docs-sec') {
+            el.style.display = (id === 'docs-sec' || id === 'stats-sec' || id === 'task-sec' || id === 'quickstart-sec') ? '' : 'none';
+          } else {
+            el.style.display = (id === target) ? '' : 'none';
+          }
+        }
       });
       if (target === 'pool-sec') loadPool();
       if (target === 'providers-sec') loadProviders();
@@ -1346,7 +1352,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       if (target === 'logs-sec') startLogPolling();
       if (target === 'proxy-sec') startProxyPolling();
       if (target === 'gallery-sec') loadGallery();
-      if (target === 'task-sec') loadTasks();
+      if (target === 'docs-sec') { loadTasks(); loadStats(); }
     };
   });
 
@@ -1493,7 +1499,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         var prompt = esc(item.prompt || '');
         var dur = item.duration_sec != null ? item.duration_sec.toFixed(1) + 's' : '';
         var imgUrl = item.image_base64 || item.image_url || '';
-        html += '<div class="cell"><img src="' + imgUrl + '" alt="" loading="lazy"><div class="meta"><div class="prompt">' + prompt + '</div><div class="dur">' + dur + '</div></div></div>';
+        // v4.2: alt 携带 prompt → 灯箱可复制/重填
+        html += '<div class="cell"><img src="' + imgUrl + '" alt="' + prompt + '" loading="lazy" data-prompt="' + prompt + '"><div class="meta"><div class="prompt">' + prompt + '</div><div class="dur">' + dur + '</div></div></div>';
       });
       html += '</div>';
       el.innerHTML = html;
@@ -2638,12 +2645,19 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
       lbImg.src = img.src;
       lbDl.href = img.src;
-      lbInfo.textContent = img.alt || '听风AI 高清作品详情';
+      // v4.2: 用 dataset.prompt 携带 Prompt，支持复制/重填
+      var altText = img.alt || '';
+      lbInfo.textContent = altText || '听风AI 高清作品详情';
+      lbInfo.dataset.prompt = altText;
+      _updatePrompt();
       lb.style.display = 'flex';
     };
 
     if (lbClose) lbClose.onclick = function () { lb.style.display = 'none'; };
     lb.onclick = function (e) { if (e.target === lb) lb.style.display = 'none'; };
+    // 记录当前灯箱图片的 alt（含 prompt）
+    var _lbPrompt = '';
+    var _updatePrompt = function () { _lbPrompt = lbInfo.dataset.prompt || ''; };
     if (lbCopy) {
       lbCopy.onclick = function () {
         if (lbImg.src) {
@@ -2651,6 +2665,27 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         } else {
           showToast('⚠️ 没有可复制的图片链接', 'warning');
         }
+      };
+    }
+    // v4.2: 复制 Prompt + 重填调试器
+    var lbCopyPrompt = document.getElementById('glb-copy-prompt');
+    var lbFillPrompt = document.getElementById('glb-fill-prompt');
+    if (lbCopyPrompt) {
+      lbCopyPrompt.onclick = function () {
+        if (_lbPrompt) copyTextSafe(_lbPrompt, '✅ Prompt 已复制');
+        else showToast('⚠️ 该作品无 Prompt', 'warning');
+      };
+    }
+    if (lbFillPrompt) {
+      lbFillPrompt.onclick = function () {
+        if (!_lbPrompt) { showToast('⚠️ 该作品无 Prompt', 'warning'); return; }
+        // 复制到剪贴板 + 重填到文生图输入框并切到在线使用 tab
+        copyTextSafe(_lbPrompt, '✅ Prompt 已复制并重填');
+        var pg = document.getElementById('pg-prompt');
+        if (pg) pg.value = _lbPrompt;
+        var nav = document.querySelector('.nav-tab[data-nav="playground"]');
+        if (nav && nav.click) nav.click();
+        showToast('🔁 已填入提示词，可点击生成', 'info');
       };
     }
   })();

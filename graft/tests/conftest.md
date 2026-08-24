@@ -6,6 +6,6 @@
 - port_open · function · L84-L89 — def port_open(port: int, host: str = "127.0.0.1") -> bool
 - wait_port · function · L92-L98 — def wait_port(port: int, timeout: float, desc: str) -> bool
 - mock_cfsolver · function · L102-L119 — def mock_cfsolver()
-- _app_instance · function · L123-L188 — async def _app_instance(mock_cfsolver)
-- pytest_sessionfinish · function · L191-L197 — def pytest_sessionfinish(session, exitstatus)
-- app_with_mocks · function · L201-L235 — async def app_with_mocks(_app_instance)
+- _app_instance · function · L123-L193 — async def _app_instance(mock_cfsolver)
+- pytest_sessionfinish · function · L196-L202 — def pytest_sessionfinish(session, exitstatus)
+- app_with_mocks · function · L206-L240 — async def app_with_mocks(_app_instance)

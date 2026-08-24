@@ -33,29 +33,29 @@
 - direct_pool_size · method · L410-L411 — def direct_pool_size(self) -> int
 - _WorkerHandle · class · L414-L423 — class _WorkerHandle
 - __init__ · method · L419-L423 — def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event)
-- Engine · class · L426-L968 — class Engine
+- Engine · class · L426-L1000 — class Engine
 - __init__ · method · L427-L452 — def __init__(self, db)
 - start · method · L455-L472 — async def start(self) -> None: # H4: 回收上次进程遗留的孤儿任务（pending/processing 永不结束的）
 - stop · method · L474-L487 — async def stop(self) -> None
 - submit · method · L490-L493 — async def submit(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default") -> str
-- submit_priority · method · L495-L517 — async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default", priority: int = 2) -> str
-- _next_seq · method · L519-L521 — def _next_seq(self) -> int
-- requeue_dlq_task · method · L523-L544 — async def requeue_dlq_task(self, task_id: str) -> bool
-- wait_result · method · L546-L559 — async def wait_result(self, task_id: str, timeout: float) -> dict
-- _resume_from_queue · method · L561-L574 — def _resume_from_queue(self) -> int
-- token_pool · method · L578-L580 — def token_pool(self) -> asyncio.Queue
-- _acquire_token · method · L582-L584 — async def _acquire_token(self, timeout: float) -> str | None
-- acquire_token · method · L586-L589 — async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None
-- _create_worker · method · L592-L601 — def _create_worker(self, idx: int) -> _WorkerHandle
-- queue_in_rate · method · L604-L614 — async def queue_in_rate(self, window: float = 60.0) -> float
-- _worker_batch_loop · method · L617-L682 — async def _worker_batch_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
-- _worker_loop · method · L684-L726 — async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
-- _auto_scale_loop · method · L729-L738 — async def _auto_scale_loop(self) -> None
-- _auto_scale_once · method · L740-L773 — async def _auto_scale_once(self) -> None
-- _idle_workers_count · method · L775-L780 — def _idle_workers_count(self) -> int
-- _shrink_one_worker · method · L782-L792 — def _shrink_one_worker(self) -> None
-- _process · method · L794-L884 — async def _process(self, task_id: str) -> None
-- _record_slow · method · L886-L903 — def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float, status: str) -> None
-- _finish · method · L905-L927 — async def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
-- _generate_once · method · L929-L954 — async def _generate_once(self, row: dict, token: str) -> dict
-- snapshot · method · L957-L968 — def snapshot(self) -> dict
+- submit_priority · method · L495-L526 — async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default", priority: int = 2) -> str
+- _next_seq · method · L528-L530 — def _next_seq(self) -> int
+- requeue_dlq_task · method · L532-L553 — async def requeue_dlq_task(self, task_id: str) -> bool
+- wait_result · method · L555-L568 — async def wait_result(self, task_id: str, timeout: float) -> dict
+- _resume_from_queue · method · L570-L583 — def _resume_from_queue(self) -> int
+- token_pool · method · L587-L589 — def token_pool(self) -> asyncio.Queue
+- _acquire_token · method · L591-L593 — async def _acquire_token(self, timeout: float) -> str | None
+- acquire_token · method · L595-L598 — async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None
+- _create_worker · method · L601-L610 — def _create_worker(self, idx: int) -> _WorkerHandle
+- queue_in_rate · method · L613-L623 — async def queue_in_rate(self, window: float = 60.0) -> float
+- _worker_batch_loop · method · L626-L691 — async def _worker_batch_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
+- _worker_loop · method · L693-L735 — async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None
+- _auto_scale_loop · method · L738-L747 — async def _auto_scale_loop(self) -> None
+- _auto_scale_once · method · L749-L782 — async def _auto_scale_once(self) -> None
+- _idle_workers_count · method · L784-L789 — def _idle_workers_count(self) -> int
+- _shrink_one_worker · method · L791-L801 — def _shrink_one_worker(self) -> None
+- _process · method · L803-L905 — async def _process(self, task_id: str) -> None
+- _record_slow · method · L907-L924 — def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float, status: str) -> None
+- _finish · method · L926-L959 — async def _finish(self, task_id: str, status: str, image_url: str | None, error: str | None, t0: float, image_base64: str | None = None, image_mime: str | None = None) -> None
+- _generate_once · method · L961-L986 — async def _generate_once(self, row: dict, token: str) -> dict
+- snapshot · method · L989-L1000 — def snapshot(self) -> dict

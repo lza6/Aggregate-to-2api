@@ -176,7 +176,7 @@ async def test_dispatch_edit_routes(tmp_db, monkeypatch):
 
 
 def test_normalize_model_legacy():
-    from api.main import _normalize_model
+    from api.dispatch import _normalize_model
     assert _normalize_model("default") == "imagefree/default"
     assert _normalize_model("anime") == "imagefree/anime"
     assert _normalize_model("minimaxh3/gpt-image-2") == "minimaxh3/gpt-image-2"

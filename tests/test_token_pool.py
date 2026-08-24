@@ -173,7 +173,7 @@ async def test_acquire_timeout_counts_wait_timeout(fake_solve):
 class TestMainObservability:
     @pytest.mark.asyncio
     async def test_healthz_has_solver_fields(self):
-        from api.main import healthz
+        from api.routes.health import healthz
         h = await healthz()
         for k in ("solver_status", "solve_success_total", "solve_failure_total",
                   "solve_avg_seconds", "solve_window_success_rate", "solve_window_solve_count",
@@ -185,7 +185,7 @@ class TestMainObservability:
 
     @pytest.mark.asyncio
     async def test_metrics_has_solver_lines(self):
-        from api.main import metrics
+        from api.routes.admin import metrics
         text = (await metrics()).body.decode()
         for line in (
             'imagefree_solve_total{result="success"}',
@@ -203,7 +203,7 @@ class TestMainObservability:
 
     @pytest.mark.asyncio
     async def test_metrics_keeps_legacy_lines(self):
-        from api.main import metrics
+        from api.routes.admin import metrics
         text = (await metrics()).body.decode()
         assert "imagefree_requests_total" in text
         assert "imagefree_token_pool" in text

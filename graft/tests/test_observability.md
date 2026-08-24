@@ -8,10 +8,10 @@
 - test_get_public_missing · method · L63-L65 — async def test_get_public_missing(self, tmp_db)
 - TestMetrics · class · L69-L80 — class TestMetrics
 - test_metrics_returns_prometheus_text · method · L71-L80 — async def test_metrics_returns_prometheus_text(self)
-- TestHealthz · class · L84-L106 — class TestHealthz
+- TestHealthz · class · L84-L107 — class TestHealthz
 - test_healthz_has_deep_metrics · method · L86-L94 — async def test_healthz_has_deep_metrics(self)
-- test_cf_probe_cache_ttl · method · L97-L106 — async def test_cf_probe_cache_ttl(self)
-- TestDiskLogger · class · L111-L152 — class TestDiskLogger
-- test_setup_creates_dir_and_writes · method · L112-L135 — def test_setup_creates_dir_and_writes(self, tmp_path)
-- test_teardown_removes_handler · method · L137-L143 — def test_teardown_removes_handler(self, tmp_path)
-- test_rotation_keeps_backup_count · method · L145-L152 — def test_rotation_keeps_backup_count(self, tmp_path)
+- test_cf_probe_cache_ttl · method · L97-L107 — async def test_cf_probe_cache_ttl(self)
+- TestDiskLogger · class · L112-L153 — class TestDiskLogger
+- test_setup_creates_dir_and_writes · method · L113-L136 — def test_setup_creates_dir_and_writes(self, tmp_path)
+- test_teardown_removes_handler · method · L138-L144 — def test_teardown_removes_handler(self, tmp_path)
+- test_rotation_keeps_backup_count · method · L146-L153 — def test_rotation_keeps_backup_count(self, tmp_path)

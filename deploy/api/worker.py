@@ -500,6 +500,15 @@ class Engine:
         """
         task_id = str(uuid.uuid4())
         await self.db.create_request(task_id, prompt, aspect_ratio, download, "txt", model)
+        # v4.2: SSE 事件 - 任务已入队（含队列位置）
+        try:
+            pos = self.queue.qsize() + 1
+            from .sse_events import publish_task_event
+            publish_task_event(task_id, "status", {
+                "task_id": task_id, "status": "pending", "queue_pos": pos,
+            })
+        except Exception:
+            pass
         limits = {0: config.ADMIN_QUEUE_MAX, 1: config.HIGH_QUEUE_MAX, 2: config.NORMAL_QUEUE_MAX}
         try:
             if config.IF_WORKER_BATCH_ENABLED and self.queue.is_full(priority):
@@ -796,6 +805,12 @@ class Engine:
         if not row:
             return
         await self.db.mark_started(task_id)
+        # v4.2: SSE 事件 - 任务进入处理阶段
+        try:
+            from .sse_events import publish_task_event
+            publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
+        except Exception:
+            pass
         # IMP-29: 持久化队列标记 processing
         if self._persistent_queue and self._queue_db:
             self._queue_db.mark_processing(task_id)
@@ -832,6 +847,12 @@ class Engine:
                                   if solver_guard.circuit_open
                                   else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
                     break
+                # v4.2: SSE 事件 - token 已获取，进入生成阶段
+                try:
+                    from .sse_events import publish_task_event
+                    publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
+                except Exception:
+                    pass
                 try:
                     with tracer.start_as_current_span(
                         "provider.submit",
@@ -908,6 +929,17 @@ class Engine:
         """终态落库（统一累计耗时）。"""
         await self.db.mark_finished(task_id, status, image_url, error, time.monotonic() - t0,
                               image_base64, image_mime)
+        # v4.2: SSE 事件 - 终态（result/error，自动结束事件流）
+        try:
+            from .sse_events import publish_task_event
+            event_type = "result" if status == "completed" else "error"
+            publish_task_event(task_id, event_type, {
+                "task_id": task_id, "status": status, "image_url": image_url,
+                "error": error,
+                "duration_sec": round(time.monotonic() - t0, 1),
+            })
+        except Exception:
+            pass
         # IMP-29: 持久化队列标记终态
         if self._persistent_queue and self._queue_db:
             self._queue_db.mark_completed(task_id)

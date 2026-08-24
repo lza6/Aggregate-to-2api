@@ -170,8 +170,13 @@ async def _app_instance(mock_cfsolver):
     import api.main  # 首次导入，触发模块级代码执行
 
     # ── 手动触发 lifespan startup（引擎启动、worker 创建等）──
-    _lifespan_ctx = api.main.lifespan(api.main.app)
+    from api.lifespan import lifespan
+    from api.meta import registry
+    _lifespan_ctx = lifespan(api.main.app)
     await _lifespan_ctx.__aenter__()
+
+    # 挂载 registry 引用到 api.main 模块（供 test 访问）
+    api.main.registry = registry
 
     yield api.main
 

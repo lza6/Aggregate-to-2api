@@ -302,7 +302,7 @@ class TestTelemetrySnapshot:
 
     def test_main_module_imports_telemetry(self):
         """main.py 正确导入 telemetry 模块。"""
-        from api.main import lifespan
+        from api.lifespan import lifespan
 
         # lifespan 引用了 init_telemetry / shutdown_telemetry
         # 不报错即验证通过
