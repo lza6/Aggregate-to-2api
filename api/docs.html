@@ -2647,8 +2647,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       lbDl.href = img.src;
       // v4.2: 用 dataset.prompt 携带 Prompt，支持复制/重填
       var altText = img.alt || '';
-      lbInfo.textContent = altText || '听风AI 高清作品详情';
-      lbInfo.dataset.prompt = altText;
+      lbInfo.textContent = decodeURIComponent(altText) || '听风AI 高清作品详情';
+      lbInfo.dataset.prompt = decodeURIComponent(altText);
       _updatePrompt();
       lb.style.display = 'flex';
     };
