@@ -18,10 +18,12 @@ async def run_and_save_one():
     }
     client_22do = httpx.AsyncClient(timeout=15.0, headers=headers_22do)
     email = None
-    for _ in range(10):
+    for _ in range(15):
         r = await client_22do.post("https://22.do/action/mailbox/create", json={"type": "random"})
         em = (r.json().get("data") or {}).get("email", "")
-        if em and "+" not in em and em.count(".") == 1:
+        # 只选取 nanobanana 明确放行且能收到验证邮件的域名（如 tnbeta.com, colaname.com, colabeta.com, usdtbeta.com）
+        allowed_domains = ("tnbeta.com", "colaname.com", "colabeta.com", "usdtbeta.com")
+        if em and any(em.endswith(f"@{d}") for d in allowed_domains):
             email = em
             break
     print(f"[1] Email: {email}")

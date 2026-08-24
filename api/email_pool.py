@@ -168,20 +168,21 @@ class Do22Source(MailSource):
                                                   "Accept": "*/*"})
 
     async def new_address(self) -> tuple[str, dict]:
-        # 循环创建直到获得不含 '+' 别名且不含过多 '.' 的干净邮箱（上游 Better-Auth 屏蔽此类邮箱）
+        # 循环创建直到获得目标站放行且可收件的干净域名（tnbeta.com, colaname.com, colabeta.com, usdtbeta.com）
         address = ""
-        for _ in range(12):
+        allowed = ("@tnbeta.com", "@colaname.com", "@colabeta.com", "@usdtbeta.com")
+        for _ in range(15):
             r = await self.session.post(f"{self.BASE}/action/mailbox/create",
                                         json={"type": "random"})
             if r.status_code != 200:
                 continue
             data = (r.json() or {}).get("data") or {}
             em = str(data.get("email") or "")
-            if em and "@" in em and "+" not in em and em.count(".") == 1:
+            if em and any(em.endswith(suf) for suf in allowed):
                 address = em
                 break
         if not address or "@" not in address:
-            raise RuntimeError(f"22.do 无法创建无别名干净邮箱")
+            raise RuntimeError(f"22.do 无法创建白名单域名邮箱")
 
         # login 拿 email cookie（message 接口需要）
         await self.session.post(f"{self.BASE}/action/mailbox/login",
