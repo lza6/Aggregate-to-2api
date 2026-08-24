@@ -1,17 +1,17 @@
 {
-  "nodeCount": 2977,
-  "edgeCount": 5287,
+  "nodeCount": 3165,
+  "edgeCount": 5680,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 2977,
+  "totalCount": 3165,
   "readyCount": 0,
-  "staleCount": 286,
+  "staleCount": 2,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-24T15:07:09.659Z",
-  "lastFile": "release_notes.md"
+  "syncedAt": "2026-08-24T16:45:19.347Z",
+  "lastFile": "dispatch_edit.py"
 }
