@@ -82,9 +82,10 @@ class TestIdempotencyDispatch:
 
     async def test_known_returns_existing(self, tmp_db, monkeypatch):
         """幂等 key 已存在时返回已有 task_id。"""
-        from api.main import db, _dispatch_generate
-        from api.main import GenerateRequest
-        monkeypatch.setattr("api.main.db", tmp_db)
+        from api.meta import db
+        from api.dispatch import _dispatch_generate
+        from api.models import GenerateRequest
+        monkeypatch.setattr("api.dispatch.db", tmp_db)
 
         await tmp_db.save_idempotency("known-key", "existing-task-999")
 
@@ -100,9 +101,10 @@ class TestIdempotencyDispatch:
 
     async def test_without_key_normal(self, tmp_db, monkeypatch):
         """不带幂等 key 时正常走原流程。"""
-        from api.main import db, _dispatch_generate
-        from api.main import GenerateRequest
-        monkeypatch.setattr("api.main.db", tmp_db)
+        from api.meta import db
+        from api.dispatch import _dispatch_generate
+        from api.models import GenerateRequest
+        monkeypatch.setattr("api.dispatch.db", tmp_db)
 
         req = GenerateRequest(prompt="test", aspect_ratio="1:1")
         req.model = "imagefree/default"

@@ -27,7 +27,7 @@ def _import_pool_cls():
     os.environ["IF_DB_FILE"] = _tmp_db
     os.environ["IF_ACCOUNT_AUTO"] = "0"
     os.environ["IF_MOCK_REGISTER"] = "1"
-    from api.main import _EditProxyPool
+    from api.dispatch_edit import _EditProxyPool
     return _EditProxyPool
 
 

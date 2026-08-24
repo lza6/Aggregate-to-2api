@@ -22,14 +22,14 @@ os.environ["IF_ACCOUNT_AUTO"] = "0"
 os.environ["IF_MOCK_REGISTER"] = "1"
 
 from api.errors import AppError  # noqa: E402
-from api.main import (  # noqa: E402
+from api.dispatch import (  # noqa: E402
     _normalize_model,
     _parse_input_image,
     _parse_input_images,
-    _uptime_human,
     _validate_model,
     _validate_ratio,
 )
+from api.meta import _uptime_human
 
 
 def _b64(data: bytes) -> str:

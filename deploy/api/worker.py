@@ -914,13 +914,13 @@ class Engine:
         # IMP-11: 出图成功 → 失效画廊缓存，下次请求重新查询 DB
         # 使用懒导入避免循环依赖（worker → main → worker）
         try:
-            from .main import broadcast_task_event
+            from .dispatch import broadcast_task_event
             broadcast_task_event(task_id, status, {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)})
         except Exception:
             pass
         if status == "completed" and image_url:
             try:
-                from .main import gallery_cache as _gc
+                from .meta import gallery_cache as _gc
                 import asyncio
                 asyncio.create_task(_gc.invalidate_prefix("gallery:"))
             except Exception as exc:

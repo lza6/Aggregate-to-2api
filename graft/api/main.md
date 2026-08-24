@@ -53,37 +53,38 @@
 - sse_task_events · function · L910-L927 — async def sse_task_events()
 - event_generator · function · L916-L925 — async def event_generator()
 - _provider_prefix · function · L934-L935 — def _provider_prefix(model: str) -> str
-- _dispatch_generate · function · L938-L996 — async def _dispatch_generate(req: GenerateRequest) -> str
-- _run · function · L973-L991 — async def _run() -> None
-- _dispatch_edit · function · L999-L1038 — async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: bool) -> str
-- _run · function · L1017-L1033 — async def _run() -> None
-- _dispatch_edit_multi · function · L1041-L1074 — async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[bytes], download: bool) -> str
-- _run · function · L1054-L1069 — async def _run() -> None
-- edit_image · function · L1078-L1131 — async def edit_image(req: EditRequest)
-- _run_edit_job · function · L1134-L1160 — async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default") -> None
-- _is_edit_slot_wedged · function · L1163-L1166 — def _is_edit_slot_wedged(err: object) -> bool
-- _run_edit_chain · function · L1169-L1232 — async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default", proxy: str | None = None) -> None
-- get_edit_task · function · L1236-L1241 — async def get_edit_task(job_id: str)
-- models · function · L1245-L1250 — async def models()
-- providers · function · L1254-L1276 — async def providers()
-- account_pool_dashboard · function · L1280-L1287 — async def account_pool_dashboard()
-- list_tasks · function · L1291-L1310 — async def list_tasks( limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), status: str | None = Query(None, description="筛选：pending/processing/completed/error"), model: str | None = Query(None, description="筛选：模型 id，如 imagefree/default"), sort: str = Query("created_at", description="排序字段：created_at/duration_sec"), )
-- get_task · function · L1314-L1318 — async def get_task(task_id: str)
-- meta · function · L1322-L1325 — async def meta()
-- zanshang_qr · function · L1336-L1341 — async def zanshang_qr()
-- logo_small · function · L1345-L1349 — async def logo_small()
-- logo_medium · function · L1353-L1357 — async def logo_medium()
-- get_stats · function · L1361-L1403 — async def get_stats()
-- gallery · function · L1407-L1434 — async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None, description="画廊密码（IF_GALLERY_PASSWORD 非空时必填）"))
-- errors · function · L1438-L1456 — async def errors(limit: int = Query(20, ge=1, le=100))
-- metrics · function · L1463-L1469 — async def metrics()
-- get_logs · function · L1473-L1475 — async def get_logs(lines: int = Query(50, ge=1, le=200))
-- log_websocket · function · L1479-L1494 — async def log_websocket(websocket: WebSocket)
-- dead_letter_queue · function · L1498-L1501 — async def dead_letter_queue(limit: int = Query(20, ge=1, le=100))
-- retry_dlq_task · function · L1505-L1519 — async def retry_dlq_task(task_id: str, request: Request)
-- clear_dlq · function · L1523-L1528 — async def clear_dlq(request: Request)
-- get_proxy_pool · function · L1532-L1536 — async def get_proxy_pool(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=500))
-- get_proxy_subscription · function · L1540-L1548 — async def get_proxy_subscription(format: str = Query("base64", description="订阅格式：base64 或 raw"))
-- get_slow_requests · function · L1553-L1578 — async def get_slow_requests(limit: int = Query(50, ge=1, le=500))
-- slow_view · function · L1582-L1584 — async def slow_view()
-- diagnostics · function · L1589-L1643 — async def diagnostics()
+- _dispatch_generate · function · L938-L1006 — async def _dispatch_generate(req: GenerateRequest) -> str
+- _run · function · L973-L1001 — async def _run() -> None
+- _dispatch_edit · function · L1009-L1058 — async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: bool) -> str
+- _run · function · L1027-L1053 — async def _run() -> None
+- _dispatch_edit_multi · function · L1061-L1104 — async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[bytes], download: bool) -> str
+- _run · function · L1074-L1099 — async def _run() -> None
+- edit_image · function · L1108-L1161 — async def edit_image(req: EditRequest)
+- _run_edit_job · function · L1164-L1190 — async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default") -> None
+- _is_edit_slot_wedged · function · L1193-L1196 — def _is_edit_slot_wedged(err: object) -> bool
+- _run_edit_chain · function · L1199-L1262 — async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default", proxy: str | None = None) -> None
+- get_edit_task · function · L1266-L1271 — async def get_edit_task(job_id: str)
+- models · function · L1275-L1280 — async def models()
+- providers · function · L1284-L1306 — async def providers()
+- account_pool_dashboard · function · L1310-L1317 — async def account_pool_dashboard()
+- list_tasks · function · L1321-L1340 — async def list_tasks( limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), status: str | None = Query(None, description="筛选：pending/processing/completed/error"), model: str | None = Query(None, description="筛选：模型 id，如 imagefree/default"), sort: str = Query("created_at", description="排序字段：created_at/duration_sec"), )
+- get_task · function · L1344-L1348 — async def get_task(task_id: str)
+- meta · function · L1352-L1355 — async def meta()
+- zanshang_qr · function · L1366-L1371 — async def zanshang_qr()
+- logo_small · function · L1375-L1379 — async def logo_small()
+- logo_medium · function · L1383-L1387 — async def logo_medium()
+- get_stats · function · L1391-L1433 — async def get_stats()
+- gallery · function · L1437-L1464 — async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None, description="画廊密码（IF_GALLERY_PASSWORD 非空时必填）"))
+- errors · function · L1468-L1486 — async def errors(limit: int = Query(20, ge=1, le=100))
+- metrics · function · L1493-L1499 — async def metrics()
+- get_logs · function · L1503-L1505 — async def get_logs(lines: int = Query(50, ge=1, le=200))
+- log_websocket · function · L1509-L1524 — async def log_websocket(websocket: WebSocket)
+- dead_letter_queue · function · L1528-L1531 — async def dead_letter_queue(limit: int = Query(20, ge=1, le=100))
+- retry_dlq_task · function · L1535-L1549 — async def retry_dlq_task(task_id: str, request: Request)
+- clear_dlq · function · L1553-L1558 — async def clear_dlq(request: Request)
+- get_proxy_pool · function · L1562-L1566 — async def get_proxy_pool(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=500))
+- get_proxy_subscription · function · L1570-L1578 — async def get_proxy_subscription(format: str = Query("base64", description="订阅格式：base64 或 raw"))
+- get_routing_records · function · L1583-L1588 — async def get_routing_records(limit: int = Query(50, ge=1, le=200))
+- get_slow_requests · function · L1593-L1618 — async def get_slow_requests(limit: int = Query(50, ge=1, le=500))
+- slow_view · function · L1622-L1624 — async def slow_view()
+- diagnostics · function · L1629-L1683 — async def diagnostics()

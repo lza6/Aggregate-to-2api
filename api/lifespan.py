@@ -1,0 +1,164 @@
+"""应用生命周期管理（v4.2 拆分：main.py lifespan 迁移）。"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import time
+
+from . import config
+from . import imagefree_client
+from . import turnstile_client
+from .base64_store import enforce_quota as enforce_base64_quota
+from .base64_store import ensure_dir as ensure_base64_dir
+from .meta import (
+    _uptime_human, shutdown_phase, db, engine, gallery_cache,
+    registry, providers_bootstrap, _prev_engine,
+)
+from .bg_tasks import run_background_tasks
+from .cache_warmup import warmup_cache
+from .log_ws import ws_log_handler
+from .disk_logger import setup_disk_logging, teardown_disk_logging
+from .telemetry import init_telemetry, shutdown_telemetry
+from .solver_guard import solver_guard
+from .worker_health import worker_health
+
+log = logging.getLogger("imagefree_api")
+
+
+async def lifespan(_app):
+    # IMP-08: 启动 OTel 追踪
+    init_telemetry()
+    # U-02: 注入 WebSocket 日志处理器
+    logging.getLogger().addHandler(ws_log_handler)
+    # P13: 磁盘日志落盘
+    _disk_log_handler = setup_disk_logging(config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)
+    log.info("磁盘日志已启用: %s（保留 %d 天）", config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)
+
+    await engine.start()
+    gallery_cache.start_reaper()
+    restored = await gallery_cache.restore_from_db()
+    if restored:
+        log.info("缓存从 DB 恢复完成: %d 个条目", restored)
+    _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
+    _background_task = asyncio.create_task(run_background_tasks(
+        db, engine, registry, solver_guard, worker_health, gallery_cache))
+    _batch_timer_task = None
+    if config.IF_DB_BATCH_ENABLED:
+        _batch_timer_task = asyncio.create_task(db.start_batch_timer())
+
+    providers_bootstrap()
+    imagefree_provider = registry.providers.get("imagefree")
+    if imagefree_provider:
+        from .meta import _prev_engine_fallback
+        _prev_engine_fallback(imagefree_provider, engine)
+
+    from .proxy_pool import proxy_pool
+    if config.PROXY_FILE:
+        proxy_pool.load_file(config.PROXY_FILE)
+    aifree = registry.providers.get("aifreeforever")
+    if aifree:
+        aifree._proxy_pool = proxy_pool
+
+    from .free_proxy_fetcher import free_proxy_fetcher
+    await free_proxy_fetcher.start()
+
+    if config.ACCOUNT_AUTO:
+        from . import registerer
+        from .account_pool import account_pool
+        account_pool.registerers.update(registerer.build_registerers())
+        await account_pool.start()
+
+    from .providers.registry import startup_all as providers_startup
+    await providers_startup()
+    ensure_base64_dir()
+    try:
+        n = db.clean_base64_files(config.IF_BASE64_FILE_TTL)
+        if n:
+            log.info("base64 文件启动清理: 删除 %d 个过期文件", n)
+    except Exception as e:
+        log.warning("base64 文件启动清理失败（可忽略）: %s", e)
+    try:
+        r = await db.cleanup(config.DB_RETENTION_DAYS)
+        log.info("DB 启动清理: %s", r)
+    except Exception as e:
+        log.warning("DB 启动清理失败（可忽略）: %s", e)
+
+    from .provider_probe import provider_probe
+    await provider_probe.start(interval_seconds=180)
+
+    yield
+    log.info("优雅关闭开始: 分阶段有序停止服务")
+    await provider_probe.stop()
+
+    from .providers.registry import shutdown_all as providers_shutdown
+
+    async def _stop_warmup() -> None:
+        if _warmup_task and not _warmup_task.done():
+            _warmup_task.cancel()
+            try:
+                await _warmup_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _stop_batch_timer() -> None:
+        if _batch_timer_task:
+            _batch_timer_task.cancel()
+            try:
+                await _batch_timer_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _stop_background() -> None:
+        _background_task.cancel()
+        try:
+            await _background_task
+        except ExceptionGroup:
+            pass
+
+    await shutdown_phase(5.0, "① 后台任务停止",
+                         _stop_warmup(), _stop_batch_timer(), _stop_background())
+
+    async def _flush_db() -> None:
+        await db.flush()
+    await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
+    await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
+
+    async def _restore_engine() -> None:
+        await providers_shutdown()
+        _imgf = registry.providers.get("imagefree")
+        if _imgf is not None:
+            if _prev_engine is not None:
+                _imgf.engine = _prev_engine
+            else:
+                _imgf.engine = None
+                try:
+                    delattr(_imgf, "engine")
+                except AttributeError:
+                    pass
+    await shutdown_phase(8.0, "④ Provider 停止", _restore_engine())
+
+    from .free_proxy_fetcher import free_proxy_fetcher as _fpf
+    from .account_pool import account_pool as _ap
+    await shutdown_phase(5.0, "⑤ 代理/号池停止",
+                         _fpf.stop(), _ap.stop())
+
+    async def _flush_cache() -> None:
+        await gallery_cache.flush_to_db()
+    await shutdown_phase(3.0, "⑥ 缓存持久化",
+                         _flush_cache(), gallery_cache.stop_reaper())
+
+    await shutdown_phase(3.0, "⑦ HTTP 连接池关闭",
+                         turnstile_client.close_client(), imagefree_client.close_client())
+
+    async def _shutdown_otel() -> None:
+        shutdown_telemetry()
+    await shutdown_phase(2.0, "⑧ OTel 关闭", _shutdown_otel())
+
+    async def _close_db() -> None:
+        await db.close()
+    await shutdown_phase(3.0, "⑨ DB 连接池关闭", _close_db())
+
+    logging.getLogger().removeHandler(ws_log_handler)
+    teardown_disk_logging(_disk_log_handler)
+    log.info("优雅关闭完成")

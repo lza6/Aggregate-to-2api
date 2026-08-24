@@ -19,7 +19,7 @@ os.environ["IF_ACCOUNT_AUTO"] = "0"
 os.environ["IF_MOCK_REGISTER"] = "1"
 
 from api import config  # noqa: E402
-from api.main import (  # noqa: E402
+from api.dispatch_edit import (  # noqa: E402
     _EDIT_MUTEX_DIR,
     _EditProxyPool,
     _acquire_edit_mutex,
