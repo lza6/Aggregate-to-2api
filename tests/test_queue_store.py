@@ -22,15 +22,18 @@ class TestQueueStore:
         await store.enqueue("task-1", 2, 1)
         await store.enqueue("task-0", 0, 2)
         pending = await store.list_pending()
-        assert sorted([(p, s, t) for p, s, t in pending]) == [
-            (0, 2, "task-0"),
-            (2, 1, "task-1"),
-        ]
+        assert pending == [(0, 2, "task-0"), (2, 1, "task-1")]
 
     @pytest.mark.asyncio
     async def test_mark_completed(self, store):
         await store.enqueue("task-1", 2, 1)
         await store.mark_completed("task-1")
+        assert await store.list_pending() == []
+
+    @pytest.mark.asyncio
+    async def test_mark_processing(self, store):
+        await store.enqueue("task-1", 2, 1)
+        await store.mark_processing("task-1")
         assert await store.list_pending() == []
 
     @pytest.mark.asyncio
