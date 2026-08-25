@@ -18,9 +18,13 @@ class QueueDB:
     def __init__(self, path: str):
         import sqlite3
         self._conn = sqlite3.connect(path, check_same_thread=False)
+        # 极限性能调优参数（v5.2）：与主库一致的写读无锁并发 + 内存缓存
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute("PRAGMA busy_timeout=10000")
+        self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
+        self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+        self._conn.execute("PRAGMA temp_store=MEMORY")
         self._lock = threading.Lock()
         self._init_schema()
 

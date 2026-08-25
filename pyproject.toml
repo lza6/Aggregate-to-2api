@@ -1,7 +1,19 @@
 # imagefree_api 项目配置
 [project]
+name = "imagefree-2ai"
+version = "5.0.0"
+description = "High concurrency image generation API"
+requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "httpx>=0.24",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "aiosqlite>=0.20.0",
     "prometheus-client>=0.21",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
 ]
 
 [tool.pytest.ini_options]

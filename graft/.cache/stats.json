@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3165,
-  "edgeCount": 5680,
+  "nodeCount": 3469,
+  "edgeCount": 6199,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3165,
+  "totalCount": 3469,
   "readyCount": 0,
-  "staleCount": 2,
+  "staleCount": 36,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-24T16:45:19.347Z",
-  "lastFile": "report.md"
+  "syncedAt": "2026-08-25T10:45:03.937Z",
+  "lastFile": "core.py"
 }

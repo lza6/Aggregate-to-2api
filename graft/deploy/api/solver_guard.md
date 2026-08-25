@@ -1,13 +1,34 @@
 # deploy/api/solver_guard.py
 
-- SolverGuard · class · L26-L131 — class SolverGuard
-- __init__ · method · L27-L33 — def __init__(self, circuit_threshold: int = 5, probe_interval: float = 30.0, window_seconds: float = 300.0, window_maxlen: int = 10000) -> None
-- _reset · method · L35-L47 — def _reset(self) -> None
-- record_success · method · L50-L59 — def record_success(self, duration_sec: float) -> None
-- record_failure · method · L61-L74 — def record_failure(self, reason: str, duration_sec: float | None = None) -> None
-- record_rejected · method · L76-L78 — def record_rejected(self) -> None
-- allow_solve · method · L81-L90 — def allow_solve(self) -> bool
-- circuit_open · method · L93-L94 — def circuit_open(self) -> bool
-- consecutive_failures · method · L97-L98 — def consecutive_failures(self) -> int
-- snapshot · method · L101-L126 — def snapshot(self) -> dict
-- _trim_window · method · L128-L131 — def _trim_window(self) -> None
+- SolverNodeState · class · L30-L177 — class SolverNodeState
+- __init__ · method · L33-L50 — def __init__( self, url: str, weight: int = 1, circuit_threshold: int = 5, probe_interval: float = 30.0, rate_limit_cooldown: float = 60.0, window_seconds: float = 300.0, window_maxlen: int = 5000, ) -> None
+- _reset · method · L52-L65 — def _reset(self) -> None
+- inflight · method · L68-L69 — def inflight(self) -> int
+- circuit_open · method · L72-L77 — def circuit_open(self) -> bool: # 如果是因为连续失败熔断或者 429 限流
+- consecutive_failures · method · L80-L81 — def consecutive_failures(self) -> int
+- acquire_inflight · method · L83-L84 — def acquire_inflight(self) -> None
+- release_inflight · method · L86-L87 — def release_inflight(self) -> None
+- is_rate_limited · method · L89-L90 — def is_rate_limited(self) -> bool
+- allow_solve · method · L92-L103 — def allow_solve(self) -> bool
+- record_success · method · L105-L115 — def record_success(self, duration_sec: float) -> None
+- record_failure · method · L117-L140 — def record_failure(self, reason: str, duration_sec: float | None = None) -> None
+- _trim_window · method · L142-L145 — def _trim_window(self) -> None
+- snapshot · method · L147-L177 — def snapshot(self) -> dict[str, Any]
+- SolverGuard · class · L180-L392 — class SolverGuard
+- __init__ · method · L183-L207 — def __init__( self, circuit_threshold: int = 5, probe_interval: float = 30.0, window_seconds: float = 300.0, window_maxlen: int = 10000, urls: Sequence[str] | None = None, weights: dict[str, int] | None = None, rate_limit_cooldown: float = 60.0, ) -> None
+- _reset_global_stats · method · L209-L216 — def _reset_global_stats(self) -> None
+- _reset · method · L218-L222 — def _reset(self) -> None
+- configure_nodes · method · L224-L248 — def configure_nodes(self, urls: Sequence[str], weights: dict[str, int] | None = None) -> None
+- get_nodes · method · L250-L251 — def get_nodes(self) -> list[SolverNodeState]
+- select_node · method · L253-L274 — def select_node(self) -> SolverNodeState | None
+- _score · function · L265-L266 — def _score(n: SolverNodeState) -> float
+- select_candidates · method · L276-L289 — def select_candidates(self, exclude_urls: set[str] | None = None) -> list[SolverNodeState]
+- _score · function · L284-L286 — def _score(n: SolverNodeState) -> tuple[int, float]: # (是否熔断, inflight/weight)
+- record_success · method · L292-L306 — def record_success(self, duration_sec: float, node_url: str | None = None) -> None
+- record_failure · method · L308-L324 — def record_failure(self, reason: str, duration_sec: float | None = None, node_url: str | None = None) -> None
+- record_rejected · method · L326-L328 — def record_rejected(self) -> None
+- allow_solve · method · L331-L333 — def allow_solve(self) -> bool
+- circuit_open · method · L336-L340 — def circuit_open(self) -> bool
+- consecutive_failures · method · L343-L347 — def consecutive_failures(self) -> int
+- snapshot · method · L350-L387 — def snapshot(self) -> dict[str, Any]
+- _trim_global_window · method · L389-L392 — def _trim_global_window(self) -> None

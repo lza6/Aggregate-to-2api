@@ -761,6 +761,13 @@ class EmailPool:
             ]
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # 极限性能调优参数（v5.2）：与主库一致的写读无锁并发 + 内存缓存
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=10000")
+        self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
+        self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+        self._conn.execute("PRAGMA temp_store=MEMORY")
         self._lock = threading.Lock()
         self._init_schema()
         self._used: set[str] = self._load_used()

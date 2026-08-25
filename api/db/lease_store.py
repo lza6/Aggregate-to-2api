@@ -44,9 +44,13 @@ class LeaseStore:
             os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
             self._conn = await aiosqlite.connect(self.path)
             self._conn.row_factory = aiosqlite.Row
+            # 极限性能调优参数（v5.2）：与主库一致的写读无锁并发 + 内存缓存
             await self._conn.execute("PRAGMA journal_mode=WAL")
             await self._conn.execute("PRAGMA synchronous=NORMAL")
-            await self._conn.execute("PRAGMA busy_timeout=5000")
+            await self._conn.execute("PRAGMA busy_timeout=10000")
+            await self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
+            await self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+            await self._conn.execute("PRAGMA temp_store=MEMORY")
             await self._conn.executescript(_SCHEMA)
             await self._conn.commit()
 

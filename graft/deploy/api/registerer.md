@@ -1,17 +1,31 @@
 # deploy/api/registerer.py
 
-- _browser_headers · function · L25-L30 — def _browser_headers(origin: str, referer: str | None = None) -> dict
-- _th · function · L33-L38 — async def _th(fn, *a, **k)
-- Minimaxh3Registerer · class · L42-L139 — class Minimaxh3Registerer
-- __init__ · method · L50-L54 — def __init__(self) -> None
-- _ensure_client · method · L56-L69 — def _ensure_client(self, email: str = "") -> None
-- register_one · method · L71-L136 — async def register_one(self) -> dict | None
-- checkin · method · L138-L139 — async def checkin(self, acc: dict) -> int | None
-- _extract_code · function · L142-L149 — def _extract_code(mail: dict | None) -> str | None
-- NanobananaRegisterer · class · L153-L300 — class NanobananaRegisterer
-- __init__ · method · L161-L165 — def __init__(self) -> None
-- _ensure_client · method · L167-L177 — def _ensure_client(self, email: str = "") -> None
-- register_one · method · L179-L240 — async def register_one(self) -> dict | None
-- checkin · method · L242-L300 — async def checkin(self, acc: dict) -> int | None
-- _extract_verify_link · function · L303-L310 — def _extract_verify_link(mail: dict | None) -> str | None
-- build_registerers · function · L314-L317 — def build_registerers() -> dict[str, object]
+- RegistrationStage · class · L39-L48 — class RegistrationStage(str, enum.Enum)
+- RegistrationErrorCategory · class · L51-L56 — class RegistrationErrorCategory(str, enum.Enum)
+- RegistrationError · class · L59-L81 — class RegistrationError(Exception)
+- __init__ · method · L62-L75 — def __init__( self, message: str, category: RegistrationErrorCategory = RegistrationErrorCategory.TRANSIENT, stage: RegistrationStage = RegistrationStage.INIT, provider: str = "", details: dict[str, Any] | None = None, ) -> None
+- __repr__ · method · L77-L81 — def __repr__(self) -> str
+- RegistrationSession · class · L85-L138 — class RegistrationSession
+- advance_to · method · L106-L113 — def advance_to(self, stage: RegistrationStage, **kwargs: Any) -> None
+- mark_failed · method · L115-L120 — def mark_failed(self, error: str, category: RegistrationErrorCategory) -> None
+- snapshot · method · L122-L138 — def snapshot(self) -> dict[str, Any]
+- AdaptiveRegistrationBackoff · class · L141-L199 — class AdaptiveRegistrationBackoff
+- __init__ · method · L144-L161 — def __init__( self, cf_backoff: float | None = None, email_backoff: float | None = None, ip_backoff: float | None = None, transient_base: float | None = None, transient_max: float | None = None, ) -> None
+- compute_backoff · method · L163-L186 — def compute_backoff(self, provider: str, category: RegistrationErrorCategory) -> float
+- record_success · method · L188-L190 — def record_success(self, provider: str) -> None
+- snapshot · method · L192-L199 — def snapshot(self) -> dict[str, Any]
+- _browser_headers · function · L206-L213 — def _browser_headers(origin: str, referer: str | None = None) -> dict[str, str]
+- _th · function · L216-L218 — async def _th(fn, *a, **k)
+- _extract_code · function · L221-L227 — def _extract_code(mail: dict | None) -> str | None
+- _extract_verify_link · function · L230-L236 — def _extract_verify_link(mail: dict | None) -> str | None
+- Minimaxh3Registerer · class · L240-L464 — class Minimaxh3Registerer
+- __init__ · method · L248-L256 — def __init__(self) -> None
+- _ensure_client · method · L258-L276 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
+- register_one · method · L278-L461 — async def register_one(self) -> dict | None
+- checkin · method · L463-L464 — async def checkin(self, acc: dict) -> int | None
+- NanobananaRegisterer · class · L468-L743 — class NanobananaRegisterer
+- __init__ · method · L476-L484 — def __init__(self) -> None
+- _ensure_client · method · L486-L502 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
+- register_one · method · L504-L667 — async def register_one(self) -> dict | None
+- checkin · method · L669-L743 — async def checkin(self, acc: dict) -> int | None
+- build_registerers · function · L747-L751 — def build_registerers() -> dict[str, object]

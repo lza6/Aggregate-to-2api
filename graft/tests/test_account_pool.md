@@ -9,15 +9,22 @@
 - test_mark_and_credits · method · L51-L56 — def test_mark_and_credits(self, pool)
 - test_counts · method · L58-L63 — def test_counts(self, pool)
 - test_dashboard · method · L65-L69 — def test_dashboard(self, pool)
-- test_autoregister_loop_fills_to_target · function · L74-L99 — async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch)
-- test_daily_checkin_updates_credits · function · L104-L121 — async def test_daily_checkin_updates_credits(tmp_path)
-- _checkin · function · L111-L112 — async def _checkin(acc)
-- TestEmailPool · class · L125-L159 — class TestEmailPool
-- test_allocate_unique_and_record · method · L127-L144 — async def test_allocate_unique_and_record(self, tmp_path, monkeypatch)
-- test_stats · method · L147-L159 — async def test_stats(self, tmp_path, monkeypatch)
-- TestAccountPoolDashboard · class · L164-L184 — class TestAccountPoolDashboard
-- test_dashboard_structure · method · L165-L174 — def test_dashboard_structure(self, pool)
-- test_dashboard_counts_reflect_state · method · L176-L184 — def test_dashboard_counts_reflect_state(self, pool)
-- test_autoregister_pauses_without_proxy · function · L188-L223 — async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch)
-- _Reg · class · L205-L208 — class _Reg
-- register_one · method · L206-L208 — async def register_one(self)
+- TestAccountFSM · class · L73-L167 — class TestAccountFSM
+- test_fsm_borrow_and_release · method · L74-L96 — def test_fsm_borrow_and_release(self, pool)
+- test_fsm_release_to_cooling_when_exhausted · method · L98-L112 — def test_fsm_release_to_cooling_when_exhausted(self, pool)
+- test_fsm_mark_dead_on_banned · method · L114-L123 — def test_fsm_mark_dead_on_banned(self, pool)
+- test_fsm_wake_cooling_accounts · method · L125-L141 — def test_fsm_wake_cooling_accounts(self, pool)
+- test_fsm_lease_context_manager · method · L144-L154 — async def test_fsm_lease_context_manager(self, pool)
+- test_fsm_lease_exception_dead · method · L157-L167 — async def test_fsm_lease_exception_dead(self, pool)
+- test_autoregister_loop_fills_to_target · function · L172-L197 — async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch)
+- test_daily_checkin_updates_credits · function · L202-L219 — async def test_daily_checkin_updates_credits(tmp_path)
+- _checkin · function · L209-L210 — async def _checkin(acc)
+- TestEmailPool · class · L223-L257 — class TestEmailPool
+- test_allocate_unique_and_record · method · L225-L242 — async def test_allocate_unique_and_record(self, tmp_path, monkeypatch)
+- test_stats · method · L245-L257 — async def test_stats(self, tmp_path, monkeypatch)
+- TestAccountPoolDashboard · class · L262-L282 — class TestAccountPoolDashboard
+- test_dashboard_structure · method · L263-L272 — def test_dashboard_structure(self, pool)
+- test_dashboard_counts_reflect_state · method · L274-L282 — def test_dashboard_counts_reflect_state(self, pool)
+- test_autoregister_pauses_without_proxy · function · L286-L321 — async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch)
+- _Reg · class · L303-L306 — class _Reg
+- register_one · method · L304-L306 — async def register_one(self)

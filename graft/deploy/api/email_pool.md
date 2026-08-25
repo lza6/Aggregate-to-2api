@@ -1,26 +1,52 @@
 # deploy/api/email_pool.py
 
-- MailSource · class · L40-L51 — class MailSource
-- new_address · method · L45-L47 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L49-L51 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- TempTfSource · class · L55-L77 — class TempTfSource(MailSource)
-- __init__ · method · L59-L61 — def __init__(self) -> None
-- new_address · method · L63-L67 — async def new_address(self) -> tuple[str, dict]: # 纯本地随机生成（无需网络），10 位小写字母数字 → 百万亿级空间
-- fetch_mails · method · L69-L77 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- TempMailSource · class · L81-L145 — class TempMailSource(MailSource)
-- __init__ · method · L93-L99 — def __init__(self) -> None
-- new_address · method · L101-L122 — async def new_address(self) -> tuple[str, dict]: # chatgpt2api 逆向确认：POST /mailbox（空 body）→ {token, mailbox}（建箱+拿 JWT）。 # temp-mail 有建箱限流（429 Too Many Request）——加最小间隔 + 失败退避，防批量注册触发。
-- fetch_mails · method · L124-L145 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- Do22Source · class · L149-L240 — class Do22Source(MailSource)
-- __init__ · method · L162-L168 — def __init__(self) -> None
-- new_address · method · L170-L197 — async def new_address(self) -> tuple[str, dict]: # 循环创建直到获得目标站放行且可收件的干净域名（tnbeta.com, colaname.com, colabeta.com, usdtbeta.com）
-- fetch_mails · method · L199-L240 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L246-L346 — class EmailPool
-- __init__ · method · L247-L253 — def __init__(self, db_path: str = DB_FILE) -> None
-- _init_schema · method · L255-L267 — def _init_schema(self) -> None
-- _load_used · method · L269-L271 — def _load_used(self) -> set[str]
-- allocate · method · L274-L310 — async def allocate(self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None) -> tuple[str, object]
-- wait_for_mail · method · L313-L327 — async def wait_for_mail(self, address: str, source_state: object, timeout: float = 90.0, contains: str | None = None) -> dict | None
-- record · method · L330-L336 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
-- registered_providers · method · L338-L340 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L342-L346 — def stats(self) -> dict
+- BaseMailSource · class · L50-L102 — class BaseMailSource
+- new_address · method · L61-L63 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L65-L67 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- is_available · method · L69-L71 — def is_available(self) -> bool
+- mark_success · method · L73-L77 — def mark_success(self) -> None
+- mark_failure · method · L79-L93 — def mark_failure(self, error: str = "", backoff_seconds: float = 30.0) -> None
+- score · method · L95-L102 — def score(self) -> float
+- LinshiMailSource · class · L110-L163 — class LinshiMailSource(BaseMailSource)
+- __init__ · method · L117-L127 — def __init__(self) -> None
+- new_address · method · L129-L134 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L136-L163 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- MailTmSource · class · L171-L291 — class MailTmSource(BaseMailSource)
+- __init__ · method · L180-L190 — def __init__(self) -> None
+- _get_domains · method · L192-L209 — async def _get_domains(self) -> list[str]
+- new_address · method · L211-L246 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L248-L291 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- GuerrillaMailSource · class · L295-L370 — class GuerrillaMailSource(BaseMailSource)
+- __init__ · method · L301-L309 — def __init__(self) -> None
+- new_address · method · L311-L331 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L333-L370 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- CustomImapSource · class · L374-L511 — class CustomImapSource(BaseMailSource)
+- __init__ · method · L384-L403 — def __init__( self, host: str | None = None, port: int | None = None, username: str | None = None, password: str | None = None, domain: str | None = None, use_ssl: bool = True, ) -> None
+- is_configured · method · L405-L406 — def is_configured(self) -> bool
+- is_available · method · L408-L409 — def is_available(self) -> bool
+- new_address · method · L411-L416 — async def new_address(self) -> tuple[str, dict]
+- _sync_fetch_mails · method · L418-L506 — def _sync_fetch_mails(self, address: str) -> list[dict]
+- fetch_mails · method · L508-L511 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- Do22Source · class · L515-L604 — class Do22Source(BaseMailSource)
+- __init__ · method · L521-L532 — def __init__(self) -> None
+- new_address · method · L534-L559 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L561-L604 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempMailSource · class · L608-L694 — class TempMailSource(BaseMailSource)
+- __init__ · method · L614-L625 — def __init__(self) -> None
+- new_address · method · L627-L648 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L650-L694 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempTfSource · class · L698-L723 — class TempTfSource(BaseMailSource)
+- __init__ · method · L704-L709 — def __init__(self) -> None
+- new_address · method · L711-L714 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L716-L723 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- EmailPool · class · L727-L955 — class EmailPool
+- __init__ · method · L749-L766 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
+- _init_schema · method · L768-L788 — def _init_schema(self) -> None
+- _load_used · method · L790-L792 — def _load_used(self) -> set[str]
+- _find_source · method · L794-L799 — def _find_source(self, name: str) -> BaseMailSource | None
+- get_sources · method · L801-L803 — def get_sources(self) -> list[BaseMailSource]
+- allocate · method · L806-L867 — async def allocate( self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None, ) -> tuple[str, dict]
+- wait_for_mail · method · L870-L896 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
+- record · method · L899-L926 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
+- registered_providers · method · L928-L930 — def registered_providers(self, email: str) -> list[str]
+- stats · method · L932-L955 — def stats(self) -> dict

@@ -16,3 +16,8 @@
 - test_recover_on_probe_success · method · L105-L114 — def test_recover_on_probe_success(self)
 - test_consecutive_failures_reset_on_success · method · L116-L124 — def test_consecutive_failures_reset_on_success(self)
 - test_success_clears_circuit_and_counter · method · L126-L133 — def test_success_clears_circuit_and_counter(self)
+- TestClusterFederation · class · L137-L209 — class TestClusterFederation
+- test_multi_node_initialization_and_snapshot · method · L138-L148 — def test_multi_node_initialization_and_snapshot(self)
+- test_least_inflight_weighted_selection · method · L150-L164 — def test_least_inflight_weighted_selection(self)
+- test_single_node_429_rate_limit_circuit_break · method · L166-L187 — def test_single_node_429_rate_limit_circuit_break(self)
+- test_node_consecutive_failure_and_half_open_probe · method · L189-L209 — def test_node_consecutive_failure_and_half_open_probe(self)
