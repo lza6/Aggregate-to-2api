@@ -9,9 +9,9 @@
   ],
   "totalCount": 3469,
   "readyCount": 0,
-  "staleCount": 34,
+  "staleCount": 0,
   "dirty": true,
   "syncing": false,
   "syncedAt": "2026-08-25T11:38:56.315Z",
-  "lastFile": "dispatch.py"
+  "lastFile": "test_providers.py"
 }
