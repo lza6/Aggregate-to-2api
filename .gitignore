@@ -61,3 +61,4 @@ frontend/tsconfig.node.tsbuildinfo
 htmlcov/
 *.db-shm
 *.db-wal
+data/data/
