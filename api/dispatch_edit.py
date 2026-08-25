@@ -123,9 +123,16 @@ async def _renew_edit_lock_loop(key: str, token: str) -> asyncio.Task:
     async def _heartbeat() -> None:
         while True:
             await asyncio.sleep(config.EDIT_LEASE_TTL / 3.0)
-            if not await _EDIT_LEASE_STORE.renew(key, token, config.EDIT_LEASE_TTL):
+            try:
+                ok = await _EDIT_LEASE_STORE.renew(key, token, config.EDIT_LEASE_TTL)
+            except Exception as e:
+                log.error("租约锁续租异常 key=%s: %s", key, e)
+                continue  # 数据库抖动，继续重试
+            if not ok:
+                log.warning("租约锁已易主/过期，停止续租 key=%s", key)
                 return  # 锁已被抢/释放，停止续租
     t = asyncio.create_task(_heartbeat())
+    t.add_done_callback(lambda _: None)  # 回收 unhandled exception 告警
     return t
 
 
@@ -342,11 +349,18 @@ async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
                 await db.mark_finished(job_id, "error", None,
                                  "图生图繁忙：其他实例正在生成同一出口通道，请稍后重试", None)
                 return
-            heartbeat = await _renew_edit_lock_loop(key, token)
+            heartbeat = None
+            if config.EDIT_LEASE_ENABLED:
+                heartbeat = await _renew_edit_lock_loop(key, token)
             try:
                 await _run_edit_chain(job_id, image, ctype, prompt, download, model, proxy)
             finally:
-                heartbeat.cancel()
+                if heartbeat:
+                    heartbeat.cancel()
+                    try:
+                        await heartbeat
+                    except asyncio.CancelledError:
+                        pass
                 await _release_edit_lock(key, token)
     finally:
         _EDIT_PROXY_POOL.release_proxy(proxy)

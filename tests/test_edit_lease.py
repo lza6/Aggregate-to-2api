@@ -96,3 +96,37 @@ class TestLeaseStore:
         assert await store.acquire("key-close-1", "h1", "t1", 30) is True
         await store.close()
         assert await store.acquire("key-close-2", "h2", "t2", 30) is True
+
+
+class TestEditLockOrchestration:
+    """编排层：_acquire_edit_lock / _release_edit_lock 可切换互斥。"""
+
+    @pytest.mark.asyncio
+    async def test_edit_lock_orchestration(self, store, monkeypatch):
+        """租约锁拿锁→释放→他人可得。"""
+        import api.dispatch_edit as de
+        monkeypatch.setattr("api.config.EDIT_LEASE_ENABLED", True)
+        monkeypatch.setattr(de, "_EDIT_LEASE_STORE", store)
+        tok = await de._acquire_edit_lock("orch-key", "holder-1", timeout=2.0)
+        assert tok
+        tok2 = await de._acquire_edit_lock("orch-key", "holder-2", timeout=1.0)
+        assert tok2 is None
+        await de._release_edit_lock("orch-key", tok)
+        tok3 = await de._acquire_edit_lock("orch-key", "holder-2", timeout=2.0)
+        assert tok3
+        await de._release_edit_lock("orch-key", tok3)
+
+    @pytest.mark.asyncio
+    async def test_lease_disabled_falls_back_to_file_lock(self, store, monkeypatch, tmp_path):
+        """关闭租约锁→走文件锁 fallback，且不启动心跳/不碰租约 DB。"""
+        import api.dispatch_edit as de
+        monkeypatch.setattr("api.config.EDIT_LEASE_ENABLED", False)
+        monkeypatch.setattr("api.config.EDIT_MUTEX_ENABLED", True)
+        monkeypatch.setattr(de, "_EDIT_LEASE_STORE", store)
+        monkeypatch.setattr(de, "_EDIT_MUTEX_DIR", str(tmp_path))
+        tok = await de._acquire_edit_lock("fb-key", "holder-1", timeout=2.0)
+        assert tok and tok != "noop"
+        path = de._edit_mutex_path("fb-key")
+        assert os.path.exists(path)
+        await de._release_edit_lock("fb-key", tok)
+        assert not os.path.exists(path)
