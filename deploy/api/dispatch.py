@@ -28,6 +28,7 @@ from .models import GenerateRequest, EditRequest, TaskInfo
 from .meta import db, engine, registry, gallery_cache
 from .errors import AppError, ErrorCodes
 from .db import task_to_public
+from .semaphore_manager import upstream_semaphore
 from .sse_events import hub, task_events_generator, publish_task_event
 from .worker import QueueFull
 
@@ -179,6 +180,16 @@ async def sse_task_events():
 
 # ── 多提供商路由 ──
 _PROVIDER_TASKS: set[asyncio.Task] = set()  # 持有 provider 后台任务引用，防 GC
+_provider_semaphores: dict[tuple[int, str], asyncio.Semaphore] = {}
+
+
+def _provider_sem(prefix: str, limit: int = 16) -> asyncio.Semaphore:
+    """按 (event_loop, prefix) 缓存信号量——asyncio.Semaphore 绑定创建它的 loop，
+    跨 loop 复用会永久挂起（集成测试/uvicorn reload 场景）。"""
+    key = (id(asyncio.get_running_loop()), prefix)
+    if key not in _provider_semaphores:
+        _provider_semaphores[key] = asyncio.Semaphore(limit)
+    return _provider_semaphores[key]
 
 
 async def _dispatch_generate(req: GenerateRequest) -> str:
@@ -233,11 +244,12 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
 
     async def _run() -> None:
         try:
-            res = await provider.generate(
-                model, req.prompt, req.aspect_ratio, images=None,
-                resolution=req.resolution, download=req.download,
-                duration=req.duration or (spec.meta.get("video_durations") or [4])[0],
-            )
+            async with upstream_semaphore:
+                res = await provider.generate(
+                    model, req.prompt, req.aspect_ratio, images=None,
+                    resolution=req.resolution, download=req.download,
+                    duration=req.duration or (spec.meta.get("video_durations") or [4])[0],
+                )
             if res.proxy_used:
                 await db.update_proxy_used(task_id, res.proxy_used)
             if res.status == "completed":
@@ -259,6 +271,11 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                     pass
         except Exception as e:
             await db.mark_finished(task_id, "error", None, str(e), time.monotonic() - t0)
+            try:
+                registry.adaptive_router.record_result(
+                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+            except Exception:
+                pass
             log.exception("提供商生成异常 %s", task_id)
 
     t = asyncio.create_task(_run())
