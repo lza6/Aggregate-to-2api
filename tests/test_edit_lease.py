@@ -54,3 +54,45 @@ class TestLeaseStore:
         assert renewed is True
         row = await store.get("key-e")
         assert row["holder"] == "holder-1"
+
+    @pytest.mark.asyncio
+    async def test_expired_lock_cannot_renew(self, store):
+        """过期锁不得被旧持有者续租复活（acquire 会覆盖新锁）。"""
+        await store.acquire("key-f", "holder-1", "tok-1", ttl=-1)  # 立即过期
+        renewed = await store.renew("key-f", "tok-1", new_ttl=30)
+        assert renewed is False
+
+    @pytest.mark.asyncio
+    async def test_acquire_after_blocked(self, store):
+        """acquire 被占返回 False 后，后续 acquire 正常（事务已回滚）。"""
+        ok1 = await store.acquire("key-g", "holder-1", "tok-1", ttl=30)
+        assert ok1 is True
+        ok2 = await store.acquire("key-g", "holder-2", "tok-2", ttl=30)
+        assert ok2 is False
+        # 锁仍被 holder-1/tok-1 持有，同 key 再次 acquire 不崩溃且正确返回 False
+        ok3 = await store.acquire("key-g", "holder-1", "tok-1", ttl=30)
+        assert ok3 is False
+
+    @pytest.mark.asyncio
+    async def test_acquire_concurrent(self, store):
+        """并发争夺同一 key，仅一个成功。"""
+        async def try_acquire(label):
+            return await store.acquire("concurrent-key", label, f"tok-{label}", 30)
+
+        results = await asyncio.gather(try_acquire("A"), try_acquire("B"))
+        assert sum(results) == 1  # 仅一个成功
+
+    @pytest.mark.asyncio
+    async def test_reopen_after_close(self, store):
+        """close 后 reopen（惰性重开）可继续使用。"""
+        assert await store.acquire("key-reopen", "h1", "t1", 30) is True
+        await store.close()
+        assert await store.acquire("key-reopen", "h2", "t2", 30) is False  # 仍被占
+        assert await store.acquire("key-reopen-2", "h2", "t2", 30) is True  # 新 key 正常
+
+    @pytest.mark.asyncio
+    async def test_close_then_acquire_new_key(self, store):
+        """模拟持有结束：close 后新 key 可正常获取，不残留事务。"""
+        assert await store.acquire("key-close-1", "h1", "t1", 30) is True
+        await store.close()
+        assert await store.acquire("key-close-2", "h2", "t2", 30) is True
