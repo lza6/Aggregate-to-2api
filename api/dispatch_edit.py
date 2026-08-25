@@ -19,6 +19,7 @@ from .meta import db, engine, registry, gallery_cache
 from .errors import AppError, ErrorCodes
 from .db import task_to_public
 from .dispatch import _normalize_model, _provider_prefix, _parse_input_image, _parse_input_images, _validate_model, _PROVIDER_TASKS
+from .db.lease_store import LeaseStore
 
 log = logging.getLogger("dispatch_edit")
 
@@ -100,6 +101,41 @@ def _release_edit_mutex(key: str, token: str | None) -> None:
         pass
 
 
+# ── 图生图跨进程互斥（可切换：SQLite 租约锁 or 文件锁）──
+async def _acquire_edit_lock(key: str, holder: str, timeout: float | None = None) -> str | None:
+    """按配置选择：租约锁 或 文件锁。返回持有 token；获取失败返回 None。"""
+    if config.EDIT_LEASE_ENABLED:
+        deadline = time.monotonic() + timeout if timeout is not None else None
+        token = uuid.uuid4().hex
+        while True:
+            if deadline is not None and time.monotonic() > deadline:
+                return None
+            ok = await _EDIT_LEASE_STORE.acquire(key, holder, token, config.EDIT_LEASE_TTL)
+            if ok:
+                return token
+            await asyncio.sleep(1.0)
+    # 兼容旧文件锁
+    return await _acquire_edit_mutex(key, timeout)
+
+
+async def _renew_edit_lock_loop(key: str, token: str) -> asyncio.Task:
+    """持锁期间的心跳续租协程。"""
+    async def _heartbeat() -> None:
+        while True:
+            await asyncio.sleep(config.EDIT_LEASE_TTL / 3.0)
+            if not await _EDIT_LEASE_STORE.renew(key, token, config.EDIT_LEASE_TTL):
+                return  # 锁已被抢/释放，停止续租
+    t = asyncio.create_task(_heartbeat())
+    return t
+
+
+async def _release_edit_lock(key: str, token: str | None) -> None:
+    if config.EDIT_LEASE_ENABLED and token:
+        await _EDIT_LEASE_STORE.release(key, token)
+    else:
+        _release_edit_mutex(key, token)
+
+
 # ── 图生图住宅代理池 ──
 class _EditProxyPool:
     """图生图住宅代理池：分配独立出口 IP 会话，per-代理串行锁。"""
@@ -141,6 +177,7 @@ class _EditProxyPool:
 
 
 _EDIT_PROXY_POOL = _EditProxyPool()
+_EDIT_LEASE_STORE = LeaseStore(os.path.join(os.path.dirname(config.DB_FILE) or ".", "data", "edit_leases.db"))
 
 
 # ── 图生图路由 ──
@@ -294,20 +331,23 @@ async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
                         download: bool, model: str = "default") -> None:
     """后台执行图生图全链路，双层互斥保证不撞上游并发=1。"""
     _EDIT_PENDING.add(job_id)
+    holder = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
     try:
         proxy = await _EDIT_PROXY_POOL.acquire_proxy()
         key = proxy or "default"
         local_lock = _EDIT_PROXY_POOL.lock_for(key) if proxy else _EDIT_LOCK
         async with local_lock:
-            token = await _acquire_edit_mutex(key)
+            token = await _acquire_edit_lock(key, holder, config.EDIT_CONCURRENCY_WAIT)
             if not token:
                 await db.mark_finished(job_id, "error", None,
                                  "图生图繁忙：其他实例正在生成同一出口通道，请稍后重试", None)
                 return
+            heartbeat = await _renew_edit_lock_loop(key, token)
             try:
                 await _run_edit_chain(job_id, image, ctype, prompt, download, model, proxy)
             finally:
-                _release_edit_mutex(key, token)
+                heartbeat.cancel()
+                await _release_edit_lock(key, token)
     finally:
         _EDIT_PROXY_POOL.release_proxy(proxy)
         _EDIT_PENDING.discard(job_id)
