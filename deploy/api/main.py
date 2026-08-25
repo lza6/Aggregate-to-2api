@@ -21,6 +21,13 @@ from .routes import api_router
 
 log = logging.getLogger("imagefree_api")
 
+# ── 顶层挂载日志缓冲区（在 uvicorn 模块导入阶段直接生效）──
+from .log_buffer import log_buffer
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+if log_buffer not in _root_logger.handlers:
+    _root_logger.addHandler(log_buffer)
+
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",

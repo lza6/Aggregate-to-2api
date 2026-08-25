@@ -33,8 +33,19 @@ from contextlib import asynccontextmanager
 async def lifespan(_app):
     # IMP-08: 启动 OTel 追踪
     init_telemetry()
-    # U-02: 注入 WebSocket 日志处理器
-    logging.getLogger().addHandler(ws_log_handler)
+    # U-02: 注入 WebSocket 与内存缓冲日志处理器
+    root_l = logging.getLogger()
+    root_l.setLevel(logging.INFO)
+    from .log_buffer import log_buffer
+    root_l.addHandler(log_buffer)
+    root_l.addHandler(ws_log_handler)
+    for _name in ("imagefree_api", "dispatch", "dispatch_edit", "worker", "routes", "uvicorn", "uvicorn.access"):
+        _l = logging.getLogger(_name)
+        _l.setLevel(logging.INFO)
+        if log_buffer not in _l.handlers:
+            _l.addHandler(log_buffer)
+        if ws_log_handler not in _l.handlers:
+            _l.addHandler(ws_log_handler)
     # P13: 磁盘日志落盘
     _disk_log_handler = setup_disk_logging(config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)
     log.info("磁盘日志已启用: %s（保留 %d 天）", config.IF_LOG_DIR, config.IF_LOG_RETENTION_DAYS)

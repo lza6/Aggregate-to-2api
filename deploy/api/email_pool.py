@@ -130,16 +130,37 @@ class TempMailSource(MailSource):
             r = await self.session.get(f"{self.API}/messages",
                                        headers={"Authorization": f"Bearer {token}"})
             if r.status_code == 200:
-                msgs = r.json()
-                # 兼容响应：数组 或 {messages:[...]} 或 {data:[...]}
-                if isinstance(msgs, list):
-                    return msgs
-                if isinstance(msgs, dict):
+                raw_msgs = r.json()
+                items = []
+                if isinstance(raw_msgs, list):
+                    items = raw_msgs
+                elif isinstance(raw_msgs, dict):
                     for k in ("messages", "data", "mailbox"):
-                        v = msgs.get(k)
+                        v = raw_msgs.get(k)
                         if isinstance(v, list):
-                            return v
-                return []
+                            items = v
+                            break
+                out = []
+                for item in items:
+                    mid = item.get("_id") or item.get("id")
+                    if mid:
+                        try:
+                            det = await self.session.get(
+                                f"{self.API}/messages/{mid}",
+                                headers={"Authorization": f"Bearer {token}"}
+                            )
+                            if det.status_code == 200:
+                                ddata = det.json()
+                                out.append({
+                                    "subject": ddata.get("subject") or item.get("subject", ""),
+                                    "bodyHtml": ddata.get("bodyHtml") or ddata.get("bodyText") or "",
+                                    "bodyPreview": ddata.get("bodyPreview") or item.get("bodyPreview", ""),
+                                })
+                                continue
+                        except Exception:
+                            pass
+                    out.append(item)
+                return out
         except Exception as e:
             log.warning("temp-mail 收件失败 %s: %s", address, e)
         return []

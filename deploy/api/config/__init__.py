@@ -197,10 +197,16 @@ class Settings(BaseSettings):
 
     # ── 缓存 ──
     if_lru_cache_size: int = Field(
-        128, validation_alias="IF_LRU_CACHE_SIZE"
+        512, validation_alias="IF_LRU_CACHE_SIZE"
     )
     if_lru_cache_ttl: int = Field(
-        5, validation_alias="IF_LRU_CACHE_TTL"
+        10, validation_alias="IF_LRU_CACHE_TTL"
+    )
+    if_redis_enabled: bool = Field(
+        False, validation_alias="IF_REDIS_ENABLED"
+    )
+    if_redis_url: str = Field(
+        "redis://localhost:6379/0", validation_alias="IF_REDIS_URL"
     )
 
     # ── 可观测性 ──
@@ -246,11 +252,11 @@ class Settings(BaseSettings):
         True, validation_alias="IF_DB_BATCH_ENABLED"
     )
     if_db_batch_window: float = Field(
-        0.2, validation_alias="IF_DB_BATCH_WINDOW"
+        0.5, validation_alias="IF_DB_BATCH_WINDOW"
     )
-    if_db_pool_size: int = Field(3, validation_alias="IF_DB_POOL_SIZE")
+    if_db_pool_size: int = Field(5, validation_alias="IF_DB_POOL_SIZE")
     if_db_pool_timeout: int = Field(
-        5, validation_alias="IF_DB_POOL_TIMEOUT"
+        10, validation_alias="IF_DB_POOL_TIMEOUT"
     )
 
     # ── Provider / 代理池 / 号池 ──
@@ -407,6 +413,8 @@ class Settings(BaseSettings):
         self._cache = CacheSettings(
             size=self.if_lru_cache_size,
             ttl=self.if_lru_cache_ttl,
+            redis_enabled=self.if_redis_enabled,
+            redis_url=self.if_redis_url,
         )
         self._provider = ProviderSettings(
             proxy_file=self.proxy_file,

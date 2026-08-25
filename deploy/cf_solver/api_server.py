@@ -919,10 +919,7 @@ class ClearanceAPIServer:
         if not url or not sitekey:
             raise HTTPException(status_code=400, detail={"status": "error", "error": "Parameter 'url' dan 'sitekey' wajib diisi"})
 
-        # 指定 proxy 时不需要全局 page_pool（走独立代理上下文），否则校验池容量
-        if proxy is None and self.page_pool.qsize() == 0:
-            return JSONResponse(content={"status": "error", "error": "Server penuh, coba lagi nanti"}, status_code=429)
-
+        # 解除硬性 429 拦截：允许请求进入 asyncio 排队池等待可用页面，避免直接丢弃
         task_id = str(uuid.uuid4())
         self.results[task_id] = {"status": "process", "message": "solving turnstile", "start_time": time.time()}
         try:

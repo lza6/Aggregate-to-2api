@@ -294,10 +294,10 @@ class AccountPool:
                 log.warning("签到循环异常 %s: %s", provider, e)
 
     def dashboard(self) -> dict:
-        """前端「号池」看板数据。"""
+        """前端「号池」看板数据（仅展示长期支持号池提供商 nanobanana）。"""
         counts = self.counts()
         out = {}
-        for prov in ("minimaxh3", "nanobanana"):
+        for prov in ("nanobanana",):
             c = counts.get(prov, {})
             out[prov] = {
                 "total": sum(c.values()),
@@ -305,7 +305,7 @@ class AccountPool:
                 "exhausted": c.get("exhausted", 0),
                 "registering": c.get("registering", 0),
                 "credits": self.total_credits(prov),
-                "target": TARGET_MINIMAXH3 if prov == "minimaxh3" else TARGET_NANOBANANA,
+                "target": TARGET_NANOBANANA,
                 "auto_register": self.registerers.get(prov) is not None,
             }
         return out

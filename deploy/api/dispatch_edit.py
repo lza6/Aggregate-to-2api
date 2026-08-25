@@ -47,8 +47,10 @@ def _edit_mutex_stale(path: str) -> bool:
         return True
     if time.time() - ts > config.EDIT_LOCK_MAX_AGE:
         return True
-    if os.name == "nt":
-        return False
+    # Docker 容器内 PID 1 是 init 进程，os.kill(1,0) 返回 PermissionError 而非 ProcessLookupError，
+    # 导致锁文件被误判为"仍存活"而永不回收到期。对 PID 1 特殊处理：直接按时间判定（超时即 stale）。
+    if pid <= 1:
+        return True
     try:
         os.kill(pid, 0)
         return False

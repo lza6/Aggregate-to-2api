@@ -512,7 +512,7 @@
     <div class="stat-card"><div class="label">当前并发</div><div class="value" id="st-proc">–</div><div class="delta" id="st-queue">排队中：–</div></div>
     <div class="stat-card"><div class="label">Worker 数</div><div class="value" id="st-workers">–</div><div class="delta">并行生成通道</div></div>
     <div class="stat-card"><div class="label">运行时长</div><div class="value" id="st-up">–</div><div class="delta">服务已持续运行</div></div>
-    <div class="stat-card"><div class="label">号池账号</div><div class="value small" id="st-accounts">–</div><div class="delta">minimaxh3 + nanobanana</div></div>
+    <div class="stat-card"><div class="label">号池账号</div><div class="value small" id="st-accounts">–</div><div class="delta">nanobanana 长效号池</div></div>
     <div class="stat-card"><div class="label">CF 求解</div><div class="value" id="st-solver-status" style="font-size:18px">–</div><div class="delta" id="st-solver-rate">成功率：–</div></div>
   </div>
 </section>
@@ -663,8 +663,26 @@
 
 <!-- ── 实时日志 ── -->
 <section class="card" id="logs-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
-  <h2 style="margin-top:0">📋 实时日志</h2>
-  <p class="muted">后台日志（最近 50 条，每 3 秒自动刷新，仅数据变化时更新）。</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div>
+      <h2 style="margin:0 0 4px">📋 实时日志</h2>
+      <p class="muted" style="margin:0">后台日志（最近 50 条，每 3 秒自动刷新，支持多维度分类与快速筛选）。</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="text" id="log-filter-search" placeholder="🔍 搜索日志关键字…" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;width:180px">
+    </div>
+  </div>
+
+  <!-- 分类筛选 Pill 标签栏 -->
+  <div class="pg-tabs" id="log-category-tabs" style="margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:8px">
+    <button class="pg-tab on" data-cat="all">🌐 全部日志</button>
+    <button class="pg-tab" data-cat="http">🚀 HTTP 请求</button>
+    <button class="pg-tab" data-cat="email">📧 邮箱与注册</button>
+    <button class="pg-tab" data-cat="solver">🧩 求解器 (CF)</button>
+    <button class="pg-tab" data-cat="engine">⚙️ 引擎与队列</button>
+    <button class="pg-tab" data-cat="provider">🛰️ 提供商与探针</button>
+  </div>
+
   <div class="log-box" id="log-box"><div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">⏳ 加载中…</div></div>
 </section>
 
@@ -832,6 +850,7 @@
       <div class="pool-stat"><span>任务 ID</span><b id="tm-id" style="font-family:monospace;font-size:12px;word-break:break-all">–</b></div>
       <div class="pool-stat"><span>状态</span><b id="tm-status">–</b></div>
       <div class="pool-stat"><span>模型</span><b id="tm-model">–</b></div>
+      <div class="pool-stat"><span>路由执行</span><b id="tm-provider" style="color:var(--primary)">–</b></div>
       <div class="pool-stat"><span>比例</span><b id="tm-ratio">–</b></div>
       <div class="pool-stat"><span>类型</span><b id="tm-type">–</b></div>
       <div class="pool-stat"><span>提示词</span><b id="tm-prompt" style="word-break:break-all;font-weight:400">–</b></div>
@@ -1655,6 +1674,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     safeJson('/v1/tasks/' + id).then(function (d) {
       document.getElementById('tm-status').innerHTML = taskStatusHtml(d.status);
       document.getElementById('tm-model').textContent = esc(d.model || 'default');
+      var pfx = (d.model || '').indexOf('/') !== -1 ? (d.model || '').split('/')[0] : 'imagefree';
+      document.getElementById('tm-provider').textContent = '🛰️ ' + pfx;
       document.getElementById('tm-type').textContent = d.type === 'img' ? '🎨 图生图' : '🖼️ 文生图';
       document.getElementById('tm-ratio').textContent = esc(d.aspect_ratio || '—');
       document.getElementById('tm-prompt').textContent = esc(d.prompt || '—');
@@ -1871,9 +1892,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
   function loadPool() {
     safeJson('/v1/account-pool').then(function (d) {
-      var data = JSON.stringify(d);
-      if (data === poolLastData) return;
-      poolLastData = data;
+      var box = document.getElementById('pool-grid');
+      if (!box) return;
 
       var accounts = d.accounts || {};
       var hasAny = false;
@@ -1899,11 +1919,10 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           '<div class="progress-label">' + pctStr + '</div>' +
           '</div>';
       });
-      var box = document.getElementById('pool-grid');
       if (!hasAny) {
         box.innerHTML = '<div class="empty">号池未启动（IF_ACCOUNT_AUTO=0）</div>';
       } else {
-        updateCardGrid('pool-grid', cardsHtml, 'data-prov');
+        box.innerHTML = cardsHtml;
       }
       var total = 0;
       Object.keys(accounts).forEach(function (p) { total += accounts[p].ok || 0; });
@@ -1912,7 +1931,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       var ep = document.getElementById('email-pool-box');
       if (d.email_pool) {
         ep.innerHTML = '<h3 style="font-size:14px">邮箱注册记录</h3>' +
-          '<p class="muted">已注册账号：' + d.email_pool.total_registered + '；按提供商：' +
+          '<p class="muted">已分配邮箱：' + (d.email_pool.total_registered || 0) + '；按提供商：' +
           esc(JSON.stringify(d.email_pool.by_provider || {})) + '</p>';
       }
     }).catch(function () {
@@ -1991,11 +2010,30 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   var logTimer = null;
   var logLastData = '';
 
+  var currentLogCategory = 'all';
+  var currentLogSearch = '';
+
   function startLogPolling() {
     if (logTimer) return;
     loadLogs();
     logTimer = setInterval(loadLogs, 3000);
-    // v4.2.1: 首页直达日志 tab 时若首次加载超时，5s 兜底显示空态而非无限"加载中"
+    // 绑定分类 Tab 切换
+    document.querySelectorAll('#log-category-tabs .pg-tab').forEach(function (tab) {
+      tab.onclick = function () {
+        document.querySelectorAll('#log-category-tabs .pg-tab').forEach(function (t) { t.classList.remove('on'); });
+        this.classList.add('on');
+        currentLogCategory = this.dataset.cat || 'all';
+        renderFilteredLogs();
+      };
+    });
+    // 绑定关键字搜索过滤
+    var sInput = document.getElementById('log-filter-search');
+    if (sInput) {
+      sInput.oninput = function () {
+        currentLogSearch = this.value.trim().toLowerCase();
+        renderFilteredLogs();
+      };
+    }
     setTimeout(function () {
       var box = document.getElementById('log-box');
       if (box && box.textContent.indexOf('加载中') !== -1) {
@@ -2004,26 +2042,64 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     }, 5000);
   }
 
-  function loadLogs() {
-    safeJson('/v1/logs?lines=50').then(function (d) {
-      var logs = d.logs || [];
-      var html = logs.map(function (l) {
-        var lvl = l.level || 'INFO';
-        var ts = l.timestamp || '';
-        var logger = l.logger || '';
-        var msg = esc(l.message || '');
-        return '<div class="log-line">' +
-          '<span class="log-ts">' + esc(ts) + '</span>' +
-          '<span class="lvl ' + lvl + '">' + esc(lvl) + '</span>' +
-          '<span class="log-logger">[' + esc(logger) + ']</span>' +
-          '<span class="log-msg">' + msg + '</span></div>';
-      }).join('');
-      if (html !== logLastData) {
-        logLastData = html;
-        var box = document.getElementById('log-box');
-        box.innerHTML = html || '<div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">📭 暂无日志记录</div>';
-        box.scrollTop = box.scrollHeight;
+  var rawLogsCache = [];
+
+  function matchLogCategory(item, cat) {
+    if (cat === 'all') return true;
+    var logger = (item.logger || '').toLowerCase();
+    var msg = (item.message || '').toLowerCase();
+    if (cat === 'http') {
+      return logger.indexOf('uvicorn') !== -1 || logger.indexOf('httpx') !== -1 || msg.indexOf('http') !== -1;
+    }
+    if (cat === 'email') {
+      return logger.indexOf('email') !== -1 || logger.indexOf('account') !== -1 || logger.indexOf('register') !== -1 || msg.indexOf('邮箱') !== -1 || msg.indexOf('注册') !== -1 || msg.indexOf('mail') !== -1;
+    }
+    if (cat === 'solver') {
+      return logger.indexOf('turnstile') !== -1 || logger.indexOf('solver') !== -1 || msg.indexOf('turnstile') !== -1 || msg.indexOf('求解') !== -1;
+    }
+    if (cat === 'engine') {
+      return logger.indexOf('engine') !== -1 || logger.indexOf('worker') !== -1 || logger.indexOf('queue') !== -1 || msg.indexOf('出图完成') !== -1 || msg.indexOf('worker') !== -1;
+    }
+    if (cat === 'provider') {
+      return logger.indexOf('provider') !== -1 || logger.indexOf('dispatch') !== -1 || msg.indexOf('提供商') !== -1 || msg.indexOf('探针') !== -1;
+    }
+    return true;
+  }
+
+  function renderFilteredLogs() {
+    var filtered = rawLogsCache.filter(function (l) {
+      if (!matchLogCategory(l, currentLogCategory)) return false;
+      if (currentLogSearch) {
+        var str = (l.message || '') + ' ' + (l.logger || '') + ' ' + (l.level || '');
+        if (str.toLowerCase().indexOf(currentLogSearch) === -1) return false;
       }
+      return true;
+    });
+
+    var box = document.getElementById('log-box');
+    if (!filtered.length) {
+      box.innerHTML = '<div class="muted" style="color:#94a3b8;text-align:center;padding:20px 0">📭 暂无此分类的日志记录</div>';
+      return;
+    }
+    var html = filtered.map(function (l) {
+      var lvl = l.level || 'INFO';
+      var ts = l.timestamp || '';
+      var logger = l.logger || '';
+      var msg = esc(l.message || '');
+      return '<div class="log-line">' +
+        '<span class="log-ts">' + esc(ts) + '</span>' +
+        '<span class="lvl ' + lvl + '">' + esc(lvl) + '</span>' +
+        '<span class="log-logger">[' + esc(logger) + ']</span>' +
+        '<span class="log-msg">' + msg + '</span></div>';
+    }).join('');
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function loadLogs() {
+    safeJson('/v1/logs?lines=100').then(function (d) {
+      rawLogsCache = d.logs || [];
+      renderFilteredLogs();
     }).catch(function () {
       var box = document.getElementById('log-box');
       box.innerHTML = '<div class="muted" style="color:#f87171;text-align:center;padding:20px 0">日志加载失败（端点可能未就绪）</div>';

@@ -57,11 +57,67 @@ class ImagefreeProvider(Provider):
         if self.engine is None:
             return GenerationResult(status="error", error="imagefree 引擎未就绪")
         if images:
-            # 图生图走既有 edit 链路（需 main 注入 run_edit 回调）
+            # 图生图直调既有执行链（带进程内+跨进程文件锁，保障并发=1）
             runner = kw.get("edit_runner")
-            if runner is None:
-                return GenerationResult(status="error", error="imagefree 图生图未启用")
-            return await runner(model, prompt, images, download)
+            if runner is not None:
+                return await runner(model, prompt, images, download)
+            # 未显式注入 runner 时直通内部链路
+            from .. import imagefree_client
+            from ..dispatch_edit import _EDIT_PROXY_POOL, _EDIT_LOCK, _acquire_edit_mutex, _release_edit_mutex
+            image = images[0]
+            ctype = imagefree_client.detect_mime(image)
+            proxy = await _EDIT_PROXY_POOL.acquire_proxy()
+            key = proxy or "default"
+            local_lock = _EDIT_PROXY_POOL.lock_for(key) if proxy else _EDIT_LOCK
+            try:
+                async with local_lock:
+                    token = await _acquire_edit_mutex(key)
+                    if not token:
+                        return GenerationResult(status="error", error="图生图繁忙：其他实例正在生成同一出口通道，请稍后重试")
+                    try:
+                        upstream_model = model.split("/", 1)[-1] if "/" in model else model
+                        last_err = None
+                        for attempt in range(1, config.EDIT_RETRY_MAX + 1):
+                            cf_token = await self.engine.acquire_token(key=proxy or "direct")
+                            if not cf_token:
+                                return GenerationResult(status="error", error="人机验证 token 暂不可用，请稍后重试")
+                            try:
+                                public_url = await imagefree_client.upload_edit_image(
+                                    config.BASE_URL, image, ctype, proxy=proxy)
+                                tid = await imagefree_client.submit_edit(
+                                    config.BASE_URL, public_url, config.apply_model(prompt, upstream_model), cf_token,
+                                    proxy=proxy)
+                                res = await imagefree_client.poll_edit_status(
+                                    config.BASE_URL, tid, config.EDIT_TIMEOUT, config.GENERATE_POLL_INTERVAL,
+                                    proxy=proxy)
+                                break
+                            except Exception as e:
+                                last_err = str(e)
+                                msg = last_err.lower()
+                                if ("already have an image editing task" in msg or "task in progress" in msg) and attempt < config.EDIT_RETRY_MAX:
+                                    await asyncio.sleep(config.EDIT_RETRY_INTERVAL)
+                                    continue
+                                return GenerationResult(status="error", error=f"图生图失败: {e}", proxy_used=proxy)
+                        else:
+                            return GenerationResult(status="error", error=f"图生图失败（重试超限）: {last_err}", proxy_used=proxy)
+
+                        asset_url = res["image"]
+                        asset_bytes = None
+                        asset_mime = None
+                        if download:
+                            try:
+                                raw = await imagefree_client.download_image(asset_url, 60.0, config.MAX_IMAGE_BYTES)
+                                asset_mime = imagefree_client.detect_mime(raw)
+                                asset_bytes = imagefree_client.to_base64(raw, asset_mime)
+                            except Exception:
+                                pass
+                        return GenerationResult(status="completed", asset_url=asset_url,
+                                                asset_bytes=asset_bytes, asset_mime=asset_mime,
+                                                proxy_used=proxy)
+                    finally:
+                        _release_edit_mutex(key, token)
+            finally:
+                _EDIT_PROXY_POOL.release_proxy(proxy)
         # 文生图：入队 → 等待终态
         try:
             task_id = await self.engine.submit(prompt, aspect_ratio, download, model)

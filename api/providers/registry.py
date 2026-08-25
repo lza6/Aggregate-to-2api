@@ -91,15 +91,17 @@ class Registry:
 
         # 首选 healthy/degraded → 组装候选（首选 + 各能力匹配的备用）交给自适应路由
         candidates = [spec.provider]
-        for prefix, p in self.providers.items():
-            if prefix == spec.provider:
-                continue
-            if p.health_status == "down":
-                continue  # 熔断/不可用不参与
-            for mid, ms in p.models.items():
-                if set(spec.capabilities) & set(ms.capabilities):
-                    candidates.append(prefix)
-                    break
+        # 仅当目标提供商不是明确指定专有前缀（如 imagefree/* 专属）或显式需要降级时才交叉打分
+        if spec.provider != "imagefree":
+            for prefix, p in self.providers.items():
+                if prefix == spec.provider:
+                    continue
+                if p.health_status == "down":
+                    continue  # 熔断/不可用不参与
+                for mid, ms in p.models.items():
+                    if set(spec.capabilities) & set(ms.capabilities):
+                        candidates.append(prefix)
+                        break
         # 去重保序，交给 MAB-EWMA 打分
         seen: set[str] = set()
         uniq = [c for c in candidates if not (c in seen or seen.add(c))]
