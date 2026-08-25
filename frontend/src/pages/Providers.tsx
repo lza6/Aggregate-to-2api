@@ -29,9 +29,11 @@ export function ProvidersPage() {
             key={prefix}
             name={summary.display_name ?? prefix}
             prefix={prefix}
+            baseUrl={summary.base_url}
             models={summary.model_count ?? 0}
             status={summary.health_status ?? 'unknown'}
             errorCount={summary.error_count ?? 0}
+            credits={summary.credits}
           />
         ))}
         {!providers.length && !loading && <Empty text="暂无数据" hint="后端未注册任何提供商" />}
