@@ -70,9 +70,23 @@ async def account_pool_dashboard():
     """号池看板。"""
     from ..account_pool import account_pool
     from ..email_pool import email_pool
+    raw_list = account_pool.list("nanobanana")
+    desensitized = []
+    for item in raw_list:
+        em = item.get("email", "")
+        parts = em.split("@")
+        safe_em = (parts[0][:3] + "***@" + parts[1]) if len(parts) == 2 else em
+        desensitized.append({
+            "email": safe_em,
+            "credits": item.get("credits", 0),
+            "status": item.get("status", "ok"),
+            "created_at": item.get("created_at"),
+            "checkin_at": item.get("checkin_at"),
+        })
     return {
         "accounts": account_pool.dashboard(),
         "email_pool": email_pool.stats(),
+        "items": desensitized,
     }
 
 

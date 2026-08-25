@@ -652,6 +652,33 @@
 
   <div class="pool-grid" id="pool-grid"><div class="empty">⏳ 加载中…</div></div>
   <div id="email-pool-box" style="margin-top:16px"></div>
+
+  <!-- ── 账号明细与每日签到透明度面板 ── -->
+  <div style="margin-top:24px;border-top:1px solid var(--line);padding-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0;font-size:15px;display:flex;align-items:center;gap:6px">
+        <span>👤</span> <span>长效账号活跃明细（积分/签到时间/下次签到）</span>
+      </h3>
+      <button class="btn secondary" id="btn-refresh-accounts" style="padding:4px 12px;font-size:12px;margin:0">🔄 刷新账号状态</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse" id="accounts-table">
+        <thead>
+          <tr style="border-bottom:1px solid var(--line);text-align:left;color:var(--muted)">
+            <th style="padding:8px 6px">邮箱 (脱敏)</th>
+            <th style="padding:8px 6px">当前积分</th>
+            <th style="padding:8px 6px">账号状态</th>
+            <th style="padding:8px 6px">注册入池时间</th>
+            <th style="padding:8px 6px">上次签到时间</th>
+            <th style="padding:8px 6px">预计下次自动签到</th>
+          </tr>
+        </thead>
+        <tbody id="accounts-tbody">
+          <tr><td colspan="6" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">⏳ 暂无入池账号明细</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <!-- ── 提供商状态 ── -->
@@ -1934,6 +1961,36 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           '<p class="muted">已分配邮箱：' + (d.email_pool.total_registered || 0) + '；按提供商：' +
           esc(JSON.stringify(d.email_pool.by_provider || {})) + '</p>';
       }
+
+      // 渲染账号明细列表
+      var accItems = d.items || [];
+      var tbody = document.getElementById('accounts-tbody');
+      if (tbody) {
+        if (!accItems.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">📭 暂无入库账号（后台持续补号激活中…）</td></tr>';
+        } else {
+          tbody.innerHTML = accItems.map(function (it) {
+            var cTime = it.created_at ? new Date(it.created_at * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+            var chkTime = it.checkin_at ? new Date(it.checkin_at * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '尚未签到';
+            var nextChk = '今日已签';
+            if (!it.checkin_at || (Date.now() - it.checkin_at * 1000 > 20 * 3600 * 1000)) {
+              nextChk = '<span style="color:#10b981;font-weight:600">⚡ 待签到 (自动触发)</span>';
+            } else {
+              var nextTs = new Date(it.checkin_at * 1000 + 24 * 3600 * 1000);
+              nextChk = nextTs.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) + ' 之后';
+            }
+            var statusBadge = it.status === 'ok' ? '<span class="pill ok">正常</span>' : '<span class="pill err">' + esc(it.status) + '</span>';
+            return '<tr style="border-bottom:1px solid var(--line)">' +
+              '<td style="padding:8px 6px"><code>' + esc(it.email) + '</code></td>' +
+              '<td style="padding:8px 6px;color:#10b981;font-weight:600">' + (it.credits || 0) + ' 分</td>' +
+              '<td style="padding:8px 6px">' + statusBadge + '</td>' +
+              '<td style="padding:8px 6px;color:var(--muted)">' + cTime + '</td>' +
+              '<td style="padding:8px 6px;color:var(--muted)">' + chkTime + '</td>' +
+              '<td style="padding:8px 6px">' + nextChk + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+      }
     }).catch(function () {
       document.getElementById('pool-grid').innerHTML = '<div class="empty">号池未启动（IF_ACCOUNT_AUTO=0）</div>';
     });
@@ -1980,8 +2037,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         }
 
         cardsHtml += '<div class="prov-card" data-prov="' + esc(prov) + '">' +
-          '<h3>' + esc(p.display_name || prov) + ' <span class="pill ok">' + esc(prov) + '</span></h3>' +
-          '<div class="prov-base">' + esc(p.base_url || '') + '</div>' +
+          '<h3><a href="' + esc(p.base_url || '#') + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:6px">' + esc(p.display_name || prov) + ' <span style="font-size:12px;color:var(--primary)">↗ 官网</span></a> <span class="pill ok">' + esc(prov) + '</span></h3>' +
+          '<div class="prov-base"><a href="' + esc(p.base_url || '#') + '" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">' + esc(p.base_url || '') + '</a></div>' +
           '<div class="prov-meta">' +
           '<span>📦 ' + p.model_count + ' 模型</span>' +
           '<span>' + caps + '</span>' +
@@ -1993,7 +2050,10 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           probeHtml +
           '</div>';
       });
-      updateCardGrid('prov-grid', cardsHtml, 'data-prov');
+      var pBox = document.getElementById('prov-grid');
+      if (pBox) {
+        pBox.innerHTML = cardsHtml;
+      }
     }).catch(function () {
       document.getElementById('prov-grid').innerHTML = '<div class="empty">提供商数据加载失败</div>';
     });
@@ -2005,6 +2065,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
   loadModels();
   loadPool();
+  loadProviders();
+  var btnRef = document.getElementById('btn-refresh-accounts');
+  if (btnRef) {
+    btnRef.onclick = function() {
+      showToast('🔄 正在拉取账号最新状态…', 'info', 1000);
+      loadPool();
+    };
+  }
 
   // ── 实时日志 ──
   var logTimer = null;
