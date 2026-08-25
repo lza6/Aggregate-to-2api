@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>v5.0-account-pool-report</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --heading: #f0f6fc;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+h1, h2, h3 { color: var(--heading); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+h1 { border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; font-size: 2rem; }
+h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; font-size: 1.4rem; }
+p, ul, ol { margin-bottom: 1rem; }
+ul, ol { padding-left: 1.5rem; }
+li { margin-bottom: 0.3rem; }
+code { background: #21262d; color: #ff7b72; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+pre { background: #161b22; border: 1px solid var(--border); padding: 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+pre code { background: none; color: #e6edf3; padding: 0; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+th, td { border: 1px solid var(--border); padding: 0.6rem 0.8rem; text-align: left; }
+th { background: #21262d; color: var(--heading); }
+tr:nth-child(even) { background: #161b22; }
+.badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+.badge-ok { background: #238636; color: #fff; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.quiz-box { background: #1f242c; border: 1px solid #388bfd; border-radius: 8px; padding: 1.5rem; margin-top: 2rem; }
+.quiz-q { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px dashed var(--border); }
+.quiz-q:last-child { border-bottom: none; }
+.quiz-title { font-weight: bold; color: var(--heading); margin-bottom: 0.5rem; }
+.quiz-opt { margin-left: 0.5rem; margin-bottom: 0.3rem; display: block; cursor: pointer; }
+.btn { background: #238636; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: bold; }
+.btn:hover { background: #2ea043; }
+#quiz-result { margin-top: 1rem; font-size: 1.1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>智能号池全自动化生命周期管理 (Account Pool 2.0) 生产交付报告</h1>
+<p>交付时间: 2026-08-25 | 模式: 生产级总控交付 | 状态: <span class="badge badge-ok">已验证·真实闭环</span></p>
+
+<h2>1. 升级背景与核心架构</h2>
+<p>针对原有号池对单源邮箱强依赖、易受 429 频控与封号影响的问题，实施 v5.0 Account Pool 2.0 升级：</p>
+<ul>
+  <li><strong>多源弹性邮箱抽象 (Mail Provider Strategy)</strong>：提供 <code>BaseMailSource</code> 统一接口，实现 <code>LinshiMailSource</code>、<code>MailTmSource</code>、<code>GuerrillaMailSource</code>、<code>CustomImapSource</code>，支持多源打分轮换与自动切源降级。</li>
+  <li><strong>账号生命周期状态机与自适应延寿 (Account FSM)</strong>：支持 <code>unregistered</code> &rarr; <code>registering</code> &rarr; <code>active</code> &rarr; <code>working</code> &rarr; <code>cooling</code> &rarr; <code>dead</code> 状态流转，401/403 异常熔断，每日自动签到与超期唤醒。</li>
+  <li><strong>自适应分类退避与断点续跑注册 Worker</strong>：CF 阻断退避 30s、邮箱限流退避 60s、IP 污染退避 120s，保障高并发批量注册零死锁、零空转。</li>
+</ul>
+
+<h2>2. 需求追踪矩阵 (Traceability Matrix)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>需求描述</th>
+      <th>实现文件</th>
+      <th>状态</th>
+      <th>验证证据</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ACC-01</td>
+      <td>多邮箱提供商统一抽象基类与动态打分降级策略</td>
+      <td><code>api/email_pool.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>tests/test_email_pool.py</code> (10 passed)</td>
+    </tr>
+    <tr>
+      <td>ACC-02</td>
+      <td>mail.tm、GuerrillaMail、CustomImap 与 Linshi 适配器</td>
+      <td><code>api/email_pool.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>tests/test_email_pool.py</code> (多源收件覆盖)</td>
+    </tr>
+    <tr>
+      <td>ACC-03</td>
+      <td>账号生命周期 FSM (borrow, release, mark_cooling, mark_dead)</td>
+      <td><code>api/account_pool.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>tests/test_account_pool.py</code> (17 passed)</td>
+    </tr>
+    <tr>
+      <td>ACC-04</td>
+      <td>长效号池每日签到、冷却超期自动唤醒巡检</td>
+      <td><code>api/account_pool.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>tests/test_account_pool.py</code> (延寿测试)</td>
+    </tr>
+    <tr>
+      <td>ACC-05</td>
+      <td>注册 Worker 故障自适应分类退避 (CF: 30s, Email: 60s, IP: 120s)</td>
+      <td><code>api/registerer.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>tests/test_registerer_adaptive.py</code> (6 passed)</td>
+    </tr>
+    <tr>
+      <td>ACC-06</td>
+      <td>deploy 生产镜像与配置同构同步</td>
+      <td><code>deploy/api/</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td>单测全绿，代码对齐</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. 状态机模型 (Account FSM)</h2>
+<pre><code>[unregistered] --(触发注册)--> [registering] --(注册成功)--> [active/ok] <----+
+                                                                  |          |
+                                         (借出取号 borrow)         |          | (每日签到/唤醒)
+                                                                  v          |
+                                                              [working]      |
+                                                            /          \     |
+                                          (正常归还/余额>0) /            \    | (余额耗尽 credits<=0)
+                                                          v              v   |
+                                                     [active/ok]     [cooling/exhausted]
+                                                                        |
+                                             (401/403 封号)              |
+                                                    +-------------------+
+                                                    v
+                                               [dead/banned] (永久下线)</code></pre>
+
+<h2>4. 自动化测试套件执行证据</h2>
+<p>执行 3.1 与 3.2 的完整联测套件：</p>
+<pre><code>pytest tests/test_solver_guard.py tests/test_turnstile_client.py tests/test_token_pool.py tests/test_solver_federation_e2e.py tests/test_email_pool.py tests/test_account_pool.py tests/test_registerer_adaptive.py -q
+---------------------------------------------------------------------------------------------
+..........................................x....................................
+======================== 78 passed, 1 xfailed in 24.85s ========================</code></pre>
+
+<div class="quiz-box">
+  <h2>交互式架构与状态机测验 (通过线: 80%)</h2>
+  <div class="quiz-q" data-ans="A">
+    <div class="quiz-title">1. 当注册 Worker 遭遇上游 403 Forbidden 或 IP 风控时，自适应退避时间是多少？</div>
+    <label class="quiz-opt"><input type="radio" name="q1" value="A"> A. 退避 120s，并强制轮换住宅代理会话</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="B"> B. 退避 30s，并重试原 IP</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="C"> C. 立即重试，不退避</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="D"> D. 退避 24 小时</label>
+  </div>
+
+  <div class="quiz-q" data-ans="B">
+    <div class="quiz-title">2. 在 Account FSM 中，当账号执行完生成任务且剩余积分为 0 时，账号会流转至哪个状态？</div>
+    <label class="quiz-opt"><input type="radio" name="q2" value="A"> A. dead (失效)</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="B"> B. cooling (每日限额冷却中，记录 cooling_since，等待次日签到唤醒)</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="C"> C. registering (重新注册)</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="D"> D. unregistered</label>
+  </div>
+
+  <div class="quiz-q" data-ans="D">
+    <div class="quiz-title">3. BaseMailSource 如何应对某临时邮箱提供商突发的 429 限流？</div>
+    <label class="quiz-opt"><input type="radio" name="q3" value="A"> A. 抛出致命异常并停止整个服务</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="B"> B. 仅记录日志，继续向该源发请求</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="C"> C. 永远拉黑该提供商</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="D"> D. 调用 mark_failure 自动进入指数退避冷却，动态降分并无缝将流量切至备用邮箱源</label>
+  </div>
+
+  <div class="quiz-q" data-ans="C">
+    <div class="quiz-title">4. 借号调用中出现 401 Unauthorized / 403 Forbidden 封号异常时，系统如何处理？</div>
+    <label class="quiz-opt"><input type="radio" name="q4" value="A"> A. 重新借出该账号重试</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="B"> B. 标记为 cooling</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="C"> C. 捕获异常并通过 mark_dead 将其置为 dead/banned，永久剔除出可用队列</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="D"> D. 直接删除数据库记录</label>
+  </div>
+
+  <div class="quiz-q" data-ans="B">
+    <div class="quiz-title">5. CustomImapSource 的核心优势是什么？</div>
+    <label class="quiz-opt"><input type="radio" name="q5" value="A"> A. 不需要配置邮箱账号</label>
+    <label class="quiz-opt"><input type="radio" name="q5" value="B"> B. 基于自有域名通配符（Catch-all）接收任意前缀邮件，彻底摆脱第三方临时邮箱的 429 限流与域名封禁</label>
+    <label class="quiz-opt"><input type="radio" name="q5" value="C"> C. 只能接收纯文本邮件</label>
+    <label class="quiz-opt"><input type="radio" name="q5" value="D"> D. 仅支持本地 SQLite 模拟</label>
+  </div>
+
+  <button class="btn" onclick="submitQuiz()">提交测验并评分</button>
+  <div id="quiz-result"></div>
+</div>
+
+<script>
+function submitQuiz() {
+  const questions = document.querySelectorAll('.quiz-q');
+  let score = 0;
+  let total = questions.length;
+  let wrongList = [];
+
+  questions.forEach((q, idx) => {
+    const ans = q.getAttribute('data-ans');
+    const selected = q.querySelector('input[type="radio"]:checked');
+    if (selected && selected.value === ans) {
+      score++;
+    } else {
+      wrongList.push(idx + 1);
+    }
+  });
+
+  const percentage = Math.round((score / total) * 100);
+  const resultDiv = document.getElementById('quiz-result');
+  if (percentage >= 80) {
+    resultDiv.style.color = 'var(--success)';
+    resultDiv.innerHTML = `🎉 测验通过！得分: ${percentage}% (${score}/${total})。号池生命周期机制已掌握。`;
+  } else {
+    resultDiv.style.color = 'var(--danger)';
+    resultDiv.innerHTML = `⚠️ 测验未达标。得分: ${percentage}% (${score}/${total})。错题编号: ${wrongList.join(', ')}。`;
+  }
+}
+</script>
+
+</body>
+</html>

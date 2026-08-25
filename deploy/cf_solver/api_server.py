@@ -30,12 +30,16 @@ class ClearanceAPIServer:
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Boterdrop Solver</title>
+        <title>CF Turnstile Solver</title>
+        <style>
+            /* 极简零渲染开销布局，避免重排与重绘 */
+            html, body { margin: 0; padding: 0; background: #ffffff; width: 100%; height: 100%; overflow: hidden; }
+            .cf-turnstile { display: block; width: 70px; height: 65px; }
+        </style>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async="" defer=""></script>
     </head>
     <body>
         <!-- cf turnstile -->
-        <p id="ip-display"></p>
     </body>
     </html>
     """
@@ -411,25 +415,58 @@ class ClearanceAPIServer:
                     await page.unroute_all()
                 except Exception:
                     pass
-                await page.route(url_with_slash, lambda route: route.fulfill(body=page_data, status=200))
-                await page.goto(url_with_slash)
-                await page.eval_on_selector("//div[@class='cf-turnstile']", "el => el.style.width = '70px'")
+
+                # 路由拦截强化 (Route Interception Optimization):
+                # 1. 目标 URL HTML 返回自定义页面
+                # 2. 拦截图片、媒体、字体、样式等冗余资源
+                # 3. 仅放行 challenges.cloudflare.com 的 Turnstile 核心 JS 及必要的 API 请求
+                async def _turnstile_route_handler(route):
+                    req = route.request
+                    r_url = req.url
+                    r_type = req.resource_type
+
+                    if r_url.rstrip("/") == url_with_slash.rstrip("/"):
+                        await route.fulfill(body=page_data, status=200, content_type="text/html")
+                        return
+
+                    if r_type in ["image", "media", "font", "stylesheet"]:
+                        try:
+                            await route.abort()
+                        except Exception:
+                            pass
+                        return
+
+                    # 仅放行必要请求 (challenges.cloudflare.com, script, document, xhr, fetch)
+                    try:
+                        await route.continue_()
+                    except Exception:
+                        pass
+
+                await page.route("**/*", _turnstile_route_handler)
+                await page.goto(url_with_slash, wait_until="commit", timeout=15000)
 
                 solved = False
-                for attempt in range(80):  # 80 × 0.3s = ~24 detik timeout
+                # 极速探测：初段采用 50ms~100ms 快速轮询与智能触发，大幅缩短求解时延
+                for attempt in range(120):  # 120 × 0.15s = ~18 秒
                     try:
-                        value = await page.input_value("[name=cf-turnstile-response]", timeout=400)
-                        if value == "":
-                            await page.locator("//div[@class='cf-turnstile']").click(timeout=400)
-                            await asyncio.sleep(0.3)
-                        else:
+                        value = await page.input_value("[name=cf-turnstile-response]", timeout=150)
+                        if value:
                             elapsed = round(time.time() - start_time, 3)
                             self.results[task_id] = {"status": "success", "elapsed_time": elapsed, "value": value}
                             logger.info(f"[Turnstile] Sukses (putaran {round_num}) — {task_id} ({elapsed}s)")
                             solved = True
                             return
+                        else:
+                            # 尝试触发 Turnstile 容器点击 (如遇交互型验证)
+                            if attempt % 2 == 0:
+                                try:
+                                    await page.locator("//div[@class='cf-turnstile']").click(timeout=100)
+                                except Exception:
+                                    pass
+                            await asyncio.sleep(0.15)
                     except Exception as e:
                         logger.debug(f"[Turnstile] Putaran {round_num} percobaan {attempt + 1} gagal: {e}")
+                        await asyncio.sleep(0.15)
 
                 if not solved:
                     logger.warning(f"[Turnstile] Putaran {round_num} gagal 30x — {task_id}, {'retry...' if round_num < MAX_ROUNDS else 'menyerah'}")

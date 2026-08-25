@@ -156,5 +156,63 @@ class TestTimeoutRetry:
         assert set(g.snapshot()["failure_reasons"]) == {"http_error"}
 
 
+# ── 集群 Failover 与 429 自动切换测试 ──────────────────────
+class TestClusterFailover:
+    @pytest.mark.asyncio
+    async def test_auto_failover_on_429_rate_limit(self, monkeypatch):
+        """当首选节点返回 429 时，自动 failover 到备用节点并成功返回。"""
+        # 模拟不同 URL 的返回
+        class MultiNodeClient:
+            async def get(self, url, params=None, timeout=None):
+                if "node-1" in url:
+                    if "/turnstile" in url:
+                        return _Resp(429, {"error": "Too Many Requests"})
+                if "node-2" in url:
+                    if "/turnstile" in url:
+                        return _Resp(202, {"task_id": "t-node2", "status": "accepted"})
+                    if "/result" in url:
+                        return _Resp(200, {"status": "success", "value": "tok-from-node2", "elapsed_time": 3.0})
+                return _Resp(500, {"error": "unexpected"})
+
+        g = SolverGuard(urls=["http://node-1", "http://node-2"])
+        monkeypatch.setattr(turnstile_client, "solver_guard", g)
+        monkeypatch.setattr(turnstile_client, "_get_client", lambda: MultiNodeClient())
+
+        tok, dur = await turnstile_client.solve_turnstile(None, "http://target", "sk", 5.0)
+        assert tok == "tok-from-node2"
+        snap = g.snapshot()
+        assert snap["solve_success_total"] == 1
+        assert snap["solve_failure_total"] == 1
+        assert snap["failure_reasons"] == {"rate_limit": 1}
+        # 验证 node-1 进入熔断，node-2 记录成功
+        nodes_map = {n["url"]: n for n in snap["nodes"]}
+        assert nodes_map["http://node-1"]["rate_limited"] is True
+        assert nodes_map["http://node-2"]["solve_success_total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_auto_failover_on_network_transport_error(self, monkeypatch):
+        """首选节点网络不可达时，自动尝试下一个节点。"""
+        class MultiNodeClient:
+            async def get(self, url, params=None, timeout=None):
+                if "node-1" in url:
+                    raise httpx.TransportError("connection refused")
+                if "node-2" in url:
+                    if "/turnstile" in url:
+                        return _Resp(202, {"task_id": "t-node2", "status": "accepted"})
+                    if "/result" in url:
+                        return _Resp(200, {"status": "success", "value": "tok-from-node2"})
+                return _Resp(500, {})
+
+        g = SolverGuard(urls=["http://node-1", "http://node-2"])
+        monkeypatch.setattr(turnstile_client, "solver_guard", g)
+        monkeypatch.setattr(turnstile_client, "_get_client", lambda: MultiNodeClient())
+
+        tok, _ = await turnstile_client.solve_turnstile(None, "http://target", "sk", 5.0)
+        assert tok == "tok-from-node2"
+        snap = g.snapshot()
+        assert snap["failure_reasons"] == {"transport": 1}
+        assert snap["solve_success_total"] == 1
+
+
 def _raise_transport():
     return httpx.TransportError("boom")

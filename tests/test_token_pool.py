@@ -31,7 +31,7 @@ def fake_solve(monkeypatch):
         await asyncio.sleep(0.03)
         return (f"mock-token-{proxy or 'direct'}-{time.time_ns()}", 0.03)
 
-    monkeypatch.setattr("api.worker.turnstile_client.solve_turnstile", _fake)
+    monkeypatch.setattr("api.turnstile_client.solve_turnstile", _fake)
     return calls
 
 
@@ -85,8 +85,9 @@ async def test_dynamic_watermark_direct(fake_solve):
 
 @pytest.mark.asyncio
 async def test_circuit_open_fast_fail(fake_solve, monkeypatch):
-    from api.worker import solver_guard
-    monkeypatch.setattr(solver_guard, "_circuit_open", True)
+    from api.solver_guard import solver_guard
+    for n in solver_guard._nodes.values():
+        monkeypatch.setattr(n, "_circuit_open", True)
     m = TokenPoolManager(_EngineStub())
     await m.start()
     try:
@@ -101,7 +102,7 @@ async def test_circuit_open_fast_fail(fake_solve, monkeypatch):
 @pytest.mark.asyncio
 async def test_circuit_open_still_uses_existing_token(fake_solve, monkeypatch):
     """熔断 OPEN 但池里已有现成 token → 仍可取用（求解失败≠token 无效），不浪费预取。"""
-    from api.worker import solver_guard
+    from api.solver_guard import solver_guard
     m = TokenPoolManager(_EngineStub())
     await m.start()
     try:
@@ -110,7 +111,8 @@ async def test_circuit_open_still_uses_existing_token(fake_solve, monkeypatch):
             if m.pools_snapshot()["direct"]["size"] >= 1:
                 break
             await asyncio.sleep(0.05)
-        monkeypatch.setattr(solver_guard, "_circuit_open", True)
+        for n in solver_guard._nodes.values():
+            monkeypatch.setattr(n, "_circuit_open", True)
         t0 = time.monotonic()
         tok = await m.acquire("direct", timeout=3)  # OPEN 但池里有现成 token → 仍可取
         assert tok is not None
@@ -155,9 +157,9 @@ async def test_acquire_timeout_counts_wait_timeout(fake_solve):
     async def _fail(*args, **kwargs):
         await asyncio.sleep(0.2)
         raise RuntimeError("solve fail")
-    import api.worker
-    orig = api.worker.turnstile_client.solve_turnstile
-    api.worker.turnstile_client.solve_turnstile = _fail
+    import api.turnstile_client
+    orig = api.turnstile_client.solve_turnstile
+    api.turnstile_client.solve_turnstile = _fail
     m = TokenPoolManager(_EngineStub())
     await m.start()
     try:
@@ -166,7 +168,7 @@ async def test_acquire_timeout_counts_wait_timeout(fake_solve):
         assert m.wait_timeout_total >= 1
     finally:
         await m.stop()
-        api.worker.turnstile_client.solve_turnstile = orig
+        api.turnstile_client.solve_turnstile = orig
 
 
 # ── main 层：/healthz 与 /metrics 新观测字段 ─────────

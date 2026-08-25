@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     cf_solver_url: str = Field(
         "http://127.0.0.1:8001", validation_alias="IF_CF_SOLVER_URL"
     )
+    cf_solver_urls: str | list[str] = Field(
+        default_factory=lambda: ["http://127.0.0.1:8001"], validation_alias="IF_CF_SOLVER_URLS"
+    )
+    solver_node_weights: str | dict[str, int] = Field(
+        default_factory=dict, validation_alias="IF_SOLVER_NODE_WEIGHTS"
+    )
+    solver_rate_limit_cooldown_seconds: float = Field(
+        60.0, validation_alias="IF_SOLVER_RATE_LIMIT_COOLDOWN_SECONDS"
+    )
 
     # ── HTTP ──
     host: str = Field("127.0.0.1", validation_alias="IF_HOST")
@@ -320,6 +329,11 @@ class Settings(BaseSettings):
     default_model: str = Field(
         "default", validation_alias="IF_DEFAULT_MODEL"
     )
+    reg_backoff_cf: float = Field(30.0, validation_alias="IF_REG_BACKOFF_CF")
+    reg_backoff_email: float = Field(60.0, validation_alias="IF_REG_BACKOFF_EMAIL")
+    reg_backoff_ip: float = Field(120.0, validation_alias="IF_REG_BACKOFF_IP")
+    reg_backoff_transient_base: float = Field(2.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_BASE")
+    reg_backoff_transient_max: float = Field(30.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_MAX")
 
     # ── 分组配置（延迟初始化，由 model_validator 填充）───────────────
     _db: DBSettings | None = None
@@ -372,6 +386,40 @@ class Settings(BaseSettings):
                     self.proxy = val
                     break
 
+        # ── Solver URLs 规范化 ──
+        resolved_solver_urls: list[str] = []
+        if isinstance(self.cf_solver_urls, str):
+            resolved_solver_urls = [u.strip() for u in self.cf_solver_urls.split(",") if u.strip()]
+        elif isinstance(self.cf_solver_urls, (list, tuple)):
+            resolved_solver_urls = [str(u).strip() for u in self.cf_solver_urls if str(u).strip()]
+
+        # 若 CF_SOLVER_URLS 未显式自定义（仅默认值）但指定了单个 CF_SOLVER_URL，则以 CF_SOLVER_URL 为准
+        if not resolved_solver_urls or resolved_solver_urls == ["http://127.0.0.1:8001"]:
+            if self.cf_solver_url:
+                resolved_solver_urls = [self.cf_solver_url]
+        elif self.cf_solver_url and self.cf_solver_url not in resolved_solver_urls:
+            # 确保主 URL 在列表首位或列表中
+            pass
+        if not resolved_solver_urls:
+            resolved_solver_urls = [self.cf_solver_url or "http://127.0.0.1:8001"]
+
+        # 解析权重（支持 JSON 字符串或 "url1=1,url2=2" 格式）
+        resolved_weights: dict[str, int] = {}
+        if isinstance(self.solver_node_weights, str) and self.solver_node_weights:
+            try:
+                import json
+                resolved_weights = json.loads(self.solver_node_weights)
+            except Exception:
+                for part in self.solver_node_weights.split(","):
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        try:
+                            resolved_weights[k.strip()] = int(v.strip())
+                        except ValueError:
+                            pass
+        elif isinstance(self.solver_node_weights, dict):
+            resolved_weights = {str(k): int(v) for k, v in self.solver_node_weights.items()}
+
         # ── 分组配置 ──
         self._db = DBSettings(
             file=self.db_file,
@@ -399,7 +447,10 @@ class Settings(BaseSettings):
         self._solver = SolverSettings(
             base_url=self.base_url,
             sitekey=self.sitekey,
-            cf_solver_url=self.cf_solver_url,
+            cf_solver_url=resolved_solver_urls[0] if resolved_solver_urls else self.cf_solver_url,
+            cf_solver_urls=resolved_solver_urls,
+            solver_node_weights=resolved_weights,
+            solver_rate_limit_cooldown_seconds=self.solver_rate_limit_cooldown_seconds,
             turnstile_timeout=self.turnstile_timeout,
             turnstile_poll_interval=self.turnstile_poll_interval,
             solve_circuit_threshold=self.solve_circuit_threshold,
@@ -432,6 +483,11 @@ class Settings(BaseSettings):
             degrade_threshold=self.if_provider_degrade_threshold,
             recover_interval=self.if_provider_recover_interval,
             default_model=self.default_model,
+            reg_backoff_cf=self.reg_backoff_cf,
+            reg_backoff_email=self.reg_backoff_email,
+            reg_backoff_ip=self.reg_backoff_ip,
+            reg_backoff_transient_base=self.reg_backoff_transient_base,
+            reg_backoff_transient_max=self.reg_backoff_transient_max,
         )
         self._pool = PoolSettings(
             token_pool_size=self.token_pool_size,
@@ -597,7 +653,10 @@ settings = Settings()
 # Solver
 BASE_URL = settings.base_url
 SITEKEY = settings.sitekey
-CF_SOLVER_URL = settings.cf_solver_url
+CF_SOLVER_URL = settings.solver.cf_solver_url
+CF_SOLVER_URLS = settings.solver.cf_solver_urls
+SOLVER_NODE_WEIGHTS = settings.solver.solver_node_weights
+SOLVER_RATE_LIMIT_COOLDOWN_SECONDS = settings.solver.solver_rate_limit_cooldown_seconds
 
 # HTTP
 HOST = settings.host
@@ -726,6 +785,11 @@ IF_SLOW_LOG_ENABLED = settings.if_slow_log_enabled
 IF_SLOW_REQUEST_MS = settings.if_slow_request_ms
 IF_SLOW_LOG_SIZE = settings.if_slow_log_size
 DEFAULT_MODEL = settings.default_model
+REG_BACKOFF_CF = settings.reg_backoff_cf
+REG_BACKOFF_EMAIL = settings.reg_backoff_email
+REG_BACKOFF_IP = settings.reg_backoff_ip
+REG_BACKOFF_TRANSIENT_BASE = settings.reg_backoff_transient_base
+REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
 
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
@@ -810,6 +874,9 @@ __all__ = [
     "BASE_URL",
     "SITEKEY",
     "CF_SOLVER_URL",
+    "CF_SOLVER_URLS",
+    "SOLVER_NODE_WEIGHTS",
+    "SOLVER_RATE_LIMIT_COOLDOWN_SECONDS",
     "HOST",
     "PORT",
     "PROXY",

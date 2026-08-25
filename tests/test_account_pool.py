@@ -1,4 +1,4 @@
-"""号池（account_pool）与邮箱池（email_pool）单测：持久化/分配/自动补号/签到。"""
+"""号池（account_pool）与邮箱池（email_pool）单测：持久化/分配/自动补号/签到/状态机 (Account FSM)。"""
 import asyncio
 import os
 import time
@@ -67,6 +67,104 @@ class TestAccountPool:
         d = pool.dashboard()
         assert "minimaxh3" in d
         assert d["minimaxh3"]["credits"] == 4
+
+
+# ── 状态机 (Account FSM) 测试 ─────────────────────
+class TestAccountFSM:
+    def test_fsm_borrow_and_release(self, pool):
+        """测试正常流程：active (ok) -> borrow -> working -> release -> active。"""
+        pool.add("nanobanana", "fsm1@test.com", "cookie1", credits=8, status="active")
+
+        # 借号
+        acc = pool.borrow_account("nanobanana")
+        assert acc is not None
+        assert acc["email"] == "fsm1@test.com"
+        assert acc["status"] == "working"
+
+        # 再次尝试借号，池中无可用 active
+        acc2 = pool.borrow_account("nanobanana")
+        assert acc2 is None
+
+        # 归还并扣除积分
+        pool.release_account("nanobanana", "fsm1@test.com", new_credits=4)
+
+        # 归还后应恢复为 active
+        active_list = pool.get("nanobanana")
+        assert len(active_list) == 1
+        assert active_list[0]["email"] == "fsm1@test.com"
+        assert active_list[0]["credits"] == 4
+        assert active_list[0]["status"] == "active"
+
+    def test_fsm_release_to_cooling_when_exhausted(self, pool):
+        """测试归还时积分耗尽自动转移至 cooling (exhausted)。"""
+        pool.add("nanobanana", "fsm2@test.com", "cookie2", credits=4, status="active")
+        acc = pool.borrow_account("nanobanana")
+        assert acc is not None
+
+        # 归还时扣减至 0
+        pool.release_account("nanobanana", "fsm2@test.com", new_credits=0)
+
+        # 应进入 cooling / exhausted
+        cooling_list = pool.list("nanobanana", status="cooling")
+        assert len(cooling_list) == 1
+        assert cooling_list[0]["email"] == "fsm2@test.com"
+        assert cooling_list[0]["cooling_since"] is not None
+        assert pool.get("nanobanana") == []
+
+    def test_fsm_mark_dead_on_banned(self, pool):
+        """测试捕获封号/鉴权失效时转移至 dead (banned)。"""
+        pool.add("nanobanana", "fsm3@test.com", "cookie3", credits=10, status="active")
+        pool.mark_dead("nanobanana", "fsm3@test.com", reason="HTTP 401 Unauthorized")
+
+        dead_list = pool.list("nanobanana", status="dead")
+        assert len(dead_list) == 1
+        assert dead_list[0]["email"] == "fsm3@test.com"
+        assert "401" in dead_list[0]["note"]
+        assert pool.get("nanobanana") == []
+
+    def test_fsm_wake_cooling_accounts(self, pool):
+        """测试冷却扫描唤醒器：超过超期时间的 cooling 账号恢复为 active。"""
+        pool.add("nanobanana", "fsm4@test.com", "cookie4", credits=0, status="active")
+        pool.mark_cooling("nanobanana", "fsm4@test.com", reason="out of credits")
+
+        # 手动篡改 cooling_since 为 24 小时前
+        old_time = time.time() - 86400
+        pool._conn.execute("UPDATE accounts SET cooling_since=? WHERE email='fsm4@test.com'", (old_time,))
+        pool._conn.commit()
+
+        # 触发唤醒（设定超时 72000 秒，即 20 小时）
+        woken = pool.wake_cooling_accounts("nanobanana", cooling_timeout=72000)
+        assert woken == 1
+
+        active_list = pool.get("nanobanana")
+        assert len(active_list) == 1
+        assert active_list[0]["email"] == "fsm4@test.com"
+
+    @pytest.mark.asyncio
+    async def test_fsm_lease_context_manager(self, pool):
+        """测试异步 lease 语法糖与自动归还。"""
+        pool.add("nanobanana", "fsm5@test.com", "cookie5", credits=5, status="active")
+
+        async with pool.lease("nanobanana") as acc:
+            assert acc is not None
+            assert acc["email"] == "fsm5@test.com"
+            assert acc["status"] == "working"
+
+        # 退出 with 块后已归还
+        assert len(pool.get("nanobanana")) == 1
+
+    @pytest.mark.asyncio
+    async def test_fsm_lease_exception_dead(self, pool):
+        """测试 lease 内发生 403 封号异常自动转为 dead。"""
+        pool.add("nanobanana", "fsm6@test.com", "cookie6", credits=5, status="active")
+
+        with pytest.raises(RuntimeError):
+            async with pool.lease("nanobanana") as acc:
+                raise RuntimeError("403 Forbidden: Account suspended")
+
+        dead_list = pool.list("nanobanana", status="dead")
+        assert len(dead_list) == 1
+        assert dead_list[0]["email"] == "fsm6@test.com"
 
 
 # ── 自动补号 ─────────────────────────────────────

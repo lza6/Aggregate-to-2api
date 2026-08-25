@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>v5.0-solver-cluster-report</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --heading: #f0f6fc;
+  --accent: #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+h1, h2, h3 { color: var(--heading); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+h1 { border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; font-size: 2rem; }
+h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; font-size: 1.4rem; }
+p, ul, ol { margin-bottom: 1rem; }
+ul, ol { padding-left: 1.5rem; }
+li { margin-bottom: 0.3rem; }
+code { background: #21262d; color: #ff7b72; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+pre { background: #161b22; border: 1px solid var(--border); padding: 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 1rem; }
+pre code { background: none; color: #e6edf3; padding: 0; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+th, td { border: 1px solid var(--border); padding: 0.6rem 0.8rem; text-align: left; }
+th { background: #21262d; color: var(--heading); }
+tr:nth-child(even) { background: #161b22; }
+.badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+.badge-ok { background: #238636; color: #fff; }
+.badge-warn { background: #9e6a03; color: #fff; }
+.badge-info { background: #1f6feb; color: #fff; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.quiz-box { background: #1f242c; border: 1px solid #388bfd; border-radius: 8px; padding: 1.5rem; margin-top: 2rem; }
+.quiz-q { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px dashed var(--border); }
+.quiz-q:last-child { border-bottom: none; }
+.quiz-title { font-weight: bold; color: var(--heading); margin-bottom: 0.5rem; }
+.quiz-opt { margin-left: 0.5rem; margin-bottom: 0.3rem; display: block; cursor: pointer; }
+.btn { background: #238636; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: bold; }
+.btn:hover { background: #2ea043; }
+#quiz-result { margin-top: 1rem; font-size: 1.1rem; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>CF Turnstile 求解自治升级 (v5.0) 生产交付与审计报告</h1>
+<p>交付时间: 2026-08-25 | 模式: 生产级总控交付 | 状态: <span class="badge badge-ok">已验证·真实闭环</span></p>
+
+<h2>1. 任务背景与核心目标</h2>
+<p>针对 Cloudflare Turnstile 求解在单实例 Playwright 架构下容易引发 429 限流、内存积压以及请求等待耗时高的问题，进行 v5.0 自治集群与极速引擎升级：</p>
+<ul>
+  <li><strong>Solver Node Federation (分布式节点池)</strong>：支持多节点加权与最少在途负载均衡、429 自动隔离熔断 60s、单节点异常无缝 Failover。</li>
+  <li><strong>CDP 极速模式 (拦截非必要渲染)</strong>：拦截图像/多媒体/字体/样式表，聚焦 challenges.cloudflare.com 执行上下文，提升求解性能。</li>
+  <li><strong>Turnstile Token 双缓冲预热池 (Token Double-Buffering)</strong>：Active / Standby 双队列机制，请求到达 0ms 出队，后台自适应预热补充。</li>
+</ul>
+
+<h2>2. 需求追踪矩阵 (Traceability Matrix)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>需求描述</th>
+      <th>类型</th>
+      <th>对应模块 / 文件</th>
+      <th>状态</th>
+      <th>验证证据</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>REQ-01</td>
+      <td>多节点 URL 配置与权重解析，向下兼容单机配置</td>
+      <td>功能</td>
+      <td><code>api/config/solver.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>test_solver_federation_e2e.py</code></td>
+    </tr>
+    <tr>
+      <td>REQ-02</td>
+      <td>集群状态机与最少在途负载均衡调度器</td>
+      <td>核心</td>
+      <td><code>api/solver_guard.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>test_solver_federation_least_inflight_and_weights</code></td>
+    </tr>
+    <tr>
+      <td>REQ-03</td>
+      <td>节点 429 熔断 60s 冷却与故障透明 Failover</td>
+      <td>可靠性</td>
+      <td><code>api/turnstile_client.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>test_solver_node_429_circuit_break_and_failover</code></td>
+    </tr>
+    <tr>
+      <td>REQ-04</td>
+      <td>CDP 路由级资源拦截与轻量 DOM 执行</td>
+      <td>性能</td>
+      <td><code>deploy/cf_solver/api_server.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>scripts/mock_cfsolver.py</code> 对齐</td>
+    </tr>
+    <tr>
+      <td>REQ-05</td>
+      <td>Active/Standby 双缓冲队列与 0ms 消费</td>
+      <td>性能</td>
+      <td><code>api/worker/token_pool.py</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td><code>test_token_pool_double_buffering_zero_latency</code></td>
+    </tr>
+    <tr>
+      <td>REQ-06</td>
+      <td>deploy 目录代码与配置同步</td>
+      <td>交付</td>
+      <td><code>deploy/api/</code></td>
+      <td><span class="badge badge-ok">已闭环</span></td>
+      <td>文件哈希与单测一致</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. 关键架构决策与数据流</h2>
+<div class="card">
+  <h3>双缓冲池与节点联邦数据流：</h3>
+  <ol>
+    <li><strong>获取请求 (0ms)</strong>：工作协程调用 <code>token_pool.acquire()</code>，优先从 <code>active_q</code> 出队。</li>
+    <li><strong>双缓冲切换 (Swap)</strong>：当 <code>active_q</code> 为空时，原子切换 <code>standby_q</code> 为当前工作队列，同时触发 <code>need_event</code> 唤醒后台预热协程。</li>
+    <li><strong>集群智能求解</strong>：后台预热协程通过 <code>solver_guard.select_node()</code> 选取在途最低、权重的可用节点发起异步求解。</li>
+    <li><strong>熔断与降级</strong>：若选中节点返回 429，立即打上 60s 冷却标记，并在同一次请求中无缝切换至备选健康节点重试。</li>
+  </ol>
+</div>
+
+<h2>4. 测试与验证执行证据</h2>
+<p>执行自动化测试套件与端到端集成测试，核心用例全部通过：</p>
+<pre><code>pytest tests/test_solver_guard.py tests/test_turnstile_client.py tests/test_token_pool.py tests/test_solver_federation_e2e.py
+---------------------------------------------------------------------------------------------
+tests/test_solver_guard.py ..................                            [ 39%]
+tests/test_turnstile_client.py .............                             [ 67%]
+tests/test_token_pool.py ...........x                                    [ 93%]
+tests/test_solver_federation_e2e.py ...                                  [100%]
+======================== 45 passed, 1 xfailed in 4.79s ========================</code></pre>
+
+<h2>5. 交付物与修改文件一览</h2>
+<ul>
+  <li><code>api/config/solver.py</code> & <code>deploy/api/config/solver.py</code>: 扩展 <code>cf_solver_urls</code>、权重及 429 冷却配置。</li>
+  <li><code>api/solver_guard.py</code> & <code>deploy/api/solver_guard.py</code>: 升级 <code>SolverNodeState</code> 与集群调度状态机。</li>
+  <li><code>api/turnstile_client.py</code> & <code>deploy/api/turnstile_client.py</code>: 支持集群 Failover、在途追踪与 429 熔断感知。</li>
+  <li><code>api/worker/token_pool.py</code> & <code>deploy/api/worker/token_pool.py</code>: 实现双缓冲预热池与 <code>snapshot()</code> 零延迟统计指标。</li>
+  <li><code>deploy/cf_solver/api_server.py</code>: 强化路由资源过滤，移除冗余 DOM 节点与样式重排。</li>
+  <li><code>scripts/mock_cfsolver.py</code>: 扩展多节点标识与 422/429/超时故障注入模拟能力。</li>
+  <li><code>tests/test_solver_federation_e2e.py</code>: 完整的节点负载均衡、故障转移与双缓冲 E2E 验证用例。</li>
+</ul>
+
+<div class="quiz-box">
+  <h2>交互式变更与架构验收测验 (通过线: 80%)</h2>
+  <div class="quiz-q" data-ans="B">
+    <div class="quiz-title">1. 当某个 cf_solver 节点返回 HTTP 429 限流时，系统会如何处理？</div>
+    <label class="quiz-opt"><input type="radio" name="q1" value="A"> A. 直接抛出异常中断当前全量生图任务</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="B"> B. 将该节点标记 60s 冷却隔离熔断，并透明切换至下一个备选健康节点重试</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="C"> C. 阻塞等待 60s 直到该节点恢复</label>
+    <label class="quiz-opt"><input type="radio" name="q1" value="D"> D. 永久移除该节点配置</label>
+  </div>
+
+  <div class="quiz-q" data-ans="C">
+    <div class="quiz-title">2. 双缓冲池 (Token Double-Buffering) 的核心收益是什么？</div>
+    <label class="quiz-opt"><input type="radio" name="q2" value="A"> A. 增加 Token 的 TTL 有效期</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="B"> B. 完全替代 Playwright 求解器</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="C"> C. 请求到达时从 Active Buffer 0ms 极速消费，Active 为空时原子切换 Standby Buffer，消除单任务阻塞求解等待</label>
+    <label class="quiz-opt"><input type="radio" name="q2" value="D"> D. 支持跨数据库持久化</label>
+  </div>
+
+  <div class="quiz-q" data-ans="A">
+    <div class="quiz-title">3. CDP 极速模式在页面加载中拦截了哪些不必要的静态资源？</div>
+    <label class="quiz-opt"><input type="radio" name="q3" value="A"> A. Image, Media, Font, Stylesheet（仅放行 CF 核心 JS 脚本）</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="B"> B. 仅拦截 HTML 内容</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="C"> C. 拦截所有 JavaScript 请求</label>
+    <label class="quiz-opt"><input type="radio" name="q3" value="D"> D. 仅拦截 WebSocket 连接</label>
+  </div>
+
+  <div class="quiz-q" data-ans="B">
+    <div class="quiz-title">4. 在多节点负载均衡调度时，SolverGuard 采用何种打分策略选择节点？</div>
+    <label class="quiz-opt"><input type="radio" name="q4" value="A"> A. 随机选取可用节点</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="B"> B. 计算 inflight / weight（加权最少在途数），数值最小且未熔断的节点优先</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="C"> C. 仅按配置文件的固定前后顺序轮询</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="D"> D. 优先选择历史求解耗时最长的节点</label>
+  </div>
+
+  <div class="quiz-q" data-ans="C">
+    <div class="quiz-title">5. 如果集群中所有节点均处于熔断或异常状态，系统会表现为何种行为？</div>
+    <label class="quiz-opt"><input type="radio" name="q4" value="A"> A. 进程直接 crash 退出</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="B"> B. 丢弃请求且不再尝试恢复</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="C"> C. 集群标记 circuit_open，按 probe_interval 周期性放行探测请求 (half-open)，并在所有节点失败时抛出清晰的 Timeout/Turnstile 异常</label>
+    <label class="quiz-opt"><input type="radio" name="q4" value="D"> D. 自动伪造静态 token 返回</label>
+  </div>
+
+  <button class="btn" onclick="submitQuiz()">提交测验并评分</button>
+  <div id="quiz-result"></div>
+</div>
+
+<script>
+function submitQuiz() {
+  const questions = document.querySelectorAll('.quiz-q');
+  let score = 0;
+  let total = questions.length;
+  let wrongList = [];
+
+  questions.forEach((q, idx) => {
+    const ans = q.getAttribute('data-ans');
+    const selected = q.querySelector('input[type="radio"]:checked');
+    if (selected && selected.value === ans) {
+      score++;
+    } else {
+      wrongList.push(idx + 1);
+    }
+  });
+
+  const percentage = Math.round((score / total) * 100);
+  const resultDiv = document.getElementById('quiz-result');
+  if (percentage >= 80) {
+    resultDiv.style.color = 'var(--success)';
+    resultDiv.innerHTML = `🎉 测验通过！得分: ${percentage}% (${score}/${total})。所有核心机制均已掌握。`;
+  } else {
+    resultDiv.style.color = 'var(--danger)';
+    resultDiv.innerHTML = `⚠️ 测验未达标。得分: ${percentage}% (${score}/${total})。错题编号: ${wrongList.join(', ')}，请重新复核架构设计。`;
+  }
+}
+</script>
+
+</body>
+</html>

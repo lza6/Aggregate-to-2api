@@ -13,10 +13,8 @@ export function Gallery({ limit = 20, password }: { limit?: number; password?: s
   const [pwdInput, setPwdInput] = useState('');
   const [pwdSubmitting, setPwdSubmitting] = useState(false);
   const [pwdWrong, setPwdWrong] = useState(false);
-  // probing = 探测中（可能无密码）；required = 需要密码；ok = 已通过
   const [pwdState, setPwdState] = useState<PwdState>('probing');
   const [pwdFromDashboard, setPwdFromDashboard] = useState<string | undefined>(password);
-  // Dashboard 受控密码优先；否则读 sessionStorage（刷新不丢，P-GALLERY）
   const stored = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(PWD_KEY) ?? undefined : undefined;
   const effectivePwd = pwdFromDashboard ?? stored;
 
@@ -34,7 +32,6 @@ export function Gallery({ limit = 20, password }: { limit?: number; password?: s
         if (cancelled) return;
         const status = (e as any)?.status ?? (e as any)?.response?.status;
         if (status === 403) {
-          // 密码缺失或错误：清记住态，弹框
           sessionStorage.removeItem(PWD_KEY);
           setPwdState('required');
           if (effectivePwd) setPwdWrong(true);
@@ -65,71 +62,187 @@ export function Gallery({ limit = 20, password }: { limit?: number; password?: s
 
   if (pwdState === 'probing' && loading) {
     return (
-      <div className="gallery-skeleton">
-        <Skeleton lines={1} height={180} />
-        <style>{`.gallery-skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }`}</style>
+      <div className="gallery-skeleton-grid">
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <style>{`.gallery-skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }`}</style>
       </div>
     );
   }
 
   if (pwdState === 'required') {
-    return <div className="gallery-pwd-required">
-      <p>{pwdWrong ? '密码错误，请重新输入' : '画廊需要密码才能查看'}</p>
-      <input
-        type="password"
-        value={pwdInput}
-        autoFocus
-        disabled={pwdSubmitting}
-        onChange={e => setPwdInput(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') void handlePwdSubmit(); }}
-        placeholder="输入画廊密码"
-        aria-label="画廊密码"
-      />
-      <button onClick={handlePwdSubmit} disabled={pwdSubmitting || !pwdInput.trim()} className="btn">
-        {pwdSubmitting ? '验证中...' : '提交'}
-      </button>
-      <style>{`
-        .gallery-pwd-required { text-align: center; padding: 40px 0; font-size: 13px; color: #6b7280; }
-        .gallery-pwd-required p { margin-bottom: 12px; }
-        .gallery-pwd-required input { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5e0; font-size: 13px; margin-right: 8px; }
-        .gallery-pwd-required .btn { padding: 8px 16px; border: none; border-radius: 8px; background: #6b8aff; color: #fff; font-size: 13px; cursor: pointer; }
-        .gallery-pwd-required .btn:disabled { opacity: .55; cursor: not-allowed; }
-      `}</style>
-    </div>;
+    return (
+      <div className="gallery-pwd-card tf-card">
+        <div className="gallery-pwd-icon">🔒</div>
+        <h4 className="gallery-pwd-title">画廊访问受保护</h4>
+        <p className="gallery-pwd-desc">{pwdWrong ? '密码校验未通过，请重新输入' : '请输入管理员或画廊访问口令以预览生成作品'}</p>
+        <div className="gallery-pwd-form">
+          <input
+            type="password"
+            value={pwdInput}
+            autoFocus
+            disabled={pwdSubmitting}
+            onChange={e => setPwdInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void handlePwdSubmit(); }}
+            placeholder="输入画廊访问密码…"
+            aria-label="画廊密码"
+            className="tf-input gallery-pwd-input"
+          />
+          <button
+            onClick={handlePwdSubmit}
+            disabled={pwdSubmitting || !pwdInput.trim()}
+            className="tf-btn tf-btn-primary"
+          >
+            {pwdSubmitting ? '验证中...' : '解锁画廊'}
+          </button>
+        </div>
+        <style>{`
+          .gallery-pwd-card {
+            text-align: center;
+            padding: 48px 24px;
+            max-width: 440px;
+            margin: 0 auto;
+          }
+          .gallery-pwd-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+          }
+          .gallery-pwd-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+          }
+          .gallery-pwd-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+          }
+          .gallery-pwd-form {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+          }
+          .gallery-pwd-input {
+            width: 220px;
+          }
+        `}</style>
+      </div>
+    );
   }
 
   if (loading) {
     return (
-      <div className="gallery-skeleton">
-        <Skeleton lines={1} height={180} />
-        <style>{`.gallery-skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }`}</style>
+      <div className="gallery-skeleton-grid">
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <Skeleton lines={1} height={200} />
+        <style>{`.gallery-skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }`}</style>
       </div>
     );
   }
-  if (!items.length) return <Empty text="暂无作品" hint="完成的生成任务会出现在这里" />;
+
+  if (!items.length) return <Empty text="暂无生成作品" hint="当有用户通过 API 出图成功后，作品缩略图会自动呈现在这里" />;
 
   return (
-    <div className="gallery-grid">
+    <div className="gallery-modern-grid">
       {items.map((item, i) => (
-        <div key={i} className="gallery-cell">
-          {item.image_url && <img src={item.image_url} alt={item.prompt} loading="lazy" />}
-          <div className="gallery-overlay">
-            <div className="gallery-prompt">{item.prompt}</div>
-            {item.duration_sec != null && <div className="gallery-dur">{item.duration_sec.toFixed(1)}s</div>}
+        <div key={i} className="gallery-card tf-card">
+          <div className="gallery-img-wrap">
+            {item.image_url && <img src={item.image_url} alt={item.prompt} loading="lazy" />}
+            <div className="gallery-mask">
+              <div className="gallery-prompt-text">{item.prompt}</div>
+              <div className="gallery-meta-row">
+                {item.duration_sec != null && (
+                  <span className="gallery-badge-time">⚡ {item.duration_sec.toFixed(1)}s</span>
+                )}
+                <span className="gallery-badge-model">AI Generated</span>
+              </div>
+            </div>
           </div>
         </div>
       ))}
       <style>{`
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .gallery-cell { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #eef0f5; cursor: pointer; }
-        .gallery-cell img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
-        .gallery-cell:hover img { transform: scale(1.06); }
-        .gallery-overlay { position: absolute; inset: auto 0 0 0; padding: 20px 10px 8px; background: linear-gradient(transparent, rgba(10,14,30,.82)); color: #fff; font-size: 11px; opacity: 0; transition: opacity .25s; }
-        .gallery-cell:hover .gallery-overlay { opacity: 1; }
-        .gallery-prompt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .gallery-dur { color: #a9b4d8; margin-top: 2px; }
-        @media (prefers-color-scheme: dark) {
-          .gallery-cell { background: #1a1d2e; }
+        .gallery-modern-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 14px;
+        }
+
+        .gallery-card {
+          padding: 0;
+          overflow: hidden;
+          aspect-ratio: 1;
+          cursor: pointer;
+        }
+
+        .gallery-img-wrap {
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .gallery-img-wrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .gallery-card:hover .gallery-img-wrap img {
+          transform: scale(1.08);
+        }
+
+        .gallery-mask {
+          position: absolute;
+          inset: 0;
+          padding: 16px 14px 12px;
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0) 30%, rgba(15, 23, 42, 0.88) 100%);
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          opacity: 0;
+          transition: opacity 0.22s ease;
+        }
+
+        .gallery-card:hover .gallery-mask {
+          opacity: 1;
+        }
+
+        .gallery-prompt-text {
+          font-size: 12px;
+          color: #ffffff;
+          line-height: 1.4;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        }
+
+        .gallery-meta-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-top: 8px;
+        }
+
+        .gallery-badge-time {
+          font-size: 11px;
+          font-weight: 600;
+          color: #34d399;
+          font-family: ui-monospace, monospace;
+        }
+
+        .gallery-badge-model {
+          font-size: 10px;
+          color: #cbd5e1;
+          background: rgba(255, 255, 255, 0.15);
+          padding: 1px 6px;
+          border-radius: 4px;
         }
       `}</style>
     </div>

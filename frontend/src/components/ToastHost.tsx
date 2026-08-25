@@ -3,9 +3,8 @@ import { onToast } from '../api';
 import type { Toast } from '../api';
 
 const MAX_TOASTS = 4;
-const AUTO_DISMISS_MS = 3000;
+const AUTO_DISMISS_MS = 3500;
 
-/** 全局 Toast 容器：挂载于 Layout，监听 api.ts notify() 广播。 */
 export function ToastHost() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -27,27 +26,102 @@ export function ToastHost() {
 
   if (!toasts.length) return null;
 
-  const color = (type: Toast['type']) =>
-    type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
-
   return (
-    <div className="toast-host" aria-live="polite">
-      {toasts.map(t => (
-        <div key={t.id} className="toast-item" style={{ borderLeftColor: color(t.type) }}>
-          <span className="toast-msg">{t.message}</span>
-          <button className="toast-close" onClick={() => dismiss(t.id)} aria-label="关闭">×</button>
-        </div>
-      ))}
+    <div className="toast-host-container" aria-live="polite">
+      {toasts.map(t => {
+        const isSuccess = t.type === 'success';
+        const isError = t.type === 'error';
+        const icon = isSuccess ? '✅' : isError ? '❌' : 'ℹ️';
+        const toastTypeClass = isSuccess ? 'toast-success' : isError ? 'toast-error' : 'toast-info';
+
+        return (
+          <div key={t.id} className={`toast-card-modern ${toastTypeClass}`}>
+            <span className="toast-icon">{icon}</span>
+            <span className="toast-msg">{t.message}</span>
+            <button className="toast-close-btn" onClick={() => dismiss(t.id)} aria-label="关闭通知">
+              ×
+            </button>
+          </div>
+        );
+      })}
       <style>{`
-        .toast-host { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
-        .toast-item { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #d1d5e0; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #1f2430; box-shadow: 0 4px 16px rgba(10,14,30,.10); animation: toast-in .22s ease-out; }
-        .toast-msg { flex: 1; word-break: break-all; }
-        .toast-close { border: none; background: none; color: #9aa1b2; font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; }
-        .toast-close:hover { color: #1f2430; }
-        @keyframes toast-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
-        @media (prefers-color-scheme: dark) {
-          .toast-item { background: #1e2132; border-color: #2d3050; color: #e1e4ed; }
-          .toast-close:hover { color: #e1e4ed; }
+        .toast-host-container {
+          position: fixed;
+          top: 24px;
+          right: 24px;
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-width: 380px;
+          pointer-events: none;
+        }
+
+        .toast-card-modern {
+          pointer-events: auto;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--bg-card);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-lg);
+          padding: 12px 16px;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-primary);
+          box-shadow: var(--shadow-xl);
+          backdrop-filter: blur(16px);
+          animation: toast-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .toast-success {
+          border-left: 4px solid var(--success);
+        }
+
+        .toast-error {
+          border-left: 4px solid var(--danger);
+        }
+
+        .toast-info {
+          border-left: 4px solid var(--primary-500);
+        }
+
+        .toast-icon {
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+
+        .toast-msg {
+          flex: 1;
+          line-height: 1.4;
+          word-break: break-all;
+        }
+
+        .toast-close-btn {
+          border: none;
+          background: none;
+          color: var(--text-muted);
+          font-size: 18px;
+          cursor: pointer;
+          padding: 0 4px;
+          line-height: 1;
+          border-radius: 4px;
+          transition: color var(--transition-fast);
+        }
+
+        .toast-close-btn:hover {
+          color: var(--text-primary);
+        }
+
+        @keyframes toast-slide-in {
+          from {
+            opacity: 0;
+            transform: translateX(24px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
         }
       `}</style>
     </div>

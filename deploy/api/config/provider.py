@@ -22,3 +22,9 @@ class ProviderSettings(BaseModel):
     degrade_threshold: int = 3
     recover_interval: int = 300
     default_model: str = "default"
+    # 自适应注册退避配置
+    reg_backoff_cf: float = 30.0
+    reg_backoff_email: float = 60.0
+    reg_backoff_ip: float = 120.0
+    reg_backoff_transient_base: float = 2.0
+    reg_backoff_transient_max: float = 30.0

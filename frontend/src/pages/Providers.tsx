@@ -17,12 +17,35 @@ export function ProvidersPage() {
 
   if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
   if (loading && !data) {
-    return <div className="prov-grid"><Skeleton lines={2} height={110} /><Skeleton lines={2} height={110} /></div>;
+    return (
+      <div className="providers-container">
+        <div className="page-header">
+          <h1 className="page-title">提供商集群状态</h1>
+        </div>
+        <div className="prov-grid">
+          <Skeleton lines={3} height={140} />
+          <Skeleton lines={3} height={140} />
+          <Skeleton lines={3} height={140} />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h1 style={{ fontSize: 22, marginBottom: 20 }}>提供商状态</h1>
+    <div className="providers-container">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            提供商集群状态
+            <span className="title-badge">{providers.length} 个可用上游</span>
+          </h1>
+          <p className="page-desc">各上游 AI 生图提供商健康度、模型目录、额度余额及官网快捷直达</p>
+        </div>
+        <button onClick={reload} className="tf-btn tf-btn-secondary">
+          <span>🔄</span> 刷新状态
+        </button>
+      </div>
+
       <div className="prov-grid">
         {providers.map(({ prefix, summary }) => (
           <ProviderCard
@@ -36,10 +59,25 @@ export function ProvidersPage() {
             credits={summary.credits}
           />
         ))}
-        {!providers.length && !loading && <Empty text="暂无数据" hint="后端未注册任何提供商" />}
+        {!providers.length && !loading && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Empty text="未检测到已注册提供商" hint="后端暂未加载任何上游提供商适配器" />
+          </div>
+        )}
       </div>
+
       <style>{`
-        .prov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+        .providers-container {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .prov-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 16px;
+        }
       `}</style>
     </div>
   );

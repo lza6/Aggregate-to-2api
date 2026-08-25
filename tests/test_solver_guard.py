@@ -64,7 +64,7 @@ class TestStats:
         assert g.snapshot()["rejected_total"] == 2
 
     def test_reason_categories_are_known(self):
-        assert set(REASON_CATEGORIES) == {"timeout", "transport", "http_error", "solver_rejected", "other"}
+        assert set(REASON_CATEGORIES) == {"timeout", "transport", "http_error", "rate_limit", "solver_rejected", "other"}
 
 
 # ── 熔断状态机 ────────────────────────────────────
@@ -131,3 +131,80 @@ class TestCircuit:
         assert g.consecutive_failures == 0
         assert g.snapshot()["solve_success_total"] == 1
         assert g.snapshot()["solve_failure_total"] == 2
+
+
+# ── 集群与分布式节点调度 (Federation & 429 Failover) ────────
+class TestClusterFederation:
+    def test_multi_node_initialization_and_snapshot(self):
+        urls = ["http://solver-1:8001", "http://solver-2:8001"]
+        weights = {"http://solver-1:8001": 2, "http://solver-2:8001": 1}
+        g = SolverGuard(urls=urls, weights=weights, circuit_threshold=3)
+        snap = g.snapshot()
+        assert snap["node_count"] == 2
+        assert snap["healthy_node_count"] == 2
+        assert len(snap["nodes"]) == 2
+        nodes_by_url = {n["url"]: n for n in snap["nodes"]}
+        assert nodes_by_url["http://solver-1:8001"]["weight"] == 2
+        assert nodes_by_url["http://solver-2:8001"]["weight"] == 1
+
+    def test_least_inflight_weighted_selection(self):
+        urls = ["http://solver-1:8001", "http://solver-2:8001"]
+        weights = {"http://solver-1:8001": 1, "http://solver-2:8001": 2}
+        g = SolverGuard(urls=urls, weights=weights)
+
+        node1 = g._nodes["http://solver-1:8001"]
+        node2 = g._nodes["http://solver-2:8001"]
+
+        # node1 inflight = 1 (score 1/1=1.0), node2 inflight = 1 (score 1/2=0.5) -> should select node2
+        node1.acquire_inflight()
+        node2.acquire_inflight()
+
+        selected = g.select_node()
+        assert selected is not None
+        assert selected.url == "http://solver-2:8001"
+
+    def test_single_node_429_rate_limit_circuit_break(self):
+        urls = ["http://solver-1:8001", "http://solver-2:8001"]
+        g = SolverGuard(urls=urls, circuit_threshold=5, rate_limit_cooldown=10.0)
+
+        # 节点 1 遇到 429
+        g.record_failure("rate_limit", duration_sec=0.5, node_url="http://solver-1:8001")
+
+        snap = g.snapshot()
+        nodes_by_url = {n["url"]: n for n in snap["nodes"]}
+        assert nodes_by_url["http://solver-1:8001"]["rate_limited"] is True
+        assert nodes_by_url["http://solver-1:8001"]["circuit_open"] is True
+        assert nodes_by_url["http://solver-2:8001"]["circuit_open"] is False
+
+        # 集群整体仍可用（因为 solver-2 健康）
+        assert g.allow_solve() is True
+        assert g.circuit_open is False
+        assert snap["solver_status"] == "degraded"
+
+        # 调度应避开 solver-1，只选 solver-2
+        selected = g.select_node()
+        assert selected is not None
+        assert selected.url == "http://solver-2:8001"
+
+    def test_node_consecutive_failure_and_half_open_probe(self):
+        urls = ["http://solver-1:8001"]
+        g = SolverGuard(urls=urls, circuit_threshold=2, probe_interval=0.05)
+
+        g.record_failure("transport", 1.0, node_url="http://solver-1:8001")
+        g.record_failure("transport", 1.0, node_url="http://solver-1:8001")
+
+        assert g.circuit_open is True
+        snap = g.snapshot()
+        assert snap["solver_status"] == "circuit_open"
+
+        # half-open 探测放行
+        assert g.allow_solve() is True
+        assert g.allow_solve() is False
+        time.sleep(0.06)
+        assert g.allow_solve() is True
+
+        # 探测成功恢复
+        g.record_success(0.5, node_url="http://solver-1:8001")
+        assert g.circuit_open is False
+        assert g.snapshot()["solver_status"] == "ok"
+

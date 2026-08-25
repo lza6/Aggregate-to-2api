@@ -14,68 +14,137 @@ export function TasksPage() {
   const tasks: Task[] = data?.items ?? [];
   const total = data?.total ?? 0;
 
-  const statusColor = (s: string) => {
+  const getStatusBadge = (s: string) => {
     switch (s) {
-      case 'completed': return '#10b981';
-      case 'processing': return '#f59e0b';
-      case 'error': return '#ef4444';
-      default: return '#6b7280';
+      case 'completed':
+        return <span className="tf-badge tf-badge-success"><span className="tf-dot" style={{ background: 'var(--success)' }} />已完成</span>;
+      case 'processing':
+        return <span className="tf-badge tf-badge-warning"><span className="tf-dot tf-dot-pulse" style={{ background: 'var(--warning)' }} />处理中</span>;
+      case 'error':
+        return <span className="tf-badge tf-badge-danger"><span className="tf-dot" style={{ background: 'var(--danger)' }} />失败</span>;
+      case 'pending':
+        return <span className="tf-badge tf-badge-info"><span className="tf-dot" style={{ background: 'var(--info)' }} />排队中</span>;
+      default:
+        return <span className="tf-badge tf-badge-neutral">{s}</span>;
     }
   };
 
   if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
 
   return (
-    <div>
-      <h1 style={{ fontSize: 22, marginBottom: 16 }}>任务管理 <span style={{ fontSize: 13, color: '#6b7280' }}>共 {total} 条</span></h1>
-      <div style={{ marginBottom: 12 }}>
-        <select value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d1d5e0', fontSize: 13 }}>
-          <option value="">全部状态</option>
-          <option value="pending">排队中</option>
-          <option value="processing">处理中</option>
-          <option value="completed">已完成</option>
-          <option value="error">失败</option>
-        </select>
+    <div className="tasks-container">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            生成任务管理
+            <span className="title-badge">共 {total} 条记录</span>
+          </h1>
+          <p className="page-desc">查询并监控所有已提交的图像生成请求、提示词、执行状态与耗时</p>
+        </div>
+        <div className="tasks-filter-bar">
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+            className="tf-select"
+            aria-label="按状态过滤"
+          >
+            <option value="">全部状态 (All)</option>
+            <option value="pending">⏳ 排队中 (Pending)</option>
+            <option value="processing">⚡ 处理中 (Processing)</option>
+            <option value="completed">✅ 已完成 (Completed)</option>
+            <option value="error">❌ 失败 (Error)</option>
+          </select>
+          <button onClick={reload} className="tf-btn tf-btn-secondary">
+            <span>🔄</span> 刷新
+          </button>
+        </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>状态</th>
-              <th>模型</th>
-              <th>提示词</th>
-              <th>耗时</th>
-              <th>创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map(t => (
-              <tr key={t.id}>
-                <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.id.slice(0, 8)}</td>
-                <td><span className="status-pill" style={{ background: statusColor(t.status) }}>{t.status}</span></td>
-                <td>{t.model}</td>
-                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.prompt?.slice(0, 40)}</td>
-                <td>{t.duration_sec != null ? `${t.duration_sec.toFixed(1)}s` : '-'}</td>
-                <td style={{ fontSize: 12, color: '#6b7280' }}>{t.created_at ? new Date(t.created_at * 1000).toLocaleString() : '-'}</td>
+
+      <div className="tf-table-container">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tf-table">
+            <thead>
+              <tr>
+                <th>任务 ID</th>
+                <th>运行状态</th>
+                <th>目标模型</th>
+                <th style={{ minWidth: 260 }}>提示词 (Prompt)</th>
+                <th>执行耗时</th>
+                <th>创建时间</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {loading && !data && <Skeleton lines={4} height={14} />}
-        {!loading && !tasks.length && !error && <Empty text="暂无任务" hint="生成请求提交后会出现在这里" />}
+            </thead>
+            <tbody>
+              {tasks.map(t => (
+                <tr key={t.id}>
+                  <td>
+                    <code style={{ fontSize: 11.5, color: 'var(--primary-600)' }}>
+                      {t.id ? t.id.slice(0, 8) : '-'}
+                    </code>
+                  </td>
+                  <td>{getStatusBadge(t.status)}</td>
+                  <td>
+                    <span className="task-model-pill">{t.model}</span>
+                  </td>
+                  <td>
+                    <div className="task-prompt-text" title={t.prompt}>
+                      {t.prompt || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                      {t.duration_sec != null ? `${t.duration_sec.toFixed(1)}s` : '-'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    {t.created_at ? new Date(t.created_at * 1000).toLocaleString() : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {loading && !data && (
+          <div style={{ padding: '16px 20px' }}>
+            <Skeleton lines={5} height={20} />
+          </div>
+        )}
+        {!loading && !tasks.length && !error && (
+          <Empty text="未找到相关任务" hint="提交生成请求后，任务状态将实时在此更新" />
+        )}
       </div>
+
       <style>{`
-        .table-wrap { overflow-x: auto; background: #fff; border-radius: 12px; border: 1px solid #d1d5e0; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 10px 12px; border-bottom: 1px solid #d1d5e0; color: #6b7280; font-weight: 600; font-size: 12px; background: #f8f9fc; }
-        td { padding: 10px 12px; border-bottom: 1px solid #d1d5e0; }
-        tr:last-child td { border-bottom: none; }
-        .status-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; }
-        @media (prefers-color-scheme: dark) {
-          .table-wrap { background: #1e2132; border-color: #2d3050; }
-          th { border-color: #2d3050; color: #8b8fa3; background: #252840; }
-          td { border-color: #2d3050; }
+        .tasks-container {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .tasks-filter-bar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .task-model-pill {
+          display: inline-block;
+          font-size: 11.5px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          background: var(--bg-subtle);
+          border: 1px solid var(--border-default);
+          padding: 2px 8px;
+          border-radius: var(--radius-sm);
+        }
+
+        .task-prompt-text {
+          max-width: 380px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 12.5px;
+          color: var(--text-primary);
         }
       `}</style>
     </div>
