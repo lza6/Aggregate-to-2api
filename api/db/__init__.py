@@ -9,5 +9,6 @@ from __future__ import annotations
 
 from .core import DB
 from .queries import QueueDB, task_to_public
+from .queue_store import QueueStore
 
-__all__ = ["DB", "QueueDB", "task_to_public"]
+__all__ = ["DB", "QueueDB", "QueueStore", "task_to_public"]

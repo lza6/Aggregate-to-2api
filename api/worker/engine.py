@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from .. import config
 from .. import imagefree_client
 from .. import turnstile_client
-from ..db import QueueDB
+from ..db.queue_store import QueueStore
 from ..retry_policy import RetryPolicy
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
@@ -140,9 +140,9 @@ class Engine:
         self._enqueued_at: dict[str, float] = {}
         # ── 持久化队列（IMP-29）─────────────────────────
         self._persistent_queue = config.IF_PERSISTENT_QUEUE_ENABLED
-        self._queue_db: QueueDB | None = None
+        self._queue_db: QueueStore | None = None
         if self._persistent_queue:
-            self._queue_db = QueueDB(config.IF_PERSISTENT_QUEUE_DB)
+            self._queue_db = QueueStore(config.IF_PERSISTENT_QUEUE_DB)
 
     # ── 生命周期 ──────────────────────────────────
     async def start(self) -> None:
@@ -158,7 +158,7 @@ class Engine:
             self._auto_scaler_task = asyncio.create_task(self._auto_scale_loop())
         # ── 持久化队列恢复（IMP-29）─────────────────────
         if self._persistent_queue and self._queue_db:
-            restored = self._resume_from_queue()
+            restored = await self._resume_from_queue()
             log.info("持久化队列恢复: %d 个待消费任务续跑", restored)
         log.info("引擎启动: workers=%d token_pool=%d 队列上限=%d auto_scale=%s batch=%s",
                  config.WORKERS, config.TOKEN_POOL_SIZE, config.MAX_QUEUE,
@@ -193,15 +193,6 @@ class Engine:
         """
         task_id = str(uuid.uuid4())
         await self.db.create_request(task_id, prompt, aspect_ratio, download, "txt", model)
-        # v4.2: SSE 事件 - 任务已入队（含队列位置）
-        try:
-            pos = self.queue.qsize() + 1
-            from .sse_events import publish_task_event
-            publish_task_event(task_id, "status", {
-                "task_id": task_id, "status": "pending", "queue_pos": pos,
-            })
-        except Exception:
-            pass
         limits = {0: config.ADMIN_QUEUE_MAX, 1: config.HIGH_QUEUE_MAX, 2: config.NORMAL_QUEUE_MAX}
         try:
             if config.IF_WORKER_BATCH_ENABLED and self.queue.is_full(priority):
@@ -212,7 +203,17 @@ class Engine:
             self._enqueued_at[task_id] = time.monotonic()
             # IMP-29: 持久化队列写入
             if self._persistent_queue and self._queue_db:
-                self._queue_db.enqueue(task_id, priority, seq)
+                await self._queue_db.enqueue(task_id, priority, seq)
+            # v4.2: SSE 事件 - 任务已入队（带精确队列位置和优先级）
+            try:
+                pos = self.queue.qsize() + 1
+                from .sse_events import publish_task_event
+                publish_task_event(task_id, "status", {
+                    "task_id": task_id, "status": "pending", "queue_pos": pos,
+                    "priority": priority,
+                })
+            except Exception:
+                pass
         except asyncio.QueueFull:
             await self.db.mark_finished(task_id, "error", None, "queue_full", None)
             raise QueueFull("服务器繁忙，请稍后重试")
@@ -241,7 +242,7 @@ class Engine:
             await self.db.mark_finished(task_id, "error", None, "requeue_failed: queue_full", None)
             return False
         if self._persistent_queue and self._queue_db:
-            self._queue_db.enqueue(task_id, 2, seq)
+            await self._queue_db.enqueue(task_id, 2, seq)
         log.info("DLQ 重入队: task %s 已放回 normal 队列", task_id)
         return True
 
@@ -260,12 +261,12 @@ class Engine:
                     "duration_sec": None, "type": "txt", "model": "default"}
         return t
 
-    def _resume_from_queue(self) -> int:
+    async def _resume_from_queue(self) -> int:
         """持久化队列恢复：从 task_queue 读取 pending 任务，按 priority/seq 排序后重新入队。
         返回恢复的任务数。"""
         if not self._queue_db:
             return 0
-        pending = self._queue_db.list_pending()
+        pending = await self._queue_db.list_pending()
         if not pending:
             return 0
         for priority, seq, task_id in pending:
@@ -362,12 +363,12 @@ class Engine:
                         await self.db.mark_finished(tid, "error", None,
                                               f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                         if self._persistent_queue and self._queue_db:
-                            self._queue_db.mark_completed(tid)
+                            await self._queue_db.mark_completed(tid)
                     elif isinstance(result, Exception):
                         log.exception("batch 任务执行异常 %s", tid)
                         await self.db.mark_finished(tid, "error", None, f"{result}", None)
                         if self._persistent_queue and self._queue_db:
-                            self._queue_db.mark_completed(tid)
+                            await self._queue_db.mark_completed(tid)
             except asyncio.TimeoutError:
                 log.error("batch 整体硬超时（%ss），强制回收 %d 个任务",
                           config.TASK_HARD_TIMEOUT, len(tasks))
@@ -375,7 +376,7 @@ class Engine:
                     await self.db.mark_finished(tid, "error", None,
                                           f"批量生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                     if self._persistent_queue and self._queue_db:
-                        self._queue_db.mark_completed(tid)
+                        await self._queue_db.mark_completed(tid)
             except asyncio.CancelledError:
                 raise
             finally:
@@ -413,7 +414,7 @@ class Engine:
                 await self.db.mark_finished(task_id, "error", None,
                                       f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                 if self._persistent_queue and self._queue_db:
-                    self._queue_db.mark_completed(task_id)
+                    await self._queue_db.mark_completed(task_id)
             except asyncio.CancelledError:
                 log.info("worker[%d] 任务执行中被取消，清理状态", idx)
                 raise
@@ -421,7 +422,7 @@ class Engine:
                 log.exception("任务执行异常 %s", task_id)
                 await self.db.mark_finished(task_id, "error", None, f"{e}", None)
                 if self._persistent_queue and self._queue_db:
-                    self._queue_db.mark_completed(task_id)
+                    await self._queue_db.mark_completed(task_id)
             finally:
                 self.processing -= 1
                 self._queue_counts[priority] = max(0, self._queue_counts.get(priority, 0) - 1)
@@ -506,7 +507,7 @@ class Engine:
             pass
         # IMP-29: 持久化队列标记 processing
         if self._persistent_queue and self._queue_db:
-            self._queue_db.mark_processing(task_id)
+            await self._queue_db.mark_processing(task_id)
         t0 = time.monotonic()
         last_error: str | None = None
         # S-4: 慢日志画像阶段计时（queue_ms = worker 取走 → 开始处理）
@@ -626,7 +627,7 @@ class Engine:
         # _finish 不再直接调用 publish_task_event，避免 worker.py:936 与 dispatch.py:140 双重发布。
         # IMP-29: 持久化队列标记终态
         if self._persistent_queue and self._queue_db:
-            self._queue_db.mark_completed(task_id)
+            await self._queue_db.mark_completed(task_id)
         # IMP-11: 出图成功 → 失效画廊缓存，下次请求重新查询 DB
         # 使用懒导入避免循环依赖（worker → main → worker）
         try:
