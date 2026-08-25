@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     edit_mutex_enabled: bool = Field(
         True, validation_alias="IF_EDIT_MUTEX_ENABLED"
     )
+    edit_lease_enabled: bool = Field(
+        False, validation_alias="IF_EDIT_LEASE_ENABLED"
+    )
+    edit_lease_ttl: int = Field(
+        30, validation_alias="IF_EDIT_LEASE_TTL"
+    )
     edit_lock_max_age: int = Field(
         1500, validation_alias="IF_EDIT_LOCK_MAX_AGE"
     )
@@ -357,6 +363,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "edit_mutex_enabled",
+        "edit_lease_enabled",
         "if_worker_auto",
         "if_persistent_queue_enabled",
         "if_health_check_enabled",
@@ -522,6 +529,8 @@ class Settings(BaseSettings):
             task_hard_timeout=self.task_hard_timeout,
             edit_concurrency_wait=self.edit_concurrency_wait,
             edit_mutex_enabled=self.edit_mutex_enabled,
+            edit_lease_enabled=self.edit_lease_enabled,
+            edit_lease_ttl=self.edit_lease_ttl,
             edit_lock_max_age=self.edit_lock_max_age,
             edit_retry_max=self.edit_retry_max,
             edit_retry_interval=self.edit_retry_interval,
@@ -685,6 +694,8 @@ EDIT_TIMEOUT = settings.edit_timeout
 TASK_HARD_TIMEOUT = settings.task_hard_timeout
 EDIT_CONCURRENCY_WAIT = settings.edit_concurrency_wait
 EDIT_MUTEX_ENABLED = settings.edit_mutex_enabled
+EDIT_LEASE_ENABLED = settings.edit_lease_enabled
+EDIT_LEASE_TTL = settings.edit_lease_ttl
 EDIT_LOCK_MAX_AGE = settings.edit_lock_max_age
 EDIT_RETRY_MAX = settings.edit_retry_max
 EDIT_RETRY_INTERVAL = settings.edit_retry_interval
@@ -899,6 +910,8 @@ __all__ = [
     "TASK_HARD_TIMEOUT",
     "EDIT_CONCURRENCY_WAIT",
     "EDIT_MUTEX_ENABLED",
+    "EDIT_LEASE_ENABLED",
+    "EDIT_LEASE_TTL",
     "EDIT_LOCK_MAX_AGE",
     "EDIT_RETRY_MAX",
     "EDIT_RETRY_INTERVAL",
