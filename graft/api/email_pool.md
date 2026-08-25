@@ -39,14 +39,14 @@
 - __init__ · method · L704-L709 — def __init__(self) -> None
 - new_address · method · L711-L714 — async def new_address(self) -> tuple[str, dict]
 - fetch_mails · method · L716-L723 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L727-L955 — class EmailPool
-- __init__ · method · L749-L766 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
-- _init_schema · method · L768-L788 — def _init_schema(self) -> None
-- _load_used · method · L790-L792 — def _load_used(self) -> set[str]
-- _find_source · method · L794-L799 — def _find_source(self, name: str) -> BaseMailSource | None
-- get_sources · method · L801-L803 — def get_sources(self) -> list[BaseMailSource]
-- allocate · method · L806-L867 — async def allocate( self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None, ) -> tuple[str, dict]
-- wait_for_mail · method · L870-L896 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
-- record · method · L899-L926 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
-- registered_providers · method · L928-L930 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L932-L955 — def stats(self) -> dict
+- EmailPool · class · L727-L962 — class EmailPool
+- __init__ · method · L749-L773 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
+- _init_schema · method · L775-L795 — def _init_schema(self) -> None
+- _load_used · method · L797-L799 — def _load_used(self) -> set[str]
+- _find_source · method · L801-L806 — def _find_source(self, name: str) -> BaseMailSource | None
+- get_sources · method · L808-L810 — def get_sources(self) -> list[BaseMailSource]
+- allocate · method · L813-L874 — async def allocate( self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None, ) -> tuple[str, dict]
+- wait_for_mail · method · L877-L903 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
+- record · method · L906-L933 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
+- registered_providers · method · L935-L937 — def registered_providers(self, email: str) -> list[str]
+- stats · method · L939-L962 — def stats(self) -> dict

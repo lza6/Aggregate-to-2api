@@ -18,7 +18,7 @@ from .models import EditRequest, TaskInfo
 from .meta import db, engine, registry, gallery_cache
 from .errors import AppError, ErrorCodes
 from .db import task_to_public
-from .dispatch import _normalize_model, _provider_prefix, _parse_input_image, _parse_input_images, _validate_model, _PROVIDER_TASKS
+from .dispatch import _normalize_model, _provider_prefix, _parse_input_image, _parse_input_images, _validate_model, _PROVIDER_TASKS, _provider_sem
 from .db.lease_store import LeaseStore
 
 log = logging.getLogger("dispatch_edit")
@@ -198,7 +198,6 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
         # P0-3: imagefree 图生图 task 加入 _PROVIDER_TASKS 托盘，确保 shutdown 可优雅取消
         t = asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download,
                                           model.split("/", 1)[-1]))
-        from .dispatch import _PROVIDER_TASKS
         _PROVIDER_TASKS.add(t)
         t.add_done_callback(_PROVIDER_TASKS.discard)
         return job_id
@@ -211,8 +210,9 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
 
     async def _run() -> None:
         try:
-            res = await provider.generate(model, prompt, "1:1", images=[image_bytes],
-                                          resolution="1K", download=download)
+            async with _provider_sem(provider.prefix):
+                res = await provider.generate(model, prompt, "1:1", images=[image_bytes],
+                                              resolution="1K", download=download)
             if res.proxy_used:
                 await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
@@ -234,6 +234,11 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
                     pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
+            try:
+                registry.adaptive_router.record_result(
+                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+            except Exception:
+                pass
             log.exception("提供商图生图异常 %s", job_id)
 
     t = asyncio.create_task(_run())
@@ -254,8 +259,9 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
 
     async def _run() -> None:
         try:
-            res = await provider.generate(model, prompt, "1:1", images=image_bytes_list,
-                                          resolution="1K", download=download)
+            async with _provider_sem(provider.prefix):
+                res = await provider.generate(model, prompt, "1:1", images=image_bytes_list,
+                                              resolution="1K", download=download)
             if res.proxy_used:
                 await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
@@ -277,6 +283,11 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
                     pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
+            try:
+                registry.adaptive_router.record_result(
+                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+            except Exception:
+                pass
             log.exception("提供商多图图生图异常 %s", job_id)
 
     t = asyncio.create_task(_run())
