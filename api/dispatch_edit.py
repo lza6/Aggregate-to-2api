@@ -184,7 +184,7 @@ class _EditProxyPool:
 
 
 _EDIT_PROXY_POOL = _EditProxyPool()
-_EDIT_LEASE_STORE = LeaseStore(os.path.join(os.path.dirname(config.DB_FILE) or ".", "data", "edit_leases.db"))
+_EDIT_LEASE_STORE = LeaseStore(os.path.join(os.path.dirname(config.DB_FILE) or ".", "edit_leases.db"))
 
 
 # ── 图生图路由 ──

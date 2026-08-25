@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     edit_mutex_enabled: bool = Field(
         True, validation_alias="IF_EDIT_MUTEX_ENABLED"
     )
+    edit_lease_enabled: bool = Field(
+        False, validation_alias="IF_EDIT_LEASE_ENABLED"
+    )
+    edit_lease_ttl: int = Field(
+        30, validation_alias="IF_EDIT_LEASE_TTL"
+    )
     edit_lock_max_age: int = Field(
         1500, validation_alias="IF_EDIT_LOCK_MAX_AGE"
     )
@@ -329,6 +335,11 @@ class Settings(BaseSettings):
     default_model: str = Field(
         "default", validation_alias="IF_DEFAULT_MODEL"
     )
+    reg_backoff_cf: float = Field(30.0, validation_alias="IF_REG_BACKOFF_CF")
+    reg_backoff_email: float = Field(60.0, validation_alias="IF_REG_BACKOFF_EMAIL")
+    reg_backoff_ip: float = Field(120.0, validation_alias="IF_REG_BACKOFF_IP")
+    reg_backoff_transient_base: float = Field(2.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_BASE")
+    reg_backoff_transient_max: float = Field(30.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_MAX")
 
     # ── 分组配置（延迟初始化，由 model_validator 填充）───────────────
     _db: DBSettings | None = None
@@ -352,6 +363,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "edit_mutex_enabled",
+        "edit_lease_enabled",
         "if_worker_auto",
         "if_persistent_queue_enabled",
         "if_health_check_enabled",
@@ -478,6 +490,11 @@ class Settings(BaseSettings):
             degrade_threshold=self.if_provider_degrade_threshold,
             recover_interval=self.if_provider_recover_interval,
             default_model=self.default_model,
+            reg_backoff_cf=self.reg_backoff_cf,
+            reg_backoff_email=self.reg_backoff_email,
+            reg_backoff_ip=self.reg_backoff_ip,
+            reg_backoff_transient_base=self.reg_backoff_transient_base,
+            reg_backoff_transient_max=self.reg_backoff_transient_max,
         )
         self._pool = PoolSettings(
             token_pool_size=self.token_pool_size,
@@ -512,6 +529,8 @@ class Settings(BaseSettings):
             task_hard_timeout=self.task_hard_timeout,
             edit_concurrency_wait=self.edit_concurrency_wait,
             edit_mutex_enabled=self.edit_mutex_enabled,
+            edit_lease_enabled=self.edit_lease_enabled,
+            edit_lease_ttl=self.edit_lease_ttl,
             edit_lock_max_age=self.edit_lock_max_age,
             edit_retry_max=self.edit_retry_max,
             edit_retry_interval=self.edit_retry_interval,
@@ -675,6 +694,8 @@ EDIT_TIMEOUT = settings.edit_timeout
 TASK_HARD_TIMEOUT = settings.task_hard_timeout
 EDIT_CONCURRENCY_WAIT = settings.edit_concurrency_wait
 EDIT_MUTEX_ENABLED = settings.edit_mutex_enabled
+EDIT_LEASE_ENABLED = settings.edit_lease_enabled
+EDIT_LEASE_TTL = settings.edit_lease_ttl
 EDIT_LOCK_MAX_AGE = settings.edit_lock_max_age
 EDIT_RETRY_MAX = settings.edit_retry_max
 EDIT_RETRY_INTERVAL = settings.edit_retry_interval
@@ -775,6 +796,11 @@ IF_SLOW_LOG_ENABLED = settings.if_slow_log_enabled
 IF_SLOW_REQUEST_MS = settings.if_slow_request_ms
 IF_SLOW_LOG_SIZE = settings.if_slow_log_size
 DEFAULT_MODEL = settings.default_model
+REG_BACKOFF_CF = settings.reg_backoff_cf
+REG_BACKOFF_EMAIL = settings.reg_backoff_email
+REG_BACKOFF_IP = settings.reg_backoff_ip
+REG_BACKOFF_TRANSIENT_BASE = settings.reg_backoff_transient_base
+REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
 
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
@@ -884,6 +910,8 @@ __all__ = [
     "TASK_HARD_TIMEOUT",
     "EDIT_CONCURRENCY_WAIT",
     "EDIT_MUTEX_ENABLED",
+    "EDIT_LEASE_ENABLED",
+    "EDIT_LEASE_TTL",
     "EDIT_LOCK_MAX_AGE",
     "EDIT_RETRY_MAX",
     "EDIT_RETRY_INTERVAL",

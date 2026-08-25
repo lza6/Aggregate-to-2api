@@ -1,7 +1,7 @@
 """EditSettings 子配置。"""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EditSettings(BaseModel):
@@ -11,6 +11,12 @@ class EditSettings(BaseModel):
     task_hard_timeout: int = 480
     edit_concurrency_wait: int = 60
     edit_mutex_enabled: bool = True
+    edit_lease_enabled: bool = Field(
+        False, validation_alias="IF_EDIT_LEASE_ENABLED"
+    )
+    edit_lease_ttl: int = Field(
+        30, validation_alias="IF_EDIT_LEASE_TTL"
+    )
     edit_lock_max_age: int = 1500
     edit_retry_max: int = 30
     edit_retry_interval: int = 20

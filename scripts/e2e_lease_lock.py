@@ -18,7 +18,7 @@ os.environ.setdefault("IF_MOCK_REGISTER", "1")
 os.environ["IF_EDIT_LEASE_ENABLED"] = "1"
 
 from api import config
-from api.dispatch_edit import _acquire_edit_lock, _release_edit_lock
+from api.dispatch_edit import _acquire_edit_lock, _EDIT_LEASE_STORE, _release_edit_lock
 
 
 async def main() -> None:
@@ -48,6 +48,8 @@ async def main() -> None:
 
     print(f"[OK] 异常宕机后锁自动过期，holder D 获取锁: {tok_e[:8]}")
     print("E2E 租约锁验证全部通过 [OK]")
+    # 关闭租约锁连接，让 asyncio.run 能干净退出（否则 aiosqlite 线程使 shutdown 挂起）
+    await _EDIT_LEASE_STORE.close()
 
 
 if __name__ == "__main__":
