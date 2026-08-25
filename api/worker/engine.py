@@ -178,6 +178,8 @@ class Engine:
             tasks.append(self._auto_scaler_task)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if self._queue_db:
+            await self._queue_db.close()
 
     # ── 入口 ──────────────────────────────────────
     async def submit(self, prompt: str, aspect_ratio: str, download: bool,
@@ -206,7 +208,7 @@ class Engine:
                 await self._queue_db.enqueue(task_id, priority, seq)
             # v4.2: SSE 事件 - 任务已入队（带精确队列位置和优先级）
             try:
-                pos = self.queue.qsize() + 1
+                pos = self.queue.qsize()
                 from .sse_events import publish_task_event
                 publish_task_event(task_id, "status", {
                     "task_id": task_id, "status": "pending", "queue_pos": pos,

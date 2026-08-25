@@ -80,3 +80,12 @@ class QueueStore:
             " ORDER BY priority ASC, seq ASC")
         rows = await cur.fetchall()
         return [(r["priority"], r["seq"], r["task_id"]) for r in rows]
+
+    async def cleanup(self, retention_days: int = 7) -> dict:
+        """清理超期 pending 记录，返回删除数。"""
+        await self.open()
+        cutoff = time.time() - retention_days * 86400
+        cur = await self._conn.execute(
+            "DELETE FROM task_queue WHERE status='pending' AND created_at < ?", (cutoff,))
+        await self._conn.commit()
+        return {"deleted": cur.rowcount}

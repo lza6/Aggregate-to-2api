@@ -214,6 +214,28 @@ class TestQueueStore:
         finally:
             self._cleanup(path)
 
+    @pytest.mark.asyncio
+    async def test_cleanup_deletes_expired_pending(self):
+        """cleanup 删除超期 pending 记录，保留未超期及新任务。"""
+        store, path = self._make_store()
+        try:
+            await store.enqueue("old", 2, 1)
+            # 直接篡改 created_at 使其超过 7 天保留期
+            cutoff = time.time() - 8 * 86400
+            cur = await store._conn.execute(
+                "UPDATE task_queue SET created_at=? WHERE task_id='old'", (cutoff,))
+            await store._conn.commit()
+            assert cur.rowcount == 1
+            await store.enqueue("new", 2, 2)
+
+            res = await store.cleanup(retention_days=7)
+            assert res["deleted"] == 1
+            pending = await store.list_pending()
+            assert [p[2] for p in pending] == ["new"]
+        finally:
+            await store.close()
+            self._cleanup(path)
+
 
 class _DBStub:
     """最小 DB 替身（同 test_priority_queue.py，async 化以匹配 DB 迁移）。"""

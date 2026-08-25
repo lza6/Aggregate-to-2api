@@ -51,7 +51,7 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                 if nc:
                     log.info("缓存表周期清理: 删除 %d 个过期条目", nc)
                 if config.IF_PERSISTENT_QUEUE_ENABLED and _engine._queue_db:
-                    nq = _engine._queue_db.cleanup()
+                    nq = await _engine._queue_db.cleanup()
                     if nq.get("deleted"):
                         log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
                 snap = engine.snapshot()
