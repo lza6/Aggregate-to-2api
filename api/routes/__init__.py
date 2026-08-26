@@ -8,6 +8,7 @@ from . import health
 from . import tasks
 from . import generate
 from . import admin
+from . import chat
 
 # ── 注册所有路由 ──
 api_router = APIRouter()

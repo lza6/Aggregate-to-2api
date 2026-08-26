@@ -39,7 +39,7 @@
 - __init__ · method · L720-L725 — def __init__(self) -> None
 - new_address · method · L727-L730 — async def new_address(self) -> tuple[str, dict]
 - fetch_mails · method · L732-L739 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L743-L993 — class EmailPool
+- EmailPool · class · L743-L1001 — class EmailPool
 - __init__ · method · L765-L789 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
 - _init_schema · method · L791-L811 — def _init_schema(self) -> None
 - _load_used · method · L813-L815 — def _load_used(self) -> set[str]
@@ -50,4 +50,4 @@
 - wait_for_mail · method · L908-L934 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
 - record · method · L937-L964 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
 - registered_providers · method · L966-L968 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L970-L993 — def stats(self) -> dict
+- stats · method · L970-L1001 — def stats(self) -> dict

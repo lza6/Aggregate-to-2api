@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining } from '../api';
 import { StatCard } from '../components/StatCard';
 import { BarChart } from '../components/BarChart';
 import { Gallery } from '../components/Gallery';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec } from '../api';
+import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining } from '../api';
 
 const PWD_KEY = 'galleryPwd';
 
 declare global { interface Window { __galleryChangePassword?: (pwd: string) => void } }
+
+/** Token 数短格式化（1234567 -> 1.2M / 3456 -> 3.5k） */
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
 
 export function Dashboard() {
   const { data: stats, loading, error, reload } = useApi<Stats>(() => fetchStats(), { intervalMs: 5000 });
@@ -19,6 +27,8 @@ export function Dashboard() {
     { intervalMs: 15000 },
   );
   const { data: sys } = useApi<SystemSpec>(() => fetchSystemSpec(), { intervalMs: 60000 });
+  const { data: chatUsage } = useApi<ChatUsageStats>(() => fetchChatUsage('24h'), { intervalMs: 15000 });
+  const { data: chatRemaining } = useApi<ChatRemaining>(() => fetchChatRemaining(), { intervalMs: 15000 });
   const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -37,6 +47,10 @@ export function Dashboard() {
   const dailyChart = stats?.daily?.map(d => ({
     name: (d.day ?? '').slice(5),
     value: d.images,
+  })) ?? [];
+  const chatModelChart = chatUsage?.by_model?.map(item => ({
+    name: item.model.split('/').pop() || item.model,
+    value: item.calls,
   })) ?? [];
 
   if (error && !stats) {
@@ -114,7 +128,32 @@ export function Dashboard() {
         />
       </div>
 
-      {/* 诊断提示 */}
+      {/* AI 聊天服务 */}
+      <div className="section-block">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">💬 AI 聊天服务</h2>
+            <span className="section-sub">聊天调用、Token 消耗与实时额度概览</span>
+          </div>
+        </div>
+        <div className="stats-grid">
+          <StatCard label="聊天调用（24h）" value={chatUsage?.total_calls ?? '-'} icon="💬" />
+          <StatCard
+            label="Token 消耗（24h）"
+            value={chatUsage ? formatTokens(chatUsage.prompt_tokens + chatUsage.completion_tokens) : '-'}
+            sub={chatUsage ? `推理 ${formatTokens(chatUsage.reasoning_tokens)}` : undefined}
+            icon="📝"
+          />
+          <StatCard
+            label="当前可用额度"
+            value={chatRemaining?.remaining ?? '-'}
+            sub={chatRemaining ? `${chatRemaining.available_proxies} 个出口 × ${chatRemaining.calls_per_proxy_per_hour}/时` : undefined}
+            color={chatRemaining ? (chatRemaining.remaining > 0 ? 'var(--success)' : 'var(--danger)') : undefined}
+            icon="🔋"
+          />
+          <StatCard label="工具调用（24h）" value={chatUsage?.tool_calls ?? '-'} icon="🔧" />
+        </div>
+      </div>
       {diagError && (
         <div className="diag-notice tf-card">
           <span>ℹ️</span> 诊断指标轮询降级（不影响核心生成）: {diagError.message}
@@ -142,6 +181,19 @@ export function Dashboard() {
             <p className="empty-text">暂无趋势数据</p>
             <span className="empty-hint">生成作品后，出图趋势将在此展示</span>
           </div>
+        </div>
+      )}
+
+      {chatModelChart.length > 0 && (
+        <div className="section-block">
+          <BarChart
+            data={chatModelChart}
+            title="近 24h 各模型调用分布"
+            sub="按聊天模型统计调用次数"
+            unit="次"
+            metricLabel="调用量"
+            height={170}
+          />
         </div>
       )}
 

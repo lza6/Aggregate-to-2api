@@ -6,7 +6,7 @@
 - __init__ · method · L78-L83 — def __init__(self, email: str)
 - update_result · method · L85-L94 — def update_result(self, duration_ms: float, is_success: bool)
 - score · method · L96-L100 — def score(self) -> float
-- AccountPool · class · L103-L621 — class AccountPool
+- AccountPool · class · L103-L672 — class AccountPool
 - __init__ · method · L104-L121 — def __init__(self, db_path: str = DB_FILE) -> None
 - get_adaptive · method · L123-L134 — def get_adaptive(self, provider: str) -> dict | None
 - _get_or_create_score · method · L136-L139 — def _get_or_create_score(self, email: str) -> AdaptiveAccountScore
@@ -21,16 +21,17 @@
 - lease · method · L333-L354 — async def lease(self, provider: str, prefer_email: str | None = None) -> AsyncGenerator[dict | None, None]
 - add · method · L358-L368 — def add(self, provider: str, email: str, cookie: str, password: str | None = None, credits: int = 0, status: str = "ok", note: str = "", register_ip: str = "") -> None
 - list · method · L370-L389 — def list(self, provider: str | None = None, status: str | None = None) -> list[dict]
-- get · method · L391-L398 — def get(self, provider: str) -> list[dict]
-- update_credits · method · L400-L404 — def update_credits(self, provider: str, email: str, credits: int) -> None
-- mark · method · L406-L413 — def mark(self, provider: str, email: str, status: str, note: str = "") -> None
-- set_checkin · method · L415-L419 — def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
-- counts · method · L421-L448 — def counts(self) -> dict
-- total_credits · method · L450-L455 — def total_credits(self, provider: str) -> int
-- start · method · L458-L466 — async def start(self) -> None: # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
-- _autoreg_enabled · method · L469-L470 — def _autoreg_enabled(provider: str) -> bool
-- stop · method · L472-L477 — async def stop(self) -> None
-- _cooling_wake_loop · method · L479-L490 — async def _cooling_wake_loop(self) -> None
-- _autoregister_loop · method · L492-L532 — async def _autoregister_loop(self, provider: str) -> None
-- _daily_checkin_loop · method · L534-L583 — async def _daily_checkin_loop(self, provider: str) -> None
-- dashboard · method · L585-L621 — def dashboard(self) -> dict
+- list_page · method · L391-L428 — def list_page(self, provider: str | None = None, status: str | None = None, page: int = 1, page_size: int = 20, search: str = "") -> dict
+- get · method · L430-L437 — def get(self, provider: str) -> list[dict]
+- update_credits · method · L439-L443 — def update_credits(self, provider: str, email: str, credits: int) -> None
+- mark · method · L445-L452 — def mark(self, provider: str, email: str, status: str, note: str = "") -> None
+- set_checkin · method · L454-L458 — def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
+- counts · method · L460-L487 — def counts(self) -> dict
+- total_credits · method · L489-L494 — def total_credits(self, provider: str) -> int
+- start · method · L497-L505 — async def start(self) -> None: # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
+- _autoreg_enabled · method · L508-L509 — def _autoreg_enabled(provider: str) -> bool
+- stop · method · L511-L516 — async def stop(self) -> None
+- _cooling_wake_loop · method · L518-L529 — async def _cooling_wake_loop(self) -> None
+- _autoregister_loop · method · L531-L571 — async def _autoregister_loop(self, provider: str) -> None
+- _daily_checkin_loop · method · L573-L634 — async def _daily_checkin_loop(self, provider: str) -> None
+- dashboard · method · L636-L672 — def dashboard(self) -> dict

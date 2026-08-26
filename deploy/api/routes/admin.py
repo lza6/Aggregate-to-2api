@@ -66,13 +66,19 @@ async def providers():
 
 
 @router.get("/v1/account-pool")
-async def account_pool_dashboard():
-    """号池看板。"""
+async def account_pool_dashboard(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str = Query("", max_length=128),
+):
+    """号池看板与分页账号明细。"""
     from ..account_pool import account_pool
     from ..email_pool import email_pool
-    raw_list = account_pool.list("nanobanana")
+    page_data = account_pool.list_page(
+        provider="nanobanana", page=page, page_size=page_size, search=search,
+    )
     desensitized = []
-    for item in raw_list:
+    for item in page_data["items"]:
         em = item.get("email", "")
         parts = em.split("@")
         safe_em = (parts[0][:3] + "***@" + parts[1]) if len(parts) == 2 else em
@@ -88,6 +94,10 @@ async def account_pool_dashboard():
         "accounts": account_pool.dashboard(),
         "email_pool": email_pool.stats(),
         "items": desensitized,
+        "items_total": page_data["total"],
+        "page": page_data["page"],
+        "page_size": page_data["page_size"],
+        "total_pages": page_data["total_pages"],
     }
 
 

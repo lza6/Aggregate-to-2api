@@ -24,8 +24,17 @@ interface AccountItem {
 
 interface AccountPoolData {
   accounts: Record<string, ProviderPoolStats>;
-  email_pool: { total_registered: number; by_provider: Record<string, number> };
+  email_pool: {
+    total_registered: number;
+    by_provider: Record<string, number>;
+    successful_registrations?: number;
+    failed_registrations?: number;
+  };
   items?: AccountItem[];
+  items_total?: number;
+  total_pages?: number;
+  page?: number;
+  page_size?: number;
 }
 
 const PROVIDER_META: Record<string, { name: string; note: string }> = {
@@ -94,10 +103,21 @@ function PoolCard({ prefix, stats }: { prefix: string; stats: ProviderPoolStats 
 }
 
 export function AccountsPage() {
-  const { data, loading, error, reload } = useApi<AccountPoolData>(() => fetchAccountPool(), { intervalMs: 10000 });
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const { data, loading, error, reload } = useApi<AccountPoolData>(
+    () => fetchAccountPool({ page, pageSize, search: filter }),
+    { intervalMs: 10000 },
+  );
+
+  // Hooks 必须在条件 return 之前调用；筛选/页大小变化后回到第一页并刷新
+  useEffect(() => {
+    setPage(1);
+  }, [filter, pageSize]);
+  useEffect(() => {
+    void reload();
+  }, [page, filter, pageSize, reload]);
 
   if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
   if (loading && !data) {
@@ -114,16 +134,10 @@ export function AccountsPage() {
   }
 
   const entries = Object.entries(data?.accounts ?? {}).filter(([prefix]) => ACTIVE_PROVIDERS.has(prefix));
-  const rawItems = data?.items ?? [];
-  const filtered = filter
-    ? rawItems.filter(i => i.email.toLowerCase().includes(filter.toLowerCase()) || i.status.includes(filter))
-    : rawItems;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalItems = data?.items_total ?? 0;
+  const totalPages = Math.max(1, data?.total_pages ?? 1);
   const safePage = Math.min(page, totalPages);
-  const pagedItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  // 当搜索或数据变化时重置到第1页
-  useEffect(() => setPage(1), [filter, rawItems.length]);
+  const pagedItems = data?.items ?? [];
 
   return (
     <div className="accounts-page-container">
@@ -131,7 +145,7 @@ export function AccountsPage() {
         <div>
           <h1 className="page-title">
             长效号池管理
-            <span className="title-badge">{rawItems.length} 个活跃账号</span>
+            <span className="title-badge">{totalItems} 个活跃账号</span>
           </h1>
           <p className="page-desc">各平台长效账号自动注册、每日签到续额调度、脱敏活跃明细及邮箱分配</p>
         </div>
@@ -153,7 +167,7 @@ export function AccountsPage() {
         <div className="detail-header">
           <div className="detail-title-group">
             <h3 className="detail-title">👤 入池账号活跃明细</h3>
-            <span className="tf-badge tf-badge-info">{rawItems.length} 个账号总数</span>
+            <span className="tf-badge tf-badge-info">{totalItems} 个账号总数</span>
           </div>
           <div className="detail-search-wrap">
             <input
@@ -253,10 +267,10 @@ export function AccountsPage() {
       </div>
 
       {/* 分页控件 */}
-        {filtered.length > pageSize && (
+        {totalItems > pageSize && (
           <div className="pagination-bar">
             <span className="pagination-info">
-              共 {filtered.length} 条，第 {safePage}/{totalPages} 页
+              共 {totalItems} 条，第 {safePage}/{totalPages} 页
             </span>
             <div className="pagination-controls">
               <button
@@ -305,7 +319,7 @@ export function AccountsPage() {
         <div className="email-pool-section tf-card">
           <div className="email-pool-header">
             <h3 className="email-pool-title">📮 临时邮箱池分配统计</h3>
-            <span className="email-total-tag">已分配总量: {data.email_pool.total_registered} 个</span>
+            <span className="email-total-tag">注册尝试: {data.email_pool.total_registered} · 成功入池: {data.email_pool.successful_registrations ?? 0} · 失败: {data.email_pool.failed_registrations ?? 0}</span>
           </div>
           <div className="email-providers-list">
             {Object.entries(data.email_pool.by_provider ?? {}).map(([prov, n]) => (

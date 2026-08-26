@@ -4,17 +4,23 @@ interface BarChartProps {
   data: { name: string; value: number }[];
   title: string;
   height?: number;
+  /** 可选副标题（默认沿用出图趋势文案） */
+  sub?: string;
+  /** Tooltip 数量单位（默认 '张'） */
+  unit?: string;
+  /** Tooltip 指标名（默认 '出图量'） */
+  metricLabel?: string;
 }
 
 // 自定义高质感 Tooltip
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, unit, metricLabel }: any) {
   if (active && payload && payload.length) {
     return (
       <div className="chart-tooltip">
         <div className="chart-tooltip-date">{label}</div>
         <div className="chart-tooltip-val">
           <span className="chart-tooltip-dot" />
-          出图量：<strong>{payload[0].value}</strong> 张
+          {metricLabel ?? '出图量'}：<strong>{payload[0].value}</strong> {unit ?? '张'}
         </div>
       </div>
     );
@@ -22,13 +28,17 @@ function CustomTooltip({ active, payload, label }: any) {
   return null;
 }
 
-export function BarChart({ data, title, height = 220 }: BarChartProps) {
+export function BarChart({ data, title, height = 220, sub, unit, metricLabel }: BarChartProps) {
   return (
     <div className="chart-card-modern tf-card">
       <div className="chart-header">
         <div className="chart-title-wrap">
           <h3 className="chart-title">{title}</h3>
-          <span className="chart-sub">每日图片生成成功趋势</span>
+          {sub !== undefined ? (
+            <span className="chart-sub">{sub}</span>
+          ) : (
+            <span className="chart-sub">每日图片生成成功趋势</span>
+          )}
         </div>
         <div className="chart-legend">
           <span className="legend-indicator" />
@@ -58,7 +68,7 @@ export function BarChart({ data, title, height = 220 }: BarChartProps) {
               tickLine={false}
               tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-subtle)', opacity: 0.6 }} />
+            <Tooltip content={<CustomTooltip unit={unit} metricLabel={metricLabel} />} cursor={{ fill: 'var(--bg-subtle)', opacity: 0.6 }} />
             <Bar
               dataKey="value"
               fill="url(#barGradient)"

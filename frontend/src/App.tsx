@@ -10,6 +10,7 @@ const TasksPage = lazy(() => import('./pages/Tasks').then(m => ({ default: m.Tas
 const AccountsPage = lazy(() => import('./pages/Accounts').then(m => ({ default: m.AccountsPage })));
 const LogsPage = lazy(() => import('./pages/Logs').then(m => ({ default: m.LogsPage })));
 const DLQPage = lazy(() => import('./pages/DLQ').then(m => ({ default: m.DLQPage })));
+const ChatPlayground = lazy(() => import('./pages/ChatPlayground').then(m => ({ default: m.ChatPlayground })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/dlq" element={<DLQPage />} />
+            <Route path="/chat" element={<ChatPlayground />} />
           </Routes>
         </Suspense>
       </Layout>

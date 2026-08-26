@@ -314,12 +314,21 @@ def bootstrap() -> None:
     架构优化：已移除用完即丢且不可签到的冗余提供商，
     将所有算力与号池集中在支持每日自动签到续额的长效提供商（nanobanana）
     以及主力提供商（imagefree, aifreeforever）。
+    v4.4: 同步注册文本对话 ChatProvider（tryingopen，可通过 IF_TRYINGOPEN_ENABLED 关闭）。
     """
     if registry.providers:
         return
     registry.register(imagefree.ImagefreeProvider())
     registry.register(aifreeforever.AifreeforeverProvider())
     registry.register(nanobanana.NanobananaProvider())
+    # v4.4: 文本对话提供商（导入失败/开关关闭时静默跳过，不影响图像主链路）
+    import os
+    if os.getenv("IF_TRYINGOPEN_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from .tryingopen import TryingopenChatProvider
+            registry.register_chat(TryingopenChatProvider())
+        except Exception as e:
+            log.warning("聊天提供商 tryingopen 注册失败（降级跳过）: %s", e)
 
 
 async def startup_all() -> None:
@@ -329,6 +338,11 @@ async def startup_all() -> None:
             await p.startup()
         except Exception as e:
             log.warning("提供商 %s 启动失败（可忽略，降级）: %s", p.prefix, e)
+    for p in registry.chat_providers.values():
+        try:
+            await p.startup()
+        except Exception as e:
+            log.warning("聊天提供商 %s 启动失败（可忽略，降级）: %s", p.prefix, e)
 
 
 async def shutdown_all() -> None:
@@ -337,3 +351,8 @@ async def shutdown_all() -> None:
             await p.shutdown()
         except Exception as e:
             log.warning("提供商 %s 停止失败: %s", p.prefix, e)
+    for p in registry.chat_providers.values():
+        try:
+            await p.shutdown()
+        except Exception as e:
+            log.warning("聊天提供商 %s 停止失败: %s", p.prefix, e)

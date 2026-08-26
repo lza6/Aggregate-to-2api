@@ -388,6 +388,45 @@ class AccountPool:
         rows = self._conn.execute(q + " ORDER BY created_at DESC", args).fetchall()
         return [dict(r) for r in rows]
 
+    def list_page(self, provider: str | None = None, status: str | None = None,
+                  page: int = 1, page_size: int = 20, search: str = "") -> dict:
+        """分页读取账号列表，避免百万级号池一次性加载到内存。"""
+        page = max(1, int(page))
+        page_size = min(100, max(1, int(page_size)))
+        conds: list[str] = []
+        args: list[object] = []
+        if provider:
+            conds.append("provider=?")
+            args.append(provider)
+        if status:
+            if status in ("ok", "active"):
+                conds.append("status IN ('ok', 'active')")
+            elif status in ("exhausted", "cooling"):
+                conds.append("status IN ('exhausted', 'cooling')")
+            elif status in ("banned", "dead"):
+                conds.append("status IN ('banned', 'dead')")
+            else:
+                conds.append("status=?")
+                args.append(status)
+        if search:
+            conds.append("(email LIKE ? OR status LIKE ? OR register_ip LIKE ?)")
+            needle = f"%{search.strip()}%"
+            args.extend([needle, needle, needle])
+        where = f" WHERE {' AND '.join(conds)}" if conds else ""
+        total = self._conn.execute(f"SELECT COUNT(*) FROM accounts{where}", args).fetchone()[0]
+        offset = (page - 1) * page_size
+        rows = self._conn.execute(
+            f"SELECT * FROM accounts{where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            [*args, page_size, offset],
+        ).fetchall()
+        return {
+            "items": [dict(r) for r in rows],
+            "total": int(total),
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, (int(total) + page_size - 1) // page_size),
+        }
+
     def get(self, provider: str) -> list[dict]:
         """某提供商当前就绪可用账号（含 cookie，供 Provider 用）。"""
         # 返回 active, ok, 以及短效未被锁定的账号
@@ -534,9 +573,12 @@ class AccountPool:
     async def _daily_checkin_loop(self, provider: str) -> None:
         """nanobanana：定时检查签到（按时区与间隔），按批次处理避免 O(n)。"""
         BATCH_SIZE = 500  # 每轮最多处理 500 个账号，避免单次全表扫描阻塞事件循环
+        first_cycle = True
         while True:
             try:
-                await asyncio.sleep(1800)  # 30 分钟一轮
+                # 启动后先等 60s，让 provider/代理池完成初始化；随后每 30 分钟巡检。
+                await asyncio.sleep(60 if first_cycle else 1800)
+                first_cycle = False
                 reg = self.registerers.get(provider)
                 if reg is None:
                     continue

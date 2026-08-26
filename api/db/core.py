@@ -391,6 +391,24 @@ class DB:
                     cached_at   REAL NOT NULL
                 );
             """)
+            await conn.executescript("""
+                CREATE TABLE IF NOT EXISTS chat_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    prompt_tokens INTEGER DEFAULT 0,
+                    completion_tokens INTEGER DEFAULT 0,
+                    reasoning_tokens INTEGER DEFAULT 0,
+                    tool_calls INTEGER DEFAULT 0,
+                    duration_ms REAL DEFAULT 0,
+                    success INTEGER DEFAULT 1,
+                    proxy_used TEXT,
+                    error TEXT,
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_usage_created ON chat_usage(created_at);
+                CREATE INDEX IF NOT EXISTS idx_chat_usage_model ON chat_usage(model, created_at);
+            """)
             cursor = await conn.execute("PRAGMA table_info(requests)")
             rows = await cursor.fetchall()
             cols = {r[1] for r in rows}

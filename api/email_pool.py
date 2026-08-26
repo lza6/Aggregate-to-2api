@@ -974,6 +974,11 @@ class EmailPool:
                 "SELECT provider, COUNT(*) FROM email_registry GROUP BY provider"
             ).fetchall()
         )
+        by_status = dict(
+            self._conn.execute(
+                "SELECT status, COUNT(*) FROM email_registry GROUP BY status"
+            ).fetchall()
+        )
         sources_status = [
             {
                 "name": s.name,
@@ -989,6 +994,9 @@ class EmailPool:
         return {
             "total_registered": total,
             "by_provider": by_provider,
+            "by_status": by_status,
+            "successful_registrations": int(by_status.get("ok", 0)),
+            "failed_registrations": int(by_status.get("error", 0)),
             "sources": sources_status,
         }
 

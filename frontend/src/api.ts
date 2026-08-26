@@ -184,12 +184,27 @@ export interface AccountPoolItem {
 
 export interface AccountPoolResponse {
   accounts: Record<string, AccountPoolProviderStats>;
-  email_pool: { total_registered: number; by_provider: Record<string, number> };
+  email_pool: {
+    total_registered: number;
+    by_provider: Record<string, number>;
+    by_status?: Record<string, number>;
+    successful_registrations?: number;
+    failed_registrations?: number;
+  };
   items: AccountPoolItem[];
+  items_total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
-export async function fetchAccountPool(): Promise<AccountPoolResponse> {
-  const res = await fetch(`${API_BASE}/v1/account-pool`);
+export async function fetchAccountPool(params: { page?: number; pageSize?: number; search?: string } = {}): Promise<AccountPoolResponse> {
+  const q = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  if (params.search?.trim()) q.set('search', params.search.trim());
+  const res = await fetch(`${API_BASE}/v1/account-pool?${q}`);
   return res.json();
 }
 
@@ -248,4 +263,62 @@ export interface SystemSpec {
 export async function fetchSystemSpec(): Promise<SystemSpec> {
   const res = await fetch(`${API_BASE}/v1/system`);
   return res.json();
+}
+
+// ── v4.4 AI 聊天 ──
+export interface ChatUsageStats {
+  period: string;
+  total_calls: number;
+  ok_calls: number;
+  fail_calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  reasoning_tokens: number;
+  tool_calls: number;
+  avg_duration_ms: number | null;
+  today_calls: number;
+  today_tokens: number;
+  by_model: { model: string; calls: number; prompt_tokens: number; completion_tokens: number }[];
+}
+
+export interface ChatRemaining {
+  available_proxies: number;
+  calls_per_proxy_per_hour: number;
+  hourly_limit: number;
+  used_last_hour: number;
+  remaining: number;
+}
+
+export interface ChatModelInfo {
+  id: string;
+  display_name: string;
+  context_window: number;
+  capabilities: string[];
+  price_per_mtok?: number | null;
+  max_messages?: number;
+}
+
+export async function fetchChatUsage(period = '24h'): Promise<ChatUsageStats> {
+  const res = await fetch(`${API_BASE}/v1/chat/usage?period=${period}`);
+  return res.json();
+}
+
+export async function fetchChatRemaining(): Promise<ChatRemaining> {
+  const res = await fetch(`${API_BASE}/v1/chat/remaining`);
+  return res.json();
+}
+
+export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number }> {
+  const res = await fetch(`${API_BASE}/v1/chat/models`);
+  return res.json();
+}
+
+/** 聊天补全（供 playground 用）；流式 SSE 响应体由页面自行 reader 解析 */
+export async function chatCompletions(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  return fetch(`${API_BASE}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
 }
