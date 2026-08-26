@@ -308,16 +308,46 @@ export async function fetchChatRemaining(): Promise<ChatRemaining> {
   return res.json();
 }
 
-export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number }> {
+export interface ChatAuthStatus {
+  enabled: boolean;
+  header: string;
+  alt_headers: string[];
+}
+
+export async function fetchChatAuthStatus(): Promise<ChatAuthStatus> {
+  const res = await fetch(`${API_BASE}/v1/chat/auth/status`);
+  return res.json();
+}
+
+// ── 本地保存的 API Key（仅浏览器 localStorage，永不上传） ──
+const CHAT_KEY_STORAGE = 'imagefreeChatApiKey';
+
+export function getStoredApiKey(): string {
+  try { return localStorage.getItem(CHAT_KEY_STORAGE) ?? ''; } catch { return ''; }
+}
+
+export function setStoredApiKey(key: string): void {
+  try {
+    if (key.trim()) localStorage.setItem(CHAT_KEY_STORAGE, key.trim());
+    else localStorage.removeItem(CHAT_KEY_STORAGE);
+  } catch { /* ignore */ }
+}
+
+function authHeaders(): Record<string, string> {
+  const key = getStoredApiKey();
+  return key ? { 'Authorization': `Bearer ${key}` } : {};
+}
+
+export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }> {
   const res = await fetch(`${API_BASE}/v1/chat/models`);
   return res.json();
 }
 
-/** 聊天补全（供 playground 用）；流式 SSE 响应体由页面自行 reader 解析 */
+/** 聊天补全（供 playground 用）；流式 SSE 响应体由页面自行 reader 解析；自动携带本地保存的 Key */
 export async function chatCompletions(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   return fetch(`${API_BASE}/v1/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
     signal,
   });

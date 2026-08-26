@@ -210,6 +210,9 @@ class Settings(BaseSettings):
     )
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
+    # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
+    if_api_keys: str = Field("", validation_alias="IF_API_KEYS")
+    if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
 
     # ── 缓存 ──
     if_lru_cache_size: int = Field(
@@ -584,6 +587,8 @@ class Settings(BaseSettings):
         self._security = SecuritySettings(
             gallery_password=self.if_gallery_password,
             cors_origins=self.if_cors_origins,
+            api_keys=[k.strip() for k in (self.if_api_keys or "").split(",") if k.strip()],
+            chat_requests_per_minute=self.if_chat_rate_limit,
         )
         # 模块级便捷引用（供 main.py 读取）
         global CORS_ORIGINS
