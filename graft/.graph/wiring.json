@@ -1,8 +1,8 @@
 {
   "meta": {
     "version": 1,
-    "nodeCount": 3275,
-    "edgeCount": 5806,
+    "nodeCount": 3264,
+    "edgeCount": 5759,
     "languages": [
       "javascript",
       "python",
@@ -22455,6 +22455,77 @@
       "owner": "TaskEventHub"
     },
     {
+      "id": "deploy/api/system_spec.py",
+      "name": "system_spec.py",
+      "kind": "file",
+      "path": "deploy/api/system_spec.py",
+      "span": "L1-L103",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "598c3fa5389fd3afc8d1de6332feb243f68a44bc9629a36e0d1e0e87b476a22c",
+      "chars": 3285,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/system_spec.py#_detect_cpu_count",
+      "name": "_detect_cpu_count",
+      "kind": "function",
+      "path": "deploy/api/system_spec.py",
+      "span": "L4-L9",
+      "signature": "def _detect_cpu_count() -> int",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "4d961255857d7e9c0bffe25a93f894690990dd3038fee7e5b28bd92d1bc2a9e7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/system_spec.py#_detect_disk_gb",
+      "name": "_detect_disk_gb",
+      "kind": "function",
+      "path": "deploy/api/system_spec.py",
+      "span": "L27-L42",
+      "signature": "def _detect_disk_gb(path: str = \".\") -> tuple[float, float, float]",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "c3f844bd2763fad3022a6994f1a65eb3fb353b09a8ef99a881c12ecf109545f0",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/system_spec.py#_detect_memory_mb",
+      "name": "_detect_memory_mb",
+      "kind": "function",
+      "path": "deploy/api/system_spec.py",
+      "span": "L11-L25",
+      "signature": "def _detect_memory_mb() -> int",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "3cdf7c1835b8b997d70888042f350dc94f4b01755123a2c646131468545028f7",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/system_spec.py#system_spec",
+      "name": "system_spec",
+      "kind": "function",
+      "path": "deploy/api/system_spec.py",
+      "span": "L80-L103",
+      "signature": "def system_spec() -> dict",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "0c43f4b3582cce30222ff73e958736be67a881ab9e5488962d137c2247711a35",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/telemetry.py",
       "name": "telemetry.py",
       "kind": "file",
@@ -27117,231 +27188,6 @@
       "crux": null
     },
     {
-      "id": "probe_tryingopen.py",
-      "name": "probe_tryingopen.py",
-      "kind": "file",
-      "path": "probe_tryingopen.py",
-      "span": "L1-L481",
-      "signature": null,
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "1f7a77846629bcc5fdc68875d30a9226e8ae1d4aa253d11fbc87bcdb64614112",
-      "chars": 18260,
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#build_payload",
-      "name": "build_payload",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L69-L82",
-      "signature": "def build_payload(model: str, messages: list[dict], effort: str = \"balanced\", tools: list | None = None, tool_choice: str | None = None, images: list[str] | None = None) -> dict",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "dbcca513901c358483c29d856886f165fefe73768cee0edd7f6ec8cecee4e33c",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#do_request",
-      "name": "do_request",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L85-L93",
-      "signature": "def do_request(model: str, messages: list[dict], effort: str = \"balanced\", timeout: int = 120) -> requests.Response",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "f44b45ae683364644702a19097eb4f470e4926a1b6073b8039a4be46e244fbde",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#parse_sse",
-      "name": "parse_sse",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L38-L66",
-      "signature": "def parse_sse(stream_iter) -> list[dict]",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "bcecd8c7e4e7c8e64f0b35d2d907fa5167c64857b3ccb7817483b4276769f3d5",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_all_models_basic",
-      "name": "test_all_models_basic",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L132-L159",
-      "signature": "def test_all_models_basic()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "92274553bdbd6a93ef9440dee45b83b83f3a2402fc2fe0c68f9c54497272bfdd",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_chinese",
-      "name": "test_chinese",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L182-L195",
-      "signature": "def test_chinese()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "d332ef1a576ffae8726be017e3fac2362be6ee49201c4240fd5110c77f0f0c36",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_effort_levels",
-      "name": "test_effort_levels",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L163-L178",
-      "signature": "def test_effort_levels()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "78da10bcd2be0134092f5b6bd8993b331f0ed8ce7582aac8e4f12cab73b844d6",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_error_handling",
-      "name": "test_error_handling",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L371-L405",
-      "signature": "def test_error_handling()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "24ce4c6c730d763387515e3c81fe0592e8ea1ae23128efd05aeed75e34f6c99b",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_long_context",
-      "name": "test_long_context",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L199-L221",
-      "signature": "def test_long_context()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "d3a8bb09b44bd1a4f81708ce0c2374966f7107daea5df5d011708c2591683266",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_model_basic",
-      "name": "test_model_basic",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L96-L123",
-      "signature": "def test_model_basic(model: str, effort: str = \"balanced\") -> dict",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "694a64aea4e3dc07714645637899b436104b8ac35bb5e96baf248f830fcf3a26",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_model_streaming_detail",
-      "name": "test_model_streaming_detail",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L126-L128",
-      "signature": "def test_model_streaming_detail(model: str) -> dict",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "af4290257c338ca6fd2ae2a2a6f4bbe8e2d67a71f894a990bb9d65bf67a027c8",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_multimodal",
-      "name": "test_multimodal",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L283-L322",
-      "signature": "def test_multimodal()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "e824c42fe1380843dd5be98ec0c92b2c2eb729faf1c6e7c6c54c7159115068a8",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_non_streaming",
-      "name": "test_non_streaming",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L438-L456",
-      "signature": "def test_non_streaming()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "f3d40b3175596db08f5bce69d6fb9d4bf0727a2fb2ddc85af37cdf9dfb0b93e9",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_response_timing",
-      "name": "test_response_timing",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L409-L434",
-      "signature": "def test_response_timing()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "24cdb21ae795ac00ecaee0e3e5ffc35274f7ae7dfec160105ab3a764eb297727",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_sse_schema",
-      "name": "test_sse_schema",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L326-L367",
-      "signature": "def test_sse_schema()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "a1b41243263cc5694633a5daac66e9bba91da41f84fb5dfe8406c3c78400ce3d",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "probe_tryingopen.py#test_tool_calling",
-      "name": "test_tool_calling",
-      "kind": "function",
-      "path": "probe_tryingopen.py",
-      "span": "L225-L279",
-      "signature": "def test_tool_calling()",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "739efa7dad0cad23f44b67b195b2efc2843d939e323ce602953a2ea7728371e7",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
       "id": "scripts/batch_register_nb.py",
       "name": "batch_register_nb.py",
       "kind": "file",
@@ -29012,8 +28858,8 @@
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "d3142972bf50e551c6ae1752e0e9de8b20696cf38bc6da06bf357879e77d6753",
-      "chars": 3886,
+      "body_hash": "60f3aca7989040df378f3de2604e2277fb92a9bb8dd329f87822507ec5ed4144",
+      "chars": 3904,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -55553,18 +55399,6 @@
       "confidence": "extracted"
     },
     {
-      "source": "api/routes/health.py#healthz",
-      "target": "api/system_spec.py#system_spec",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "api/routes/health.py#system_info",
-      "target": "api/system_spec.py#system_spec",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
       "source": "api/routes/tasks.py",
       "target": "api/routes/tasks.py#get_task",
       "relation": "contains",
@@ -64980,21 +64814,9 @@
     },
     {
       "source": "deploy/api/routes/health.py#healthz",
-      "target": "api/system_spec.py#system_spec",
-      "relation": "calls",
-      "confidence": "inferred"
-    },
-    {
-      "source": "deploy/api/routes/health.py#healthz",
       "target": "deploy/api/routes/health.py#_probe_cf_solver",
       "relation": "calls",
       "confidence": "extracted"
-    },
-    {
-      "source": "deploy/api/routes/health.py#system_info",
-      "target": "api/system_spec.py#system_spec",
-      "relation": "calls",
-      "confidence": "inferred"
     },
     {
       "source": "deploy/api/routes/tasks.py",
@@ -65611,6 +65433,66 @@
     {
       "source": "deploy/api/sse_events.py#TaskEventHub.publish",
       "target": "deploy/api/sse_events.py#_sse_encode",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#_detect_cpu_count",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#_detect_memory_mb",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#_detect_cpu_count",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#_detect_disk_gb",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#_detect_memory_mb",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "deploy/api/system_spec.py#system_spec",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "multiprocessing",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "os",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py",
+      "target": "psutil",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/system_spec.py#system_spec",
+      "target": "deploy/api/system_spec.py#_detect_disk_gb",
       "relation": "calls",
       "confidence": "extracted"
     },
@@ -69020,324 +68902,6 @@
       "source": "frontend/vite.config.ts",
       "target": "vite",
       "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_all_models_basic",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_chinese",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_effort_levels",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_error_handling",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_long_context",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_multimodal",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_non_streaming",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_response_timing",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_sse_schema",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_tool_calling",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#build_payload",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_all_models_basic",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_chinese",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_effort_levels",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_error_handling",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_long_context",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_model_basic",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_model_streaming_detail",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_multimodal",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_non_streaming",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_response_timing",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_sse_schema",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "probe_tryingopen.py#test_tool_calling",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "base64",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "json",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "re",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "requests",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "sys",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "typing",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py",
-      "target": "urllib.parse",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#do_request",
-      "target": "probe_tryingopen.py#build_payload",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_all_models_basic",
-      "target": "probe_tryingopen.py#test_model_basic",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_chinese",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_chinese",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_effort_levels",
-      "target": "probe_tryingopen.py#test_model_basic",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_error_handling",
-      "target": "probe_tryingopen.py#build_payload",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_long_context",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_long_context",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_model_basic",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_model_basic",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_model_streaming_detail",
-      "target": "probe_tryingopen.py#test_model_basic",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_multimodal",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_multimodal",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_non_streaming",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_non_streaming",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_response_timing",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_response_timing",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_sse_schema",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_sse_schema",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_tool_calling",
-      "target": "probe_tryingopen.py#do_request",
-      "relation": "calls",
-      "confidence": "extracted"
-    },
-    {
-      "source": "probe_tryingopen.py#test_tool_calling",
-      "target": "probe_tryingopen.py#parse_sse",
-      "relation": "calls",
       "confidence": "extracted"
     },
     {

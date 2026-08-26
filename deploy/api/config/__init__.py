@@ -380,9 +380,39 @@ class Settings(BaseSettings):
             return v
         return v.strip().lower() in {"1", "true", "yes", "on"}
 
+    def _apply_adaptive_defaults(self) -> None:
+        """按服务器规格自适应并发参数（仅当用户未显式设置环境变量时）。
+
+        2C2G → worker=4, upstream=12, token=3, queue=1000
+        4C4G → worker=8,  upstream=32, token=8,  queue=2000
+        4C8G → worker=16, upstream=64, token=16, queue=5000
+        8C16G+ → worker=48, upstream=192, token=48, queue=12000
+        """
+        explicit = any(
+            os.environ.get(k) for k in ("IF_WORKERS", "IF_UPSTREAM_MAX_INFLIGHT",
+                                         "IF_TOKEN_POOL_SIZE", "IF_MAX_QUEUE")
+        )
+        if explicit:
+            return
+        try:
+            from ..system_spec import (
+                ADAPTIVE_WORKERS, ADAPTIVE_UPSTREAM_INFLIGHT,
+                ADAPTIVE_TOKEN_POOL_SIZE, ADAPTIVE_MAX_QUEUE,
+            )
+        except Exception:
+            return
+        if self.workers == 10:
+            self.workers = ADAPTIVE_WORKERS
+        if self.if_upstream_max_inflight == 30:
+            self.if_upstream_max_inflight = ADAPTIVE_UPSTREAM_INFLIGHT
+        if self.token_pool_size == 6:
+            self.token_pool_size = ADAPTIVE_TOKEN_POOL_SIZE
+        if self.max_queue == 2000:
+            self.max_queue = ADAPTIVE_MAX_QUEUE
+
     @model_validator(mode="after")
     def _resolve_proxy_and_init_groups(self) -> "Settings":
-        """代理 fallback 解析 + 分组配置初始化。"""
+        """代理 fallback 解析 + 服务器规格自适应并发（未显式设置时）+ 分组配置初始化。"""
         # ── 代理 fallback ──
         if not self.proxy:
             for var in ("HTTPS_PROXY", "HTTP_PROXY"):
@@ -390,6 +420,9 @@ class Settings(BaseSettings):
                 if val:
                     self.proxy = val
                     break
+
+        # ── 服务器规格自适应并发（仅当用户未显式设置对应环境变量时生效）──
+        self._apply_adaptive_defaults()
 
         # ── Solver URLs 规范化 ──
         resolved_solver_urls: list[str] = []
