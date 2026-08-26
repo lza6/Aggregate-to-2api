@@ -10,8 +10,8 @@
   "totalCount": 3526,
   "readyCount": 0,
   "staleCount": 0,
-  "dirty": false,
+  "dirty": true,
   "syncing": false,
   "syncedAt": "2026-08-26T22:56:00.894Z",
-  "lastFile": "Accounts.tsx"
+  "lastFile": "sync_deploy.py"
 }
