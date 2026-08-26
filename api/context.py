@@ -109,12 +109,17 @@ class RequestContextMiddleware:
                     dur = round((time.time() - ctx.start_time) * 1000, 1)
                     path = scope.get("path", "")
                     method = scope.get("method", "")
+                    # 仅写入内存 log_buffer，绝不调用 uvicorn.access logger：
+                    # uvicorn 的 AccessFormatter.formatMessage 会按固定模板解包 record.args（3 个值），
+                    # 用 () 构造的 record 触发 "not enough values to unpack (expected 5, got 0)" 日志噪声。
                     if path != "/v1/logs" and not path.startswith("/static"):
-                        from .log_buffer import log_buffer
-                        log_msg = f"{client_host} - \"{method} {path} HTTP/1.1\" {status} ({dur}ms)"
-                        logging.getLogger("uvicorn.access").info(log_msg)
-                        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, log_msg, (), None)
-                        log_buffer.emit(record)
+                        try:
+                            from .log_buffer import log_buffer
+                            log_msg = f"{client_host} - \"{method} {path} HTTP/1.1\" {status} ({dur}ms)"
+                            record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, log_msg, (), None)
+                            log_buffer.emit(record)
+                        except Exception:
+                            pass
                 await send(message)
 
             await self.app(scope, receive, send_with_request_id)

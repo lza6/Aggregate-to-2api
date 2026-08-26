@@ -6,7 +6,7 @@
 - __init__ · method · L76-L81 — def __init__(self, email: str)
 - update_result · method · L83-L92 — def update_result(self, duration_ms: float, is_success: bool)
 - score · method · L94-L98 — def score(self) -> float
-- AccountPool · class · L101-L591 — class AccountPool
+- AccountPool · class · L101-L617 — class AccountPool
 - __init__ · method · L102-L119 — def __init__(self, db_path: str = DB_FILE) -> None
 - get_adaptive · method · L121-L132 — def get_adaptive(self, provider: str) -> dict | None
 - _get_or_create_score · method · L134-L137 — def _get_or_create_score(self, email: str) -> AdaptiveAccountScore
@@ -32,5 +32,5 @@
 - stop · method · L470-L475 — async def stop(self) -> None
 - _cooling_wake_loop · method · L477-L488 — async def _cooling_wake_loop(self) -> None
 - _autoregister_loop · method · L490-L528 — async def _autoregister_loop(self, provider: str) -> None
-- _daily_checkin_loop · method · L530-L553 — async def _daily_checkin_loop(self, provider: str) -> None
-- dashboard · method · L555-L591 — def dashboard(self) -> dict
+- _daily_checkin_loop · method · L530-L579 — async def _daily_checkin_loop(self, provider: str) -> None
+- dashboard · method · L581-L617 — def dashboard(self) -> dict
