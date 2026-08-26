@@ -32,8 +32,10 @@ log = logging.getLogger("account_pool")
 DB_FILE = os.getenv("IF_ACCOUNT_DB_FILE", "data/account_pool.db")
 # nanobanana 目标常驻账号数（默认 500）
 TARGET_NANOBANANA = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "10000"))
-# 补号冷却（秒）：注册器连续失败时退避，防风控
-REGISTER_COOLDOWN = int(os.getenv("IF_REGISTER_COOLDOWN", "120"))
+# 补号冷却（秒）：注册器连续失败时退避，防风控。
+# 7x24h 不间断注册：每成功 1 个后休息 90s（24h ≈ 960 个），
+# 既绕开 temp-mail / cf_solver 的 429 限流，又持续累积号池。
+REGISTER_COOLDOWN = int(os.getenv("IF_REGISTER_COOLDOWN", "90"))
 # 默认账号冷却期（秒）：cooling 状态满此时长后可自动唤醒尝试签到/恢复
 DEFAULT_COOLING_PERIOD_SECONDS = float(os.getenv("IF_ACCOUNT_COOLING_PERIOD", "72000"))  # 20 hours
 # 借号租约超时（秒）：超过此时长自动重置为 active 防死锁

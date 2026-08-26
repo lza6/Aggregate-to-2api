@@ -40,9 +40,10 @@ from . import config
 log = logging.getLogger("email_pool")
 
 DB_FILE = os.getenv("IF_EMAIL_DB_FILE", "data/email_registry.db")
-# temp-mail 建箱最小间隔（秒）：防 429 限流
-EMAIL_CREATE_MIN_INTERVAL = int(os.getenv("IF_EMAIL_CREATE_INTERVAL", "30"))
-EMAIL_CREATE_BACKOFF = int(os.getenv("IF_EMAIL_CREATE_BACKOFF", "60"))
+# temp-mail 建箱最小间隔（秒）：防 429 限流。实测 temp-mail.org 对高频建箱会 429，
+# 设 90s 让建箱更稳（24h 不间断约 960 个邮箱），远低于限流阈值。
+EMAIL_CREATE_MIN_INTERVAL = int(os.getenv("IF_EMAIL_CREATE_INTERVAL", "90"))
+EMAIL_CREATE_BACKOFF = int(os.getenv("IF_EMAIL_CREATE_BACKOFF", "120"))
 
 
 # ── 规范基类 ──────────────────────────────────────────
