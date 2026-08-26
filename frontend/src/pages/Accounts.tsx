@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAccountPool } from '../api';
 import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
@@ -19,6 +19,7 @@ interface AccountItem {
   status: string;
   created_at: number | null;
   checkin_at: number | null;
+  register_ip?: string | null;
 }
 
 interface AccountPoolData {
@@ -95,6 +96,8 @@ function PoolCard({ prefix, stats }: { prefix: string; stats: ProviderPoolStats 
 export function AccountsPage() {
   const { data, loading, error, reload } = useApi<AccountPoolData>(() => fetchAccountPool(), { intervalMs: 10000 });
   const [filter, setFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
   if (loading && !data) {
@@ -112,9 +115,15 @@ export function AccountsPage() {
 
   const entries = Object.entries(data?.accounts ?? {}).filter(([prefix]) => ACTIVE_PROVIDERS.has(prefix));
   const rawItems = data?.items ?? [];
-  const items = filter
+  const filtered = filter
     ? rawItems.filter(i => i.email.toLowerCase().includes(filter.toLowerCase()) || i.status.includes(filter))
     : rawItems;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // 当搜索或数据变化时重置到第1页
+  useEffect(() => setPage(1), [filter, rawItems.length]);
 
   return (
     <div className="accounts-page-container">
@@ -166,18 +175,19 @@ export function AccountsPage() {
                 <th>状态</th>
                 <th>入池时间</th>
                 <th>上次签到时间</th>
+                <th>注册IP</th>
                 <th>下次签到窗口</th>
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 ? (
+              {pagedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
                     📭 暂无入库账号明细（后台持续注册激活中…）
                   </td>
                 </tr>
               ) : (
-                items.map((it, idx) => {
+                pagedItems.map((it) => {
                   const cTime = it.created_at
                     ? new Date(it.created_at * 1000).toLocaleString('zh-CN', {
                         month: '2-digit',
@@ -221,6 +231,9 @@ export function AccountsPage() {
                       </td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{cTime}</td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{chkTime}</td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
+                        {it.register_ip ? it.register_ip : '—'}
+                      </td>
                       <td>
                         <span style={{
                           color: isPendingCheckin ? 'var(--warning-text)' : 'var(--text-secondary)',
@@ -238,6 +251,54 @@ export function AccountsPage() {
           </table>
         </div>
       </div>
+
+      {/* 分页控件 */}
+        {filtered.length > pageSize && (
+          <div className="pagination-bar">
+            <span className="pagination-info">
+              共 {filtered.length} 条，第 {safePage}/{totalPages} 页
+            </span>
+            <div className="pagination-controls">
+              <button
+                className="tf-btn tf-btn-sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                ◀ 上一页
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                .map((p, idx, arr) => (
+                  <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                    {idx > 0 && arr[idx - 1] !== p - 1 ? <span className="pagination-ellipsis">…</span> : null}
+                    <button
+                      className={`tf-btn tf-btn-sm ${p === safePage ? 'tf-btn-primary' : ''}`}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </button>
+                  </span>
+                ))}
+              <button
+                className="tf-btn tf-btn-sm"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                下一页 ▶
+              </button>
+            </div>
+            <select
+              className="tf-input page-size-select"
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            >
+              <option value={10}>10条/页</option>
+              <option value={20}>20条/页</option>
+              <option value={50}>50条/页</option>
+              <option value={100}>100条/页</option>
+            </select>
+          </div>
+        )}
 
       {/* 临时邮箱池分配统计 */}
       {data?.email_pool && (
@@ -399,6 +460,38 @@ export function AccountsPage() {
 
         .search-input-styled {
           width: 240px;
+        }
+
+        .pagination-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 4px;
+        }
+
+        .pagination-info {
+          font-size: 12px;
+          color: var(--text-muted);
+        }
+
+        .pagination-controls {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .pagination-ellipsis {
+          color: var(--text-muted);
+          font-size: 13px;
+          padding: 0 2px;
+        }
+
+        .page-size-select {
+          width: auto;
+          min-width: 100px;
+          font-size: 12px;
         }
 
         .email-pool-section {

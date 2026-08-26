@@ -82,6 +82,7 @@ async def account_pool_dashboard():
             "status": item.get("status", "ok"),
             "created_at": item.get("created_at"),
             "checkin_at": item.get("checkin_at"),
+            "register_ip": item.get("register_ip"),
         })
     return {
         "accounts": account_pool.dashboard(),

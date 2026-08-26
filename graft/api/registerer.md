@@ -18,9 +18,9 @@
 - _th · function · L215-L217 — async def _th(fn, *a, **k)
 - _extract_code · function · L220-L226 — def _extract_code(mail: dict | None) -> str | None
 - _extract_verify_link · function · L229-L235 — def _extract_verify_link(mail: dict | None) -> str | None
-- NanobananaRegisterer · class · L239-L513 — class NanobananaRegisterer
+- NanobananaRegisterer · class · L239-L514 — class NanobananaRegisterer
 - __init__ · method · L247-L255 — def __init__(self) -> None
 - _ensure_client · method · L257-L273 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
-- register_one · method · L275-L437 — async def register_one(self) -> dict | None
-- checkin · method · L439-L513 — async def checkin(self, acc: dict) -> int | None
-- build_registerers · function · L517-L520 — def build_registerers() -> dict[str, object]
+- register_one · method · L275-L438 — async def register_one(self) -> dict | None
+- checkin · method · L440-L514 — async def checkin(self, acc: dict) -> int | None
+- build_registerers · function · L518-L521 — def build_registerers() -> dict[str, object]

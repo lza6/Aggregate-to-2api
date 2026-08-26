@@ -235,6 +235,17 @@ def _extract_verify_link(mail: dict | None) -> str | None:
     return m.group(0).replace("&amp;", "&") if m else None
 
 
+def _proxy_host(proxy: str | None) -> str:
+    """从代理字符串中提取主机/IP（形如 http://user:pass@host:port 或 socks5://host:port）。"""
+    if not proxy:
+        return ""
+    s = proxy.split("://", 1)[-1]
+    if "@" in s:
+        s = s.split("@", 1)[-1]
+    host = s.split(":", 1)[0]
+    return host
+
+
 # ── nanobanana 自适应注册器 ─────────────────────────
 class NanobananaRegisterer:
     """nanobanana 账号注册器：支持自适应故障分类、代理隔离与断点状态推进。"""
@@ -288,6 +299,7 @@ class NanobananaRegisterer:
                 "password": "mock123",
                 "credits": 4,
                 "session_id": session.session_id,
+                "register_ip": "",
             }
 
         try:
@@ -417,6 +429,7 @@ class NanobananaRegisterer:
                 "password": password,
                 "credits": 4,
                 "session_id": session.session_id,
+                "register_ip": _proxy_host(session.proxy_used),
             }
 
         except RegistrationError as err:

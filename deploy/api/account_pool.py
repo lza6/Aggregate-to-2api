@@ -156,6 +156,7 @@ class AccountPool:
                 updated_at    REAL,
                 cooling_since REAL,                     -- 进入 cooling 状态的时间戳
                 borrowed_at   REAL,                     -- 借出为 working 的时间戳
+                register_ip   TEXT,
                 note          TEXT,
                 PRIMARY KEY (provider, email)
             );
@@ -168,6 +169,8 @@ class AccountPool:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN cooling_since REAL")
                 if "borrowed_at" not in cols:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN borrowed_at REAL")
+                if "register_ip" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN register_ip TEXT")
             except Exception as e:
                 log.debug("Schema migration check: %s", e)
             self._conn.commit()
@@ -351,15 +354,15 @@ class AccountPool:
     # ── 读写兼容接口 ──────────────────────────────
 
     def add(self, provider: str, email: str, cookie: str, password: str | None = None,
-            credits: int = 0, status: str = "ok", note: str = "") -> None:
+            credits: int = 0, status: str = "ok", note: str = "", register_ip: str = "") -> None:
         now = time.time()
         if cookie == "mock-session":
             note = (note + " mock").strip()
         with self._lock:
             self._conn.execute(
-                "INSERT OR REPLACE INTO accounts (provider,email,password,cookie,credits,status,created_at,updated_at,note,cooling_since,borrowed_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL)",
-                (provider, email, password, cookie, credits, status, now, now, note))
+                "INSERT OR REPLACE INTO accounts (provider,email,password,cookie,credits,status,created_at,updated_at,note,cooling_since,borrowed_at,register_ip)"
+                " VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL,?)",
+                (provider, email, password, cookie, credits, status, now, now, note, register_ip))
             self._conn.commit()
 
     def list(self, provider: str | None = None, status: str | None = None) -> list[dict]:
@@ -500,17 +503,16 @@ class AccountPool:
 
                 try:
                     if not MOCK_REGISTER:
-                        residential = [e for e in proxy_pool.entries if e.source == "residential" and e.available(time.time())]
-                        free_ok = [e for e in proxy_pool.entries if e.source == "free" and e.available(time.time())]
-                        if not (residential or free_ok):
+                        usable = [e for e in proxy_pool.entries if e.available(time.time())]
+                        if not usable:
                             log.info("号池补号暂停 %s：无可用出口代理", provider)
                             await asyncio.sleep(REGISTER_COOLDOWN)
                             continue
-                    reg.proxy = await proxy_pool.acquire(prefer_source="residential")
+                    reg.proxy = await proxy_pool.acquire()
                     acc = await reg.register_one()
                     if acc:
                         self.add(provider, acc["email"], acc["cookie"], acc.get("password"),
-                                 credits=acc.get("credits", 0))
+                                 credits=acc.get("credits", 0), register_ip=acc.get("register_ip", ""))
                         self.mark(provider, acc["email"], "ok")
                         log.info("号池补号成功 %s: %s（现有 %d）", provider, acc["email"], len(self.get(provider)))
                         await asyncio.sleep(REGISTER_COOLDOWN)
