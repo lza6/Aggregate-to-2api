@@ -1,8 +1,8 @@
 {
   "meta": {
     "version": 1,
-    "nodeCount": 3526,
-    "edgeCount": 6330,
+    "nodeCount": 3539,
+    "edgeCount": 6362,
     "languages": [
       "javascript",
       "python",
@@ -2397,12 +2397,12 @@
       "name": "security.py",
       "kind": "file",
       "path": "api/config/security.py",
-      "span": "L1-L11",
+      "span": "L1-L17",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "dd400c057d58ef050c1e1e18d8edb6f6ad61fedc4644c038f843cab11007ecfc",
-      "chars": 263,
+      "body_hash": "605d9d580447f776e974592581e1e3d1241a10f224a7ceccac85c78a5f7a03c5",
+      "chars": 631,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -2412,11 +2412,11 @@
       "name": "SecuritySettings",
       "kind": "class",
       "path": "api/config/security.py",
-      "span": "L7-L11",
+      "span": "L7-L17",
       "signature": "class SecuritySettings(BaseModel)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "272b3e98b3e547d041c3af67c2df753357bad16755c1d81aed094baadfc40f72",
+      "body_hash": "bcc80fa43da228b378413ff1de334234e25ca6cefec53436d63eceef91ffd249",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -15172,6 +15172,125 @@
       "owner": "LRUCache"
     },
     {
+      "id": "deploy/api/chat_usage.py",
+      "name": "chat_usage.py",
+      "kind": "file",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L1-L174",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d5fa45aa270cdc7ffdc4e494add876cc44a96770f726bb07f1c69534da4eba68",
+      "chars": 5967,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "name": "ChatUsageTracker",
+      "kind": "class",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L20-L168",
+      "signature": "class ChatUsageTracker",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5277bc277e56cd0bdf3bcf0a52a984fd1da993a2dda187d8b0ced4029acef3eb",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker.__init__",
+      "name": "__init__",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L23-L24",
+      "signature": "def __init__(self, db: Any | None = None) -> None",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "208cc2060569b5a161779f199472afd7749cef05d89e390b7d79c92c1231826a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "name": "_get_db",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L26-L31",
+      "signature": "async def _get_db(self) -> Any",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "bec1adf1115624fb76c7ae4c6fad16092fa4b01c61577ccb25c448ee0ccb7341",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker._query_one",
+      "name": "_query_one",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L70-L75",
+      "signature": "async def _query_one(self, sql: str, params: tuple[Any, ...]) -> Any",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "0007055d0bfa4d5c843e93e1e1cde40ea433e78655b2ae914f1d341d219c217f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker.record",
+      "name": "record",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L33-L68",
+      "signature": "async def record( self, provider: str, model: str, prompt_tokens: int = 0, completion_tokens: int = 0, reasoning_tokens: int = 0, cost_usd: float | None = 0.0, tool_calls_count: int = 0, duration_ms: float = 0.0, success: bool = True, proxy_used: str | None = None, error: str | None = None, ) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b1a430a39b8d3ac3ae8fa0662789390c1739733068af3520611c7bf6f8cd6742",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker.remaining_credits",
+      "name": "remaining_credits",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L145-L168",
+      "signature": "async def remaining_credits(self) -> dict[str, Any]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "be46a1972ecd063b6597d3dadf372cae0aa9f34ef3f9f181bcac69e452968c13",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
+      "id": "deploy/api/chat_usage.py#ChatUsageTracker.stats",
+      "name": "stats",
+      "kind": "method",
+      "path": "deploy/api/chat_usage.py",
+      "span": "L77-L143",
+      "signature": "async def stats(self, period: str = \"24h\") -> dict[str, Any]",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "5b7a90a0bbf8da4b50e16d02f71a2a30a86ee9384567dbbec48aa256ec5f3ed0",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "ChatUsageTracker"
+    },
+    {
       "id": "deploy/api/config/__init__.py",
       "name": "__init__.py",
       "kind": "file",
@@ -23171,6 +23290,77 @@
       "exported": true,
       "origin": "ast",
       "body_hash": "612e142fddc61ad56e279cd9acb983c7c50572ecb618b9604e8ff7e5787cb6a1",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py",
+      "name": "request_guard.py",
+      "kind": "file",
+      "path": "deploy/api/request_guard.py",
+      "span": "L1-L78",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b08a9662af36356b615117696c38642771c534af401f1c1c198b418327478a4f",
+      "chars": 2393,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#check_generate_request",
+      "name": "check_generate_request",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L74-L77",
+      "signature": "def check_generate_request(request: Request, prompt: str) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "7e81aa85f74fab07f3d91a0563fdc02132e6c3fe56504722077ade9dc3caf359",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#check_prompt",
+      "name": "check_prompt",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L41-L49",
+      "signature": "def check_prompt(prompt: str) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1aaf9ddaa7343c2105a0b1a1f93c3b8c3cc67687d944a301ab88d6a913d93019",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#check_rate_limit",
+      "name": "check_rate_limit",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L52-L71",
+      "signature": "def check_rate_limit(request: Request) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "67eb631fa9731ec8ef0faeb81155d1c82b4dc7a3f1067b237a13c7605708275d",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#prompt_risk_category",
+      "name": "prompt_risk_category",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L32-L38",
+      "signature": "def prompt_risk_category(prompt: str) -> str | None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f774ed1f5cf7b4ec0f9b0134c0ebb55d1c0ca4922cb943baeea3d12c8569d88d",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -32064,8 +32254,8 @@
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "60f3aca7989040df378f3de2604e2277fb92a9bb8dd329f87822507ec5ed4144",
-      "chars": 3904,
+      "body_hash": "d7d5b70caf3858b8753ef650a8baf2abf51985f2468faacab87af88db62f80a2",
+      "chars": 3941,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -63630,6 +63820,120 @@
       "confidence": "extracted"
     },
     {
+      "source": "deploy/api/chat_usage.py",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": ".meta",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": ".proxy_pool",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": "datetime",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": "os",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": "time",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py",
+      "target": "typing",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker.__init__",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._query_one",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker.record",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker.remaining_credits",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker.stats",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker._query_one",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker.record",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker.remaining_credits",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker.remaining_credits",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._query_one",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker.stats",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._get_db",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/chat_usage.py#ChatUsageTracker.stats",
+      "target": "deploy/api/chat_usage.py#ChatUsageTracker._query_one",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "deploy/api/config/__init__.py",
       "target": "deploy/api/config/__init__.py#apply_model",
       "relation": "contains",
@@ -70168,6 +70472,84 @@
       "target": "str",
       "relation": "extends",
       "confidence": "inferred"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#check_generate_request",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#check_prompt",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#check_rate_limit",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#prompt_risk_category",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": ".",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": ".errors",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "collections",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "fastapi",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "re",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "threading",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
+      "target": "time",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py#check_generate_request",
+      "target": "deploy/api/request_guard.py#check_rate_limit",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py#check_prompt",
+      "target": "deploy/api/request_guard.py#prompt_risk_category",
+      "relation": "calls",
+      "confidence": "extracted"
     },
     {
       "source": "deploy/api/retry_policy.py",

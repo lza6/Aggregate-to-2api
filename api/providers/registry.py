@@ -244,7 +244,7 @@ class Registry:
         return list(self._models.values())
 
     def grouped(self) -> dict[str, list[dict]]:
-        """按提供商分组，供 /v1/models 与前端展示。"""
+        """按提供商分组，供 /v1/models 与前端展示（v4.4 起含聊天模型）。"""
         self._ensure_booted()
         out: dict[str, list[dict]] = {}
         for m in self._models.values():
@@ -258,6 +258,21 @@ class Registry:
                 "credits": m.credits,
                 "account_required": m.account_required,
                 "description": m.description,
+            })
+        # v4.4: 聊天模型并入同一目录（无 aspect_ratios/resolutions，附上下文窗口）
+        for spec in self.all_chat_models():
+            out.setdefault(spec.provider, []).append({
+                "id": spec.id,
+                "name": spec.display_name or spec.upstream_model,
+                "upstream_model": spec.upstream_model,
+                "capabilities": list(spec.capabilities),
+                "aspect_ratios": [],
+                "resolutions": [],
+                "credits": None,
+                "account_required": False,
+                "description": spec.description,
+                "kind": "chat",
+                "context_window": (spec.meta or {}).get("context_window", 0),
             })
         return out
 
@@ -276,6 +291,23 @@ class Registry:
                 "health_status": p.health_status,  # IMP-22: 暴露健康状态
                 "error_count": self._consecutive_failures.get(prefix, 0),  # P1-E: 连续失败计数
                 "degraded": p.health_status == "degraded",  # P1-E: 是否为降级状态
+            }
+        # v4.4: 聊天提供商并入同一看板（capabilities 用 chat/chat_tools/chat_vision 体系）
+        chat_counts: dict[str, int] = {}
+        for spec in self.all_chat_models():
+            chat_counts[spec.provider] = chat_counts.get(spec.provider, 0) + 1
+        for prefix, cp in self.chat_providers.items():
+            out[prefix] = {
+                "display_name": cp.display_name,
+                "base_url": cp.base_url,
+                "capabilities": [c for c in ("chat", "chat_tools", "chat_vision") if cp.supports(c)],
+                "model_count": chat_counts.get(prefix, len(cp.models)),
+                "needs_account": False,
+                "needs_proxy_per_request": True,  # tryingopen 每 IP 频控 → 必须轮换代理
+                "health_status": getattr(cp, "health_status", "unknown"),
+                "error_count": self._consecutive_failures.get(prefix, 0),
+                "degraded": getattr(cp, "health_status", "") == "degraded",
+                "kind": "chat",
             }
         return out
 

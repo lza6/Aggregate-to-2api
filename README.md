@@ -22,6 +22,7 @@
 - **🖥️ React 管理面板** — 独立 React 前端（/admin），图表化监控任务、提供商、号池、死信队列与实时日志
 - **🔍 深度可观测性** — Prometheus 指标 + 审计日志 + 内置告警引擎 + WebSocket 实时日志 + OTel 分布式追踪
 - **📡 SSE 每任务事件流** — `/v1/tasks/{id}/events` 实时推送 status/progress/result + Last-Event-ID 断线补偿
+- **💬 文本对话与智能体网关 (v4.4)** — 整合 TryingOpen 匿名多模型，提供标准 OpenAI `/v1/chat/completions` 与 Anthropic `/v1/messages` 兼容端点，支持思考链、工具调用（Function Calling）与多模态 Vision，自动代理轮换突破单 IP 频控。
 
 > 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
 
@@ -105,7 +106,12 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/tasks/{id}` | — | 查询单任务结果 |
 | `GET /v1/tasks/{id}/events` | SSE | **每任务事件流（status/progress/result/error + 心跳 + Last-Event-ID）** |
 | `GET /v1/events/tasks` | SSE | 全局任务广播（向后兼容） |
-| `GET /v1/models` | — | 全提供商模型列表（33+ 模型，3 提供商） |
+| `GET /v1/models` | — | 全提供商模型列表（生图 + 文本对话） |
+| `POST /v1/chat/completions` | 同步/SSE | **OpenAI 兼容对话补全（支持流式/非流式/思考链/工具调用/多模态）** |
+| `POST /v1/messages` | 同步/SSE | **Anthropic 协议端点（Claude Code / Continue / Cursor 直接接入）** |
+| `GET /v1/chat/models` | — | **聊天模型目录（含上下文长度、Token单价、工具/图片能力标签）** |
+| `GET /v1/chat/usage` | — | **全站聊天实时用量（Token消耗、调用量、时延、各模型分布）** |
+| `GET /v1/chat/remaining` | — | **基于代理池多出口自动推算的实时可用额度预测** |
 | `GET /v1/providers` | — | 提供商状态看板 |
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊（支持密码保护） |
@@ -131,6 +137,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `imagefree` | imagefree.net | txt2img / img2img | Turnstile token | 直连 |
 | `aifreeforever` | aifreeforever.com | txt2img / img2img（≤3 参考图） | 匿名 + Turnstile | **每 IP 每日限额 → 每请求轮换代理** |
 | `nanobanana` | nanobanana-pro.com | txt2img / img2img | better-auth cookie + 号池 | 每日签到续额 |
+| `tryingopen` | tryingopen.com | **chat / chat_tools / chat_vision** | **完全匿名（13+ 开源大模型）** | **单 IP 限流 20次/h → 代理池自动故障轮换** |
 
 ---
 

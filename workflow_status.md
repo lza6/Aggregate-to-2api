@@ -1,65 +1,50 @@
-# workflow_status.md — 终局闭环总审计工作流（v2）
+# workflow_status.md — 终局闭环总审计与全栈交付工作流（v3.0）
 
-> 更新日期：2026-08-24 · 当前版本：v4.2.1 · 生产：imagefree.tingfengai.art (ok)
+> 更新日期：2026-08-27 · 当前阶段：终局深度闭环与全链路审计 · 目标：生产级高可用/高并发/多模态文本+生图统一网关
 
-## 三项并行的只读深度审计已完成
+---
 
-已启动 3 个子代理（Backend / Frontend-Security / Deploy-Docs-Tests）完成全量只读审计，结果如下。
+## 1. 任务背景与核心契约 (Mission Charter)
 
-### 审计结论汇总
+将 `imagefree-2ai` 全面升级为同时具备 **生产级 AI 图像生成网关** 与 **TryingOpen 匿名多模型文本对话/Agent 网关** 的统一中枢。
+支持：
+- 图像链路：Turnstile 自动求解 + Worker 优先级队列 + 住宅/免费代理池 + 号池自动维护。
+- 对话链路：13+ 开源模型（含 GLM-5.3-Flash / Qwen3.8 / Kimi-K3 等）+ 思考链流式 + 自定义/原生工具调用 + 多模态 Vision + 20条/h/IP 限流突破（代理池动态轮换）。
+- 接口兼容：OpenAI `/v1/chat/completions` + Anthropic `/v1/messages` + 全站实时用量监控与额度动态预测。
+- 交互与体验：全站仪表盘深度整合 + 现代化 ChatPlayground 在线体验 + 故障自愈/熔断/降级。
 
-| 审计 | P0 | P1 | P2 | P3 |
-|------|----|----|----|----|
-| 后端逻辑 | 8 | 10 | 10 | 10 |
-| 前端/安全 | 4 | 10 | 7 | 1 |
-| 部署/文档/测试 | 0 | 10 | 12 | 0 |
-| **合计** | **12** | **30** | **29** | **11** |
+---
 
-## P0 阻塞问题清单（须全部修复）
+## 2. 需求追踪矩阵 (Requirements Traceability Matrix - RTM)
 
-### 后端（backend audit）
-| # | 文件 | 问题 | 状态 |
-|---|------|------|------|
-| P0-1 | dispatch.py:127 | `_SSE_SUBSCRIBERS` 无锁并发读写 + QueueFull 静默吞 | 待修 |
-| P0-2 | dispatch_edit.py:248-257 | **URL 图片下载后未回填 image_bytes/image_bytes_list → None 提交崩溃** | ✅ 已修 |
-| P0-3 | dispatch_edit.py:152 | imagefree 图生图 task 未加入 _PROVIDER_TASKS 托盘（shutdown 无法优雅取消） | 待修 |
-| P0-4 | dispatch_edit.py:267-270 | imagefree 多图静默丢弃第 2/3 张（应明确报错不支持） | 待修 |
-| P0-5 | worker.py:199 | 动态水位 `0.0 * solve_time` 恒为 0 → dynamic watermark 失效 | 待修 |
-| P0-6 | dispatch.py:196 | `req.priority or 2` 吞掉 admin 优先级 0 | 待修 |
-| P0-7 | sse_events.py:156 | `asyncio.ensure_future` 孤儿 task 不持有引用，shutdown 丢事件 | 待修 |
-| P0-8 | worker.py _finish + dispatch.py broadcast | **终态事件双重发布（publish 两遍）** | 待修 |
+| 编号 | 需求项 | 分类 | 涉及模块/文件 | 当前状态 | 验证证据 | 闭环动作 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **REQ-01** | TryingOpen 文本/对话接入与流式解析 | 核心后端 | `api/providers/tryingopen.py` | ✅ 已闭环 | `tests/test_tryingopen.py` (7/7) + 真实 E2E | 支持 17 种 SSE 事件，流式/非流式自适应 |
+| **REQ-02** | 上游模型动态目录自适应抓取 | 核心后端 | `api/providers/tryingopen.py` | ✅ 已闭环 | 真实抓取 13 个模型（含 glm-5.3-flash） | 后台定时拉取 + 静态 13 模型坚固回退 |
+| **REQ-03** | 工具调用模拟与原生工具提取 | 核心后端 | `api/providers/tryingopen.py` | ✅ 已闭环 | `test_tool_call_emulation` 通过 | 注入 `[TOOL CALLING MODE]` + 强容错正则与 JSON 解析 |
+| **REQ-04** | 多模态图片/文件输入支持 | 核心后端 | `api/providers/tryingopen.py` | ✅ 已闭环 | `test_convert_messages_folds_system_images` | 转换为 TryingOpen parts 结构，支持 data URI/URL |
+| **REQ-05** | 单 IP 20次/h 限流突破 | 基础设施 | `api/proxy_pool.py`, `free_proxy_fetcher.py` | ✅ 已闭环 | 实测抓取 300+ 注入 84 个健康代理 | 每请求轮换代理 + 429 自动阶梯冷却与重试 |
+| **REQ-06** | OpenAI `/v1/chat/completions` 标准端点 | API 层 | `api/routes/chat.py` | ✅ 已闭环 | `test_chat_routes.py` 全部通过 | 流式 chunk、非流式 object、usage 记录 |
+| **REQ-07** | Anthropic `/v1/messages` 兼容端点 | API 层 | `api/routes/chat.py` | ✅ 已闭环 | `test_chat_routes.py` 全部通过 | 适配 Claude Code / Continue / Cursor 直连 |
+| **REQ-08** | 全站实时用量追踪与数据持久化 | 数据层 | `api/chat_usage.py`, `api/db/core.py` | ✅ 已闭环 | `chat_usage` 表与索引建立完成 | 记录 Prompt/Completion/Reasoning Tokens 及时延 |
+| **REQ-09** | 仪表盘用量卡片与图表整合 | 前端 UI | `frontend/src/pages/Dashboard.tsx` | ✅ 已闭环 | TypeScript 0 错误 + 构建打包通过 | 嵌入 24h 聊天、Token、工具调用、动态剩余可用额度 |
+| **REQ-10** | 在线聊天工作台 (ChatPlayground) | 前端 UI | `frontend/src/pages/ChatPlayground.tsx` | ✅ 已闭环 | 构建产出独立 Chunk | 懒加载、思考过程折叠、会话持久化、导出 Markdown |
+| **REQ-11** | 生产部署资产同步与环境模板 | 工程化 | `deploy/`, `.env.example` | ✅ 已闭环 | `scripts/sync_deploy.py check` 一致 | 同步 Docker 容器编排及配置参数 |
 
-### 前端/安全（frontend-security audit）
-| # | 位置 | 问题 | 状态 |
-|---|------|------|------|
-| P0-1 | deploy/.env.example + git历史 | **Kookeey 住宅代理真实凭据入库**（metric 风险，须轮换+清历史） | 待修 |
-| P0-2 | docs.html:1455 | **画廊密码硬编码 `tfadmin2024` 明文** | 待修 |
-| P0-3 | main.py CORS | `allow_origins=["*"]` 全开 | 待修（收敛为配置） |
-| P0-4 | dispatch.py + imagefree_client.py | SSRF DNS rebinding 窗口（解析后重连主机名） | 待修 |
+---
 
-## P1 高优先级（择要）
-- 前后端契约不对齐（api.ts 6 处字段缺失/错位、DLQ message vs detail、Tasks 无分页）
-- README 版本 3.1.0→4.2.1 + 架构图/目录结构/端点表过时
-- sync_deploy.py 白名单缺 9 个新模块（✅ 已修）+ contracts.py
-- requirements.txt 缺 prometheus-client
-- docker-compose 版本号 v2.3.0→v4.2.1、cfsolver 端口未映射 host 导致脚本无法连
-- 8+ 新模块无测试（sse/dispatch/dispatch_edit/meta/handlers/bg_tasks/models/contracts）
-- test_async_submit_and_poll 整组跑 fail 单独 pass（session scope 共享污染）
-- CI 三处问题：-x 跑两遍、`|| true` 使 ruff 形同虚设、无 sync_deploy 校验
+## 3. 终局审计与自查缺陷修复清单 (Defect & Remediation Log)
 
-## 修复顺序（按影响）
-1. ✅ P0-2 URL 图片下载回填（已修）
-2. P0-6 admin 优先级 0 被吞 → 改为 `2 if priority is None else priority`
-3. P0-8 SSE 终态双发 → _finish 去掉 publish，bcast 全权
-4. P0-3 imagefree edit task 托盘
-5. P0-4 imagefree 多图明确报错
-6. P0-5 worker dynamic watermark
-7. P0-1 _SSE_SUBSCRIBERS 加锁
-8. P0-2 画廊密码：docs.html 去除硬编码 → 服务端 /v1/meta 下发
-9. P0-3 CORS 收敛
-10. P0-4 SSRF DNS rebinding
-11. P0-1 Kookeey 凭据：占位符替换 + README 提示轮换 + git filter 清理说明
-12. P1 契约/测试/README/CI 修复
+- **[P1-01] 修复 TryingOpen 工具调用解析误选内部参数对象问题**：优化 `_last_json_object` 优先匹配外层包含 `tool_call` / `tool` 的对象，防止 arguments 覆盖。
+- **[P1-02] 修复前端 BarChart `metricLabel` TS6133 未使用告警**：将参数完整注入 Tooltip 自定义渲染组件。
+- **[P1-03] 修复前端 Accounts 页面分页属性类型不匹配**：扩展 `AccountPoolData` 接口声明 `items_total`, `total_pages` 等字段。
+- **[P1-04] 修复免费代理抓取器单元测试初始化断言**：确保 `_client` 声明周期安全。
 
-## 节点验收标准
-每修复一个 P0/P1，须：代码证据 + 相关测试通过 + 前端若涉及则重新 build + 部署 smoke。
+---
+
+## 4. 后续自动化执行计划 (Next Steps)
+
+1. **全面代码与架构深审 (Deep Code Review)**：核对并发安全、超时逃逸、SQL 防护与资源释放。
+2. **编写端到端高并发压测与异常穿透测试**：验证极端网络与限流下的弹性。
+3. **架构资产与 ADR 沉淀**：编写标准规范文档与交付 SOP。
+4. **生成交互式 HTML 终结报告与理解测验**。

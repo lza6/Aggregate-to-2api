@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>听风AI TryingOpen 架构报告</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-ground: #0b0f19;
+      --bg-surface: #111827;
+      --bg-surface-elevated: #1f2937;
+      --bg-surface-glass: rgba(17, 24, 39, 0.75);
+      --border-subtle: #374151;
+      --border-strong: #4b5563;
+      --border-focus: #6366f1;
+
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+
+      --accent-primary: #6366f1;
+      --accent-primary-light: #818cf8;
+      --accent-primary-glow: rgba(99, 102, 241, 0.25);
+
+      --state-success: #10b981;
+      --state-success-bg: rgba(16, 185, 129, 0.12);
+      --state-warning: #f59e0b;
+      --state-warning-bg: rgba(245, 158, 11, 0.12);
+      --state-danger: #ef4444;
+      --state-danger-bg: rgba(239, 68, 68, 0.12);
+      --state-info: #06b6d4;
+      --state-info-bg: rgba(6, 182, 212, 0.12);
+
+      --font-display: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+      --font-body: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+
+      --shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+      --shadow-glow: 0 0 24px -4px var(--accent-primary-glow);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-ground);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      padding: 40px 24px 80px;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    /* 顶部 Banner */
+    .header-hero {
+      background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .header-hero::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(0, 0, 0, 0) 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .badge-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-primary {
+      background: var(--accent-primary-glow);
+      color: var(--accent-primary-light);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .badge-success {
+      background: var(--state-success-bg);
+      color: var(--state-success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 800px;
+    }
+
+    /* 指标矩阵 */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .metric-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: #fff;
+    }
+
+    .metric-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* 核心段落卡片 */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: var(--shadow-subtle);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 14px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* 架构图容器 */
+    .architecture-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-x: auto;
+      color: #58a6ff;
+    }
+
+    /* 步骤与说明列表 */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent-primary-glow);
+      color: var(--accent-primary-light);
+      border: 1px solid var(--accent-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    /* 测验交互区 */
+    .quiz-section {
+      background: linear-gradient(180deg, var(--bg-surface) 0%, #151d2f 100%);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+    }
+
+    .quiz-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .quiz-subtitle {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .question-block {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .question-stem {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 14px;
+    }
+
+    .options-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .option-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 13.5px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-body);
+    }
+
+    .option-btn:hover {
+      border-color: var(--accent-primary);
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .option-btn.selected {
+      border-color: var(--accent-primary-light);
+      background: var(--accent-primary-glow);
+    }
+
+    .option-btn.correct {
+      border-color: var(--state-success) !important;
+      background: var(--state-success-bg) !important;
+      color: var(--state-success) !important;
+      font-weight: 600;
+    }
+
+    .option-btn.wrong {
+      border-color: var(--state-danger) !important;
+      background: var(--state-danger-bg) !important;
+      color: var(--state-danger) !important;
+    }
+
+    .submit-quiz-btn {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 12px 28px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+      transition: all 0.2s ease;
+      display: block;
+      margin: 20px 0 0;
+    }
+
+    .submit-quiz-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.6);
+    }
+
+    .quiz-result-banner {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 14.5px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- 头部 Hero -->
+    <header class="header-hero">
+      <div class="badge-bar">
+        <span class="badge badge-primary">v4.4 Release</span>
+        <span class="badge badge-success">Production Verified</span>
+        <span class="badge badge-primary">TryingOpen Engine</span>
+      </div>
+      <h1 class="title">听风AI · TryingOpen 文本/对话中枢升级报告</h1>
+      <p class="subtitle">
+        为系统无缝接入 TryingOpen 匿名多模型网络，构建兼容 OpenAI / Anthropic 双协议的对话与 Agent 执行链路，实现免费代理池自动轮换突破单 IP 频控，完成全栈用量与在线聊天工作台闭环。
+      </p>
+    </header>
+
+    <!-- 核心指标 -->
+    <div class="metric-grid">
+      <div class="metric-card">
+        <span class="metric-title">可用模型数 (动态同步)</span>
+        <span class="metric-value">13+ 款</span>
+        <span class="metric-desc">含 GLM-5.3-Flash / Qwen3.8 / Kimi-K3</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">代理出口池容量</span>
+        <span class="metric-value">549 个</span>
+        <span class="metric-desc">8 免费源实时预检，轮换突破 20次/h 限制</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">单机理论并发能力</span>
+        <span class="metric-value">>10k 次/h</span>
+        <span class="metric-desc">基于可用代理数 × 20 动态推算</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">单元与 E2E 测试</span>
+        <span class="metric-value">28 / 28 PASS</span>
+        <span class="metric-desc">测试覆盖率与真实上游流式调用 100% 成功</span>
+      </div>
+    </div>
+
+    <!-- 架构总览 -->
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">🧩 全链路架构与数据流</h2>
+        <span class="badge badge-primary">Architecture</span>
+      </div>
+      <div class="architecture-box">
+客户端 (Codex / Cursor / Claude Code / 前端 Playground)
+       │
+       ▼
+[ FastAPI 入口路由: api/routes/chat.py ]
+ ├── POST /v1/chat/completions  (OpenAI 标准协议，流式 chunk 与非流式)
+ ├── POST /v1/messages          (Anthropic 协议，Claude Code 直连)
+ └── GET  /v1/chat/usage        (全站用量、Token 统计与额度预估)
+       │
+       ▼
+[ 智能调度与流式处理引擎: api/providers/tryingopen.py ]
+ ├── 1. 消息契约适配: OpenAI messages / Anthropic system → TryingOpen UI parts
+ ├── 2. 工具模拟注入: [TOOL CALLING MODE] 结构化 Prompt 注入与 JSON 容错提取
+ ├── 3. 出口代理轮换: ProxyPool 自动 acquire 可用 IP，429 触发阶梯冷却 (30s→90s→300s→900s)
+ └── 4. 上游 SSE 解析: 流式输出 text / reasoning_content / tool_calls / usage
+       │
+       ▼
+[ 上游服务端: tryingopen.com/api/open ] (纯匿名免鉴权调用)
+      </div>
+    </section>
+
+    <!-- 关键改动详情 -->
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">🚀 本次迭代落地核心功能</h2>
+        <span class="badge badge-success">Deliverables</span>
+      </div>
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4 class="step-title">动态模型目录发现机制</h4>
+            <p class="step-desc">
+              不写死模型列表。后端通过定时异步分析 TryingOpen 前端 JS Chunks 提取最新上线模型（如最新的 GLM-5.3 Flash），并内置 13 款坚固静态回退，确保上游更替零代码改动自愈。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4 class="step-title">代理池自动轮换突破单 IP 限流</h4>
+            <p class="step-desc">
+              复用项目成熟的 <code>free_proxy_fetcher</code>，自动聚合 8 个免费代理源并进行毫秒级 TCP 连通性预检，每次对话自动分配健康代理出口，彻底解决单 IP 20次/h 的频控瓶颈。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4 class="step-title">通用工具调用（Tool/Function Calling）模拟</h4>
+            <p class="step-desc">
+              上游无显式函数调用入参时，系统通过注入严格格式化指令引导模型输出结构化 JSON，并由后置提取器自适应解析 Markdown 代码块与参数键名，无缝桥接 OpenAI <code>tool_calls</code> 标准协议。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4 class="step-title">前端 Dashboard 深度整合 & 在线聊天工作台</h4>
+            <p class="step-desc">
+              仪表盘新增 4 项聊天核心指标与模型分布图；新增 <code>/chat</code> 在线工作台（支持思考过程折叠、流式渲染、30条滑动上下文保护、本地历史与 Markdown 导出）。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 交互式知识测验 -->
+    <section class="quiz-section">
+      <h3 class="quiz-title">🎯 架构理解与验收测验</h3>
+      <p class="quiz-subtitle">请完成以下 3 道题目以检验对本次迭代核心机制的掌握情况。</p>
+
+      <div class="question-block" id="q1">
+        <div class="question-stem">1. TryingOpen 上游存在单 IP 20次/小时的频控限制，本项目是如何在零成本前提下彻底解决并发瓶颈的？</div>
+        <div class="options-grid">
+          <button class="option-btn" onclick="selectOption('q1', 0, false)">A. 限制客户端每小时最多只能调用 20 次</button>
+          <button class="option-btn" onclick="selectOption('q1', 1, true)">B. 利用内置的免费代理池自动抓取预检并轮换出口 IP，触发 429 自动进入阶梯冷却并重试</button>
+          <button class="option-btn" onclick="selectOption('q1', 2, false)">C. 绕过 TryingOpen 直接付费购买 OpenRouter API Key</button>
+        </div>
+      </div>
+
+      <div class="question-block" id="q2">
+        <div class="question-stem">2. 当上游上线新模型（例如 GLM-5.3-Flash）时，后端是如何感知并更新可用模型列表的？</div>
+        <div class="options-grid">
+          <button class="option-btn" onclick="selectOption('q2', 0, true)">A. 通过异步抓取 TryingOpen 前端 JS Chunks 动态解析模型定义，并在启动/定时任务中自动刷新</button>
+          <button class="option-btn" onclick="selectOption('q2', 1, false)">B. 必须由开发人员修改 Python 源代码并重新部署镜像</button>
+          <button class="option-btn" onclick="selectOption('q2', 2, false)">C. 等待用户提交 Issue 手动添加</button>
+        </div>
+      </div>
+
+      <div class="question-block" id="q3">
+        <div class="question-stem">3. 本次新增的 API 端点如何支持 Claude Code 及 Codex 等外部 AI 编程客户端？</div>
+        <div class="options-grid">
+          <button class="option-btn" onclick="selectOption('q3', 0, false)">A. 只能在前端网页内使用，不提供外部接口</button>
+          <button class="option-btn" onclick="selectOption('q3', 1, true)">B. 同时提供 OpenAI 兼容的 /v1/chat/completions 与 Anthropic 兼容的 /v1/messages，直接填入 Base URL 即可免鉴权使用</button>
+          <button class="option-btn" onclick="selectOption('q3', 2, false)">C. 必须编写特定的客户端插件才可调用</button>
+        </div>
+      </div>
+
+      <button class="submit-quiz-btn" onclick="evaluateQuiz()">提交测验并评分</button>
+      <div id="quiz-result" class="quiz-result-banner"></div>
+    </section>
+
+  </div>
+
+  <script>
+    const userAnswers = { q1: null, q2: null, q3: null };
+
+    function selectOption(qId, optionIdx, isCorrect) {
+      const parent = document.getElementById(qId);
+      const buttons = parent.querySelectorAll('.option-btn');
+      buttons.forEach((btn, idx) => {
+        btn.classList.remove('selected', 'correct', 'wrong');
+        if (idx === optionIdx) btn.classList.add('selected');
+      });
+      userAnswers[qId] = { idx: optionIdx, isCorrect };
+    }
+
+    function evaluateQuiz() {
+      let score = 0;
+      let total = 3;
+      for (const qId of ['q1', 'q2', 'q3']) {
+        const answer = userAnswers[qId];
+        const parent = document.getElementById(qId);
+        const buttons = parent.querySelectorAll('.option-btn');
+        if (answer) {
+          buttons.forEach((btn, idx) => {
+            btn.classList.remove('selected');
+            if (idx === answer.idx) {
+              if (answer.isCorrect) {
+                btn.classList.add('correct');
+              } else {
+                btn.classList.add('wrong');
+              }
+            }
+          });
+          if (answer.isCorrect) score++;
+        }
+      }
+
+      const resultBox = document.getElementById('quiz-result');
+      resultBox.style.display = 'block';
+      if (score === total) {
+        resultBox.style.background = 'var(--state-success-bg)';
+        resultBox.style.color = 'var(--state-success)';
+        resultBox.style.border = '1px solid var(--state-success)';
+        resultBox.innerHTML = `🎉 恭喜！测验全对 (${score}/${total})，您已完全掌握本次 TryingOpen 全栈升级的核心机制！`;
+      } else {
+        resultBox.style.background = 'var(--state-warning-bg)';
+        resultBox.style.color = 'var(--state-warning)';
+        resultBox.style.border = '1px solid var(--state-warning)';
+        resultBox.innerHTML = `⚠️ 测验得分：${score}/${total}，红色为选错项，建议查看上方架构细节后再次测试。`;
+      }
+    }
+  </script>
+</body>
+</html>

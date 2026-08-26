@@ -340,6 +340,10 @@ class Settings(BaseSettings):
     reg_backoff_transient_max: float = Field(30.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_MAX")
 
     # ── 分组配置（延迟初始化，由 model_validator 填充）───────────────
+    # 公开接口限速：每 IP 每分钟允许的生成提交次数（0 = 关闭限速）
+    if_requests_per_minute: int = Field(
+        10, validation_alias="IF_REQUESTS_PER_MINUTE"
+    )
     _db: DBSettings | None = None
     _http: HTTPSettings | None = None
     _solver: SolverSettings | None = None
@@ -830,6 +834,8 @@ REG_BACKOFF_EMAIL = settings.reg_backoff_email
 REG_BACKOFF_IP = settings.reg_backoff_ip
 REG_BACKOFF_TRANSIENT_BASE = settings.reg_backoff_transient_base
 REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
+# 公开接口限速（0 = 关闭）
+IF_REQUESTS_PER_MINUTE = settings.if_requests_per_minute
 
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
@@ -1019,6 +1025,7 @@ __all__ = [
     "IF_SLOW_REQUEST_MS",
     "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
+    "IF_REQUESTS_PER_MINUTE",
     "CORS_ORIGINS",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",

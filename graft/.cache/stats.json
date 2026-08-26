@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3526,
-  "edgeCount": 6330,
+  "nodeCount": 3539,
+  "edgeCount": 6362,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3526,
+  "totalCount": 3539,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-26T22:56:00.894Z",
-  "lastFile": "sync_deploy.py"
+  "syncedAt": "2026-08-26T23:33:58.746Z",
+  "lastFile": "registry.py"
 }

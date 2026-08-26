@@ -20,12 +20,19 @@ from ..dispatch import QueueFull
 from ..db import task_to_public
 from ..errors import AppError, ErrorCodes
 from .. import imagefree_client
+from ..request_guard import check_generate_request
 
 router = APIRouter()
 
 
+def _guard(request: Request, prompt: str) -> None:
+    """入口防护：per-IP 限速（突发脚本刷量时提前 429，保护上游与号池）。"""
+    check_generate_request(request, prompt)
+
+
 @router.post("/v1/generate", response_model=TaskInfo, summary="生成图片/视频（同步等待）")
 async def generate_sync(request: Request, req: GenerateRequest):
+    _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
     try:
@@ -43,7 +50,8 @@ async def generate_sync(request: Request, req: GenerateRequest):
 
 
 @router.post("/v1/generate/async", response_model=TaskInfo, summary="生成图片/视频（异步，立即返回）")
-async def generate_async(req: GenerateRequest):
+async def generate_async(request: Request, req: GenerateRequest):
+    _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
     try:
@@ -55,7 +63,8 @@ async def generate_async(req: GenerateRequest):
 
 
 @router.post("/v1/edit", response_model=TaskInfo, summary="图生图（AI 照片编辑，异步提交）")
-async def edit_image_route(req: EditRequest):
+async def edit_image_route(request: Request, req: EditRequest):
+    _guard(request, req.prompt or "")
     return await edit_image(req)
 
 

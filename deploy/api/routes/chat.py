@@ -8,10 +8,11 @@ import time
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .. import auth
 from ..chat_usage import chat_usage_tracker as chat_usage
 from ..errors import AppError, ErrorCodes
 from ..providers.registry import bootstrap as providers_bootstrap
@@ -352,7 +353,8 @@ async def _openai_stream(
 
 
 @router.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionsRequest):
+async def chat_completions(request: ChatCompletionsRequest, raw_request: Request):
+    auth.guard_chat_request(raw_request)
     messages = _messages_payload(request.messages)
     provider = _provider_for(request.model)
     if request.stream:
@@ -395,7 +397,8 @@ def _anthropic_content(
 
 
 @router.post("/v1/messages")
-async def messages(request: MessagesRequest):
+async def messages(request: MessagesRequest, raw_request: Request):
+    auth.guard_chat_request(raw_request)
     message_payload = _messages_payload(request.messages)
     if request.system:
         message_payload = [{"role": "system", "content": request.system}] + message_payload
@@ -554,6 +557,44 @@ async def _anthropic_stream(
 @router.get("/v1/chat/usage")
 async def get_chat_usage(period: Literal["1h", "24h", "7d", "30d"] = Query("24h")):
     return await chat_usage.stats(period)
+
+
+def _chat_model_public(spec) -> dict[str, Any]:
+    """ModelSpec → 前端 / OpenAI 风格公开字段。"""
+    meta = spec.meta or {}
+    return {
+        "id": spec.id,
+        "object": "model",
+        "display_name": spec.display_name or spec.upstream_model,
+        "upstream_model": spec.upstream_model,
+        "provider": spec.provider,
+        "context_window": meta.get("context_window", 0),
+        "capabilities": list(spec.capabilities),
+        "price_per_mtok": meta.get("pricePerMTok"),
+        "message_limit": meta.get("messageLimit", 0),
+        "cheaper_fallback_id": meta.get("cheaperFallbackId", ""),
+    }
+
+
+@router.get("/v1/chat/models")
+async def list_chat_models():
+    """聊天模型目录（动态 + 静态回退合并）。"""
+    providers_bootstrap()
+    models = registry.all_chat_models()
+    items = [_chat_model_public(m) for m in models]
+    items.sort(key=lambda m: m["id"])
+    return {"items": items, "count": len(items),
+            "auth_required": auth.auth_enabled()}
+
+
+@router.get("/v1/chat/auth/status")
+async def chat_auth_status():
+    """鉴权状态：前端/调用方探测是否需要携带 Key（不泄露 Key 本体）。"""
+    return {
+        "enabled": auth.auth_enabled(),
+        "header": "Authorization: Bearer <key>",
+        "alt_headers": ["X-API-Key", "?api_key="],
+    }
 
 
 @router.get("/v1/chat/remaining")
