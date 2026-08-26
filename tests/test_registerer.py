@@ -93,10 +93,10 @@ class TestEnsureClient:
     def test_proxy_injection_rebuilds_client(self, monkeypatch):
         r = NanobananaRegisterer()
         old = r.client
-        r._ensure_client("")
+        r._ensure_client()
         assert r.client is old  # 代理未变 → 复用
         r.proxy = "http://127.0.0.1:99999"
-        r._ensure_client("")
+        r._ensure_client()
         assert r.client is not old  # 代理变化 → 重建
         r.client.close()
 
@@ -104,11 +104,11 @@ class TestEnsureClient:
         r = NanobananaRegisterer()
         monkeypatch.setattr(r, "proxy", "http://injected:8000")
         r._current_proxy = None  # 强制重建
-        r._ensure_client("e@x.com")
+        r._ensure_client()
         assert r._current_proxy == "http://injected:8000"  # 显式注入优先
         r.proxy = None
         r._current_proxy = None
-        r._ensure_client("e@x.com")
+        r._ensure_client()
         # 无显式注入时走 config.PROXY（kookeey 已移除，不再 fallback 到 kookeey）
         from api import config
         assert r._current_proxy == config.PROXY

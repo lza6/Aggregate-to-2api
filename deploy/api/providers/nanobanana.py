@@ -32,6 +32,8 @@ DEFAULT_BASE = "https://nanobanana-pro.com"
 # 逆向确认的 Server Action ID（站点改版需重新抓取；契约见 README）
 ACTION_GENERATE_IMG = "7fb61a58991c7ab2bd6f0caa88d76a8194a714d6e3"
 ACTION_EDIT_IMG = "7f89ceae4364ecc4c8405d5cdb0aaa7da0ba5a87d0"
+# 每日签到领取 claimDailyCheckinAction；与生成/图生图 Action 统一管理，站点改版需重新抓取
+ACTION_CLAIM_DAILY_CHECKIN = "7fa3d4d28767dbc090ad4228dff062a1e20d421ce2"
 
 # 上游模型清单（ID → (显示名, 能力)）
 _UPSTREAM_MODELS = {

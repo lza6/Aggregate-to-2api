@@ -19,6 +19,7 @@ import enum
 import json
 import logging
 import re
+import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,7 +29,9 @@ import httpx
 from . import config
 from . import turnstile_client
 from .email_pool import email_pool
+from .proxy_pool import proxy_pool
 from .solver_guard import solver_guard
+from .providers.nanobanana import ACTION_CLAIM_DAILY_CHECKIN
 
 log = logging.getLogger("registerer")
 
@@ -246,6 +249,31 @@ def _proxy_host(proxy: str | None) -> str:
     return host
 
 
+def _gen_password() -> str:
+    """生成高强度随机密码，避免同秒注册使用相同密码被风控判定。
+
+    由 secrets 生成 16 字符，保证大小写字母、数字、特殊符号混合。
+    """
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+    while True:
+        pw = "".join(secrets.choice(alphabet) for _ in range(16))
+        if (
+            any(c.islower() for c in pw)
+            and any(c.isupper() for c in pw)
+            and any(c.isdigit() for c in pw)
+            and any(c in "!@#$%^&*" for c in pw)
+        ):
+            return pw
+
+
+def _session_data_from_cookies(cookies: httpx.Cookies) -> str:
+    """从登录响应 cookies 提取 better-auth session_data（用于后续鉴权续期）。"""
+    for name in ("__Secure-better-auth.session_data", "better-auth.session_data"):
+        if name in cookies:
+            return cookies[name]
+    return ""
+
+
 # ── nanobanana 自适应注册器 ─────────────────────────
 class NanobananaRegisterer:
     """nanobanana 账号注册器：支持自适应故障分类、代理隔离与断点状态推进。"""
@@ -320,7 +348,7 @@ class NanobananaRegisterer:
 
             self._ensure_client(email)
             session.proxy_used = self._current_proxy or "direct"
-            password = f"Tf@{int(time.time())}"
+            password = _gen_password()
             session.password = password
 
             # 阶段 2: Turnstile 求解
@@ -405,8 +433,10 @@ class NanobananaRegisterer:
             except Exception as e:
                 raise RegistrationError(f"sign-in 请求网络异常: {e}", category=RegistrationErrorCategory.TRANSIENT, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
 
-            cookie = "; ".join(f"{k}={v}" for k, v in login.cookies.items())
-            if login.status_code == 400 or "__Secure-better-auth.session_token" not in login.cookies:
+            # 从 client jar 提取累积的全部 cookies（含重定向/其它响应累积的 __Secure-better-auth.session_data 等），
+            # 而非仅 login 响应 cookies。
+            cookie = "; ".join(f"{k}={v}" for k, v in self.client.cookies.items())
+            if login.status_code == 400 or "__Secure-better-auth.session_token" not in self.client.cookies:
                 email_pool.record(email, self.provider, "error", "login_fail")
                 if login.status_code == 403:
                     self._ensure_client(email, force_rotate=True)
@@ -418,14 +448,16 @@ class NanobananaRegisterer:
                 raise RegistrationError(f"登录失败 HTTP {login.status_code}: {str(login.text)[:120]}", category=cat, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
 
             session.advance_to(RegistrationStage.LOGGED_IN, session_cookie=cookie, credits=4)
+            session_data = _session_data_from_cookies(self.client.cookies)
             email_pool.record(email, self.provider, "ok", note="no_verify" if not link else "verified")
             adaptive_backoff.record_success(self.provider)
             session.advance_to(RegistrationStage.COMPLETED)
-            log.info("nanobanana 注册成功 %s credits=4 (session: %s)", email, session.session_id)
+            log.info("nanobanana 注册成功 %s credits=4 (session: %s, has_session_data=%s)", email, session.session_id, bool(session_data))
 
             return {
                 "email": email,
                 "cookie": cookie,
+                "session_data": session_data,
                 "password": password,
                 "credits": 4,
                 "session_id": session.session_id,
@@ -453,6 +485,10 @@ class NanobananaRegisterer:
         """每日签到（Next.js Server Action claimDailyCheckinAction），返回新余额。"""
         if MOCK_REGISTER:
             return int(acc.get("credits", 0)) + 4
+        # 签到走独立出口代理：从 proxy_pool 获取一个新代理并绑定到 self.proxy，
+        # 避免沿用上次注册残留的代理或直连。
+        if not MOCK_REGISTER:
+            self.proxy = await proxy_pool.acquire()
         self._ensure_client()
         cookie = acc.get("cookie")
         if not cookie:
@@ -482,6 +518,8 @@ class NanobananaRegisterer:
                         self.turnstile_page,
                         self.SITEKEY,
                         config.TURNSTILE_TIMEOUT,
+                        # 与 register_one 保持一致：传入当前出口代理，避免签到求解直连导致 IP 分散/风控
+                        proxy=self.proxy or config.PROXY,
                     )
                     body = [{"captchaToken": captcha}]
                 except Exception:
@@ -494,7 +532,7 @@ class NanobananaRegisterer:
                 headers={
                     "Cookie": cookie,
                     "User-Agent": config.USER_AGENT,
-                    "Next-Action": "7fa3d4d28767dbc090ad4228dff062a1e20d421ce2",
+                    "Next-Action": ACTION_CLAIM_DAILY_CHECKIN,
                     "Accept": "text/x-component",
                     "Content-Type": "text/plain;charset=UTF-8",
                 },
@@ -523,6 +561,57 @@ class NanobananaRegisterer:
             return int((bal.json() or {}).get("credits", 0))
         except Exception as e:
             log.warning("nanobanana 签到失败 %s: %s", acc.get("email", "?"), e)
+        return None
+
+    async def re_login(self, email: str, password: str) -> dict | None:
+        """cookie 失效后重新登录（Turnstile 求解 + sign-in 端点），返回新会话 cookie。
+
+        复用 register_one 的登录流程：代理修复 + Turnstile 求解 + POST /api/auth/sign-in/email，
+        从 client cookie jar 汇总 __Secure-better-auth 会话 cookie，并顺带取 session_data。
+        """
+        if MOCK_REGISTER:
+            return {"email": email, "password": password, "cookie": "mock-session", "session_data": ""}
+        # 沿用 checkin 的出口代理（也可为空直连）；邻代码每次操作都保证代理新鲜
+        self._ensure_client(email)
+        try:
+            login_captcha = ""
+            try:
+                login_captcha, _ = await turnstile_client.solve_turnstile(
+                    config.CF_SOLVER_URL,
+                    self.turnstile_page,
+                    self.SITEKEY,
+                    config.TURNSTILE_TIMEOUT,
+                    proxy=config.PROXY,
+                )
+            except Exception as e:
+                solver_guard.record_failure("cf_solver_failed")
+                log.warning("nanobanana re_login Turnstile 求解失败: %s", e)
+
+            login = await _th(
+                self.client.post,
+                f"{self.base}/api/auth/sign-in/email",
+                headers={
+                    **_browser_headers(self.base, f"{self.base}/zh"),
+                    "x-turnstile-token": login_captcha,
+                },
+                json={"email": email, "password": password, "callbackURL": "/zh"},
+            )
+
+            cookie = "; ".join(f"{k}={v}" for k, v in self.client.cookies.items())
+            if login.status_code == 400 or "__Secure-better-auth.session_token" not in self.client.cookies or not cookie:
+                log.warning("nanobanana re_login 失败 %s: HTTP %s（无 session_token）", email, login.status_code)
+                return None
+
+            session_data = _session_data_from_cookies(self.client.cookies)
+            log.info("nanobanana re_login 成功 %s (has_session_data=%s)", email, bool(session_data))
+            return {
+                "email": email,
+                "password": password,
+                "cookie": cookie,
+                "session_data": session_data,
+            }
+        except Exception as e:
+            log.warning("nanobanana re_login 异常 %s: %s", email, e)
         return None
 
 

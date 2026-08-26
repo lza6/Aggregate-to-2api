@@ -528,7 +528,8 @@ class AccountPool:
                 await asyncio.sleep(30)
 
     async def _daily_checkin_loop(self, provider: str) -> None:
-        """nanobanana：定时检查签到（按时区与间隔）。"""
+        """nanobanana：定时检查签到（按时区与间隔），按批次处理避免 O(n)。"""
+        BATCH_SIZE = 500  # 每轮最多处理 500 个账号，避免单次全表扫描阻塞事件循环
         while True:
             try:
                 await asyncio.sleep(1800)  # 30 分钟一轮
@@ -536,17 +537,42 @@ class AccountPool:
                 if reg is None:
                     continue
                 now = time.time()
-                for acc in self.list(provider, status="ok"):
-                    last = acc.get("checkin_at") or 0
-                    if now - last > 20 * 3600:  # 距上次签到 >20h → 补签
-                        try:
-                            ok = await reg.checkin(acc)
-                            if ok:
-                                self.set_checkin(provider, acc["email"], time.time())
-                                self.update_credits(provider, acc["email"], ok)
-                                self.mark(provider, acc["email"], "active")
-                        except Exception as e:
-                            log.warning("nanobanana 签到失败 %s: %s", acc["email"], e)
+                cutoff = now - 20 * 3600  # 距上次签到 >20h → 补签
+                # SQL 层过滤：只加载需要签到的账号，避免 O(n) 全表扫描
+                rows = self._conn.execute(
+                    "SELECT * FROM accounts WHERE provider=? AND status IN ('ok', 'active') "
+                    "AND (checkin_at IS NULL OR checkin_at < ?) ORDER BY checkin_at ASC LIMIT ?",
+                    (provider, cutoff, BATCH_SIZE)
+                ).fetchall()
+                if not rows:
+                    continue
+                for row in rows:
+                    acc = dict(row)
+                    try:
+                        ok = await reg.checkin(acc)
+                        if ok:
+                            self.set_checkin(provider, acc["email"], time.time())
+                            self.update_credits(provider, acc["email"], ok)
+                            self.mark(provider, acc["email"], "active")
+                            continue
+                        # checkin 返回 None（cookie 失效）→ 尝试用保存的密码重新登录续期
+                        if acc.get("password") and hasattr(reg, "re_login"):
+                            re = await reg.re_login(acc["email"], acc["password"])
+                            if re and re.get("cookie"):
+                                self.add(
+                                    provider, acc["email"], re["cookie"],
+                                    password=acc.get("password"),
+                                    credits=int(acc.get("credits") or 0),
+                                    status="active", note=acc.get("note") or "",
+                                    register_ip=acc.get("register_ip") or "",
+                                )
+                                log.info("nanobanana cookie 续期成功 %s", acc["email"])
+                            else:
+                                self.mark(provider, acc["email"], "dead", note="cookie 失效且重新登录失败")
+                        else:
+                            self.mark(provider, acc["email"], "dead", note="cookie 失效（无密码可续期）")
+                    except Exception as e:
+                        log.warning("nanobanana 签到失败 %s: %s", acc["email"], e)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
