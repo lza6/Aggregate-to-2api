@@ -1,6 +1,6 @@
 """registerer（自动注册器）单元测试。
 
-覆盖：注册器注册表结构、minimaxh3 / nanobanana MOCK 注册路径、
+覆盖：注册器注册表结构、nanobanana MOCK 注册路径、
 nanobanana 签到循环（含 Server Action 领取响应解析 L1/L5 修复）、
 邮箱验证码/验证链接提取逻辑。
 """
@@ -15,7 +15,6 @@ os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 
 from api.registerer import (  # noqa: E402
     NanobananaRegisterer,
-    Minimaxh3Registerer,
     _extract_code,
     _extract_verify_link,
     build_registerers,
@@ -24,10 +23,9 @@ from api.registerer import (  # noqa: E402
 
 # ── 注册表结构 ─────────────────────────────────────
 class TestBuildRegisterers:
-    def test_returns_two_providers(self):
+    def test_returns_nanobanana(self):
         regs = build_registerers()
-        assert set(regs) == {"minimaxh3", "nanobanana"}
-        assert isinstance(regs["minimaxh3"], Minimaxh3Registerer)
+        assert set(regs) == {"nanobanana"}
         assert isinstance(regs["nanobanana"], NanobananaRegisterer)
 
     def test_registerers_expose_register_checkin(self):
@@ -38,18 +36,6 @@ class TestBuildRegisterers:
 
 # ── MOCK 注册路径（cash 时）─────────────────────────
 class TestMockRegister:
-    @pytest.mark.asyncio
-    async def test_minimaxh3_mock_register(self, monkeypatch):
-        monkeypatch.setattr("api.registerer.MOCK_REGISTER", True)
-        r = Minimaxh3Registerer()
-        acc = await r.register_one()
-        assert acc is not None
-        assert acc["email"].startswith("mock")
-        assert acc["cookie"] == "mock-session"
-        assert acc["password"] == "mock123"
-        assert acc["credits"] == 4
-        r.client.close()
-
     @pytest.mark.asyncio
     async def test_nanobanana_mock_register(self, monkeypatch):
         monkeypatch.setattr("api.registerer.MOCK_REGISTER", True)
@@ -105,7 +91,7 @@ class TestExtractVerifyLink:
 # ── 代理轮换（_ensure_client 重建）──────────────────
 class TestEnsureClient:
     def test_proxy_injection_rebuilds_client(self, monkeypatch):
-        r = Minimaxh3Registerer()
+        r = NanobananaRegisterer()
         old = r.client
         r._ensure_client("")
         assert r.client is old  # 代理未变 → 复用
@@ -117,20 +103,21 @@ class TestEnsureClient:
     def test_proxy_priority(self, monkeypatch):
         r = NanobananaRegisterer()
         monkeypatch.setattr(r, "proxy", "http://injected:8000")
-        monkeypatch.setattr("api.registerer.kookeey_proxy_for", lambda email: "http://kookeey:9000")
         r._current_proxy = None  # 强制重建
         r._ensure_client("e@x.com")
-        assert r._current_proxy == "http://injected:8000"  # 显式注入优先于 kookeey
+        assert r._current_proxy == "http://injected:8000"  # 显式注入优先
         r.proxy = None
         r._current_proxy = None
         r._ensure_client("e@x.com")
-        assert r._current_proxy == "http://kookeey:9000"  # kookeey 次之
+        # 无显式注入时走 config.PROXY（kookeey 已移除，不再 fallback 到 kookeey）
+        from api import config
+        assert r._current_proxy == config.PROXY
         r.client.close()
 
 
 # ── _ensure_client 的 mock 客户端默认创建（仅构造路径）──
 def test_clients_are_httpx(monkeypatch):
     monkeypatch.setattr("api.registerer.config.PROXY", None)
-    r = Minimaxh3Registerer()
+    r = NanobananaRegisterer()
     assert hasattr(r.client, "post")
     r.client.close()

@@ -1,27 +1,27 @@
 # deploy/api/providers/registry.py
 
-- Registry · class · L22-L276 — class Registry
-- __init__ · method · L23-L37 — def __init__(self) -> None
-- _ensure_booted · method · L39-L42 — def _ensure_booted(self) -> None
-- register · method · L44-L52 — def register(self, provider: Provider) -> None
-- model · method · L54-L56 — def model(self, model_id: str) -> ModelSpec | None
-- get_routing_records · method · L58-L60 — def get_routing_records(self, limit: int = 50) -> list[dict]
-- provider_for · method · L62-L115 — def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None
-- find_alternative · method · L117-L139 — def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]
-- degrade · method · L142-L148 — def degrade(self, provider: str, reason: str) -> None
-- mark_down · method · L150-L160 — def mark_down(self, provider: str, reason: str) -> None
-- degraded_providers · method · L162-L166 — def degraded_providers(self) -> list[str]
-- recover · method · L168-L177 — def recover(self, provider: str) -> None
-- record_failure · method · L180-L186 — def record_failure(self, provider: str) -> None
-- record_success · method · L188-L192 — def record_success(self, provider: str) -> None
-- mark_exhausted · method · L194-L196 — def mark_exhausted(self, provider: str, account_id: str) -> None
-- try_recover · method · L198-L203 — def try_recover(self, provider: str) -> None
-- try_recover_all · method · L205-L214 — def try_recover_all(self) -> None
-- all_models · method · L216-L218 — def all_models(self) -> list[ModelSpec]
-- grouped · method · L220-L236 — def grouped(self) -> dict[str, list[dict]]
-- provider_summary · method · L238-L252 — def provider_summary(self) -> dict[str, dict]
-- healthy_providers · method · L255-L260 — def healthy_providers(self) -> list[str]
-- health_check_all · method · L262-L276 — async def health_check_all(self) -> None
-- bootstrap · function · L283-L294 — def bootstrap() -> None
-- startup_all · function · L297-L303 — async def startup_all() -> None
-- shutdown_all · function · L306-L311 — async def shutdown_all() -> None
+- Registry · class · L21-L281 — class Registry
+- __init__ · method · L22-L36 — def __init__(self) -> None
+- _ensure_booted · method · L38-L41 — def _ensure_booted(self) -> None
+- register · method · L43-L51 — def register(self, provider: Provider) -> None
+- model · method · L53-L55 — def model(self, model_id: str) -> ModelSpec | None
+- get_routing_records · method · L57-L59 — def get_routing_records(self, limit: int = 50) -> list[dict]
+- provider_for · method · L61-L114 — def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None
+- find_alternative · method · L116-L138 — def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]
+- degrade · method · L141-L151 — def degrade(self, provider: str, reason: str) -> None
+- mark_down · method · L153-L163 — def mark_down(self, provider: str, reason: str) -> None
+- degraded_providers · method · L165-L169 — def degraded_providers(self) -> list[str]
+- recover · method · L171-L180 — def recover(self, provider: str) -> None
+- record_failure · method · L183-L189 — def record_failure(self, provider: str) -> None
+- record_success · method · L191-L195 — def record_success(self, provider: str) -> None
+- mark_exhausted · method · L197-L199 — def mark_exhausted(self, provider: str, account_id: str) -> None
+- try_recover · method · L201-L206 — def try_recover(self, provider: str) -> None
+- try_recover_all · method · L208-L217 — def try_recover_all(self) -> None
+- all_models · method · L219-L221 — def all_models(self) -> list[ModelSpec]
+- grouped · method · L223-L239 — def grouped(self) -> dict[str, list[dict]]
+- provider_summary · method · L241-L257 — def provider_summary(self) -> dict[str, dict]
+- healthy_providers · method · L260-L265 — def healthy_providers(self) -> list[str]
+- health_check_all · method · L267-L281 — async def health_check_all(self) -> None
+- bootstrap · function · L288-L299 — def bootstrap() -> None
+- startup_all · function · L302-L308 — async def startup_all() -> None
+- shutdown_all · function · L311-L316 — async def shutdown_all() -> None

@@ -15,8 +15,7 @@ class ProviderSettings(BaseModel):
     proxy_use_cooldown_map: str = "0,30,90,300,900"
     account_db_file: str = "data/account_pool.db"
     email_db_file: str = "data/email_registry.db"
-    minimaxh3_account_target: int = 500
-    nanobanana_account_target: int = 500
+    nanobanana_account_target: int = 10000
     account_auto: bool = True
     mock_register: bool = False
     degrade_threshold: int = 3

@@ -1,4 +1,4 @@
-"""QueueDB 类 + task_to_public 函数。"""
+"""QueueDB 类（已废弃，请使用 QueueStore）+ task_to_public 函数。"""
 from __future__ import annotations
 
 import logging
@@ -9,10 +9,12 @@ log = logging.getLogger("db")
 
 
 class QueueDB:
-    """持久化队列 DB（IMP-29）：独立 SQLite 文件，记录待消费任务。
+    """持久化队列 DB（同步实现，**已废弃**）。
 
-    重启后从未消费的 task_queue 中恢复任务，避免重启丢失队列。
-    保持轻量级，不改为异步 — 仅被 worker 的同步代码路径使用。
+    ⚠️ 此实现使用同步 sqlite3，会阻塞事件循环。
+    请使用 `api.db.queue_store.QueueStore`（异步 aiosqlite）替代。
+
+    保留仅为兼容已有引用，**不要在新代码中使用**。
     """
 
     def __init__(self, path: str):

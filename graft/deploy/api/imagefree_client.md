@@ -1,28 +1,28 @@
 # deploy/api/imagefree_client.py
 
 - _shrink_buf · function · L34-L45 — def _shrink_buf(buf: bytearray, target: int) -> None
-- _BufferPool · class · L48-L115 — class _BufferPool
-- _Slot · class · L67-L73 — class _Slot
-- __init__ · method · L72-L73 — def __init__(self, buf: bytearray) -> None
-- __init__ · method · L75-L82 — def __init__(self, max_size: int = 10, prealloc_size: int = 64 * 1024) -> None
-- acquire · method · L84-L102 — def acquire(self) -> bytearray
-- release · method · L104-L115 — def release(self, buf: bytearray) -> None
-- _PoolView · class · L118-L145 — class _PoolView
-- __init__ · method · L127-L129 — def __init__(self, buf: bytearray) -> None
-- from_pool · method · L132-L133 — def from_pool(cls, pool) -> "_PoolView"
-- extend · method · L135-L138 — def extend(self, data: bytes) -> None
-- __len__ · method · L140-L141 — def __len__(self) -> int
-- __bytes__ · method · L143-L145 — def __bytes__(self) -> bytes
-- ImagefreeError · class · L153-L154 — class ImagefreeError(RuntimeError)
-- _get_client · function · L161-L174 — def _get_client() -> httpx.AsyncClient
-- close_client · function · L177-L182 — async def close_client() -> None
-- _browser_headers · function · L185-L200 — def _browser_headers(base_url: str, referer: str | None = None) -> dict
-- submit_generate · function · L203-L236 — async def submit_generate( base_url: str, prompt: str, aspect_ratio: str, turnstile_token: str, timeout: float = 30.0, ) -> str
-- poll_generate_status · function · L239-L284 — async def poll_generate_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, ) -> dict
-- download_image · function · L287-L328 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
-- to_base64 · function · L331-L333 — def to_base64(data: bytes, mime: str = "image/png") -> str
-- detect_mime · function · L336-L348 — def detect_mime(data: bytes) -> str
-- _edit_client · function · L361-L366 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
-- upload_edit_image · function · L369-L393 — async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None) -> str
-- submit_edit · function · L396-L417 — async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None) -> str
-- poll_edit_status · function · L420-L455 — async def poll_edit_status(base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None) -> dict
+- _BufferPool · class · L48-L121 — class _BufferPool
+- _Slot · class · L66-L76 — class _Slot
+- __init__ · method · L74-L76 — def __init__(self, buf: bytearray) -> None
+- __init__ · method · L78-L81 — def __init__(self, max_size: int = 10, prealloc_size: int = 64 * 1024) -> None
+- acquire · method · L83-L104 — def acquire(self) -> bytearray
+- release · method · L106-L121 — def release(self, buf: bytearray) -> None
+- _PoolView · class · L124-L151 — class _PoolView
+- __init__ · method · L133-L135 — def __init__(self, buf: bytearray) -> None
+- from_pool · method · L138-L139 — def from_pool(cls, pool) -> "_PoolView"
+- extend · method · L141-L144 — def extend(self, data: bytes) -> None
+- __len__ · method · L146-L147 — def __len__(self) -> int
+- __bytes__ · method · L149-L151 — def __bytes__(self) -> bytes
+- ImagefreeError · class · L159-L160 — class ImagefreeError(RuntimeError)
+- _get_client · function · L167-L180 — def _get_client() -> httpx.AsyncClient
+- close_client · function · L183-L188 — async def close_client() -> None
+- _browser_headers · function · L191-L206 — def _browser_headers(base_url: str, referer: str | None = None) -> dict
+- submit_generate · function · L209-L242 — async def submit_generate( base_url: str, prompt: str, aspect_ratio: str, turnstile_token: str, timeout: float = 30.0, ) -> str
+- poll_generate_status · function · L245-L290 — async def poll_generate_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, ) -> dict
+- download_image · function · L293-L334 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
+- to_base64 · function · L337-L339 — def to_base64(data: bytes, mime: str = "image/png") -> str
+- detect_mime · function · L342-L354 — def detect_mime(data: bytes) -> str
+- _edit_client · function · L367-L372 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
+- upload_edit_image · function · L375-L399 — async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None) -> str
+- submit_edit · function · L402-L423 — async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None) -> str
+- poll_edit_status · function · L426-L461 — async def poll_edit_status(base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None) -> dict

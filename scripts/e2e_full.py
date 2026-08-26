@@ -192,7 +192,7 @@ class E2ERunner:
         count = (d.get("json") or {}).get("count") or 0
         self.check("模型总数 ≥ 40", count >= 40, f"count={count}")
         self.check("imagefree 组存在", "imagefree" in items)
-        self.check("minimaxh3 组存在", "minimaxh3" in items)
+        self.check("nanobanana 组存在", "nanobanana" in items)
         naming_ok = all(m["id"].startswith(p + "/") for p, ms in items.items() for m in ms)
         self.check("模型命名 <提供商>/<真实模型名>", naming_ok)
 

@@ -1,6 +1,6 @@
 """多提供商统一网关：提供商抽象基类。
 
-每个上游（imagefree / minimaxh3 / aifreeforever / nanobanana-pro 等）实现一个 Provider：
+每个上游（imagefree / aifreeforever / nanobanana-pro 等）实现一个 Provider：
 - 统一能力面：txt2img / img2img / txt2vid（支持哪些由 capability 声明）
 - 统一生命周期：提交 → 轮询 → 取产物 URL / 下载
 - 统一额度面：余额、每次消耗、健康
@@ -35,8 +35,8 @@ CAP_IMG2VID = "img2vid"
 @dataclass(frozen=True)
 class ModelSpec:
     """统一模型描述。id = "<provider_prefix>/<真实模型名>"（外部命名契约）。"""
-    id: str                 # 外部暴露 id，如 "minimaxh3/nano-banana-pro"
-    provider: str           # 提供商前缀，如 "minimaxh3"
+    id: str                 # 外部暴露 id，如 "nanobanana/nano-banana-pro"
+    provider: str           # 提供商前缀，如 "nanobanana"
     upstream_model: str     # 上游真实模型 ID，如 "nano-banana-pro"
     capabilities: tuple[str, ...]
     display_name: str = ""

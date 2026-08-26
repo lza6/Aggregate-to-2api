@@ -133,7 +133,7 @@ class TestFindAlternative:
         registry.mark_down("imagefree", "test")
         try:
             alt_provider, alt_model = registry.find_alternative("imagefree/default")
-            # 至少应找到（minimaxh3 等同能力）或 None（无可替代时不抛错）
+            # 至少应找到（nanobanana 等同能力）或 None（无可替代时不抛错）
             assert alt_provider is None or alt_provider.prefix != "imagefree"
         finally:
             registry.recover("imagefree")

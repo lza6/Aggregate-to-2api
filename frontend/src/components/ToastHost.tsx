@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { onToast } from '../api';
 import type { Toast } from '../api';
 
@@ -7,22 +7,34 @@ const AUTO_DISMISS_MS = 3500;
 
 export function ToastHost() {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     return onToast((t: Toast) => {
       setToasts(prev => [...prev.slice(-(MAX_TOASTS - 1)), t]);
+      const timer = setTimeout(() => {
+        setToasts(prev => prev.filter(item => item.id !== t.id));
+        timersRef.current.delete(t.id);
+      }, AUTO_DISMISS_MS);
+      timersRef.current.set(t.id, timer);
     });
   }, []);
 
-  useEffect(() => {
-    if (!toasts.length) return;
-    const timer = setTimeout(() => {
-      setToasts(prev => prev.slice(1));
-    }, AUTO_DISMISS_MS);
-    return () => clearTimeout(timer);
-  }, [toasts]);
+  const dismiss = (id: number) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
-  const dismiss = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(timer => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, []);
 
   if (!toasts.length) return null;
 

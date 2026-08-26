@@ -105,8 +105,8 @@ export function LogsPage() {
               <span>⚡ 等待服务端日志流推入中…</span>
             </div>
           ) : (
-            filtered.map((l, i) => (
-              <div key={i} className="terminal-line">
+            filtered.map((l) => (
+              <div key={l.timestamp || l.logger || l.message.slice(0, 20)} className="terminal-line">
                 <span className="t-ts">{l.timestamp}</span>
                 <span className={`t-lvl ${getLevelBadgeClass(l.level)}`}>{l.level}</span>
                 <span className="t-logger">[{l.logger}]</span>

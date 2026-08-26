@@ -47,6 +47,16 @@ class TestRegistry:
         assert s["aifreeforever"]["needs_proxy_per_request"] is True
         assert s["nanobanana"]["needs_account"] is True
         assert s["imagefree"]["needs_account"] is False
+        # P1-E: 验证新增字段
+        for prefix in s:
+            assert "error_count" in s[prefix], f"{prefix} 缺少 error_count"
+            assert "degraded" in s[prefix], f"{prefix} 缺少 degraded"
+            assert isinstance(s[prefix]["error_count"], int), f"{prefix} error_count 不是 int"
+            assert isinstance(s[prefix]["degraded"], bool), f"{prefix} degraded 不是 bool"
+            # 初始状态无连续失败，error_count 应为 0
+            assert s[prefix]["error_count"] == 0, f"{prefix} error_count 期望 0 实际 {s[prefix]['error_count']}"
+            # 初始 health_status 为 healthy，所以 degraded 应为 False
+            assert s[prefix]["degraded"] is False, f"{prefix} degraded 期望 False"
 
 
 # ── 提供商 mock 生成 ─────────────────────────────
@@ -152,6 +162,68 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
 
 @pytest.mark.slow
 @pytest.mark.asyncio
+async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
+    """P1-D: 非 imagefree 路径按 priority 控制并发。
+    P0 立即执行（不信号量），P1 有限并发（4），P2 串行排队（1）。
+    """
+    from api.dispatch import _dispatch_generate, _provider_sem, _HIGH_CONCURRENCY, _NORMAL_CONCURRENCY
+    from api.worker import QueueFull
+
+    monkeypatch.setattr("api.dispatch.db", tmp_db)
+    engine.db = tmp_db
+    await engine.start()
+    try:
+        prov = registry.providers["nanobanana"]
+        monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
+        monkeypatch.setattr(registry.adaptive_router, "select_best",
+                           lambda *a, **kw: "nanobanana")
+        await prov.startup()
+
+        # 验证信号量按 limit 隔离
+        p2_sem = _provider_sem("nanobanana", _NORMAL_CONCURRENCY)
+        p1_sem = _provider_sem("nanobanana", _HIGH_CONCURRENCY)
+        assert p2_sem is not p1_sem, "P1 与 P2 的信号量实例应不同"
+
+        # 验证 P2 串行：acquire → 再 acquire 会阻塞
+        await p2_sem.acquire()
+        locked = p2_sem.locked()
+        p2_sem.release()
+        assert locked, "P2 信号量（limit=1）acquire 后应 locked"
+
+        # 验证 P1 并发 4 个
+        for i in range(4):
+            await p1_sem.acquire()
+        assert p1_sem.locked(), "P1 信号量（limit=4）全部 acquire 后应 locked"
+        for i in range(4):
+            p1_sem.release()
+
+        # 提交 3 个不同优先级的非 imagefree 任务，验证它们都能完成
+        tids = {}
+        for prio, label in [(0, "p0"), (1, "p1"), (2, "p2")]:
+            tid = await _dispatch_generate(type("R", (), {
+                "prompt": f"priority-{label}", "aspect_ratio": "1:1",
+                "download": False, "model": "nanobanana/nano-banana-pro",
+                "resolution": "1K", "duration": None, "priority": prio,
+            })())
+            tids[prio] = tid
+
+        # 等待所有任务完成
+        for prio, tid in tids.items():
+            for _ in range(50):
+                s = (await tmp_db.get(tid))["status"]
+                if s in ("completed", "error"):
+                    break
+                await asyncio.sleep(0.1)
+            s = (await tmp_db.get(tid))["status"]
+            assert s == "completed", f"priority={prio} task {tid} 期望 completed 实际 {s}"
+
+        await prov.shutdown()
+    finally:
+        await engine.stop()
+
+
+@pytest.mark.slow
+@pytest.mark.asyncio
 async def test_dispatch_edit_routes(tmp_db, monkeypatch):
     from api.dispatch_edit import _dispatch_edit
 
@@ -182,4 +254,4 @@ def test_normalize_model_legacy():
     from api.dispatch import _normalize_model
     assert _normalize_model("default") == "imagefree/default"
     assert _normalize_model("anime") == "imagefree/anime"
-    assert _normalize_model("minimaxh3/gpt-image-2") == "minimaxh3/gpt-image-2"
+    assert _normalize_model("nanobanana/nano-banana-pro") == "nanobanana/nano-banana-pro"

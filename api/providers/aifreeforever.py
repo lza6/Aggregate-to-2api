@@ -98,7 +98,7 @@ class AifreeforeverProvider(Provider):
 
         # 2) 该 IP 专属求解 Turnstile（token 与 IP 绑定）
         # 用 /image-generators 页面作为 turnstile 上下文（逆向确认该页面有 Turnstile 挂载）
-        # 先直连求解（cf_solver 带 kookeey 代理 → Cloudflare 100% 拦截 aifreeforever turnstile）
+        # 先直连求解（cf_solver 代理 → Cloudflare 100% 拦截 aifreeforever turnstile）
         turnstile_page = f"{self.base_url}/image-generators"
         token = None
         for attempt_i in range(2):

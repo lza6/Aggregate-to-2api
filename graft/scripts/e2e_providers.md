@@ -3,7 +3,7 @@
 - _reconfigure_stdout · function · L28-L32 — def _reconfigure_stdout()
 - port_open · function · L35-L40 — def port_open(port: int, host: str = "127.0.0.1") -> bool
 - wait_port · function · L43-L51 — def wait_port(port: int, timeout: float, desc: str) -> bool
-- ProvidersE2E · class · L54-L262 — class ProvidersE2E
+- ProvidersE2E · class · L54-L259 — class ProvidersE2E
 - __init__ · method · L55-L60 — def __init__(self, api_port: int)
 - check · method · L62-L63 — def check(self, name: str, cond: bool, detail: str = "") -> None
 - start · method · L65-L85 — def start(self) -> None
@@ -13,10 +13,10 @@
 - post · method · L129-L135 — def post(self, path: str, body: dict) -> dict
 - submit_and_wait · method · L137-L148 — def submit_and_wait(self, body: dict, timeout: float = 20) -> dict
 - run · method · L150-L162 — def run(self) -> int
-- _verify_models · method · L164-L181 — def _verify_models(self) -> None
-- _verify_providers · method · L183-L190 — def _verify_providers(self) -> None
-- _verify_account_pool · method · L192-L200 — def _verify_account_pool(self) -> None
-- _verify_routing · method · L202-L236 — def _verify_routing(self) -> None: # imagefree → 引擎队列（mock 上游 completed）
-- _verify_brand · method · L238-L246 — def _verify_brand(self) -> None
-- _report · method · L248-L262 — def _report(self) -> None
-- main · function · L265-L275 — def main() -> int
+- _verify_models · method · L164-L180 — def _verify_models(self) -> None
+- _verify_providers · method · L182-L189 — def _verify_providers(self) -> None
+- _verify_account_pool · method · L191-L197 — def _verify_account_pool(self) -> None
+- _verify_routing · method · L199-L233 — def _verify_routing(self) -> None: # imagefree → 引擎队列（mock 上游 completed）
+- _verify_brand · method · L235-L243 — def _verify_brand(self) -> None
+- _report · method · L245-L259 — def _report(self) -> None
+- main · function · L262-L272 — def main() -> int

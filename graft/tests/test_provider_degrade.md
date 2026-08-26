@@ -2,7 +2,7 @@
 
 - _bootstrap · function · L24-L26 — def _bootstrap()
 - _reset_registry_state · function · L30-L39 — def _reset_registry_state()
-- TestRegistryDegrade · class · L43-L91 — class TestRegistryDegrade
+- TestRegistryDegrade · class · L43-L92 — class TestRegistryDegrade
 - test_initial_health_is_healthy · method · L44-L47 — def test_initial_health_is_healthy(self)
 - test_degrade_marks_degraded · method · L49-L51 — def test_degrade_marks_degraded(self)
 - test_mark_down_marks_down · method · L53-L58 — def test_mark_down_marks_down(self)
@@ -10,21 +10,21 @@
 - test_degraded_providers_ordering · method · L67-L73 — def test_degraded_providers_ordering(self)
 - test_provider_for_returns_none_when_down · method · L75-L80 — def test_provider_for_returns_none_when_down(self)
 - test_provider_for_returns_provider_when_degraded · method · L82-L86 — def test_provider_for_returns_provider_when_degraded(self)
-- test_provider_for_returns_provider_when_healthy · method · L88-L91 — def test_provider_for_returns_provider_when_healthy(self)
-- TestConsecutiveFailures · class · L95-L126 — class TestConsecutiveFailures
-- test_record_failure_counts · method · L96-L100 — def test_record_failure_counts(self)
-- test_record_failure_triggers_degrade_at_threshold · method · L102-L106 — def test_record_failure_triggers_degrade_at_threshold(self): # 连续 3 次（默认阈值）→ 降级
-- test_record_success_resets_failure_count · method · L108-L112 — def test_record_success_resets_failure_count(self)
-- test_success_before_threshold_prevents_degrade · method · L114-L121 — def test_success_before_threshold_prevents_degrade(self)
-- test_exhausted_accounts_tracking · method · L123-L126 — def test_exhausted_accounts_tracking(self)
-- TestRecover · class · L130-L160 — class TestRecover
-- test_try_recover_restores_health · method · L131-L136 — def test_try_recover_restores_health(self)
-- test_try_recover_all_only_recover_after_interval · method · L138-L149 — def test_try_recover_all_only_recover_after_interval(self, monkeypatch)
-- test_try_recover_all_skips_healthy · method · L151-L160 — def test_try_recover_all_skips_healthy(self, monkeypatch)
-- TestRouteIntegration · class · L164-L184 — class TestRouteIntegration
-- test_provider_for_returns_429_when_down · method · L165-L173 — def test_provider_for_returns_429_when_down(self)
-- test_healthy_provider_dispatch_ok · method · L175-L178 — def test_healthy_provider_dispatch_ok(self)
-- test_degraded_provider_dispatch_ok · method · L180-L184 — def test_degraded_provider_dispatch_ok(self)
-- TestConfig · class · L188-L193 — class TestConfig
-- test_degrade_threshold_config · method · L189-L190 — def test_degrade_threshold_config(self)
-- test_recover_interval_config · method · L192-L193 — def test_recover_interval_config(self)
+- test_provider_for_returns_provider_when_healthy · method · L88-L92 — def test_provider_for_returns_provider_when_healthy(self)
+- TestConsecutiveFailures · class · L96-L127 — class TestConsecutiveFailures
+- test_record_failure_counts · method · L97-L101 — def test_record_failure_counts(self)
+- test_record_failure_triggers_degrade_at_threshold · method · L103-L107 — def test_record_failure_triggers_degrade_at_threshold(self): # 连续 3 次（默认阈值）→ 降级
+- test_record_success_resets_failure_count · method · L109-L113 — def test_record_success_resets_failure_count(self)
+- test_success_before_threshold_prevents_degrade · method · L115-L122 — def test_success_before_threshold_prevents_degrade(self)
+- test_exhausted_accounts_tracking · method · L124-L127 — def test_exhausted_accounts_tracking(self)
+- TestRecover · class · L131-L161 — class TestRecover
+- test_try_recover_restores_health · method · L132-L137 — def test_try_recover_restores_health(self)
+- test_try_recover_all_only_recover_after_interval · method · L139-L150 — def test_try_recover_all_only_recover_after_interval(self, monkeypatch)
+- test_try_recover_all_skips_healthy · method · L152-L161 — def test_try_recover_all_skips_healthy(self, monkeypatch)
+- TestRouteIntegration · class · L165-L185 — class TestRouteIntegration
+- test_provider_for_returns_429_when_down · method · L166-L174 — def test_provider_for_returns_429_when_down(self)
+- test_healthy_provider_dispatch_ok · method · L176-L179 — def test_healthy_provider_dispatch_ok(self)
+- test_degraded_provider_dispatch_ok · method · L181-L185 — def test_degraded_provider_dispatch_ok(self)
+- TestConfig · class · L189-L194 — class TestConfig
+- test_degrade_threshold_config · method · L190-L191 — def test_degrade_threshold_config(self)
+- test_recover_interval_config · method · L193-L194 — def test_recover_interval_config(self)

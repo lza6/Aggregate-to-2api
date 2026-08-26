@@ -112,6 +112,26 @@ class TaskEventHub:
 # 模块级单例
 hub = TaskEventHub()
 
+# 待完成的 SSE 发布任务（关闭时 await 防丢终态）
+_pending_sse_tasks: set[asyncio.Task] = set()
+
+
+def _pending_sse_task_done(t: asyncio.Task) -> None:
+    _pending_sse_tasks.discard(t)
+
+
+async def await_pending_sse_tasks(timeout: float = 5.0) -> None:
+    """关闭时等待所有待处理的 SSE 发布任务完成，确保终态事件不丢。"""
+    if not _pending_sse_tasks:
+        return
+    tasks = list(_pending_sse_tasks)
+    _pending_sse_tasks.clear()
+    done, pending = await asyncio.wait(tasks, timeout=timeout)
+    for t in pending:
+        t.cancel()
+    if pending:
+        log.warning("SSE 发布任务等待超时: %d 个未完成", len(pending))
+
 
 async def task_events_generator(task_id: str, request) -> Any:
     """SSE 事件生成器：先回放历史（Last-Event-ID 补偿），再实时订阅，15s 心跳。
@@ -153,7 +173,9 @@ async def task_events_generator(task_id: str, request) -> Any:
 def publish_task_event(task_id: str, event: str, data: dict) -> None:
     """供 async 环境同步调用的发布入口（内部自动包成 asyncio 任务执行）。"""
     try:
-        asyncio.ensure_future(hub.publish(task_id, event, data))
+        t = asyncio.ensure_future(hub.publish(task_id, event, data))
+        _pending_sse_tasks.add(t)
+        t.add_done_callback(_pending_sse_task_done)
     except RuntimeError:
         # 无运行中的 loop（测试/关闭期）→ 丢弃避免警告
         pass

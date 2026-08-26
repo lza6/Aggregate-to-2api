@@ -4,7 +4,7 @@
 用不同出口 IP。号池注册也需轮换 IP 防批量风控。
 
 设计：
-- 双源：住宅代理文件（每行 http://user:pass@host:port，kookeey 格式，优先）+ 免费代理
+- 双源：住宅代理文件（每行 http://user:pass@host:port，优先）+ 免费代理
   （free_proxy_fetcher 后台抓取注入，source="free"，量大兜底）。
 - 分配：优先选从未使用过的 IP（use_count == 0）；全部用过一轮后选冷却最早结束的。
 - 冷却：每 IP 记 {use_count, cooldown_until}，USE_COOLDOWN_MAP 决定递增冷却时间。

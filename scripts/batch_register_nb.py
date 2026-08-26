@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""nanobanana 批量注册脚本（生产用，依赖 cf_solver + 22.do 邮箱 + kookeey 代理）。
+"""nanobanana 批量注册脚本（生产用，依赖 cf_solver + 22.do 邮箱 + 免费代理池）。
 
 用法：
   python scripts/batch_register_nb.py --target 10000 --concurrency 2
@@ -20,6 +20,7 @@ import logging
 import os
 import signal
 import sys
+import tempfile
 import time
 
 # 添加项目根目录到路径，确保可以直接运行
@@ -34,7 +35,7 @@ os.environ.setdefault("IF_MOCK_UPSTREAM", "0")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("batch_register")
 
-CHECKPOINT = "/tmp/nb_registry.json"
+CHECKPOINT = os.path.join(tempfile.gettempdir(), "nb_registry.json")
 MAX_CONSECUTIVE_FAIL = 10
 PROGRESS_INTERVAL = 10
 

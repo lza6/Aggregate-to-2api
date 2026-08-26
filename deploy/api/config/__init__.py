@@ -166,7 +166,8 @@ class Settings(BaseSettings):
     )
     sync_timeout: int = Field(300, validation_alias="IF_SYNC_TIMEOUT")
 
-    # ── 队列 / Worker ──
+    # ── 队列 / Worker（服务器规格自适应默认值）──
+    # 默认值在运行时由 system_spec 的 ADAPTIVE_* 覆盖（见 _resolve_adaptive_defaults）
     max_queue: int = Field(2000, validation_alias="IF_MAX_QUEUE")
     admin_queue_max: int = Field(200, validation_alias="IF_ADMIN_QUEUE_MAX")
     high_queue_max: int = Field(500, validation_alias="IF_HIGH_QUEUE_MAX")
@@ -297,11 +298,8 @@ class Settings(BaseSettings):
     email_db_file: str = Field(
         "data/email_registry.db", validation_alias="IF_EMAIL_DB_FILE"
     )
-    minimaxh3_account_target: int = Field(
-        500, validation_alias="IF_MINIMAXH3_ACCOUNT_TARGET"
-    )
     nanobanana_account_target: int = Field(
-        500, validation_alias="IF_NANOBANANA_ACCOUNT_TARGET"
+        10000, validation_alias="IF_NANOBANANA_ACCOUNT_TARGET"
     )
     account_auto: bool = Field(True, validation_alias="IF_ACCOUNT_AUTO")
     mock_register: bool = Field(
@@ -483,7 +481,6 @@ class Settings(BaseSettings):
             proxy_use_cooldown_map=self.if_proxy_use_cooldown_map,
             account_db_file=self.account_db_file,
             email_db_file=self.email_db_file,
-            minimaxh3_account_target=self.minimaxh3_account_target,
             nanobanana_account_target=self.nanobanana_account_target,
             account_auto=self.account_auto,
             mock_register=self.mock_register,
@@ -778,7 +775,6 @@ IF_PROXY_MAX_USE_PER_DAY = settings.if_proxy_max_use_per_day
 IF_PROXY_USE_COOLDOWN_MAP = settings.if_proxy_use_cooldown_map
 ACCOUNT_DB_FILE = settings.account_db_file
 EMAIL_DB_FILE = settings.email_db_file
-MINIMAXH3_ACCOUNT_TARGET = settings.minimaxh3_account_target
 NANOBANANA_ACCOUNT_TARGET = settings.nanobanana_account_target
 ACCOUNT_AUTO = settings.account_auto
 MOCK_REGISTER = settings.mock_register
@@ -975,7 +971,6 @@ __all__ = [
     "IF_PROXY_USE_COOLDOWN_MAP",
     "ACCOUNT_DB_FILE",
     "EMAIL_DB_FILE",
-    "MINIMAXH3_ACCOUNT_TARGET",
     "NANOBANANA_ACCOUNT_TARGET",
     "ACCOUNT_AUTO",
     "MOCK_REGISTER",

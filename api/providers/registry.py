@@ -1,7 +1,7 @@
 """模型注册表：统一收集各提供商 ModelSpec，暴露 /v1/models 与路由查找。
 
 命名契约：外部模型 id = "<provider前缀>/<上游真实模型名>"，让 API/前端用户一目了然
-上游来源。例：minimaxh3/nano-banana-pro、aifreeforever/gpt-image-2、nanobanana/nano-banana-pro。
+上游来源。例：nanobanana/nano-banana-pro、aifreeforever/gpt-image-2、imagefree/default。
 
 路由：自 v3.2 起 provider_for() 结合自适应路由引擎（MAB-EWMA）在候选内实时打分，
 不再"只看健康不看实时质量"。降级/熔断仍旧优先。
@@ -12,7 +12,6 @@ import logging
 
 from .base import ModelSpec, Provider
 from . import imagefree
-from . import minimaxh3
 from . import aifreeforever
 from . import nanobanana
 
@@ -143,6 +142,10 @@ class Registry:
         """标记 provider 为 degraded（连续限流/额度耗尽）。"""
         old = self.provider_health.get(provider, "healthy")
         self.provider_health[provider] = "degraded"
+        # 同步更新 provider 实例的 health_status
+        p = self.providers.get(provider)
+        if p:
+            p.health_status = "degraded"
         self._last_recover_at[provider] = __import__("time").time()
         if old != "degraded":
             log.warning("提供商 %s 降级为 degraded: %s", provider, reason)
@@ -236,7 +239,7 @@ class Registry:
         return out
 
     def provider_summary(self) -> dict[str, dict]:
-        """每个提供商的看板摘要（状态/能力/模型数/额度），前端与 healthz 用。"""
+        """每个提供商的看板摘要（状态/能力/模型数/额度/错误计数/降级标记），前端与 healthz 用。"""
         self._ensure_booted()
         out = {}
         for prefix, p in self.providers.items():
@@ -248,6 +251,8 @@ class Registry:
                 "needs_account": p.needs_account(),
                 "needs_proxy_per_request": p.needs_proxy_per_request(),
                 "health_status": p.health_status,  # IMP-22: 暴露健康状态
+                "error_count": self._consecutive_failures.get(prefix, 0),  # P1-E: 连续失败计数
+                "degraded": p.health_status == "degraded",  # P1-E: 是否为降级状态
             }
         return out
 
@@ -283,7 +288,7 @@ registry = Registry()
 def bootstrap() -> None:
     """创建并注册全部提供商实例（幂等）。
 
-    架构优化：已移除用完即丢且不可签到的冗余提供商（minimaxh3），
+    架构优化：已移除用完即丢且不可签到的冗余提供商，
     将所有算力与号池集中在支持每日自动签到续额的长效提供商（nanobanana）
     以及主力提供商（imagefree, aifreeforever）。
     """

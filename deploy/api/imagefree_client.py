@@ -16,7 +16,7 @@ import logging
 import os
 import socket
 import time
-import weakref
+from collections import deque
 from urllib.parse import urlsplit
 
 import httpx
@@ -46,40 +46,39 @@ def _shrink_buf(buf: bytearray, target: int) -> None:
 
 
 class _BufferPool:
-    """大缓冲区池：复用预分配 bytearray，减少 download_image 大对象反复分配的 GC 压力。
+    """大缓冲区池：复用 bytearray，减少 download_image 大对象反复分配的 GC 压力。
 
     P-05: 只对 download 专属内存做复用。bytearray 自身不可弱引用，故池中持有的是
-    可弱引用的 _Slot 包装；池用 WeakSet 登记"空闲"槽——槽的强引用常驻 _slots
-    （模块级 _buffer_pool 持有，进程存活期间不释放），弱引用仅作可用标记，
-    GC 友好：外部引用消失时弱引用失效不会残留死对象。
+    可弱引用的 _Slot 包装；池用 deque 登记"空闲"槽——槽的强引用常驻 _slots
+    （模块级 _buffer_pool 持有，进程存活期间不释放），空闲集合随租出/归还动态
+    变化（P2-6 从 WeakSet 改为 deque：不再依赖弱引用作为可用标记，逻辑更直白）。
 
     并发语义（与任务示例等价但修正了正确性）：
     - 初始全部预分配槽登记为空闲；acquire 从空闲集取走一个并清除，返回内部
       bytearray；空闲集因此随租出而动态缩小。
-    - release 按身份把槽放回空闲集；入池前判断池中空闲数量已达上限则放弃
-      该次归还（该槽仍被 _slots 强持有，随时可被再借）。
+    - release 按身份把槽放回空闲集；重复入池由"已空闲谓词"去重，池成员数不膨胀。
     - acquire 时空闲集为空（全部租出）则新建临时缓冲——永不阻塞、永不抛异常。
       扩展过大（超过预分配）的缓冲在 acquire 时用 _shrink_buf 截断回收"流浪内存"。
     """
 
-    __slots__ = ("_slots", "_pool", "_max_size", "_prealloc_size", "_buf_size")
+    __slots__ = ("_slots", "_pool", "_prealloc_size")
 
     class _Slot:
-        """可弱引用槽位：内嵌预分配 bytearray（cpython 不支持 bytearray 弱引用）。"""
+        """槽位：内嵌预分配 bytearray（cpython 不支持 bytearray 弱引用）。
 
-        __slots__ = ("buf", "__weakref__")
+        无 __weakref__（P2-6：改用 deque 登记，不再需要弱引用能力）。
+        """
+
+        __slots__ = ("buf", "idle")
 
         def __init__(self, buf: bytearray) -> None:
             self.buf = buf
+            self.idle = True  # P2-6: 显式空闲标记，供 release 去重（避免槽重复入池）
 
     def __init__(self, max_size: int = 10, prealloc_size: int = 64 * 1024) -> None:
         self._slots = tuple(self._Slot(bytearray(prealloc_size)) for _ in range(max_size))
-        self._pool: weakref.WeakSet = weakref.WeakSet()
-        for slot in self._slots:
-            self._pool.add(slot)
-        self._max_size = max_size
+        self._pool: "deque[_BufferPool._Slot]" = deque(self._slots)  # 仅登记空闲槽，初始全部空闲
         self._prealloc_size = prealloc_size
-        self._buf_size = prealloc_size  # 预分配缓冲容量快照（不含扩容）
 
     def acquire(self) -> bytearray:
         """获取一个缓冲区：优先复用池中空闲的预分配内存，返回其内部 bytearray。
@@ -89,29 +88,36 @@ class _BufferPool:
         提供长度与最终字节截取。返回值仍被 _slots 强引用，调用方不得持有跨调用的
         引用，且必须负责在 finally 中通过 release() 归还。
         """
-        for slot in list(self._pool):  # 优先复用空闲槽
-            self._pool.discard(slot)
+        while self._pool:
+            slot = self._pool.popleft()
+            if not slot.idle:  # 防御：已空闲标记的槽若出现在池中，跳过（逻辑<->标记 本应同步）
+                continue
+            slot.idle = False
             buf = slot.buf
-            if len(buf) <= self._buf_size:
+            if len(buf) <= self._prealloc_size:
                 # 未扩容缓冲：直接清空复用（保留容量）
                 buf.clear()
                 return buf
             # 扩展过大的缓冲：截断到预分配下沿，回收扩容产生的流浪内存
-            _shrink_buf(buf, self._buf_size)
+            _shrink_buf(buf, self._prealloc_size)
             return buf
-        return bytearray(self._buf_size)  # 全部租出：新建临时缓冲（复用失败路径）
+        return bytearray(self._prealloc_size)  # 全部租出：新建临时缓冲（复用失败路径）
 
     def release(self, buf: bytearray) -> None:
-        """归还缓冲区到池中（池中空闲已满则放弃，交给 GC 回收）。
+        """归还缓冲区到池中。
 
-        预分配槽常驻 _slots 不会因池成员数达上限而泄漏；超出 _prealloc_size 的
-        扩容缓冲由下一次 acquire 的截断逻辑处理。
+        始终通过身份匹配将预分配槽位归还到 _pool 中（idle 谓词保证已空闲槽
+        不会重复入池，池成员数严格 ≤ _slots 槽数），临时缓冲（非 _slots 成员）
+        直接静默释放。移除原 `>= _max_size` 早期返回以避免并发 release 中两个
+        task 同时观察到 `len(_pool) == _max_size - 1` 而其中一个被丢弃的 TOCTOU
+        竞争（P2-6）。预分配槽常驻 _slots 不会因池成员数达上限而泄漏；超出
+        _prealloc_size 的扩容缓冲由下一次 acquire 的截断逻辑处理。
         """
-        if len(self._pool) >= self._max_size:
-            return
         for slot in self._slots:
             if slot.buf is buf:
-                self._pool.add(slot)
+                if not slot.idle:  # P2-6: 已在池中则跳过，避免重复登记
+                    slot.idle = True
+                    self._pool.append(slot)
                 return
 
 

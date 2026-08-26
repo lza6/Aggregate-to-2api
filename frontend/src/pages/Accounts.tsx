@@ -30,6 +30,8 @@ interface AccountPoolData {
 const PROVIDER_META: Record<string, { name: string; note: string }> = {
   nanobanana: { name: 'NanoBanana Pro', note: '每日签到自动续额（长效号池管理）' },
 };
+// minimaxh3 提供商已下线：前端只展示当前活跃提供商卡片
+const ACTIVE_PROVIDERS = new Set(['nanobanana']);
 
 function PoolCard({ prefix, stats }: { prefix: string; stats: ProviderPoolStats }) {
   const meta = PROVIDER_META[prefix] ?? { name: prefix, note: '账号生命周期池' };
@@ -108,7 +110,7 @@ export function AccountsPage() {
     );
   }
 
-  const entries = Object.entries(data?.accounts ?? {});
+  const entries = Object.entries(data?.accounts ?? {}).filter(([prefix]) => ACTIVE_PROVIDERS.has(prefix));
   const rawItems = data?.items ?? [];
   const items = filter
     ? rawItems.filter(i => i.email.toLowerCase().includes(filter.toLowerCase()) || i.status.includes(filter))
@@ -203,7 +205,7 @@ export function AccountsPage() {
                   }
 
                   return (
-                    <tr key={idx}>
+                    <tr key={it.email}>
                       <td>
                         <code style={{ fontSize: 12, color: 'var(--primary-600)' }}>{it.email}</code>
                       </td>

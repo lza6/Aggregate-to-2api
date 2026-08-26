@@ -350,33 +350,42 @@ class Engine:
                         break
             worker_health.beat(idx)
             self.processing += len(tasks)
-            # 并行处理
+            # 并行处理：用 asyncio.wait 逐个判定，已完成任务保留真实结果，仅未完成者标超时
+            # 修正：避免 asyncio.timeout 包裹 gather 误伤已完成任务（P1-C）
+            coros = [self._process(tid) for _, _, tid in tasks]
+            fut_map = {asyncio.create_task(c): (_, _, tid) for c, (_, _, tid) in zip(coros, tasks)}
             try:
-                async with asyncio.timeout(config.TASK_HARD_TIMEOUT):
-                    results = await asyncio.gather(
-                        *(self._process(tid) for _, _, tid in tasks),
-                        return_exceptions=True,
-                    )
-                worker_health.add_processed(idx, len(tasks))
-                for task_item, result in zip(tasks, results):
-                    _, _, tid = task_item
-                    if isinstance(result, asyncio.TimeoutError):
-                        log.error("batch task %s 硬超时（%ss），强制回收", tid, config.TASK_HARD_TIMEOUT)
-                        await self.db.mark_finished(tid, "error", None,
-                                              f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
+                done, pending = await asyncio.wait(
+                    fut_map.keys(),
+                    timeout=config.TASK_HARD_TIMEOUT,
+                )
+                worker_health.add_processed(idx, len(done))
+                # 已完成任务：_process 内部已落库，此处仅记录意外异常
+                for fut in done:
+                    _, _, tid = fut_map[fut]
+                    if fut.cancelled():
+                        continue
+                    try:
+                        fut.result()
+                    except asyncio.CancelledError:
+                        pass
+                    except BaseException as exc:
+                        log.exception("batch 任务执行异常 %s: %s", tid, exc)
+                        await self.db.mark_finished(tid, "error", None, f"{exc}", None)
                         if self._persistent_queue and self._queue_db:
                             await self._queue_db.mark_completed(tid)
-                    elif isinstance(result, Exception):
-                        log.exception("batch 任务执行异常 %s", tid)
-                        await self.db.mark_finished(tid, "error", None, f"{result}", None)
-                        if self._persistent_queue and self._queue_db:
-                            await self._queue_db.mark_completed(tid)
-            except asyncio.TimeoutError:
-                log.error("batch 整体硬超时（%ss），强制回收 %d 个任务",
-                          config.TASK_HARD_TIMEOUT, len(tasks))
-                for _, _, tid in tasks:
+                # 未完成任务：cancel 后先检查 DB（_process 可能在 cancel 前已落库），
+                # 避免将已完成任务误标超时（P1-C）
+                for fut in pending:
+                    _, _, tid = fut_map[fut]
+                    fut.cancel()
+                    # 检查 task 是否在 cancel 送达前已自行完成（_process 内 _finish 已落库）
+                    row = await self.db.get(tid)
+                    if row and row["status"] in ("completed", "error"):
+                        continue  # _process 已处理，不覆盖终态
+                    log.error("batch task %s 硬超时（%ss），强制回收", tid, config.TASK_HARD_TIMEOUT)
                     await self.db.mark_finished(tid, "error", None,
-                                          f"批量生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
+                                          f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                     if self._persistent_queue and self._queue_db:
                         await self._queue_db.mark_completed(tid)
             except asyncio.CancelledError:
@@ -634,7 +643,7 @@ class Engine:
         # 使用懒导入避免循环依赖（worker → main → worker）
         try:
             from .dispatch import broadcast_task_event
-            broadcast_task_event(task_id, status, {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)})
+            await broadcast_task_event(task_id, status, {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)})
         except Exception:
             pass
         if status == "completed" and image_url:

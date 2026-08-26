@@ -22,7 +22,7 @@ DST = ROOT / "deploy" / "api"
 FILES = ["__init__.py", "main.py",
          "imagefree_client.py", "turnstile_client.py", "solver_guard.py", "docs.html",
          "account_pool.py", "email_pool.py", "proxy_pool.py", "registerer.py",
-         "free_proxy_fetcher.py", "kookeey.py",
+         "free_proxy_fetcher.py",
          "semaphore_manager.py", "cache.py", "log_buffer.py", "base64_store.py",
          "retry_policy.py", "alerting.py", "audit.py", "metrics_ext.py", "log_ws.py",
          "context.py", "health.py", "cache_warmup.py", "errors.py",

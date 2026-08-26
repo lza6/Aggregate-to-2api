@@ -1,7 +1,7 @@
 """自动注册器与自适应注册工作流 (Adaptive Registration Worker)。
 
 功能与架构特性：
-1. 支持 minimaxh3 / nanobanana 账号自动化注册闭环与 nanobanana 每日签到。
+1. 支持 nanobanana 账号自动化注册闭环与 nanobanana 每日签到。
 2. 建立注册失败自适应分类退避模型 (Adaptive Error Backoff)：
    - CF_BLOCKED: CF 阻断 (Turnstile 求解失败/Cloudflare WAF 拦截) -> 快速退避 30s，并标记求解器状态。
    - EMAIL_RATE_LIMITED: 邮箱频控 (429 / 验证码收取超时 / 建箱限流) -> 退避 60s，并触发邮箱池切源。
@@ -28,7 +28,6 @@ import httpx
 from . import config
 from . import turnstile_client
 from .email_pool import email_pool
-from .kookeey import kookeey_proxy_for
 from .solver_guard import solver_guard
 
 log = logging.getLogger("registerer")
@@ -236,234 +235,6 @@ def _extract_verify_link(mail: dict | None) -> str | None:
     return m.group(0).replace("&amp;", "&") if m else None
 
 
-# ── minimaxh3 自适应注册器 ─────────────────────────
-class Minimaxh3Registerer:
-    """minimaxh3 账号注册器：支持自适应故障分类、代理隔离与断点状态推进。"""
-
-    provider = "minimaxh3"
-    base = "https://minimaxh3.ai"
-    turnstile_page = "https://minimaxh3.ai/zh"
-    SITEKEY = "0x4AAAAAADwZ49KghcP-p2lE"
-
-    def __init__(self) -> None:
-        self.proxy: str | None = None
-        self._current_proxy: str | None = config.PROXY
-        self.client = httpx.Client(
-            proxy=config.PROXY,
-            timeout=httpx.Timeout(60.0),
-            headers={"User-Agent": config.USER_AGENT},
-        )
-        self.last_session: RegistrationSession | None = None
-
-    def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None:
-        """注册代理变化或触发强制轮换时重建 client。"""
-        if force_rotate:
-            # 强制轮换：使用带随机时间戳 session 的住宅代理或清除当前代理
-            want = kookeey_proxy_for(f"{email}_rot_{int(time.time())}") or config.PROXY
-        else:
-            want = self.proxy or kookeey_proxy_for(email) or config.PROXY
-
-        if self._current_proxy != want or force_rotate:
-            try:
-                self.client.close()
-            except Exception:
-                pass
-            self.client = httpx.Client(
-                proxy=want,
-                timeout=httpx.Timeout(60.0),
-                headers={"User-Agent": config.USER_AGENT},
-            )
-            self._current_proxy = want
-
-    async def register_one(self) -> dict | None:
-        """执行单次注册流程，严格维护阶段状态与自适应退避分类。"""
-        session = RegistrationSession(provider=self.provider)
-        self.last_session = session
-
-        if MOCK_REGISTER:
-            import random
-            email = f"mock{int(time.time())}{random.randint(0, 999)}@mock.com"
-            session.advance_to(RegistrationStage.COMPLETED, email=email, credits=4)
-            adaptive_backoff.record_success(self.provider)
-            return {
-                "email": email,
-                "cookie": "mock-session",
-                "password": "mock123",
-                "credits": 4,
-                "session_id": session.session_id,
-            }
-
-        try:
-            # 阶段 1: 邮箱分配
-            try:
-                email, src = await email_pool.allocate(self.provider)
-                src_name = (src or {}).get("source", "unknown") if isinstance(src, dict) else getattr(src, "name", "unknown")
-                session.advance_to(
-                    RegistrationStage.EMAIL_ALLOCATED,
-                    email=email,
-                    email_source=src_name,
-                    email_state=src if isinstance(src, dict) else {},
-                )
-            except Exception as e:
-                err_str = str(e)
-                cat = RegistrationErrorCategory.EMAIL_RATE_LIMITED if "429" in err_str or "限流" in err_str else RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"邮箱池分配失败: {e}", category=cat, stage=RegistrationStage.INIT, provider=self.provider)
-
-            # 客户端与代理绑定
-            self._ensure_client(email)
-            kk = kookeey_proxy_for(email)
-            session.proxy_used = kk or self._current_proxy or "direct"
-
-            # 阶段 2: Turnstile 求解
-            try:
-                captcha, _ = await turnstile_client.solve_turnstile(
-                    config.CF_SOLVER_URL,
-                    self.turnstile_page,
-                    self.SITEKEY,
-                    config.TURNSTILE_TIMEOUT,
-                    proxy=kk,
-                )
-                session.advance_to(RegistrationStage.CAPTCHA_SOLVED, captcha_token=captcha)
-            except Exception as e:
-                err_str = str(e).lower()
-                cat = RegistrationErrorCategory.CF_BLOCKED
-                solver_guard.record_failure("cf_solver_failed")
-                raise RegistrationError(f"Turnstile 求解失败: {e}", category=cat, stage=RegistrationStage.EMAIL_ALLOCATED, provider=self.provider)
-
-            # 阶段 3: 发送验证邮件
-            try:
-                r = await _th(
-                    self.client.post,
-                    f"{self.base}/api/auth/send-verification",
-                    headers=_browser_headers(self.base, f"{self.base}/zh"),
-                    json={"email": email, "locale": "zh", "captchaToken": captcha},
-                )
-            except Exception as e:
-                raise RegistrationError(f"请求 send-verification 异常: {e}", category=RegistrationErrorCategory.TRANSIENT, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
-
-            if r.status_code == 403:
-                self._ensure_client(email, force_rotate=True)
-                raise RegistrationError(f"send-verification 被 403 Forbidden 拦截", category=RegistrationErrorCategory.IP_BLOCKED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
-            if r.status_code == 429:
-                raise RegistrationError(f"send-verification 触发 429 频控", category=RegistrationErrorCategory.EMAIL_RATE_LIMITED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
-
-            try:
-                data = r.json()
-            except Exception:
-                data = {}
-
-            token = data.get("token")
-            if not token:
-                msg = str(data)[:150] or f"HTTP {r.status_code}"
-                if any(w in msg.lower() for w in ("waf", "cf-ray", "captcha", "challenge")):
-                    cat = RegistrationErrorCategory.CF_BLOCKED
-                elif any(w in msg.lower() for w in ("ip", "block", "forbidden", "denied")):
-                    cat = RegistrationErrorCategory.IP_BLOCKED
-                else:
-                    cat = RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"send-verification 失败: {msg}", category=cat, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
-
-            session.advance_to(RegistrationStage.VERIFICATION_SENT, verification_token=token)
-
-            # 阶段 4: 收取验证码
-            mail = await email_pool.wait_for_mail(email, session.email_state, 120.0, "验证码")
-            code = _extract_code(mail)
-            if not code:
-                email_pool.record(email, self.provider, "error", "no_code")
-                # 验证码超时 -> 触发邮箱源切源退避
-                src_obj = email_pool._find_source(session.email_source)
-                if src_obj:
-                    src_obj.mark_failure("验证码收取超时", backoff_seconds=60.0)
-                raise RegistrationError(f"邮箱未收到 6 位验证码: {email}", category=RegistrationErrorCategory.EMAIL_RATE_LIMITED, stage=RegistrationStage.VERIFICATION_SENT, provider=self.provider)
-
-            session.advance_to(RegistrationStage.CODE_OR_LINK_RECEIVED, verification_code=code)
-
-            # 阶段 5: CSRF 与登录回调
-            try:
-                csrf_r = await _th(self.client.get, f"{self.base}/api/auth/csrf", headers=_browser_headers(self.base))
-                csrf = (csrf_r.json() or {}).get("csrfToken", "")
-            except Exception:
-                csrf = ""
-
-            try:
-                cb = await _th(
-                    self.client.post,
-                    f"{self.base}/api/auth/callback/email-code?",
-                    headers={
-                        "User-Agent": config.USER_AGENT,
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Origin": self.base,
-                        "Referer": f"{self.base}/zh",
-                    },
-                    data={
-                        "token": token,
-                        "code": code,
-                        "redirect": "false",
-                        "csrfToken": csrf,
-                        "callbackUrl": "https%3A%2F%2Fminimaxh3.ai%2Fzh",
-                    },
-                )
-            except Exception as e:
-                raise RegistrationError(f"回调登录网络异常: {e}", category=RegistrationErrorCategory.TRANSIENT, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
-
-            cookie = "; ".join(f"{k}={v}" for k, v in cb.cookies.items())
-            if "__Secure-authjs.session-token" not in cb.cookies:
-                email_pool.record(email, self.provider, "error", "login_fail")
-                if cb.status_code == 403:
-                    cat = RegistrationErrorCategory.IP_BLOCKED
-                    self._ensure_client(email, force_rotate=True)
-                else:
-                    cat = RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"登录换取 session 失败 HTTP {cb.status_code}: {str(cb.text)[:120]}", category=cat, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
-
-            session.advance_to(RegistrationStage.LOGGED_IN, session_cookie=cookie)
-
-            # 阶段 6: 确认积分与收尾
-            credits = 0
-            try:
-                c = await _th(
-                    self.client.get,
-                    f"{self.base}/api/get-user-credits",
-                    headers={"Cookie": cookie, "User-Agent": config.USER_AGENT},
-                )
-                credits = int(((c.json() or {}).get("data") or {}).get("credits", 0))
-            except Exception:
-                pass
-
-            session.advance_to(RegistrationStage.COMPLETED, credits=credits)
-            email_pool.record(email, self.provider, "ok", f"credits={credits}")
-            adaptive_backoff.record_success(self.provider)
-            log.info("minimaxh3 注册成功 %s credits=%d (session: %s)", email, credits, session.session_id)
-
-            return {
-                "email": email,
-                "cookie": cookie,
-                "password": "",
-                "credits": credits,
-                "session_id": session.session_id,
-            }
-
-        except RegistrationError as err:
-            session.mark_failed(err.message, err.category)
-            backoff_sec = adaptive_backoff.compute_backoff(self.provider, err.category)
-            log.warning(
-                "minimaxh3 注册在阶段 [%s] 发生故障 [%s]: %s (退避 %.1fs)",
-                err.stage.value,
-                err.category.value,
-                err.message,
-                backoff_sec,
-            )
-            return None
-        except Exception as err:
-            session.mark_failed(str(err), RegistrationErrorCategory.TRANSIENT)
-            backoff_sec = adaptive_backoff.compute_backoff(self.provider, RegistrationErrorCategory.TRANSIENT)
-            log.warning("minimaxh3 发生未捕获异常退避 %.1fs: %s", backoff_sec, err)
-            return None
-
-    async def checkin(self, acc: dict) -> int | None:
-        return None
-
-
 # ── nanobanana 自适应注册器 ─────────────────────────
 class NanobananaRegisterer:
     """nanobanana 账号注册器：支持自适应故障分类、代理隔离与断点状态推进。"""
@@ -485,9 +256,9 @@ class NanobananaRegisterer:
 
     def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None:
         if force_rotate:
-            want = kookeey_proxy_for(f"{email}_rot_{int(time.time())}") or config.PROXY
+            want = config.PROXY
         else:
-            want = self.proxy or kookeey_proxy_for(email) or config.PROXY
+            want = self.proxy or config.PROXY
 
         if self._current_proxy != want or force_rotate:
             try:
@@ -536,8 +307,7 @@ class NanobananaRegisterer:
                 raise RegistrationError(f"邮箱池分配失败: {e}", category=cat, stage=RegistrationStage.INIT, provider=self.provider)
 
             self._ensure_client(email)
-            kk = kookeey_proxy_for(email)
-            session.proxy_used = kk or self._current_proxy or "direct"
+            session.proxy_used = self._current_proxy or "direct"
             password = f"Tf@{int(time.time())}"
             session.password = password
 
@@ -548,7 +318,7 @@ class NanobananaRegisterer:
                     self.turnstile_page,
                     self.SITEKEY,
                     config.TURNSTILE_TIMEOUT,
-                    proxy=kk,
+                    proxy=config.PROXY,
                 )
                 session.advance_to(RegistrationStage.CAPTCHA_SOLVED, captcha_token=captcha)
             except Exception as e:
@@ -604,7 +374,7 @@ class NanobananaRegisterer:
                     self.turnstile_page,
                     self.SITEKEY,
                     config.TURNSTILE_TIMEOUT,
-                    proxy=kk,
+                    proxy=config.PROXY,
                 )
             except Exception as e:
                 log.warning("nanobanana 登录 Turnstile 求解失败: %s", e)
@@ -747,5 +517,4 @@ class NanobananaRegisterer:
 def build_registerers() -> dict[str, object]:
     out: dict[str, object] = {}
     out["nanobanana"] = NanobananaRegisterer()
-    out["minimaxh3"] = Minimaxh3Registerer()
     return out

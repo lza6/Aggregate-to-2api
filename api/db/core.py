@@ -16,6 +16,9 @@ from ..telemetry import get_tracer
 
 log = logging.getLogger("db")
 
+# WAL 定期 checkpoint 间隔（秒）：P1-L 每 5 分钟回收一次 -wal 体积
+_WAL_CHECKPOINT_INTERVAL_SECONDS = 300
+
 # 进程内所有 DB 实例（弱引用）+ 全部 aiosqlite 连接（强引用，直到显式 stop）。
 _LIVE_DBS: weakref.WeakSet = weakref.WeakSet()
 _LIVE_CONNS: list = []
@@ -88,6 +91,9 @@ class DB:
         self._write_buffer: list[BatchWrite] = []
         self._batch_running = False
         self._commit_count = 0
+
+        # ── WAL 定期 checkpoint（P1-L）────────────────────
+        self._checkpoint_running = False
 
         # 惰性初始化
         self._initialized = False
@@ -294,6 +300,34 @@ class DB:
 
     def stop_batch_timer(self) -> None:
         self._batch_running = False
+
+    # ── WAL 定期 checkpoint（P1-L）────────────────────
+
+    async def start_checkpoint_timer(self) -> None:
+        """后台协程：每 5 分钟执行一次 PRAGMA wal_checkpoint(TRUNCATE)；
+        启动时首次执行一次 checkpoint。"""
+        self._checkpoint_running = True
+        try:
+            # 启动时首次 checkpoint
+            await self._run_checkpoint()
+            while self._checkpoint_running:
+                await asyncio.sleep(_WAL_CHECKPOINT_INTERVAL_SECONDS)
+                await self._run_checkpoint()
+        except asyncio.CancelledError:
+            # 退出前再做一次 checkpoint
+            await self._run_checkpoint()
+            raise
+
+    def stop_checkpoint_timer(self) -> None:
+        self._checkpoint_running = False
+
+    async def _run_checkpoint(self) -> None:
+        """对每条写连接执行 wal_checkpoint(TRUNCATE)，抑制异常。"""
+        for idx, conn in enumerate(self._connections):
+            try:
+                await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                log.warning("WAL checkpoint 写连接[%d] 失败（可忽略）", idx)
 
     # ── 读前自动 flush ──
     async def _ensure_flushed(self) -> None:

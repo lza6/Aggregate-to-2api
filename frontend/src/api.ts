@@ -112,7 +112,14 @@ export async function fetchGallery(limit = 20, password?: string): Promise<{ ite
   return res.json();
 }
 
-export async function fetchLogs(lines = 100): Promise<{ logs: any[] }> {
+export interface LogEntry {
+  ts: number;
+  level: string;
+  logger: string;
+  message: string;
+}
+
+export async function fetchLogs(lines = 100): Promise<{ logs: LogEntry[] }> {
   const res = await fetch(`${API_BASE}/v1/logs?lines=${lines}`);
   return res.json();
 }
@@ -151,17 +158,47 @@ export async function fetchDiagnostics(): Promise<Diagnostics> {
   return res.json();
 }
 
-export async function fetchAccountPool(): Promise<any> {
+export interface AccountPoolProviderStats {
+  total: number;
+  ok: number;
+  active: number;
+  working: number;
+  exhausted: number;
+  cooling: number;
+  dead: number;
+  banned: number;
+  registering: number;
+  unregistered: number;
+  credits: number;
+  target: number;
+  auto_register: boolean;
+}
+
+export interface AccountPoolItem {
+  email: string;
+  credits: number;
+  status: string;
+  created_at: number | null;
+  checkin_at: number | null;
+}
+
+export interface AccountPoolResponse {
+  accounts: Record<string, AccountPoolProviderStats>;
+  email_pool: { total_registered: number; by_provider: Record<string, number> };
+  items: AccountPoolItem[];
+}
+
+export async function fetchAccountPool(): Promise<AccountPoolResponse> {
   const res = await fetch(`${API_BASE}/v1/account-pool`);
   return res.json();
 }
 
-export async function retryDLQTask(taskId: string): Promise<any> {
+export async function retryDLQTask(taskId: string): Promise<{ detail?: string; message?: string }> {
   const res = await fetch(`${API_BASE}/v1/dead-letter-queue/${taskId}/retry`, { method: 'POST' });
   return res.json();
 }
 
-export async function clearDLQ(): Promise<any> {
+export async function clearDLQ(): Promise<{ detail?: string; message?: string; success?: boolean }> {
   const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, { method: 'DELETE' });
   return res.json();
 }
@@ -192,5 +229,23 @@ export interface RoutingNode {
 
 export async function fetchRoutingRecords(limit = 50): Promise<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }> {
   const res = await fetch(`${API_BASE}/v1/routing/records?limit=${limit}`);
+  return res.json();
+}
+
+// ── 服务器规格 ──
+export interface SystemSpec {
+  cpu: { cores: number; model: string };
+  memory: { total_mb: number; total_gb: number };
+  disk: { total_gb: number; used_gb: number; free_gb: number };
+  adaptive: {
+    workers: number;
+    upstream_inflight: number;
+    token_pool_size: number;
+    max_queue: number;
+  };
+}
+
+export async function fetchSystemSpec(): Promise<SystemSpec> {
+  const res = await fetch(`${API_BASE}/v1/system`);
   return res.json();
 }

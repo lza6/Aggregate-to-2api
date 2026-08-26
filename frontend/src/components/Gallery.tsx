@@ -149,8 +149,8 @@ export function Gallery({ limit = 20, password }: { limit?: number; password?: s
 
   return (
     <div className="gallery-modern-grid">
-      {items.map((item, i) => (
-        <div key={i} className="gallery-card tf-card">
+      {items.map((item) => (
+        <div key={item.image_url || item.prompt} className="gallery-card tf-card">
           <div className="gallery-img-wrap">
             {item.image_url && <img src={item.image_url} alt={item.prompt} loading="lazy" />}
             <div className="gallery-mask">

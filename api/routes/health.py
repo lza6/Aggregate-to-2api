@@ -16,6 +16,7 @@ from ..errors import AppError, ErrorCodes
 from ..solver_guard import solver_guard
 from ..health import health_registry
 from ..sse_events import hub, task_events_generator
+from ..system_spec import system_spec
 
 # 需要在 main 组装的 edit 状态（图生图看板用）
 from ..dispatch_edit import _EDIT_PENDING, _EDIT_PROXY_POOL
@@ -163,9 +164,16 @@ async def healthz():
                 "normal": config.NORMAL_QUEUE_MAX,
             },
         },
+        "system": system_spec(),
         "log_dir": {"path": config.IF_LOG_DIR, "writable": os.access(config.IF_LOG_DIR, os.W_OK)
                     if os.path.isdir(config.IF_LOG_DIR) else False},
     }
+
+
+@router.get("/v1/system")
+async def system_info():
+    """服务器规格与自适应并发参数（供前端看板展示）。"""
+    return system_spec()
 
 
 @router.get("/v1/meta")

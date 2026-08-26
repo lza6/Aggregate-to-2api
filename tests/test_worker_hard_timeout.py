@@ -60,13 +60,13 @@ class _FastProcessEngine(Engine):
 
 
 @pytest.mark.asyncio
-async def test_hard_timeout_marks_error():
+async def test_hard_timeout_marks_error(monkeypatch):
     """_process 挂起 500ms，TASK_HARD_TIMEOUT=0.1s → 超时，任务标为 error。"""
-    config.TASK_HARD_TIMEOUT = 0.1
-    config.WORKERS = 1
-    config.TOKEN_WAIT_TIMEOUT = 1
-    config.IF_DB_BATCH_ENABLED = False
-    config.IF_DB_POOL_SIZE = 1
+    monkeypatch.setattr(config, 'TASK_HARD_TIMEOUT', 0.1)
+    monkeypatch.setattr(config, 'WORKERS', 1)
+    monkeypatch.setattr(config, 'TOKEN_WAIT_TIMEOUT', 1)
+    monkeypatch.setattr(config, 'IF_DB_BATCH_ENABLED', False)
+    monkeypatch.setattr(config, 'IF_DB_POOL_SIZE', 1)
 
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -89,13 +89,13 @@ async def test_hard_timeout_marks_error():
 
 
 @pytest.mark.asyncio
-async def test_hard_timeout_processing_decremented():
+async def test_hard_timeout_processing_decremented(monkeypatch):
     """超时后 processing 计数器正确减回，不泄漏并发槽。"""
-    config.TASK_HARD_TIMEOUT = 0.1
-    config.WORKERS = 1
-    config.TOKEN_WAIT_TIMEOUT = 1
-    config.IF_DB_BATCH_ENABLED = False
-    config.IF_DB_POOL_SIZE = 1
+    monkeypatch.setattr(config, 'TASK_HARD_TIMEOUT', 0.1)
+    monkeypatch.setattr(config, 'WORKERS', 1)
+    monkeypatch.setattr(config, 'TOKEN_WAIT_TIMEOUT', 1)
+    monkeypatch.setattr(config, 'IF_DB_BATCH_ENABLED', False)
+    monkeypatch.setattr(config, 'IF_DB_POOL_SIZE', 1)
 
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -118,13 +118,13 @@ async def test_hard_timeout_processing_decremented():
 
 
 @pytest.mark.asyncio
-async def test_hard_timeout_upstream_task_id_preserved():
+async def test_hard_timeout_upstream_task_id_preserved(monkeypatch):
     """超时后 upstream_task_id 保留不变（不因 mark_finished 清空）。"""
-    config.TASK_HARD_TIMEOUT = 0.1
-    config.WORKERS = 1
-    config.TOKEN_WAIT_TIMEOUT = 1
-    config.IF_DB_BATCH_ENABLED = False
-    config.IF_DB_POOL_SIZE = 1
+    monkeypatch.setattr(config, 'TASK_HARD_TIMEOUT', 0.1)
+    monkeypatch.setattr(config, 'WORKERS', 1)
+    monkeypatch.setattr(config, 'TOKEN_WAIT_TIMEOUT', 1)
+    monkeypatch.setattr(config, 'IF_DB_BATCH_ENABLED', False)
+    monkeypatch.setattr(config, 'IF_DB_POOL_SIZE', 1)
 
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -152,13 +152,13 @@ async def test_hard_timeout_upstream_task_id_preserved():
 
 
 @pytest.mark.asyncio
-async def test_fast_task_not_timed_out():
+async def test_fast_task_not_timed_out(monkeypatch):
     """_process 瞬间完成，TASK_HARD_TIMEOUT=30s，不触发超时，正常 completed。"""
-    config.TASK_HARD_TIMEOUT = 30
-    config.WORKERS = 1
-    config.TOKEN_WAIT_TIMEOUT = 1
-    config.IF_DB_BATCH_ENABLED = False
-    config.IF_DB_POOL_SIZE = 1
+    monkeypatch.setattr(config, 'TASK_HARD_TIMEOUT', 30)
+    monkeypatch.setattr(config, 'WORKERS', 1)
+    monkeypatch.setattr(config, 'TOKEN_WAIT_TIMEOUT', 1)
+    monkeypatch.setattr(config, 'IF_DB_BATCH_ENABLED', False)
+    monkeypatch.setattr(config, 'IF_DB_POOL_SIZE', 1)
 
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -179,13 +179,13 @@ async def test_fast_task_not_timed_out():
 
 
 @pytest.mark.asyncio
-async def test_img_task_not_affected():
+async def test_img_task_not_affected(monkeypatch):
     """图生图任务（type='img'）走 _run_edit_job 独立分支，不受 TASK_HARD_TIMEOUT 影响。"""
-    config.TASK_HARD_TIMEOUT = 0.1
-    config.WORKERS = 1
-    config.TOKEN_WAIT_TIMEOUT = 1
-    config.IF_DB_BATCH_ENABLED = False
-    config.IF_DB_POOL_SIZE = 1
+    monkeypatch.setattr(config, 'TASK_HARD_TIMEOUT', 0.1)
+    monkeypatch.setattr(config, 'WORKERS', 1)
+    monkeypatch.setattr(config, 'TOKEN_WAIT_TIMEOUT', 1)
+    monkeypatch.setattr(config, 'IF_DB_BATCH_ENABLED', False)
+    monkeypatch.setattr(config, 'IF_DB_POOL_SIZE', 1)
 
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)

@@ -118,10 +118,8 @@ async def solve_turnstile(
             if remaining_timeout <= 0:
                 break
 
-            # 标记节点 inflight
-            node_state = solver_guard._nodes.get(target_node) if hasattr(solver_guard, "_nodes") else None
-            if node_state:
-                node_state.acquire_inflight()
+            # 标记节点 inflight（通过公共方法，避免直接访问 solver_guard._nodes）
+            node_state = solver_guard.acquire_inflight_for(target_node)
 
             node_t0 = time.monotonic()
             try:
@@ -163,7 +161,7 @@ async def solve_turnstile(
                 last_exc = e
             finally:
                 if node_state:
-                    node_state.release_inflight()
+                    solver_guard.release_inflight_for(target_node)
 
         # 所有候选节点均尝试完毕仍失败
         if isinstance(last_exc, (TimeoutError, asyncio.TimeoutError)):

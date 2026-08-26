@@ -53,7 +53,7 @@ class TestNormalizeModel:
         assert _normalize_model(None) == "imagefree/default"
 
     def test_prefixed_passthrough(self):
-        assert _normalize_model("minimaxh3/nano-banana-pro") == "minimaxh3/nano-banana-pro"
+        assert _normalize_model("nanobanana/nano-banana-pro") == "nanobanana/nano-banana-pro"
 
 
 class TestValidateModel:

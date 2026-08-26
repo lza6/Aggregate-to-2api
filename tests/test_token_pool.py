@@ -86,7 +86,7 @@ async def test_dynamic_watermark_direct(fake_solve):
 @pytest.mark.asyncio
 async def test_circuit_open_fast_fail(fake_solve, monkeypatch):
     from api.solver_guard import solver_guard
-    for n in solver_guard._nodes.values():
+    for n in solver_guard.get_nodes():
         monkeypatch.setattr(n, "_circuit_open", True)
     m = TokenPoolManager(_EngineStub())
     await m.start()
@@ -111,7 +111,7 @@ async def test_circuit_open_still_uses_existing_token(fake_solve, monkeypatch):
             if m.pools_snapshot()["direct"]["size"] >= 1:
                 break
             await asyncio.sleep(0.05)
-        for n in solver_guard._nodes.values():
+        for n in solver_guard.get_nodes():
             monkeypatch.setattr(n, "_circuit_open", True)
         t0 = time.monotonic()
         tok = await m.acquire("direct", timeout=3)  # OPEN 但池里有现成 token → 仍可取
@@ -152,14 +152,12 @@ async def test_proxy_pool_idle_flag(fake_solve):
 
 
 @pytest.mark.asyncio
-async def test_acquire_timeout_counts_wait_timeout(fake_solve):
+async def test_acquire_timeout_counts_wait_timeout(monkeypatch):
     """池空且求解持续失败（solve 抛异常）→ acquire 超时 → wait_timeout_total 累计。"""
     async def _fail(*args, **kwargs):
         await asyncio.sleep(0.2)
         raise RuntimeError("solve fail")
-    import api.turnstile_client
-    orig = api.turnstile_client.solve_turnstile
-    api.turnstile_client.solve_turnstile = _fail
+    monkeypatch.setattr("api.turnstile_client.solve_turnstile", _fail)
     m = TokenPoolManager(_EngineStub())
     await m.start()
     try:
@@ -168,7 +166,6 @@ async def test_acquire_timeout_counts_wait_timeout(fake_solve):
         assert m.wait_timeout_total >= 1
     finally:
         await m.stop()
-        api.turnstile_client.solve_turnstile = orig
 
 
 # ── main 层：/healthz 与 /metrics 新观测字段 ─────────
@@ -214,11 +211,11 @@ class TestMainObservability:
 
 # ── worker 链路：上游拒绝 token 的 rejected 计数 ─────
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="P-04 动态水位 token 池预取延时（2.5s/次）与 worker 重试时序竞争，偶发超时；solver_guard rejected 计数已有 test_solver_guard 单测覆盖", strict=False)
 async def test_worker_records_rejected_token(tmp_db, monkeypatch):
     """上游拒绝 token（human verification failed）→ solver_guard.rejected_total 计数（重试换 token 信号）。"""
     import api.worker as w
-    from api.worker import Engine, solver_guard
+    from api.worker import Engine
+    from api.solver_guard import solver_guard
 
     async def _solve(*a, **k):
         return ("mock-token", 0.03)
@@ -229,9 +226,10 @@ async def test_worker_records_rejected_token(tmp_db, monkeypatch):
     # 缩小退避间隔，加速测试
     from api import config
     monkeypatch.setattr(config, "IF_TXT_RETRY_BACKOFF_BASE", 0.1)
+    monkeypatch.setattr(config, "IF_PREFETCH_AFTER_SOLVE_DELAY", 0.01)
 
-    monkeypatch.setattr(w.turnstile_client, "solve_turnstile", _solve)
-    monkeypatch.setattr(w.imagefree_client, "submit_generate", _submit)
+    monkeypatch.setattr("api.turnstile_client.solve_turnstile", _solve)
+    monkeypatch.setattr("api.imagefree_client.submit_generate", _submit)
     before = solver_guard.snapshot()["rejected_total"]
     e = Engine(tmp_db)
     await e.start()

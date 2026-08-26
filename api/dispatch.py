@@ -129,26 +129,24 @@ _SSE_SUBSCRIBERS: set[asyncio.Queue] = set()
 _SSE_LOCK = asyncio.Lock()  # P0-1: 保护订阅者集合的并发安全
 
 
-def broadcast_task_event(task_id: str, status: str, data: dict | None = None) -> None:
+async def broadcast_task_event(task_id: str, status: str, data: dict | None = None) -> None:
     """向所有在线 SSE 客户端主动推送任务状态变迁（全局广播兼容层）。
 
     注意：_finish（worker.py）不再调用 publish_task_event，避免双重发布。
     """
     payload = json.dumps({"task_id": task_id, "status": status, "data": data or {}, "ts": time.time()})
     msg = f"event: task_update\ndata: {payload}\n\n"
-    # P0-1: 快照订阅者集合（list 化防迭代中修改）
-    subs = list(_SSE_SUBSCRIBERS)
-    for q in subs:
-        try:
-            q.put_nowait(msg)
-        except asyncio.QueueFull:
-            # 队列满 → 移除该慢客户端，不阻塞广播
+    # P2-1: 快照与 discard 均在 _SSE_LOCK 内，消除极端竞态
+    async with _SSE_LOCK:
+        subs = list(_SSE_SUBSCRIBERS)
+        for q in subs:
             try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                # 队列满 → 移除该慢客户端，不阻塞广播
                 _SSE_SUBSCRIBERS.discard(q)
             except Exception:
                 pass
-        except Exception:
-            pass
     # v4.2: 同时发布到 per-task 事件流（仅发布一次，非双重）
     try:
         publish_task_event(task_id, "result" if status == "completed" else "error",
@@ -180,13 +178,22 @@ async def sse_task_events():
 
 # ── 多提供商路由 ──
 _PROVIDER_TASKS: set[asyncio.Task] = set()  # 持有 provider 后台任务引用，防 GC
-_provider_semaphores: dict[tuple[int, str], asyncio.Semaphore] = {}
+_provider_semaphores: dict[tuple[int, str, int], asyncio.Semaphore] = {}
+# P1-D: 非 imagefree 提供商按优先级并发控制。P0 立即执行（不排队）、P1 有限并发、P2 串行排队。
+# _provider_workers 缓存每 (provider_prefix, priority) 的消费者任务；信号量由 _provider_sem(prefix, limit) 提供：
+#   P0 → 无限并发（不经过信号量）、P1 → 每提供商 4 个并发、P2 → 每提供商 1 个（串行 FIFO）。
+_ADMIN_PRIORITY = 0
+_HIGH_PRIORITY = 1
+_NORMAL_PRIORITY = 2
+# P1 与 P2 的并发上限（供 _dispatch_generate 创建对应信号量 adapter）
+_HIGH_CONCURRENCY = 4
+_NORMAL_CONCURRENCY = 1
 
 
 def _provider_sem(prefix: str, limit: int = 16) -> asyncio.Semaphore:
-    """按 (event_loop, prefix) 缓存信号量——asyncio.Semaphore 绑定创建它的 loop，
-    跨 loop 复用会永久挂起（集成测试/uvicorn reload 场景）。"""
-    key = (id(asyncio.get_running_loop()), prefix)
+    """按 (event_loop, prefix, limit) 缓存信号量——不同 limit 视为不同信号量，
+    供优先级队列复用（P1=4, P2=1, 编辑=16 等各独立）。"""
+    key = (id(asyncio.get_running_loop()), prefix, limit)
     if key not in _provider_semaphores:
         _provider_semaphores[key] = asyncio.Semaphore(limit)
     return _provider_semaphores[key]
@@ -243,7 +250,19 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         await db.save_idempotency(idempotency_key, task_id)
 
     async def _run() -> None:
+        # P1-D: 非 imagefree 路径按 priority 控制并发
+        # P0 → 无限并发（不经过信号量，立即执行）
+        # P1 → 有限并发（每提供商 4 个）
+        # P2 → 串行 FIFO 排队（每提供商 1 个）
+        if priority == _ADMIN_PRIORITY:
+            sem = None
+        elif priority == _HIGH_PRIORITY:
+            sem = _provider_sem(provider.prefix, _HIGH_CONCURRENCY)
+        else:
+            sem = _provider_sem(provider.prefix, _NORMAL_CONCURRENCY)
         try:
+            if sem:
+                await sem.acquire()
             async with upstream_semaphore:
                 res = await provider.generate(
                     model, req.prompt, req.aspect_ratio, images=None,
@@ -277,6 +296,9 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
             except Exception:
                 pass
             log.exception("提供商生成异常 %s", task_id)
+        finally:
+            if sem:
+                sem.release()
 
     t = asyncio.create_task(_run())
     _PROVIDER_TASKS.add(t)

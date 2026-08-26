@@ -16,7 +16,7 @@ export function DLQPage() {
     setRetryingId(taskId);
     try {
       const result = await retryDLQTask(taskId);
-      notify(result?.message ?? '重试任务已触发', 'success');
+      notify(result?.detail ?? result?.message ?? '重试任务已触发', 'success');
     } catch (e) {
       notify('重试失败: ' + (e instanceof Error ? e.message : String(e)), 'error');
     }

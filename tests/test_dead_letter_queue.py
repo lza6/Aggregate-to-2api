@@ -89,7 +89,6 @@ class TestDeadLetterQueueWorker:
     """worker 层 DLQ 推送测试。"""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="P-04 动态水位 token 池时序竞争：worker 取 token 与预取补池存在竞态，DLQ 写入可能在 wait_result 返回后才落库；DB 层 DLQ 推送已有独立测试覆盖", strict=False)
     async def test_worker_pushes_dlq_on_retry_exhaustion(self, tmp_db, monkeypatch):
         """worker 重试满后应 push_dlq。"""
         import api.worker as w
@@ -109,6 +108,8 @@ class TestDeadLetterQueueWorker:
         monkeypatch.setattr(w_imagefree, "submit_generate", _submit)
         monkeypatch.setattr(config, "IF_TXT_RETRY_MAX", 2)
         monkeypatch.setattr(config, "IF_DLQ_ENABLED", True)
+        monkeypatch.setattr(config, "IF_PREFETCH_AFTER_SOLVE_DELAY", 0.01)
+        monkeypatch.setattr(config, "IF_TXT_RETRY_BACKOFF_BASE", 0.1)
 
         e = Engine(tmp_db)
         await e.start()

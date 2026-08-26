@@ -1,6 +1,6 @@
 """S-13: 上游返回结构契约测试（防上游悄悄改结构）。
 
-用真实历史响应样例（从 imagefree_client / minimaxh3 / nanobanana 的返回结构
+用真实历史响应样例（从 imagefree_client / nanobanana 的返回结构
 抽出的最小但真实 dict）做 fixture，断言：
 - 有效样例通过 validate_contract / parse_contract 校验
 - 破坏样例（删 image / status 错枚举 / image 非 URL）立即失败且能 tell 缺字段
@@ -25,7 +25,6 @@ STATUS_COMPLETED = "completed"
 #  - IMAGE: imagefree_client.py:253（IF_MOCK_UPSTREAM 分支）
 #           和 :278（真实轮询归一化返回）
 #  - EDIT:  imagefree_client.py:415（mock 分支，图生图轮询返回）
-#  - MINI_SUBMIT/POLL: minimaxh3.py:236-237 / :264-271
 #  - NANO_SUBMIT/POLLJSON: nanobanana.py:206 / :221-232
 #  - AIFF:  aifreeforever.py:195-197（_generate 返回 images 数组）
 
@@ -47,16 +46,6 @@ def imagefree_edit_mock() -> dict:
     return {"status": "completed", "image": "https://mock.example/images/edit.png"}
 
 
-@pytest.fixture
-def minimaxh3_submit() -> dict:
-    """minimaxh3.py:236-237 提交响应（generationId 提取处）。"""
-    return {"code": 0, "data": {"generationId": "gen_9f2ab", "creditsUsed": 4}}
-
-
-@pytest.fixture
-def minimaxh3_poll() -> dict:
-    """minimaxh3.py:264-271 轮询 completed 分支（imageUrl 提取处）。"""
-    return {"status": "completed", "assets": [{"imageUrl": "https://cdn.minimaxh3.ai/img/1.png"}]}
 
 
 @pytest.fixture
@@ -104,24 +93,6 @@ class TestValidSamplesPass:
         d = imagefree_edit_mock
         assert validate_contract(EditResponse, d)
         assert parse_contract(EditResponse, d) is None
-
-    def test_minimaxh3_submit_shape(self, minimaxh3_submit):
-        # 提交响应并非 ImageGenerationResponse，校验不通过是「形状不对」但结构可识别
-        d = minimaxh3_submit
-        assert d["code"] == 0 and d["data"]["generationId"]  # 契约关键字段在
-        # 轮询产物 → 可归一化为 ImageGenerationResponse
-        polled = {"task_id": d["data"]["generationId"],
-                  "status": STATUS_COMPLETED,
-                  "image": "https://cdn.minimaxh3.ai/img/1.png"}
-        assert validate_contract(ImageGenerationResponse, polled)
-
-    def test_minimaxh3_poll(self, minimaxh3_poll):
-        d = minimaxh3_poll
-        url = d["assets"][0]["imageUrl"]
-        assert url.startswith("https://")
-        assert url  # 与 minimaxh3.py:269 提取逻辑一致
-        norm = {"task_id": "gen_9f2ab", "status": STATUS_COMPLETED, "image": url}
-        assert parse_contract(ImageGenerationResponse, norm) is None
 
     def test_nanobanana_submit_shape(self, nanobanana_submit):
         d = nanobanana_submit
@@ -195,12 +166,6 @@ class TestBrokenSamplesFail:
     def test_not_a_dict(self):
         assert not validate_contract(ImageGenerationResponse, ["x"])
         assert parse_contract(ImageGenerationResponse, None) is not None
-
-    def test_minimaxh3_poll_breaks(self, minimaxh3_poll):
-        # 上游把 assets 改成 asset / 字段改名为 imgUrl → 归一化前 URL 提取失败
-        broken = {"assets": [{"imgUrl": "https://cdn.minimaxh3.ai/img/9.png"}]}
-        urls = [a.get("imageUrl") for a in broken["assets"] if isinstance(a, dict)]
-        assert not any(urls)  # 提取不到
 
     def test_nanobanana_poll_breaks(self, nanobanana_poll):
         # 上游把 resultUrls 改名为 results → 探针找不到 URL

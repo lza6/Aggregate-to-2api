@@ -250,6 +250,21 @@ class SolverGuard:
     def get_nodes(self) -> list[SolverNodeState]:
         return list(self._nodes.values())
 
+    def acquire_inflight_for(self, url: str) -> SolverNodeState | None:
+        """通过 URL 获取节点状态并标记在途请求（公共方法，避免外部访问私有 _nodes）。"""
+        cleaned = url.rstrip("/")
+        node = self._nodes.get(cleaned)
+        if node:
+            node.acquire_inflight()
+        return node
+
+    def release_inflight_for(self, url: str) -> None:
+        """通过 URL 释放节点在途请求计数。"""
+        cleaned = url.rstrip("/")
+        node = self._nodes.get(cleaned)
+        if node:
+            node.release_inflight()
+
     def select_node(self) -> SolverNodeState | None:
         """选择最优健康节点：加权与最少在途 (Weighted Least-Inflight Selection)。
 

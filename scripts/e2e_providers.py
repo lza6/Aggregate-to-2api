@@ -5,7 +5,7 @@ mock 模式全链路 mock（IF_MOCK_UPSTREAM + IF_MOCK_REGISTER）：零外部�
   1. /v1/models 返回全提供商模型，命名 <提供商>/<真实模型名>，含 seedance-1.5-pro 480P 视频模型
   2. /v1/providers 返回各提供商能力/号池需求/每请求代理需求
   3. /v1/account-pool 号池看板：自动补号到目标、余额正确
-  4. 路由：imagefree（引擎队列）/ minimaxh3（文生图+视频+图生图）/ aifreeforever（降级）/ nanobanana（降级）
+  4. 路由：imagefree（引擎队列）/ nanobanana（降级）/ aifreeforever（降级）
   5. /v1/tasks 统一查询跨提供商任务
   6. 首页品牌（听风AI）+ logo 可达
 
@@ -169,13 +169,12 @@ class ProvidersE2E:
         self.check("/v1/models HTTP 200", ok, str(d["status"]))
         self.check("模型总数 ≥ 40（4 提供商）", count >= 40, f"count={count}")
         self.check("imagefree 组存在", "imagefree" in items)
-        self.check("minimaxh3 组存在", "minimaxh3" in items)
-        self.check("aifreeforever 组存在", "aifreeforever" in items)
         self.check("nanobanana 组存在", "nanobanana" in items)
-        mm = items.get("minimaxh3") or []
+        self.check("aifreeforever 组存在", "aifreeforever" in items)
+        nb = items.get("nanobanana") or []
         ids = {m["id"] for m in mm}
-        self.check("seedance-1.5-pro 480P 视频模型", "minimaxh3/seedance-1.5-pro" in ids,
-                   "480P 模型缺失!" if "minimaxh3/seedance-1.5-pro" not in ids else "")
+        self.check("seedance-1.5-pro 480P 视频模型", "nanobanana/seedance-1.5-pro" in ids,
+                   "480P 模型缺失!" if "nanobanana/seedance-1.5-pro" not in ids else "")
         # 命名契约：id 都是 provider/真实名
         naming_ok = all(m["id"].startswith(p + "/") for p, ms in items.items() for m in ms)
         self.check("模型命名 <提供商>/<真实模型名>", naming_ok)
@@ -184,7 +183,7 @@ class ProvidersE2E:
         d = self.get("/v1/providers")
         items = (d.get("json") or {}).get("items") or {}
         self.check("/v1/providers HTTP 200", d["status"] == 200)
-        self.check("minimaxh3 需号池", items.get("minimaxh3", {}).get("needs_account") is True)
+        self.check("nanobanana 需号池", items.get("nanobanana", {}).get("needs_account") is True)
         self.check("aifreeforever 每请求换 IP", items.get("aifreeforever", {}).get("needs_proxy_per_request") is True)
         self.check("nanobanana 需号池", items.get("nanobanana", {}).get("needs_account") is True)
         self.check("imagefree 免号池", items.get("imagefree", {}).get("needs_account") is False)
@@ -192,32 +191,30 @@ class ProvidersE2E:
     def _verify_account_pool(self) -> None:
         d = self.get("/v1/account-pool")
         acc = (d.get("json") or {}).get("accounts") or {}
-        mm = acc.get("minimaxh3") or {}
         nb = acc.get("nanobanana") or {}
-        self.check("minimaxh3 自动补号到目标", mm.get("ok", 0) >= 1, f"ok={mm.get('ok')}")
         self.check("nanobanana 自动补号到目标", nb.get("ok", 0) >= 1, f"ok={nb.get('ok')}")
-        self.check("minimaxh3 余额>0", (mm.get("credits") or 0) > 0, f"credits={mm.get('credits')}")
-        self.check("号池自动注册运行中", mm.get("auto_register") is True)
+        self.check("nanobanana 余额>0", (nb.get("credits") or 0) > 0, f"credits={nb.get('credits')}")
+        self.check("号池自动注册运行中", nb.get("auto_register") is True)
 
     def _verify_routing(self) -> None:
         # imagefree → 引擎队列（mock 上游 completed）
         t = self.submit_and_wait({"prompt": "a dog", "model": "imagefree/default", "aspect_ratio": "1:1"})
         self.check("imagefree 路由 completed", t.get("status") == "completed", str(t.get("status")))
-        # minimaxh3 文生图（mock 号池）
-        t = self.submit_and_wait({"prompt": "a cat", "model": "minimaxh3/nano-banana-pro",
+        # nanobanana 文生图（mock 号池）
+        t = self.submit_and_wait({"prompt": "a cat", "model": "nanobanana/nano-banana-pro",
                                   "aspect_ratio": "1:1", "resolution": "1K"})
-        self.check("minimaxh3 文生图 completed", t.get("status") == "completed",
+        self.check("nanobanana 文生图 completed", t.get("status") == "completed",
                    f"{t.get('status')} {str(t.get('error') or '')[:50]}")
-        # minimaxh3 视频（seedance-1.5-pro 480P）
-        t = self.submit_and_wait({"prompt": "v", "model": "minimaxh3/seedance-1.5-pro",
+        # nanobanana 视频（seedance-1.5-pro 480P）
+        t = self.submit_and_wait({"prompt": "v", "model": "nanobanana/seedance-1.5-pro",
                                   "aspect_ratio": "16:9", "resolution": "480p", "duration": 4}, timeout=15)
-        self.check("minimaxh3 视频 completed", t.get("status") == "completed",
+        self.check("nanobanana 视频 completed", t.get("status") == "completed",
                    f"{t.get('status')} {str(t.get('error') or '')[:50]}")
-        # minimaxh3 图生图
+        # nanobanana 图生图
         import base64
         png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64).decode()
         r = self.post("/v1/edit", {"image": f"data:image/png;base64,{png}",
-                                   "prompt": "make red", "model": "minimaxh3/nano-banana-pro"})
+                                   "prompt": "make red", "model": "nanobanana/nano-banana-pro"})
         tid = (r.get("json") or {}).get("id")
         if tid:
             deadline = time.monotonic() + 15
@@ -227,9 +224,9 @@ class ProvidersE2E:
                 if t.get("status") in ("completed", "error"):
                     break
                 time.sleep(0.3)
-            self.check("minimaxh3 图生图 completed", t.get("status") == "completed", str(t.get("status")))
+            self.check("nanobanana 图生图 completed", t.get("status") == "completed", str(t.get("status")))
         else:
-            self.check("minimaxh3 图生图 completed", False, "提交失败")
+            self.check("nanobanana 图生图 completed", False, "提交失败")
         # aifreeforever 代理池未配置 → 明确降级（非静默崩溃）
         t = self.submit_and_wait({"prompt": "x", "model": "aifreeforever/gpt-image-2", "aspect_ratio": "1:1"})
         self.check("aifreeforever 无代理池降级（直连或失败）", t.get("status") in ("error", "submission_failed", "timeout"),

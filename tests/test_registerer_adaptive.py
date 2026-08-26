@@ -15,7 +15,6 @@ import pytest
 from api import config
 from api.registerer import (
     AdaptiveRegistrationBackoff,
-    Minimaxh3Registerer,
     NanobananaRegisterer,
     RegistrationError,
     RegistrationErrorCategory,
@@ -112,7 +111,7 @@ def test_registration_session_stages():
 
 def test_registration_session_failure():
     """测试 RegistrationSession 失败标记。"""
-    session = RegistrationSession(provider="minimaxh3")
+    session = RegistrationSession(provider="nanobanana")
     session.advance_to(RegistrationStage.EMAIL_ALLOCATED, email="fail@temp.tf")
     session.mark_failed("WAF 403 Forbidden", RegistrationErrorCategory.IP_BLOCKED)
 
@@ -126,9 +125,9 @@ def test_registration_session_failure():
 
 
 @pytest.mark.asyncio
-async def test_minimaxh3_cf_blocked_handling(monkeypatch):
-    """测试 minimaxh3 遇到 Turnstile 求解失败时的自适应分类与 solver_guard 标记。"""
-    reg = Minimaxh3Registerer()
+async def test_nanobanana_cf_blocked_handling(monkeypatch):
+    """测试 nanobanana 遇到 Turnstile 求解失败时的自适应分类与 solver_guard 标记。"""
+    reg = NanobananaRegisterer()
     monkeypatch.setattr(config, "MOCK_REGISTER", False)
 
     async def fake_allocate(provider):

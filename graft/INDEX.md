@@ -9,7 +9,11 @@ The same graph is queryable as MCP tools (`graft_find_code`, `graft_find_all`,
 as the `graft` CLI everywhere else. Edges — who calls what — live only in the
 graph, not in these files: `graft callers <symbol>` is the only way to read them.
 
+## Concepts
+
+- [probe_tryingopen](probe_tryingopen.md) — probe_tryingopen
+
 ## Files
 
-272 per-file wiring cards mirror the source tree under `graft/` (244 carry extracted symbols). They are deliberately not enumerated here —
+264 per-file wiring cards mirror the source tree under `graft/` (237 carry extracted symbols). They are deliberately not enumerated here —
 `grep` a symbol or `find`/`ls` a filename under `graft/` to land on the card for that file.

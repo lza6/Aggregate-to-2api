@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec } from '../api';
 import { StatCard } from '../components/StatCard';
 import { BarChart } from '../components/BarChart';
 import { Gallery } from '../components/Gallery';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { Stats, Diagnostics, RoutingRecord, RoutingNode } from '../api';
+import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec } from '../api';
 
 const PWD_KEY = 'galleryPwd';
 
@@ -18,6 +18,7 @@ export function Dashboard() {
     () => fetchRoutingRecords(50),
     { intervalMs: 15000 },
   );
+  const { data: sys } = useApi<SystemSpec>(() => fetchSystemSpec(), { intervalMs: 60000 });
   const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -130,9 +131,87 @@ export function Dashboard() {
       )}
 
       {/* 趋势图表区 */}
-      {dailyChart.length > 0 && (
+      {dailyChart.length > 0 ? (
         <div className="section-block">
           <BarChart data={dailyChart} title="近 14 日出图总量趋势" height={230} />
+        </div>
+      ) : (
+        <div className="section-block tf-card empty-chart-placeholder">
+          <div className="empty-state">
+            <span className="empty-icon">📊</span>
+            <p className="empty-text">暂无趋势数据</p>
+            <span className="empty-hint">生成作品后，出图趋势将在此展示</span>
+          </div>
+        </div>
+      )}
+
+      {/* 服务器规格卡片 (自适应并发) */}
+      {sys && (
+        <div className="section-block">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">🖥️ 服务器配置</h2>
+              <span className="section-sub">按 CPU/内存自适应算力 —— 高配服务器自动提升并发</span>
+            </div>
+          </div>
+          <div className="sys-grid">
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">🧠</span>
+                <span className="sys-name">CPU 核心</span>
+                <span className="sys-val">{sys.cpu.cores} 核</span>
+              </div>
+              <div className="sys-sub">架构 · 自动检测</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">💾</span>
+                <span className="sys-name">内存</span>
+                <span className="sys-val">{sys.memory.total_gb} GB</span>
+              </div>
+              <div className="sys-sub">{sys.memory.total_mb} MB</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">💿</span>
+                <span className="sys-name">磁盘</span>
+                <span className="sys-val">{sys.disk.free_gb} GB 可用</span>
+              </div>
+              <div className="sys-sub">共 {sys.disk.total_gb} GB · 已用 {sys.disk.used_gb} GB</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">⚙️</span>
+                <span className="sys-name">并行 Worker</span>
+                <span className="sys-val">{sys.adaptive.workers}</span>
+              </div>
+              <div className="sys-sub">每个 Worker 独立生成通道</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">🌐</span>
+                <span className="sys-name">上游并发上限</span>
+                <span className="sys-val">{sys.adaptive.upstream_inflight}</span>
+              </div>
+              <div className="sys-sub">Upstream max inflight</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">🪙</span>
+                <span className="sys-name">Token 池水位</span>
+                <span className="sys-val">{sys.adaptive.token_pool_size}</span>
+              </div>
+              <div className="sys-sub">预取 turnstile token</div>
+            </div>
+            <div className="sys-card tf-card">
+              <div className="sys-head">
+                <span className="sys-icon">🧮</span>
+                <span className="sys-name">队列上限</span>
+                <span className="sys-val">{sys.adaptive.max_queue.toLocaleString()}</span>
+              </div>
+              <div className="sys-sub">有界队列最大容量</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -209,10 +288,10 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {(routingData?.records ?? []).map((r, i) => {
+                {(routingData?.records ?? []).map((r) => {
                   const isRedirected = r.selected_provider !== r.requested_provider;
                   return (
-                    <tr key={i}>
+                    <tr key={r.request_id || r.ts}>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11 }}>
                         {new Date(r.ts * 1000).toLocaleTimeString()}
                       </td>
@@ -377,6 +456,32 @@ export function Dashboard() {
           font-weight: 700;
           color: var(--primary-600);
         }
+
+        /* 服务器规格卡片 */
+        .sys-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 12px;
+        }
+
+        .sys-card {
+          padding: 14px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-subtle) 100%);
+        }
+
+        .sys-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .sys-icon { font-size: 16px; }
+        .sys-name { font-size: 12.5px; color: var(--text-muted); flex: 1; }
+        .sys-val { font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .sys-sub { font-size: 11.5px; color: var(--text-muted); }
       `}</style>
     </div>
   );

@@ -11,7 +11,7 @@ class GenerateRequest(BaseModel):
     aspect_ratio: str = Field("1:1", pattern=r"^\d+:\d+$")
     download: bool = Field(False, description="是否同时下载图片并返回 base64")
     model: str = Field("imagefree/default",
-                       description="模型 id，见 GET /v1/models（格式：<提供商>/<真实模型名>，如 minimaxh3/nano-banana-pro）")
+                       description="模型 id，见 GET /v1/models（格式：<提供商>/<真实模型名>，如 nanobanana/nano-banana-pro）")
     resolution: str = Field("1K", description="分辨率：1K/2K/4K 或视频 480p/720p")
     duration: int | None = Field(None, ge=4, le=15,
                                   description="视频时长秒数：4/8/12/15")

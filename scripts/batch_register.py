@@ -2,7 +2,7 @@
 
 用法：
   python scripts/batch_register.py --provider nanobanana --target 500 --concurrency 2
-  python scripts/batch_register.py --provider minimaxh3 --target 500 --concurrency 2
+  python scripts/batch_register.py --provider nanobanana --target 500 --concurrency 2
 """
 import argparse
 import asyncio
@@ -59,7 +59,7 @@ async def register_worker(provider: str, target: int, sem: asyncio.Semaphore, pr
 
 async def main():
     parser = argparse.ArgumentParser(description="批量自动化注册号池账号")
-    parser.add_argument("--provider", choices=["nanobanana", "minimaxh3"], default="nanobanana", help="目标提供商")
+    parser.add_argument("--provider", choices=["nanobanana"], default="nanobanana", help="目标提供商")
     parser.add_argument("--target", type=int, default=500, help="目标有效账号数")
     parser.add_argument("--concurrency", type=int, default=1, help="并发任务数（Turnstile 单槽建议 1~2）")
     args = parser.parse_args()

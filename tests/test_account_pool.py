@@ -39,34 +39,33 @@ def pool(tmp_path):
 # ── 持久化 ──────────────────────────────────────
 class TestAccountPool:
     def test_add_and_get(self, pool):
-        pool.add("minimaxh3", "a@x.com", "cookie1", credits=4)
-        pool.add("minimaxh3", "b@x.com", "cookie2", credits=4)
+        pool.add("nanobanana", "a@x.com", "cookie1", credits=4)
+        pool.add("nanobanana", "b@x.com", "cookie2", credits=4)
         pool.add("nanobanana", "c@x.com", "cookie3", credits=4)
-        mm = pool.get("minimaxh3")
-        assert len(mm) == 2
-        assert all(a["cookie"] for a in mm)
-        assert pool.total_credits("minimaxh3") == 8
-        assert pool.total_credits("nanobanana") == 4
+        nb = pool.get("nanobanana")
+        assert len(nb) == 3
+        assert all(a["cookie"] for a in nb)
+        assert pool.total_credits("nanobanana") == 12
 
     def test_mark_and_credits(self, pool):
-        pool.add("minimaxh3", "a@x.com", "c", credits=4)
-        pool.update_credits("minimaxh3", "a@x.com", 0)
-        assert pool.total_credits("minimaxh3") == 0
-        pool.mark("minimaxh3", "a@x.com", "exhausted")
-        assert pool.get("minimaxh3") == []  # exhausted 不算可用
+        pool.add("nanobanana", "a@x.com", "c", credits=4)
+        pool.update_credits("nanobanana", "a@x.com", 0)
+        assert pool.total_credits("nanobanana") == 0
+        pool.mark("nanobanana", "a@x.com", "exhausted")
+        assert pool.get("nanobanana") == []  # exhausted 不算可用
 
     def test_counts(self, pool):
-        pool.add("minimaxh3", "a@x.com", "c", credits=4)
-        pool.add("minimaxh3", "b@x.com", "c", credits=4, status="exhausted")
+        pool.add("nanobanana", "a@x.com", "c", credits=4)
+        pool.add("nanobanana", "b@x.com", "c", credits=4, status="exhausted")
         c = pool.counts()
-        assert c["minimaxh3"]["ok"] == 1
-        assert c["minimaxh3"]["exhausted"] == 1
+        assert c["nanobanana"]["ok"] == 1
+        assert c["nanobanana"]["exhausted"] == 1
 
     def test_dashboard(self, pool):
-        pool.add("minimaxh3", "a@x.com", "c", credits=4)
+        pool.add("nanobanana", "a@x.com", "c", credits=4)
         d = pool.dashboard()
-        assert "minimaxh3" in d
-        assert d["minimaxh3"]["credits"] == 4
+        assert "nanobanana" in d
+        assert d["nanobanana"]["credits"] == 4
 
 
 # ── 状态机 (Account FSM) 测试 ─────────────────────
@@ -173,27 +172,26 @@ async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
     from api.account_pool import AccountPool
     from api.proxy_pool import ProxyEntry, proxy_pool
     # 注入一个 residential 代理（无住宅代理时补号循环按安全红线跳过注册）
-    proxy_pool.entries.append(ProxyEntry("http://r:r@1.1.1.1:8080", source="residential"))
+    monkeypatch.setattr(proxy_pool, "entries", [ProxyEntry("http://r:r@1.1.1.1:8080", source="residential")])
     p = AccountPool(str(tmp_path / "acc.db"))
-    p.registerers["minimaxh3"] = _FakeReg()
-    monkeypatch.setattr("api.account_pool.TARGET_MINIMAXH3", 2)
+    p.registerers["nanobanana"] = _FakeReg()
+    monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 2)
     monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)  # M5 成功节流缩短，测试快速补满
     # 提高每日上限，让同一个 IP 能被注册两次（代理池默认每 IP 每日只用 1 次）
     monkeypatch.setattr("api.config.IF_PROXY_MAX_USE_PER_DAY", 2)
-    task = asyncio.create_task(p._autoregister_loop("minimaxh3"))
+    task = asyncio.create_task(p._autoregister_loop("nanobanana"))
     try:
         deadline = time.monotonic() + 6
-        while time.monotonic() < deadline and len(p.get("minimaxh3")) < 2:
+        while time.monotonic() < deadline and len(p.get("nanobanana")) < 2:
             await asyncio.sleep(0.3)
-        assert len(p.get("minimaxh3")) >= 2
-        assert p.total_credits("minimaxh3") >= 8
+        assert len(p.get("nanobanana")) >= 2
+        assert p.total_credits("nanobanana") >= 8
     finally:
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
-        proxy_pool.entries = [e for e in proxy_pool.entries if e.url != "http://r:r@1.1.1.1:8080"]
         p._conn.close()
 
 
@@ -230,14 +228,14 @@ class TestEmailPool:
         monkeypatch.setattr(
             p, "_sources",
             [s for s in p._sources if s.name == "temp.tf"])
-        a1, _s1 = await p.allocate("minimaxh3")
-        a2, _s2 = await p.allocate("minimaxh3")
+        a1, _s1 = await p.allocate("nanobanana")
+        a2, _s2 = await p.allocate("nanobanana")
         assert a1 != a2
         assert "@" in a1 and a1.split("@")[1].count(".") >= 1  # 合法邮箱（local@domain.tld）
-        p.record(a1, "minimaxh3", "ok")
-        assert p.registered_providers(a1) == ["minimaxh3"]
+        p.record(a1, "nanobanana", "ok")
+        assert p.registered_providers(a1) == ["nanobanana"]
         # 已用邮箱不再分配
-        a3, _s3 = await p.allocate("minimaxh3")
+        a3, _s3 = await p.allocate("nanobanana")
         assert a3 not in (a1, a2)
         p._conn.close()
 
@@ -262,24 +260,23 @@ class TestEmailPool:
 class TestAccountPoolDashboard:
     def test_dashboard_structure(self, pool):
         d = pool.dashboard()
-        for prov in ("minimaxh3", "nanobanana"):
+        for prov in ("nanobanana",):
             assert prov in d
             entry = d[prov]
             for key in ("total", "ok", "exhausted", "registering", "credits", "target", "auto_register"):
                 assert key in entry, f"{prov} 缺字段 {key}"
-        assert d["minimaxh3"]["target"] == 500
-        assert d["nanobanana"]["target"] == 500
-        assert d["minimaxh3"]["auto_register"] is False  # 未注入注册器
+        assert d["nanobanana"]["target"] == 10000  # 大容量目标（支持百万级号池）
+        assert d["nanobanana"]["auto_register"] is False  # 未注入注册器
 
     def test_dashboard_counts_reflect_state(self, pool):
-        pool.add("minimaxh3", "a@x.com", "c1", credits=4)
-        pool.add("minimaxh3", "b@x.com", "c2", credits=0)
-        pool.mark("minimaxh3", "b@x.com", "exhausted")
+        pool.add("nanobanana", "a@x.com", "c1", credits=4)
+        pool.add("nanobanana", "b@x.com", "c2", credits=0)
+        pool.mark("nanobanana", "b@x.com", "exhausted")
         d = pool.dashboard()
-        assert d["minimaxh3"]["total"] == 2
-        assert d["minimaxh3"]["ok"] == 1
-        assert d["minimaxh3"]["exhausted"] == 1
-        assert d["minimaxh3"]["credits"] == 4
+        assert d["nanobanana"]["total"] == 2
+        assert d["nanobanana"]["ok"] == 1
+        assert d["nanobanana"]["exhausted"] == 1
+        assert d["nanobanana"]["credits"] == 4
 
 
 @pytest.mark.asyncio
@@ -295,7 +292,7 @@ async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
     import api.account_pool as ap_mod
     monkeypatch.setattr(ap_mod, "MOCK_REGISTER", False)
     monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)
-    monkeypatch.setattr("api.account_pool.TARGET_MINIMAXH3", 1)
+    monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 1)
 
     p = AccountPool(str(tmp_path / "acc.db"))
     calls = []
@@ -305,13 +302,13 @@ async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
             calls.append(1)
             return None
 
-    p.registerers["minimaxh3"] = _Reg()
+    p.registerers["nanobanana"] = _Reg()
     p.proxy = None
-    task = asyncio.create_task(p._autoregister_loop("minimaxh3"))
+    task = asyncio.create_task(p._autoregister_loop("nanobanana"))
     try:
         await asyncio.sleep(0.8)  # 冷却 0.1s 内应循环多次但都不注册
         assert calls == []  # 无代理守卫生效：未触发任何注册
-        assert len(p.get("minimaxh3")) == 0
+        assert len(p.get("nanobanana")) == 0
     finally:
         task.cancel()
         try:

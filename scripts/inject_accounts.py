@@ -2,11 +2,11 @@
 
 用法：
   # 从文件导入现成账号（每行 JSON 或 tab 分隔：email<TAB>cookie<TAB>[password<TAB>credits]）
-  python scripts/inject_accounts.py --provider minimaxh3 --import accounts.txt
+  python scripts/inject_accounts.py --provider nanobanana --import accounts.txt
 
   # 批量真实注册（需 cf_solver :8001 + 邮箱源可达；受 Turnstile 求解速度限制，默认 1/轮询 2s）
   # --use-proxy-pool 时每号从免费/住宅代理池轮换出口 IP（防批量注册同 IP 风控）
-  python scripts/inject_accounts.py --provider minimaxh3 --count 500 --real --use-proxy-pool
+  python scripts/inject_accounts.py --provider nanobanana --count 500 --real --use-proxy-pool
 
   # mock 注册（测试/演示号池补号逻辑，不碰上游）
   python scripts/inject_accounts.py --provider nanobanana --count 10 --mock
@@ -43,7 +43,7 @@ def _import_file(pool, provider: str, path: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--provider", required=True, choices=["minimaxh3", "nanobanana"])
+    ap.add_argument("--provider", required=True, choices=["nanobanana"])
     ap.add_argument("--import", dest="import_file", help="从文件导入账号")
     ap.add_argument("--count", type=int, default=10, help="批量注册数量")
     ap.add_argument("--real", action="store_true", help="真实注册（需 cf_solver+邮箱）")

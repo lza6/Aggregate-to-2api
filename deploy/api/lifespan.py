@@ -59,8 +59,10 @@ async def lifespan(_app):
     _background_task = asyncio.create_task(run_background_tasks(
         db, engine, registry, solver_guard, worker_health, gallery_cache))
     _batch_timer_task = None
+    _checkpoint_timer_task = None
     if config.IF_DB_BATCH_ENABLED:
         _batch_timer_task = asyncio.create_task(db.start_batch_timer())
+    _checkpoint_timer_task = asyncio.create_task(db.start_checkpoint_timer())
 
     providers_bootstrap()
     imagefree_provider = registry.providers.get("imagefree")
@@ -124,6 +126,14 @@ async def lifespan(_app):
             except asyncio.CancelledError:
                 pass
 
+    async def _stop_checkpoint_timer() -> None:
+        if _checkpoint_timer_task:
+            _checkpoint_timer_task.cancel()
+            try:
+                await _checkpoint_timer_task
+            except asyncio.CancelledError:
+                pass
+
     async def _stop_background() -> None:
         _background_task.cancel()
         try:
@@ -132,7 +142,8 @@ async def lifespan(_app):
             pass
 
     await shutdown_phase(5.0, "① 后台任务停止",
-                         _stop_warmup(), _stop_batch_timer(), _stop_background())
+                         _stop_warmup(), _stop_batch_timer(), _stop_background(),
+                         _stop_checkpoint_timer())
 
     async def _flush_db() -> None:
         await db.flush()
@@ -162,6 +173,10 @@ async def lifespan(_app):
         await gallery_cache.flush_to_db()
     await shutdown_phase(3.0, "⑥ 缓存持久化",
                          _flush_cache(), gallery_cache.stop_reaper())
+
+    # P1-B: 关闭前等待 SSE 发布任务完成，防止终态事件丢失
+    from .sse_events import await_pending_sse_tasks
+    await shutdown_phase(5.0, "⑥.5 SSE 发布任务排空", await_pending_sse_tasks())
 
     await shutdown_phase(3.0, "⑦ HTTP 连接池关闭",
                          turnstile_client.close_client(), imagefree_client.close_client())

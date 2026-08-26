@@ -10,8 +10,6 @@
 - imagefree_client.py:253  mock 分支  {"status":"completed","image":"...","progress":100}
 - imagefree_client.py:278  真实轮询归一化 {"status":"completed","image":..., "progress":...}
 - imagefree_client.py:415  mock 分支  {"status":"completed","image":"..."}（EditResponse）
-- minimaxh3.py:236-237    提交响应    {"code":0,"data":{"generationId":...,"creditsUsed":...}}
-- minimaxh3.py:266-270    轮询响应    {"status":"completed","assets":[{"imageUrl":...}]}
 - nanobanana.py:206       提交 RSC     {"success":true,"taskId":...}
 - nanobanana.py:222-232   轮询响应    {"state":"success","resultUrls":[...]} / assets[...]
 """
@@ -61,7 +59,6 @@ class EditResponse(BaseModel):
 # 做形状校验，不绑定这些路径。代码略，任务要求不写调用逻辑改动。
 
 _READ_PATHS: dict[str, dict[str, list[str]]] = {
-    "minimaxh3": {"submit": ["data", "generationId"], "poll": ["assets"], "imageKey": ["imageUrl"]},
     "nanobanana": {"submit": ["taskId"], "poll": ["resultUrls"]},
     "aifreeforever": {"submit": ["images"]},
 }

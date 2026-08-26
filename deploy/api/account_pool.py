@@ -1,7 +1,6 @@
 """号池（账号池）：积分制提供商的账号管理 + 自动补号 + 每日签到 + 状态机 (Account FSM)。
 
 覆盖：
-- minimaxh3（用完即丢，自动注册补号，目标常驻 500 个）
 - nanobanana-pro（每日签到续额，非用完即丢，每天自动签到）
 
 职责：
@@ -31,10 +30,8 @@ from .providers.base import MOCK_REGISTER
 log = logging.getLogger("account_pool")
 
 DB_FILE = os.getenv("IF_ACCOUNT_DB_FILE", "data/account_pool.db")
-# minimaxh3 目标常驻账号数（默认 500）
-TARGET_MINIMAXH3 = int(os.getenv("IF_MINIMAXH3_ACCOUNT_TARGET", "500"))
 # nanobanana 目标常驻账号数（默认 500）
-TARGET_NANOBANANA = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "500"))
+TARGET_NANOBANANA = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "10000"))
 # 补号冷却（秒）：注册器连续失败时退避，防风控
 REGISTER_COOLDOWN = int(os.getenv("IF_REGISTER_COOLDOWN", "120"))
 # 默认账号冷却期（秒）：cooling 状态满此时长后可自动唤醒尝试签到/恢复
@@ -176,6 +173,21 @@ class AccountPool:
             self._conn.commit()
 
     # ── 状态机核心操作 (FSM) ──────────────────────────
+
+    def _reclaim_lease_timeout(self, provider: str) -> int:
+        """回收超租约的 working 账号：超过 BORROW_LEASE_TIMEOUT_SECONDS 自动重置为 active，防止账号永久卡死。"""
+        now = time.time()
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE accounts SET status='active', borrowed_at=NULL, updated_at=? "
+                "WHERE provider=? AND status='working' AND borrowed_at IS NOT NULL AND (?-borrowed_at) > ?",
+                (now, provider, now, BORROW_LEASE_TIMEOUT_SECONDS)
+            )
+            self._conn.commit()
+            reclaimed = cur.rowcount
+        if reclaimed:
+            log.info("自动回收超租约 working 账号: %d 个 (%s)", reclaimed, provider)
+        return reclaimed
 
     def borrow_account(self, provider: str, prefer_email: str | None = None) -> dict | None:
         """从 active (ok) 账号池原子借出一个账号并标记为 working 状态。"""
@@ -325,10 +337,13 @@ class AccountPool:
         except Exception as e:
             # 如果是 401/403/banned 则 mark_dead，否则正常归还
             err_str = str(e).lower()
-            if any(k in err_str for k in ("401", "403", "unauthorized", "forbidden", "banned", "account suspended")):
-                self.mark_dead(provider, email, reason=str(e)[:100])
-            else:
-                self.release_account(provider, email)
+            try:
+                if any(k in err_str for k in ("401", "403", "unauthorized", "forbidden", "banned", "account suspended")):
+                    self.mark_dead(provider, email, reason=str(e)[:100])
+                else:
+                    self.release_account(provider, email)
+            except Exception as release_err:
+                log.warning("账号归还失败 (%s/%s), 原始异常: %s", provider, email, release_err)
             raise
         else:
             self.release_account(provider, email)
@@ -436,8 +451,8 @@ class AccountPool:
 
     # ── 自动补号 / 签到 / 延寿唤醒循环 ────────────────────────
     async def start(self) -> None:
-        # 为长效签到型提供商（nanobanana）及 minimaxh3 开启自动补号与延寿巡检
-        auto_provs = [p for p in ("nanobanana", "minimaxh3") if self._autoreg_enabled(p)]
+        # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
+        auto_provs = [p for p in ("nanobanana",) if self._autoreg_enabled(p)]
         for prov in auto_provs:
             self.checkin_tasks[f"register:{prov}"] = asyncio.create_task(self._autoregister_loop(prov))
         # 每日签到与自动延寿巡检器
@@ -447,8 +462,6 @@ class AccountPool:
 
     @staticmethod
     def _autoreg_enabled(provider: str) -> bool:
-        if provider == "minimaxh3":
-            return os.getenv("IF_MINIMAXH3_AUTOREG", "1").strip().lower() in {"1", "true", "yes", "on"}
         return os.getenv("IF_NANOBANANA_AUTOREG", "1").strip().lower() in {"1", "true", "yes", "on"}
 
     async def stop(self) -> None:
@@ -459,11 +472,12 @@ class AccountPool:
         self.checkin_tasks.clear()
 
     async def _cooling_wake_loop(self) -> None:
-        """延寿唤醒巡检：每 5 分钟扫描冷却账号并自动唤醒恢复。"""
+        """延寿唤醒巡检：每 5 分钟先回收超租约 working 账号，再扫描冷却账号并自动唤醒恢复。"""
         while True:
             try:
                 await asyncio.sleep(300)
-                for prov in ("nanobanana", "minimaxh3"):
+                for prov in ("nanobanana",):
+                    self._reclaim_lease_timeout(prov)
                     self.wake_cooling_accounts(prov)
             except asyncio.CancelledError:
                 raise
@@ -472,23 +486,11 @@ class AccountPool:
 
     async def _autoregister_loop(self, provider: str) -> None:
         """提供商自动补号守护任务。"""
-        target = TARGET_MINIMAXH3 if provider == "minimaxh3" else TARGET_NANOBANANA
+        target = TARGET_NANOBANANA
         while True:
             try:
-                if provider == "minimaxh3":
-                    # 有积分的账号才算可用（minimaxh3 用完即弃）
-                    usable = sum(1 for a in self.get(provider) if int(a.get("credits", 0) or 0) > 0)
-                else:
-                    usable = len(self.get(provider))
+                usable = len(self.get(provider))
                 if usable >= target:
-                    if provider == "minimaxh3":
-                        try:
-                            from .providers import registry
-                            prov = registry.providers.get("minimaxh3")
-                            if prov:
-                                await prov.refresh_credits()
-                        except Exception:
-                            pass
                     await asyncio.sleep(60)
                     continue
                 reg = self.registerers.get(provider)
@@ -498,10 +500,9 @@ class AccountPool:
 
                 try:
                     if not MOCK_REGISTER:
-                        from .kookeey import kookeey_enabled
                         residential = [e for e in proxy_pool.entries if e.source == "residential" and e.available(time.time())]
                         free_ok = [e for e in proxy_pool.entries if e.source == "free" and e.available(time.time())]
-                        if not (residential or free_ok or kookeey_enabled()):
+                        if not (residential or free_ok):
                             log.info("号池补号暂停 %s：无可用出口代理", provider)
                             await asyncio.sleep(REGISTER_COOLDOWN)
                             continue
@@ -550,10 +551,10 @@ class AccountPool:
                 log.warning("签到循环异常 %s: %s", provider, e)
 
     def dashboard(self) -> dict:
-        """前端「号池」看板数据：包含 minimaxh3、nanobanana 等所有受支持提供商。"""
+        """前端「号池」看板数据：包含 nanobanana 等所有受支持提供商。"""
         counts = self.counts()
         out = {}
-        all_providers = set(counts.keys()) | {"nanobanana", "minimaxh3"}
+        all_providers = set(counts.keys()) | {"nanobanana"}
         for prov in all_providers:
             c = counts.get(prov, {})
             # 兼容读取各状态计数
@@ -564,7 +565,7 @@ class AccountPool:
             registering_cnt = c.get("registering", 0)
             unregistered_cnt = c.get("unregistered", 0)
 
-            target = TARGET_MINIMAXH3 if prov == "minimaxh3" else TARGET_NANOBANANA
+            target = TARGET_NANOBANANA
             # 总数按原始各状态去重汇总
             raw_total = sum(v for k, v in c.items() if k not in ("active", "cooling", "dead"))
             if raw_total == 0:
