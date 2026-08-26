@@ -108,14 +108,21 @@ MailSource = BaseMailSource
 
 # ── 1. LinshiMailSource (自建/现有免费临时邮箱，零 429) ───
 class LinshiMailSource(BaseMailSource):
-    """linshi-email.com 免费临时邮箱源，本地生成地址，零 429 限流。"""
+    """linshi-email.com 免费临时邮箱源，本地生成地址，零 429 限流。
+
+    注意：默认域名已大多被 nanobanana-pro.com 拉黑（INVALID_EMAIL 400），
+    因此此源 priority 调低；仅当其它源不可用时兜底。可通过
+    IF_LINSHI_DOMAINS 覆盖域名列表。
+    """
 
     name = "linshi-email"
     BASE = "https://www.linshi-email.com"
-    DOMAINS = ["iwatermail.com", "fextemp.com", "boximail.com", "chitthi.in"]
+    DOMAINS = [d.strip() for d in os.getenv("IF_LINSHI_DOMAINS",
+              "iwatermail.com,fextemp.com,boximail.com,chitthi.in").split(",") if d.strip()]
 
     def __init__(self) -> None:
-        super().__init__(name=self.name, priority=85)
+        # 默认域名被上游拉黑 → 权重降到 10 使其极少被选中；可用域名补齐后靠环境变量覆盖
+        super().__init__(name=self.name, priority=10)
         self.session = httpx.AsyncClient(
             timeout=15.0,
             headers={
@@ -606,13 +613,18 @@ class Do22Source(BaseMailSource):
 
 # ── 6. TempMailSource (temp-mail.org web2 API) ────────
 class TempMailSource(BaseMailSource):
-    """temp-mail.org 收件源（web2.temp-mail.org）。"""
+    """temp-mail.org 收件源（web2.temp-mail.org）。
+
+    实测验证（抓包确认）：temp-mail.org 的 hutdot.com 等域名在
+    nanobanana-pro.com 注册有效（验证邮件可正常收取），
+    因此此源 priority 提升为最高档。
+    """
 
     name = "temp-mail"
     API = "https://web2.temp-mail.org"
 
     def __init__(self) -> None:
-        super().__init__(name=self.name, priority=60)
+        super().__init__(name=self.name, priority=95)
         self._last_create = 0.0
         self.session = httpx.AsyncClient(
             timeout=20.0,
@@ -805,6 +817,14 @@ class EmailPool:
                 return src
         return None
 
+    def risky_domains(self, min_fails: int = 3) -> set[str]:
+        """返回失败次数 >= min_fails 的拉黑域名集合（供 allocate 过滤）。"""
+        rows = self._conn.execute(
+            "SELECT domain FROM domain_risk WHERE fail_count >= ? AND status = 'risky'",
+            (min_fails,),
+        ).fetchall()
+        return {r["domain"] for r in rows}
+
     def get_sources(self) -> list[BaseMailSource]:
         """获取当前配置的所有邮箱源副本。"""
         return list(self._sources)
@@ -846,6 +866,7 @@ class EmailPool:
             active_sources = [s for s in candidate_sources if s.priority > 0] or self._sources
 
         errors: list[str] = []
+        risky = self.risky_domains()  # 已被上游拉黑的域名（连续失败 >=3）
         for _ in range(15):
             src = active_sources[_ % len(active_sources)]
             try:
@@ -858,6 +879,12 @@ class EmailPool:
 
             if not address or "@" not in address:
                 src.mark_failure("返回空或无效地址")
+                continue
+
+            # 跳过已被上游拉黑的域名（INVALID_EMAIL 风控记录）
+            domain = address.split("@")[-1].lower()
+            if domain in risky:
+                log.info("跳过拉黑域名邮箱 %s（domain_risk fail>=3）", address)
                 continue
 
             if want_fresh and address in self._used:

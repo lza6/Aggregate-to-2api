@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3274,
-  "edgeCount": 5793,
+  "nodeCount": 3275,
+  "edgeCount": 5795,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3274,
+  "totalCount": 3275,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-26T07:24:32.909Z",
-  "lastFile": "context.py"
+  "syncedAt": "2026-08-26T09:56:21.401Z",
+  "lastFile": "registerer.py"
 }

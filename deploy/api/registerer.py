@@ -387,7 +387,10 @@ class NanobananaRegisterer:
             if r.status_code != 200:
                 email_pool.record(email, self.provider, "error", "signup_fail")
                 resp_text = str(r.text)[:150]
-                if "turnstile" in resp_text.lower() or "captcha" in resp_text.lower():
+                # INVALID_EMAIL → 域名已被上游拉黑，记入 domain_risk，下次分配跳过该域名
+                if "invalid_email" in resp_text.lower() or "invalid email" in resp_text.lower():
+                    cat = RegistrationErrorCategory.EMAIL_RATE_LIMITED
+                elif "turnstile" in resp_text.lower() or "captcha" in resp_text.lower():
                     cat = RegistrationErrorCategory.CF_BLOCKED
                 else:
                     cat = RegistrationErrorCategory.IP_BLOCKED if r.status_code in (401, 403) else RegistrationErrorCategory.TRANSIENT
