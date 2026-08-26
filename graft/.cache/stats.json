@@ -10,8 +10,8 @@
   "totalCount": 3275,
   "readyCount": 0,
   "staleCount": 0,
-  "dirty": false,
+  "dirty": true,
   "syncing": false,
   "syncedAt": "2026-08-26T01:42:06.893Z",
-  "lastFile": "test_account_pool.py"
+  "lastFile": "sync_deploy.py"
 }

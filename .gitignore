@@ -49,6 +49,9 @@ test-results/
 # Seal
 所有用到的提供商/
 
+# 参考项目（本地参考，不入库）
+可参考的项目/
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
 
