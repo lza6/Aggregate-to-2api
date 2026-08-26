@@ -135,7 +135,7 @@ class NanobananaProvider(Provider):
                 task_id = await self._submit_image(cookie, upstream, prompt, aspect_ratio, resolution)
             asset_url = await self._poll_task(cookie, task_id, timeout=300)
         except ProviderRateLimited as e:
-            # IMP-18: 连续限流 → 降级追踪
+            # IMP-18: 连续限流 → 降级追踪（仅做计数与标记，不触发跨提供商自动路由）
             if self._registry_ref:
                 self._registry_ref.record_failure(self.prefix)
                 self._registry_ref.mark_exhausted(self.prefix, acc.get("email", "?"))

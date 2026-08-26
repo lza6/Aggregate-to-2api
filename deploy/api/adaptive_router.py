@@ -130,6 +130,22 @@ class AdaptiveRouter:
             stats = self.nodes.setdefault(provider_id, ProviderNodeStats(provider_id=provider_id))
             stats.in_flight_requests = max(0, stats.in_flight_requests + delta)
 
+    def record_direct(self, provider_id: str, model_id: str, request_id: str = "") -> None:
+        """记录一次「直接路由」决策（selected = requested，不做跨提供商自动降级）。
+
+        供 provider_for 在 healthy/degraded 路径下写入观测记录，前端路由面板据此
+        显示该请求真实路由到了请求指定的提供商（reason=direct），而非被自适应偷换。
+        """
+        with self._lock:
+            now = time.time()
+            self._record(RoutingRecord(
+                ts=now, request_id=request_id, model=model_id,
+                selected_provider=provider_id, requested_provider=provider_id,
+                score=self._calculate_score(provider_id),
+                scores={provider_id: self._calculate_score(provider_id)},
+                reason="direct",
+            ))
+
     # ── 核心打分 ──
     def _calculate_score(self, pid: str) -> float:
         st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))

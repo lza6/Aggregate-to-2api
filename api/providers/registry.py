@@ -61,11 +61,11 @@ class Registry:
     def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None:
         """返回 model_id 对应的提供商。
 
-        路由逻辑（v3.2）：
-        1. 首选 provider down → find_alternative（静态能力匹配回退）
-        2. 首选 provider healthy/degraded → 在候选（首+备）中用自适应路由打分发流量
-        3. 全都不行 → 回退首选（最坏也只是慢，不 429）
-        路由决策会写入 adaptive_router 的路由记录，供 /v1/routing/records 展示。
+        路由逻辑（直接映射，不做跨提供商自动降级）：
+        - 仅当首选 provider 明确 down 时才静态回退到能力匹配的备用（避免请求 429）。
+        - healthy/degraded 的提供商**不**参与跨提供商 MAB-EWMA 打分，
+          直接返回请求指定的提供商（model_id 前缀即提供商），保证用户指定的
+          nanobanana/aifreeforever 等模型真实路由到对应提供商，而非被自动路由偷换。
         """
         self._ensure_booted()
         spec = self._models.get(model_id)
@@ -79,39 +79,25 @@ class Registry:
         if provider and provider.health_status == "down":
             health = "down"
 
+        # 首选 down → 静态回退到能力匹配的备用（仅此场景跨提供商）
         if health == "down":
-            # provider 为 down → 尝试找备用（静态回退，不参与自适应打分）
             if not prefer_healthy:
                 return provider
             alt_provider, alt_model_id = self.find_alternative(model_id)
             if alt_provider:
                 self.adaptive_router.record_inflight(alt_provider.prefix)
+                log.info("提供商 %s down，静态回退到 %s 处理 %s",
+                         spec.provider, alt_provider.prefix, model_id)
             return alt_provider or provider
 
-        # 首选 healthy/degraded → 组装候选（首选 + 各能力匹配的备用）交给自适应路由
-        candidates = [spec.provider]
-        # 仅当目标提供商不是明确指定专有前缀（如 imagefree/* 专属）或显式需要降级时才交叉打分
-        if spec.provider != "imagefree":
-            for prefix, p in self.providers.items():
-                if prefix == spec.provider:
-                    continue
-                if p.health_status == "down":
-                    continue  # 熔断/不可用不参与
-                for mid, ms in p.models.items():
-                    if set(spec.capabilities) & set(ms.capabilities):
-                        candidates.append(prefix)
-                        break
-        # 去重保序，交给 MAB-EWMA 打分
-        seen: set[str] = set()
-        uniq = [c for c in candidates if not (c in seen or seen.add(c))]
-
-        selected = self.adaptive_router.select_best(
-            uniq,
-            model=model_id,
-            requested_provider=spec.provider,
-        )
-        chosen = self.providers.get(selected) or provider
-        return chosen
+        # healthy/degraded → 直接返回请求指定的提供商（不做自适应交叉路由）
+        # 记录一次路由决策（selected = requested，reason=direct）供前端观测
+        try:
+            self.adaptive_router.record_inflight(spec.provider)
+            self.adaptive_router.record_direct(spec.provider, model_id)
+        except Exception:
+            pass
+        return provider
 
     def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]:
         """查找 model_id 的备用提供商。

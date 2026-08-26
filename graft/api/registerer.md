@@ -21,10 +21,10 @@
 - _proxy_host · function · L241-L249 — def _proxy_host(proxy: str | None) -> str
 - _gen_password · function · L252-L266 — def _gen_password() -> str
 - _session_data_from_cookies · function · L269-L274 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
-- NanobananaRegisterer · class · L278-L615 — class NanobananaRegisterer
+- NanobananaRegisterer · class · L278-L618 — class NanobananaRegisterer
 - __init__ · method · L286-L294 — def __init__(self) -> None
 - _ensure_client · method · L296-L312 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
-- register_one · method · L314-L482 — async def register_one(self) -> dict | None
-- checkin · method · L484-L564 — async def checkin(self, acc: dict) -> int | None
-- re_login · method · L566-L615 — async def re_login(self, email: str, password: str) -> dict | None
-- build_registerers · function · L619-L622 — def build_registerers() -> dict[str, object]
+- register_one · method · L314-L485 — async def register_one(self) -> dict | None
+- checkin · method · L487-L567 — async def checkin(self, acc: dict) -> int | None
+- re_login · method · L569-L618 — async def re_login(self, email: str, password: str) -> dict | None
+- build_registerers · function · L622-L625 — def build_registerers() -> dict[str, object]
