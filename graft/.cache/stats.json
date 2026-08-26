@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3276,
-  "edgeCount": 5797,
+  "nodeCount": 3278,
+  "edgeCount": 5803,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3276,
+  "totalCount": 3278,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-26T10:34:25.473Z",
+  "syncedAt": "2026-08-26T12:27:16.512Z",
   "lastFile": "account_pool.py"
 }

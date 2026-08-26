@@ -505,9 +505,11 @@ class AccountPool:
 
                 try:
                     if not MOCK_REGISTER:
-                        usable = [e for e in proxy_pool.entries if e.available(time.time())]
-                        if not usable:
-                            log.info("号池补号暂停 %s：无可用出口代理", provider)
+                        # 号池注册需轮换 IP：只要池里有任何代理就尝试 acquire（内部按冷却分配）。
+                        # 不能用 available()（受 IF_PROXY_MAX_USE_PER_DAY=1 每日限额约束）做前置判定，
+                        # 否则用一轮后全部 use_count=1 会被误判"无可用代理"而永久暂停。
+                        if not proxy_pool.entries:
+                            log.info("号池补号暂停 %s：代理池为空（抓取器尚未注入）", provider)
                             await asyncio.sleep(REGISTER_COOLDOWN)
                             continue
                     reg.proxy = await proxy_pool.acquire()
