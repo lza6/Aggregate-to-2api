@@ -217,10 +217,13 @@ class MailTmSource(BaseMailSource):
         return self._cached_domains or ["mailtm.me", "sharklasers.com"]
 
     async def new_address(self) -> tuple[str, dict]:
+        # 仅使用实时拉取的域名；过期默认域名（sharklasers 等）已被 mail.tm 拒绝（422），
+        # 故不再回退到硬编码旧域名。
         domains = await self._get_domains()
-        if not domains:
-            raise RuntimeError("mail.tm 无可用域名")
-        domain = random.choice(domains)
+        now = time.time()
+        if not self._cached_domains or (now - self._domains_fetched_at >= 3600):
+            raise RuntimeError("mail.tm 无法获取有效域名列表")
+        domain = random.choice(self._cached_domains)
         local = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
         address = f"{local}@{domain}"
         password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
