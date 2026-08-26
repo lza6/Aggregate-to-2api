@@ -560,6 +560,8 @@ class AccountPool:
                             self.mark(provider, acc["email"], "active")
                             continue
                         # checkin 返回 None（cookie 失效）→ 尝试用保存的密码重新登录续期
+                        # 注意：checkin 失败不一定是 cookie 过期（也可能是网络/求解临时故障），
+                        # 用连续失败计数（note 里的 fail:N 标记）代替一次就标 dead。
                         if acc.get("password") and hasattr(reg, "re_login"):
                             re = await reg.re_login(acc["email"], acc["password"])
                             if re and re.get("cookie"):
@@ -572,7 +574,14 @@ class AccountPool:
                                 )
                                 log.info("nanobanana cookie 续期成功 %s", acc["email"])
                             else:
-                                self.mark(provider, acc["email"], "dead", note="cookie 失效且重新登录失败")
+                                # 累计失败计数，>=3 次才标 dead
+                                prev_note = acc.get("note") or ""
+                                fail_n = int(prev_note.split("fail:")[1]) if "fail:" in prev_note else 1
+                                if fail_n >= 3:
+                                    self.mark(provider, acc["email"], "dead", note=f"cookie 续期连续 {fail_n} 次失败")
+                                else:
+                                    self.mark(provider, acc["email"], "active", note=f"fail:{fail_n + 1}")
+                                    log.warning("nanobanana %s checkin+re_login 失败 (第 %d 次)", acc["email"], fail_n)
                         else:
                             self.mark(provider, acc["email"], "dead", note="cookie 失效（无密码可续期）")
                     except Exception as e:

@@ -5,6 +5,9 @@
 - 统一生命周期：提交 → 轮询 → 取产物 URL / 下载
 - 统一额度面：余额、每次消耗、健康
 - 号池接入：需账号的提供商返回 account_pool 需要的注册/签到/凭据获取接口
+
+v4.4 新增 ChatProvider：文本对话提供商抽象基类（与图像 Provider 平行），
+支持流式 SSE 输出 / 思考链 / 工具调用模拟 / 多模态图片输入。
 """
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any, AsyncIterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .registry import Registry
@@ -145,3 +148,117 @@ class Provider(abc.ABC):
     def needs_account(self) -> bool:
         """是否需要号池账号（积分制、用完即弃的平台必须 True）。"""
         return any(m.account_required for m in self.models.values())
+
+
+# ── 文本对话（chat）能力枚举 ──────────────────────
+CAP_CHAT = "chat"
+CAP_CHAT_VISION = "chat_vision"    # 支持图片输入
+CAP_CHAT_TOOLS = "chat_tools"      # 支持（模拟的）函数调用
+
+
+class ChatProvider(abc.ABC):
+    """文本对话提供商抽象基类（与图像 Provider 平行，不继承它）。
+
+    接口契约：
+    - chat_stream() 逐事件 yield，事件类型固定为以下五种 dict：
+        {"type": "text",      "text": str}
+        {"type": "reasoning", "text": str}
+        {"type": "tool_call", "id": str, "name": str, "arguments": str}   # arguments 为 JSON 字符串
+        {"type": "usage",     "usage": {"prompt_tokens": int, "completion_tokens": int,
+                                        "total_tokens": int, ["reasoning_tokens": int]}}
+        {"type": "finish",    "finish_reason": "stop" | "tool_calls" | ...}
+    - chat_collect() 为默认非流式便捷封装（聚合上面五种事件）。
+    - 子类自行负责代理轮换 / 限流重试 / 消息格式转换。
+    """
+
+    prefix: str = "chat_base"
+    display_name: str = "Chat Base"
+    base_url: str = ""
+    models: dict[str, ModelSpec] = {}
+
+    def __init__(self) -> None:
+        self.health_status: str = "unknown"
+        self._registry_ref: Registry | None = None
+
+    # ── 生命周期 ──────────────────────────────────
+    async def startup(self) -> None:
+        """启动钩子：创建 HTTP 客户端、启动模型目录自动同步循环等。"""
+
+    async def shutdown(self) -> None:
+        """停止钩子：取消后台任务、关闭连接。"""
+
+    def supports(self, capability: str) -> bool:
+        return any(capability in m.capabilities for m in self.models.values())
+
+    # ── 模型目录（动态同步）───────────────────────
+    def all_models(self) -> list[ModelSpec]:
+        return list(self.models.values())
+
+    @abc.abstractmethod
+    async def refresh_models(self) -> int:
+        """从上游刷新模型目录（供后台定时同步调用）。返回当前模型数。"""
+
+    # ── 核心接口（子类实现）───────────────────────
+    @abc.abstractmethod
+    def chat_stream(self, model: str, messages: list[dict],
+                    tools: list | None = None, tool_choice: Any = None,
+                    effort: str = "balanced",
+                    **kw) -> AsyncIterator[dict]:
+        """流式聊天入口（异步生成器）。messages 为 OpenAI 格式（role/content）。"""
+
+    async def chat_collect(self, model: str, messages: list[dict],
+                           tools: list | None = None, tool_choice: Any = None,
+                           effort: str = "balanced",
+                           **kw) -> dict:
+        """非流式聚合：收集全部事件返回完整结果。"""
+        text_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        tool_calls: list[dict] = []
+        usage: dict | None = None
+        finish_reason = "stop"
+        async for ev in self.chat_stream(model, messages, tools=tools,
+                                         tool_choice=tool_choice, effort=effort, **kw):
+            etype = ev.get("type")
+            if etype == "text":
+                text_parts.append(ev.get("text", ""))
+            elif etype == "reasoning":
+                reasoning_parts.append(ev.get("text", ""))
+            elif etype == "tool_call":
+                tool_calls.append({
+                    "id": ev.get("id") or f"call_{int(time.time()*1000):x}",
+                    "type": "function",
+                    "function": {"name": ev.get("name", ""),
+                                 "arguments": ev.get("arguments") or "{}"},
+                })
+                finish_reason = "tool_calls"
+            elif etype == "usage":
+                usage = ev.get("usage")
+            elif etype == "finish":
+                finish_reason = ev.get("finish_reason", finish_reason)
+        out = {
+            "text": "".join(text_parts),
+            "reasoning": "".join(reasoning_parts),
+            "usage": usage or {},
+            "finish_reason": finish_reason,
+        }
+        if tool_calls:
+            out["tool_calls"] = tool_calls
+        return out
+
+    # ── 额度 / 健康 ───────────────────────────────
+    async def credits(self) -> int | None:
+        """当前可用额度估算。None=不适用。"""
+        return None
+
+    async def health(self) -> dict:
+        return {"healthy": self.health_status != "down", "note": ""}
+
+    async def health_check(self) -> str:
+        return "healthy"
+
+    def mark_down(self, reason: str) -> None:
+        self.health_status = "down"
+        log.warning("ChatProvider %s 标记为 down: %s", self.prefix, reason)
+
+    def mark_up(self) -> None:
+        self.health_status = "healthy"

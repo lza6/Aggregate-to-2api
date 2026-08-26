@@ -34,6 +34,9 @@ class Registry:
         # v3.2: MAB-EWMA 自适应路由引擎
         from ..adaptive_router import adaptive_router
         self.adaptive_router = adaptive_router
+        # v4.4: 文本对话提供商注册表（prefix → ChatProvider）+ 模型索引
+        self.chat_providers: dict[str, "ChatProvider"] = {}  # type: ignore[name-defined]
+        self._chat_models: dict[str, ModelSpec] = {}
 
     def _ensure_booted(self) -> None:
         if not self._booted:
@@ -49,6 +52,40 @@ class Registry:
         # 初始化健康状态
         self.provider_health[provider.prefix] = "healthy"
         log.info("注册提供商 %s（%d 模型）", provider.prefix, len(provider.models))
+
+    def register_chat(self, provider) -> None:
+        """注册文本对话 ChatProvider（v4.4）。模型 id 前缀与图像 Provider 同契约。"""
+        from .base import ChatProvider  # 延迟导入防循环
+        if not isinstance(provider, ChatProvider):
+            raise TypeError(f"{type(provider).__name__} 不是 ChatProvider")
+        self.chat_providers[provider.prefix] = provider
+        for mid, spec in provider.models.items():
+            self._chat_models[mid] = spec
+        provider._registry_ref = self  # type: ignore[attr-defined]
+        log.info("注册聊天提供商 %s（%d 模型）", provider.prefix, len(provider.models))
+
+    def chat_model(self, model_id: str) -> ModelSpec | None:
+        """查找聊天模型 spec。未找到时尝试从各 provider 动态目录补查。"""
+        self._ensure_booted()
+        spec = self._chat_models.get(model_id)
+        if spec is not None:
+            return spec
+        # 动态目录回退：模型 id 可能是刷新后新增的（如 glm-5.3-flash），按前缀委托查询
+        prefix = model_id.split("/", 1)[0]
+        prov = self.chat_providers.get(prefix)
+        if prov is not None:
+            spec = prov.models.get(model_id)
+            if spec is not None:
+                self._chat_models[model_id] = spec
+        return spec
+
+    def all_chat_models(self) -> list[ModelSpec]:
+        """全部聊天模型（含动态目录）。"""
+        self._ensure_booted()
+        out: dict[str, ModelSpec] = dict(self._chat_models)
+        for prov in self.chat_providers.values():
+            out.update(prov.models)
+        return list(out.values())
 
     def model(self, model_id: str) -> ModelSpec | None:
         self._ensure_booted()
@@ -277,12 +314,21 @@ def bootstrap() -> None:
     架构优化：已移除用完即丢且不可签到的冗余提供商，
     将所有算力与号池集中在支持每日自动签到续额的长效提供商（nanobanana）
     以及主力提供商（imagefree, aifreeforever）。
+    v4.4: 同步注册文本对话 ChatProvider（tryingopen，可通过 IF_TRYINGOPEN_ENABLED 关闭）。
     """
     if registry.providers:
         return
     registry.register(imagefree.ImagefreeProvider())
     registry.register(aifreeforever.AifreeforeverProvider())
     registry.register(nanobanana.NanobananaProvider())
+    # v4.4: 文本对话提供商（导入失败/开关关闭时静默跳过，不影响图像主链路）
+    import os
+    if os.getenv("IF_TRYINGOPEN_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from .tryingopen import TryingopenChatProvider
+            registry.register_chat(TryingopenChatProvider())
+        except Exception as e:
+            log.warning("聊天提供商 tryingopen 注册失败（降级跳过）: %s", e)
 
 
 async def startup_all() -> None:
@@ -292,6 +338,11 @@ async def startup_all() -> None:
             await p.startup()
         except Exception as e:
             log.warning("提供商 %s 启动失败（可忽略，降级）: %s", p.prefix, e)
+    for p in registry.chat_providers.values():
+        try:
+            await p.startup()
+        except Exception as e:
+            log.warning("聊天提供商 %s 启动失败（可忽略，降级）: %s", p.prefix, e)
 
 
 async def shutdown_all() -> None:
@@ -300,3 +351,8 @@ async def shutdown_all() -> None:
             await p.shutdown()
         except Exception as e:
             log.warning("提供商 %s 停止失败: %s", p.prefix, e)
+    for p in registry.chat_providers.values():
+        try:
+            await p.shutdown()
+        except Exception as e:
+            log.warning("聊天提供商 %s 停止失败: %s", p.prefix, e)
