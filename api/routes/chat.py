@@ -224,6 +224,8 @@ async def _chat_collect(
     except AppError:
         raise
     except Exception as exc:
+        # 根因必须落日志（此前被静默吞掉导致线上排障困难）
+        log.exception("聊天提供商调用失败 model=%s provider=%s", request.model, provider_name)
         usage = _normalize_usage({}, "", messages)
         await _record(
             **_record_args(
