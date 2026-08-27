@@ -140,3 +140,13 @@ def test_completions_open_mode_no_key_needed(client_no_auth, monkeypatch):
 
     resp = client_no_auth.post("/v1/chat/completions", json=PAYLOAD)
     assert resp.status_code == 200
+
+
+# ── 挂载回归：chat.router 必须真实挂在 api_router 上（防止 import 未 include 的伪实现）──
+
+def test_chat_router_is_mounted_on_api_router():
+    from api.routes import api_router
+    mounted_paths = {getattr(r, "path", "") for r in api_router.routes}
+    assert "/v1/chat/completions" in mounted_paths
+    assert "/v1/chat/models" in mounted_paths
+    assert "/v1/messages" in mounted_paths

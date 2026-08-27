@@ -17,5 +17,6 @@ api_router.include_router(health.router)
 api_router.include_router(tasks.router)
 api_router.include_router(generate.router)
 api_router.include_router(admin.router)
+api_router.include_router(chat.router)
 
 __all__ = ["api_router"]
