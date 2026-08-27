@@ -14,7 +14,9 @@ from __future__ import annotations
 import os
 import sys
 
-from pydantic import Any, BaseModel, Field, field_validator, model_validator
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .base import _env_bool, _env_int, _env_str
