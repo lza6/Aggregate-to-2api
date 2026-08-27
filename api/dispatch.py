@@ -228,7 +228,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         # imagefree 主路径：走既有引擎队列（高性能）
         task_id = await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
                                                model.split("/", 1)[-1],
-                                               priority=priority)
+                                               priority=priority,
+                                               client_ip=getattr(req, "client_ip", None))
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)

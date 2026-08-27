@@ -9,9 +9,9 @@
   ],
   "totalCount": 3592,
   "readyCount": 0,
-  "staleCount": 20,
+  "staleCount": 0,
   "dirty": true,
   "syncing": false,
   "syncedAt": "2026-08-27T04:22:14.239Z",
-  "lastFile": "Tasks.tsx"
+  "lastFile": "test_auth_ip.py"
 }
