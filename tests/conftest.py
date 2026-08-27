@@ -143,6 +143,9 @@ async def _app_instance(mock_cfsolver):
     os.environ["IF_SOLVE_CIRCUIT_THRESHOLD"] = "3"
     os.environ["IF_GALLERY_PASSWORD"] = ""
     os.environ["IF_BASE64_DIR"] = str(tempfile.mkdtemp())
+    # 集成/混沌套件默认关闭 per-IP 限流：限流有专属单测（request_guard），此处聚焦
+    # 完整链路可用性；避免多个测试累计请求共享同一 IP 桶导致 429 抢占、顺序污染。
+    os.environ["IF_REQUESTS_PER_MINUTE"] = "0"
 
     # 临时 DB 文件（会话级，共享 DB 实例）
     _db_path = tempfile.mktemp(suffix=".db")

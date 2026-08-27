@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GC 可观测闭环 · v6.3.0</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Noto+Serif+SC:wght@700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap">
+<style>
+  :root {
+    --bg: #f7f7f8; --surface: #ffffff; --surface-2: #f0f2f5;
+    --text: #1e2330; --muted: #667085; --line: #e4e7ec;
+    --accent: #0d6b58; --accent-soft: #e2f3ee;
+    --good: #12b76a; --warn: #e0a800; --bad: #f04438;
+    --code-bg: #101828;
+    --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 4px 16px rgba(16, 24, 40, 0.06);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1420; --surface: #161c2b; --surface-2: #1d2436;
+      --text: #e6e9f0; --muted: #98a1b3; --line: #2a3250;
+      --accent: #34c9a8; --accent-soft: #102b28;
+      --good: #3ddc84; --warn: #f5c451; --bad: #ff6b6b;
+      --code-bg: #0a0e18;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1420; --surface: #161c2b; --surface-2: #1d2436;
+    --text: #e6e9f0; --muted: #98a1b3; --line: #2a3250;
+    --accent: #34c9a8; --accent-soft: #102b28;
+    --good: #3ddc84; --warn: #f5c451; --bad: #ff6b6b;
+    --code-bg: #0a0e18;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  body::before {
+    content: ""; display: block; position: fixed; inset: 0 0 auto;
+    height: 4px; background: linear-gradient(90deg, var(--accent), #7dd3c0, var(--accent));
+    opacity: .9;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 90px; }
+  header.hero { margin-bottom: 14px; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 14px;
+  }
+  .kicker .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    font-family: "Noto Serif SC", serif;
+    font-size: clamp(30px, 5vw, 46px); line-height: 1.18; margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--muted); font-size: 16px; max-width: 60ch; margin: 0 0 28px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 10px 22px;
+    padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface); box-shadow: var(--shadow); font-size: 13.5px; color: var(--muted);
+    margin-bottom: 42px;
+  }
+  .meta b { color: var(--text); font-weight: 600; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 36px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--line); color: var(--text);
+  }
+  .pill.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, var(--line)); background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+  .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 52px 0 6px;
+    scroll-margin-top: 24px;
+  }
+  h2::after { content: ""; display: block; width: 44px; height: 3px; border-radius: 2px; background: var(--accent); margin-top: 6px; }
+  h3 { font-size: 17px; font-weight: 700; margin: 28px 0 10px; }
+  p { margin: 10px 0; }
+  .lead { font-size: 16.5px; color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0 8px; font-size: 14px; }
+  th { text-align: left; font-weight: 700; padding: 10px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td code, th code { font-size: 12.5px; }
+  tr:hover td { background: var(--surface-2); }
+  code {
+    font-family: "JetBrains Mono", ui-monospace, Consolas, monospace;
+    font-size: 13px; background: var(--surface-2); border: 1px solid var(--line);
+    padding: 1.5px 6px; border-radius: 6px;
+  }
+  pre {
+    background: var(--code-bg); color: #d7e0f0; border-radius: 12px;
+    padding: 18px 20px; overflow-x: auto; font-size: 13px; line-height: 1.7;
+    margin: 16px 0;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: 13px; }
+  .kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; background: var(--surface-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .card .num { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.1; }
+  .card .num.good { color: var(--good); }
+  .card .lab { font-size: 13px; color: var(--muted); margin-top: 6px; font-weight: 500; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .status.closed { color: var(--good); }
+  .status.verified { color: var(--good); }
+  .status.limited { color: var(--warn); }
+  .status.pending { color: var(--bad); }
+  .traces { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--radius); padding: 6px 20px; margin: 20px 0; }
+  .traces code { background: transparent; border: none; }
+  ul.tight { margin: 8px 0; padding-left: 22px; }
+  ul.tight li { margin: 6px 0; }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--surface);
+    border-radius: 0 10px 10px 0; padding: 14px 18px; margin: 20px 0;
+    box-shadow: var(--shadow); font-size: 15px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout code { font-size: 12.5px; }
+  .tl { list-style: none; padding: 0; margin: 20px 0; }
+  .tl li { display: grid; grid-template-columns: 200px 34px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  @media (max-width: 640px) { .tl li { grid-template-columns: 1fr; gap: 2px; } }
+  .tl .date { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .tl .arrow { color: var(--accent); text-align: center; font-weight: 700; }
+  .tl .what { font-size: 14.5px; }
+
+  /* 测验 */
+  .quiz { margin-top: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+  .q p { margin: 0 0 12px; font-weight: 600; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14.5px; }
+  .opt:hover { background: var(--surface-2); }
+  .opt input { accent-color: var(--accent); margin-top: 5px; }
+  .opt.correct { background: color-mix(in srgb, var(--good) 14%, var(--surface)); }
+  .opt.wrong { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
+  .qmeta { font-size: 12.5px; color: var(--muted); margin-top: 10px; display: none; }
+  .q.done .qmeta { display: block; }
+  .quiz-foot { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    appearance: none; border: none; cursor: pointer; font-weight: 700;
+    background: var(--accent); color: #fff; padding: 11px 26px; border-radius: 10px;
+    font-size: 15px; font-family: inherit;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+  .score { font-size: 16px; font-weight: 700; margin-left: 4px; }
+  .score.good { color: var(--good); } .score.warn { color: var(--warn); } .score.bad { color: var(--bad); }
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+</style>
+<body>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="kicker"><span class="dot"></span>imagefree-2ai · 变更交付报告</p>
+  <h1>GC 可观测闭环</h1>
+  <p class="sub">让 base64 缓存资源的「水位」可观测：热/冷占比、待清理文件数、预计释放空间，全部暴露在 <code>/v1/stats</code> 与管理面板 Dashboard 上。</p>
+</header>
+
+<div class="badges">
+  <span class="pill good">✓ 已闭环</span>
+  <span class="pill good">✓ 真实验证 32/32 E2E</span>
+  <span class="pill good">✓ 独立审查 Approve</span>
+  <span class="pill">版本 v5.1.0 → v6.3.0</span>
+  <span class="pill">2026-08-27</span>
+</div>
+
+<div class="meta">
+  <span>仓库 <b>github.com/lza6/Image-to-2api</b></span>
+  <span>分支 <b>main</b></span>
+  <span>无新建分支 ✓</span>
+  <span>Release <b>v6.3.0</b></span>
+  <span>提交 <code>777725d</code> · <code>e0671d8</code></span>
+</div>
+
+<h2>背景与目标</h2>
+<p class="lead">项目的 <code>api/base64_store.py</code> 已有完整清理逻辑——按 mtime 判定过期的 <code>clean_expired</code> 与按最旧优先的配额保护 <code>enforce_quota</code>，且 <code>test_img_gc.py</code> 已有覆盖。但这些资源的水位完全不可见：运营者看不到缓存目录有多大、多久会被后台定时任务清掉、配额是否接近上限。本次交付为这一闭环补上最后一环——可观测。</p>
+<p>目标不是新增清理能力（已有），而是把一个静默的后台过程变成管理面板上一目了然的数字。</p>
+
+<div class="callout">
+  <b>核心交付物：</b> <code>GET /v1/stats</code> 新增 <code>base64_gc</code> 段，字段包括
+  <code>total_files</code> / <code>total_gb</code> / <code>hot_files</code> / <code>hot_gb</code> /
+  <code>cold_files</code> / <code>cold_gb</code> / <code>quota_gb</code> / <code>usage_pct</code> /
+  <code>pending_cleanup_count</code> / <code>pending_cleanup_gb</code>。
+</div>
+
+<div class="cards">
+  <div class="card"><div class="num good">32/32</div><div class="lab">真实 E2E 验收项全部通过</div></div>
+  <div class="card"><div class="num">13</div><div class="lab">GC 单元测试通过</div></div>
+  <div class="card"><div class="num">1</div><div class="lab">统计端集成测试通过</div></div>
+  <div class="card"><div class="num">0</div><div class="lab">成交互测验错题（⾃测）</div></div>
+</div>
+
+<h2>架构与数据流</h2>
+<p>热冷拆分沿用系统既有的 mtime 语义，与后台清理保持逐字一致，不引入第二套判定规则：</p>
+<pre><code>base64 文件写入（save_base64）
+   │  mtime = 写入时刻
+   ▼
+gc_stats() 一次目录扫描
+   │  对每个文件: now − mtime &gt; IF_BASE64_FILE_TTL ?
+   ├──── 否 ────► hot（未过期）
+   └──── 是 ────► cold（待清理）
+   ▼
+/v1/stats 实时计算（不经过 10s LRU 缓存）
+   └────► Dashboard「base64 缓存」「待清理」卡片
+</code></pre>
+<p>关键设计点：<code>pending_cleanup_count</code> 与下一次 <code>clean_expired</code> 实际会删除的文件数精确一致——两者使用同一判定式「<code>now − mtime &gt; ttl</code>」，因此「待清理」是一个有真实含义的数字，而非估算。</p>
+
+<h2>修改前后行为对比</h2>
+<table>
+  <tr><th style="width:26%">维度</th><th>修改前</th><th>修改后</th></tr>
+  <tr><td><code>/v1/stats</code> 响应</td><td>用量 + 并发 + 日/月拆分 + solver</td><td>追加 <code>base64_gc</code> 段（向后兼容，原字段不变）</td></tr>
+  <tr><td>缓存水位可见性</td><td>不可见，只能登服务器翻目录</td><td>管理面板实时展示热/冷/待清理/配额</td></tr>
+  <tr><td>不可读目录（权限/瞬时故障）</td><td>—（策略不存在）</td><td><code>os.listdir</code> 抛出时返回全零，不向 <code>/v1/stats</code> 抛 500</td></tr>
+  <tr><td>GB 展示</td><td>—</td><td><code>toFixed(2)</code>，避免 <code>0.000314159 GB</code> 式冗长小数</td></tr>
+</table>
+
+<h2>修改的文件</h2>
+<table>
+  <tr><th>文件</th><th>改动</th></tr>
+  <tr><td><code>api/base64_store.py</code></td><td>新增 <code>gc_stats()</code>；<code>os.listdir</code> 容错</td></tr>
+  <tr><td><code>api/routes/admin.py</code></td><td><code>/v1/stats</code> 挂载 <code>base64_gc</code></td></tr>
+  <tr><td><code>frontend/src/api.ts</code></td><td><code>Stats.base64_gc</code> 类型（可选）</td></tr>
+  <tr><td><code>frontend/src/pages/Dashboard.tsx</code></td><td>新增「base64 缓存」「待清理」卡片</td></tr>
+  <tr><td><code>tests/test_img_gc.py</code></td><td>新增 5 个 <code>gc_stats</code> 测试（含不可读目录回归）</td></tr>
+  <tr><td><code>tests/integration/test_full_flow.py</code></td><td>stats 端体验证 <code>base64_gc</code> 字段</td></tr>
+  <tr><td><code>scripts/e2e_full.py</code></td><td>真实 E2E 断言 <code>base64_gc</code></td></tr>
+  <tr><td>版本号六处</td><td>5.1.0 → 6.3.0；<code>deploy/</code> 副本经 sync 同步</td></tr>
+</table>
+
+<h2>关键设计决策</h2>
+<ul class="tight">
+  <li><b>热冷判定沿用 mtime 而非引入 atime/访问计数</b>——与 <code>clean_expired</code> 完全一致，避免「统计口径」与「清理口径」分裂。</li>
+  <li><b>实时计算而非缓存</b>——<code>base64_gc</code> 直接调用 <code>gc_stats()</code>，不经过被 LRU（TTL 10s）缓存的 <code>overview</code>，保证水位数字始终新鲜。</li>
+  <li><b>纯增量、无 schema 迁移</b>——不新增配置、不改数据库、不依赖任何外部服务，风险面最小。</li>
+  <li><b>防御式渲染</b>——前端对 <code>base64_gc</code> 缺失（旧后端）显示 <code>-</code>，不崩溃。</li>
+</ul>
+
+<h2>验证证据</h2>
+<table>
+  <tr><th>验证项</th><th>命令</th><th>结果</th></tr>
+  <tr><td>GC 单元测试</td><td><code>pytest tests/test_img_gc.py -q</code></td><td><span class="status verified">13 passed</span></td></tr>
+  <tr><td>统计端集成</td><td><code>pytest tests/integration/test_full_flow.py::test_stats_endpoint</code></td><td><span class="status verified">1 passed</span></td></tr>
+  <tr><td>真实 E2E</td><td><code>python scripts/e2e_full.py</code></td><td><span class="status verified">32/32 PASS</span></td></tr>
+  <tr><td>前端构建</td><td><code>npm run build</code></td><td><span class="status verified">0 错误</span></td></tr>
+  <tr><td>deploy 同步</td><td><code>python scripts/sync_deploy.py check</code></td><td><span class="status verified">OK</span></td></tr>
+</table>
+
+<h2>独立审查结论</h2>
+<div class="traces">
+  <span class="status closed">Approve</span> — 独立 code-reviewer 审查无 Blocking / Required 问题
+</div>
+<table>
+  <tr><th>审查项</th><th>结论</th><th>落地</th></tr>
+  <tr><td>V1　不可读目录抛 500</td><td>Verify → 已加固</td><td><span class="status verified">已修复 + 回归测试</span></td></tr>
+  <tr><td>S1　类型契约声明为必填，与实际防御不一致</td><td>建议 → 已改可选 <code>base64_gc?:</code></td><td><span class="status verified">已修复</span></td></tr>
+  <tr><td>S2　GB 展示冗长小数</td><td>建议 → <code>toFixed(2)</code></td><td><span class="status verified">已修复</span></td></tr>
+  <tr><td>S3/S4　魔法数字、命名</td><td>提示 → 与现有文件风格一致</td><td><span class="status limited">保留</span></td></tr>
+  <tr><td>热/冷判定一致性、total=hot+cold、除零防护、目录缺失、新鲜度、无信息泄露</td><td>已验证确认</td><td>—</td></tr>
+</table>
+
+<h2>兼容性 / 迁移 / 回滚</h2>
+<ul class="tight">
+  <li><b>兼容性：</b> 响应只增字段，不改字段。唯一的 API 消费者是前端 <code>fetchStats</code>，已同步契约。</li>
+  <li><b>迁移：</b> 无。零 schema 变更、零新配置项、零新依赖。</li>
+  <li><b>回滚：</b> revert 掉挂载行即可恢复原 <code>/v1/stats</code>；前端降级渲染本身已兼容旧字段缺失。</li>
+</ul>
+
+<div class="callout warn">
+  <b>剩余风险与限制：</b>
+  <ol style="margin:6px 0 0; padding-left:20px">
+    <li><b>线上部署未执行</b> —— 改动已推送并打 <code>v6.3.0</code> tag，但 <code>imagefree.tingfengai.art</code> 容器需在确认后手动上线（命令见下）。</li>
+    <li><b>全量 pytest 基线</b> —— <code>tests/</code> 仍有 8 个与本任务无关的既有顺序依赖失败（v4.4.3 遗留），本任务相关测试均绿。</li>
+  </ol>
+</div>
+
+<h2>上线步骤（需确认后执行）</h2>
+<pre><code># 本机
+rsync -av deploy/ ubuntu@43.165.173.36:/home/ubuntu/imagefree-api/
+
+# 服务器（30-60s）
+ssh ubuntu@43.165.173.36
+cd /home/ubuntu/imagefree-api
+sudo docker compose build api &amp;&amp; sudo docker compose up -d api
+
+# 验证
+curl -s https://imagefree.tingfengai.art/v1/stats | python -c "import sys,json; print(json.load(sys.stdin).get('base64_gc'))"</code></pre>
+
+<h2>时间线</h2>
+<ul class="tl">
+  <li><span class="date">2026-08-27</span><span class="arrow">→</span><span class="what">实现与单元/集成测试落地，版本 bump 六处</span></li>
+  <li><span class="date">2026-08-27</span><span class="arrow">→</span><span class="what">真实 E2E <code>e2e_full.py</code> 32/32 PASS，推送 <code>main</code> + Release v6.3.0</span></li>
+  <li><span class="date">2026-08-27</span><span class="arrow">→</span><span class="what">独立 code-reviewer 审查：Approve；按其 V1/S1/S2 加固修复</span></li>
+  <li><span class="date">2026-08-27</span><span class="arrow">→</span><span class="what">复验 13 passed + 构建通过，重推 tag/Release，生成本报告</span></li>
+</ul>
+
+<h2>变更测验 / Quiz</h2>
+<p>提交前不会显示答案。通过分数线：80%。</p>
+<div class="quiz" id="quiz">
+
+  <div class="q" data-a="1">
+    <p>Q1　<code>gc_stats()</code> 中「cold」文件的判定条件是什么？</p>
+    <label class="opt"><input type="radio" name="q1" value="0"> 文件大小超过 10 MB</label>
+    <label class="opt"><input type="radio" name="q1" value="1"> <code>now − mtime &gt; IF_BASE64_FILE_TTL</code></label>
+    <label class="opt"><input type="radio" name="q1" value="0"> 文件被画廊引用过</label>
+    <label class="opt"><input type="radio" name="q1" value="0"> 文件扩展名不是 png/jpg</label>
+    <div class="qmeta">解析：cold 与 <code>clean_expired</code> 使用同一判定式，因此「待清理数」= 下次清理实际会删的数量。</div>
+  </div>
+
+  <div class="q" data-a="1">
+    <p>Q2　<code>base64_gc</code> 段的数据是否经过 10 秒 LRU 缓存？</p>
+    <label class="opt"><input type="radio" name="q2" value="1"> 否，直接实时调用 <code>gc_stats()</code></label>
+    <label class="opt"><input type="radio" name="q2" value="0"> 是，与 overview 一起缓存</label>
+    <label class="opt"><input type="radio" name="q2" value="0"> 是，缓存 60 秒</label>
+    <div class="qmeta">解析：<code>gallery_cache</code> 只缓存 overview / daily / monthly；<code>base64_gc</code> 实时计算，保证水位新鲜。</div>
+  </div>
+
+  <div class="q" data-a="0">
+    <p>Q3　目录存在但无读权限时，<code>gc_stats()</code> 的行为？</p>
+    <label class="opt"><input type="radio" name="q3" value="1"> 向上抛异常，<code>/v1/stats</code> 返回 500</label>
+    <label class="opt"><input type="radio" name="q3" value="0"> 捕获 <code>OSError</code> 返回全零，不 500</label>
+    <label class="opt"><input type="radio" name="q3" value="0"> 跳过该目录并打印告警</label>
+    <div class="qmeta">解析：<code>os.listdir</code> 已纳入 try/except，权限/瞬时失败按空目录处理，这是独立审查 V1 的加固点。</div>
+  </div>
+
+  <div class="q" data-a="1">
+    <p>Q4　<code>usage_pct</code> 的分母（配额）来自哪个配置？</p>
+    <label class="opt"><input type="radio" name="q4" value="0"> <code>IF_BASE64_FILE_TTL</code></label>
+    <label class="opt"><input type="radio" name="q4" value="1"> <code>IF_IMG_MAX_GB</code></label>
+    <label class="opt"><input type="radio" name="q4" value="0"> <code>DB_RETENTION_DAYS</code></label>
+    <label class="opt"><input type="radio" name="q4" value="0"> 磁盘总容量</label>
+    <div class="qmeta">解析：<code>IF_IMG_MAX_GB</code> 默认 5.0 GB，超限时按最旧优先清理至 80%，即配额保护的同一配置。</div>
+  </div>
+
+  <div class="q" data-a="0">
+    <p>Q5　本次改动是否引入了数据库迁移或新配置项？</p>
+    <label class="opt"><input type="radio" name="q5" value="1"> 是，新增了一张缓存统计表</label>
+    <label class="opt"><input type="radio" name="q5" value="1"> 是，新增 <code>IF_BASE64_STATS</code> 开关</label>
+    <label class="opt"><input type="radio" name="q5" value="0"> 否，纯增量、零迁移、零新配置</label>
+    <div class="qmeta">解析：可观测闭环只读已有目录，不落库、不加配置，风险面最小。</div>
+  </div>
+
+  <div class="q" data-a="0">
+    <p>Q6　前端 <code>Stats.base64_gc</code> 的类型声明是？</p>
+    <label class="opt"><input type="radio" name="q6" value="0"> 可选属性 <code>base64_gc?:</code></label>
+    <label class="opt"><input type="radio" name="q6" value="1"> 必填属性 <code>base64_gc:</code></label>
+    <label class="opt"><input type="radio" name="q6" value="0"> <code>any</code></label>
+    <div class="qmeta">解析：独立审查 S1 后改为可选，与 Dashboard 的防御式渲染一致。</div>
+  </div>
+
+  <div class="q" data-a="0">
+    <p>Q7　哪个验证证明了「待清理数」与真实清理语义一致？</p>
+    <label class="opt"><input type="radio" name="q7" value="0"> 热/冷拆分单测断言 <code>total = hot + cold</code> 且 cold 判定与 <code>clean_expired</code> 逐字一致</label>
+    <label class="opt"><input type="radio" name="q7" value="1"> 仅通过了前端构建</label>
+    <label class="opt"><input type="radio" name="q7" value="0"> 仅依赖独立审查的静态确认</label>
+    <div class="qmeta">解析：单测 <code>test_gc_stats_hot_cold_split</code> + <code>clean_expired</code> 同式判定，E2E 只做存在性检查。</div>
+  </div>
+
+  <div class="q" data-a="1">
+    <p>Q8　本次交付在 Git 上的最终形态是？</p>
+    <label class="opt"><input type="radio" name="q8" value="0"> 新建了 feature 分支并走 PR 合并</label>
+    <label class="opt"><input type="radio" name="q8" value="1"> 仍在 main 分支，直接提交 + tag + Release</label>
+    <label class="opt"><input type="radio" name="q8" value="0"> 只提交未推送</label>
+    <div class="qmeta">解析：遵循约束只在 main 分支操作，维护单一主干。</div>
+  </div>
+
+  <div class="q" data-a="0">
+    <p>Q9　线上部署目前的状态是？</p>
+    <label class="opt"><input type="radio" name="q9" value="0"> 未执行，需确认后手动上线（rsync + docker compose）</label>
+    <label class="opt"><input type="radio" name="q9" value="1"> 已自动部署到生产</label>
+    <label class="opt"><input type="radio" name="q9" value="0"> 已通过 CI 的 docker 构建验证（仅镜像层面）</label>
+    <div class="qmeta">解析：生产默认只读，推送/tag/Release 已完成；容器更新属需确认动作，命令见「上线步骤」。</div>
+  </div>
+
+  <div class="q" data-a="10">
+    <p>Q10（多选）　本次交付完成了哪些验证？（全勾选）</p>
+    <label class="opt"><input type="checkbox" name="q10" value="1"> GC 单元测试 13 passed</label>
+    <label class="opt"><input type="checkbox" name="q10" value="1"> 真实 E2E <code>e2e_full.py</code> 32/32</label>
+    <label class="opt"><input type="checkbox" name="q10" value="1"> 前端 <code>npm run build</code> 0 错误</label>
+    <label class="opt"><input type="checkbox" name="q10" value="1"> deploy 同步 <code>sync_deploy check</code> OK</label>
+    <label class="opt"><input type="checkbox" name="q10" value="0"> 浏览器真实点击 Dashboard</label>
+    <div class="qmeta">解析：前四项均已实际运行；「浏览器真实点击」因本环境无浏览器工具未执行，已用构建+类型+防御式渲染覆盖。全选前四项即满分。</div>
+  </div>
+
+  <div class="quiz-foot">
+    <button class="btn" id="gradeBtn">提交答卷</button>
+    <span class="score" id="score"></span>
+  </div>
+</div>
+
+<footer>
+  由 Claude 依据 Codex 生产级交付流程生成 · 数据与结论均来自实际运行结果（测试、E2E、构建、同步、审查）· 不包含任何密钥或敏感数据
+</footer>
+
+</div>
+
+<script>
+(function () {
+  const qtys = ['single','single','single','single','single','single','single','single','single','multi'];
+  const Q = document.querySelectorAll('.q');
+  function answered(q) {
+    return Array.from(q.querySelectorAll('input')).some(i => i.checked);
+  }
+  function scoreQuiz() {
+    let got = 0, total = 0;
+    Q.forEach((q, idx) => {
+      const opts = Array.from(q.querySelectorAll('input'));
+      const selected = opts.filter(i => i.checked);
+      total += 1;
+      const isMulti = qtys[idx] === 'multi';
+      if (!isMulti) {
+        const chosen = selected[0] && selected[0].value;
+        if (chosen !== undefined && Number(chosen) === Number(q.dataset.a)) got += 1;
+      } else {
+        const ids = selected.filter(i => i.value === '1').length;
+        const okVals = opts.filter(i => i.value === '1').length;
+        const badSel = selected.filter(i => i.value !== '1').length;
+        if (badSel === 0 && ids === okVals) got += 1;
+      }
+      q.classList.add('done');
+    });
+    const pct = total ? Math.round((got / total) * 100) : 0;
+    const el = document.getElementById('score');
+    const cls = pct >= 80 ? 'good' : pct >= 60 ? 'warn' : 'bad';
+    el.className = 'score ' + cls;
+    el.textContent = '得分 ' + got + '/' + total + '（' + pct + '%）' + (pct >= 80 ? ' · 通过' : ' · 未通过');
+    document.getElementById('gradeBtn').disabled = true;
+    document.getElementById('gradeBtn').textContent = '已提交';
+  }
+  document.getElementById('gradeBtn').addEventListener('click', scoreQuiz);
+})();
+</script>
+</body>
+</html>

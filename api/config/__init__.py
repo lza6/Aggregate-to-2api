@@ -17,7 +17,7 @@ import sys
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .base import _env_bool, _env_str
+from .base import _env_bool, _env_int, _env_str
 from .db import DBSettings
 from .http import HTTPSettings
 from .solver import SolverSettings

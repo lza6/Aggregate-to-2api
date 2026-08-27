@@ -1,5 +1,5 @@
 {
-  "nodeCount": 3646,
+  "nodeCount": 3649,
   "edgeCount": 6602,
   "languages": [
     "javascript",
@@ -7,11 +7,11 @@
     "tsx",
     "typescript"
   ],
-  "totalCount": 3646,
+  "totalCount": 3649,
   "readyCount": 0,
   "staleCount": 0,
-  "dirty": false,
+  "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-27T11:03:49.975Z",
-  "lastFile": "Dashboard.tsx"
+  "syncedAt": "2026-08-27T13:03:26.969Z",
+  "lastFile": "gc-observability-change-report.html"
 }

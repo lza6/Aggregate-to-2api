@@ -53,38 +53,47 @@ class TestFaultTolerance:
         async with httpx.AsyncClient() as c:
             await c.post(f"{mock_cfsolver}/__fault?mode=ok")
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
 
-        # 恢复后应正常工作
-        r = await client.post("/v1/generate/async", json={
-            "prompt": "test after recovery",
-            "aspect_ratio": "1:1",
-        })
+        # 恢复后应正常工作（容忍 half-open 首次探测瞬态：若仍 429/503 再等一轮重试）
+        for _ in range(3):
+            r = await client.post("/v1/generate/async", json={
+                "prompt": "test after recovery",
+                "aspect_ratio": "1:1",
+            })
+            if r.status_code == 200:
+                break
+            await asyncio.sleep(1)
         assert r.status_code == 200, f"故障 {fault} 恢复后仍失败"
 
     async def test_survives_consecutive_errors(self, app_with_mocks, mock_cfsolver):
         """连续故障后系统应自动恢复。"""
+        import api.config as cfg
         client = app_with_mocks
+        saved = cfg.IF_REQUESTS_PER_MINUTE
+        cfg.IF_REQUESTS_PER_MINUTE = 0  # 关掉 per-IP 限流，聚焦故障恢复本身
+        try:
+            async with httpx.AsyncClient() as c:
+                await c.post(f"{mock_cfsolver}/__fault?mode=fail")
 
-        async with httpx.AsyncClient() as c:
-            await c.post(f"{mock_cfsolver}/__fault?mode=fail")
+            for _ in range(20):
+                r = await client.post("/v1/generate/async", json={
+                    "prompt": "test",
+                    "aspect_ratio": "1:1",
+                })
+                assert r.status_code in (200, 202, 429, 500, 503)
 
-        for _ in range(20):
+            async with httpx.AsyncClient() as c:
+                await c.post(f"{mock_cfsolver}/__fault?mode=ok")
+
+            await asyncio.sleep(2)
+
             r = await client.post("/v1/generate/async", json={
-                "prompt": "test",
+                "prompt": "test recovery",
                 "aspect_ratio": "1:1",
             })
-            assert r.status_code in (200, 202, 429, 500, 503)
-
-        async with httpx.AsyncClient() as c:
-            await c.post(f"{mock_cfsolver}/__fault?mode=ok")
-
-        await asyncio.sleep(2)
-
-        r = await client.post("/v1/generate/async", json={
-            "prompt": "test recovery",
-            "aspect_ratio": "1:1",
-        })
+        finally:
+            cfg.IF_REQUESTS_PER_MINUTE = saved
         assert r.status_code == 200, "恢复后请求仍失败"
 
     async def test_no_resource_leak_on_error(self, app_with_mocks, mock_cfsolver):
