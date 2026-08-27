@@ -30,7 +30,8 @@ FILES = ["__init__.py", "main.py",
          "email_sources_linshi.py", "geo_ip.py", "provider_probe.py",
          "adaptive_router.py", "dispatch.py", "dispatch_edit.py",
          "lifespan.py", "handlers.py", "bg_tasks.py", "models.py", "meta.py", "sse_events.py",
-         "contracts.py", "system_spec.py", "chat_usage.py", "request_guard.py"]
+         "contracts.py", "system_spec.py", "chat_usage.py", "request_guard.py",
+         "auth.py"]
 # 需整体同步的目录（providers 包 / 静态资源 / 路由子包）
 DIRS = ["providers", "static", "routes", "config", "db", "worker"]
 

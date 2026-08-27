@@ -9,9 +9,9 @@
   ],
   "totalCount": 3588,
   "readyCount": 0,
-  "staleCount": 11,
+  "staleCount": 16,
   "dirty": true,
   "syncing": false,
   "syncedAt": "2026-08-27T03:27:40.862Z",
-  "lastFile": "docs.html"
+  "lastFile": "sync_deploy.py"
 }
