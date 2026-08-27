@@ -385,20 +385,26 @@ class TryingopenChatProvider(ChatProvider):
         converted = self._convert_messages(messages, tools, tool_choice)
         payload = self._payload(model, converted, effort)
         attempts = _env_int("IF_TRYINGOPEN_MAX_ATTEMPTS", 3)
-        for attempt in range(attempts):
-            proxy_url = await proxy_pool.acquire(prefer_source="free")
+        # v4.4.1: N 轮代理轮换全部失败后，追加一次直连兜底（本机 IP 常比随机免费代理更稳）
+        total_rounds = attempts + 1
+        for attempt in range(total_rounds):
+            is_direct_fallback = attempt >= attempts
+            proxy_url = None if is_direct_fallback else await proxy_pool.acquire(prefer_source="free")
             try:
                 result = await _resolve(self._request_once(payload, proxy_url))
             except _TryingopenRateLimited as exc:
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=True)
-                if attempt + 1 < attempts:
-                    await asyncio.sleep(2**attempt)
+                if attempt + 1 < total_rounds:
+                    await asyncio.sleep(2**min(attempt, 3))
                     continue
                 raise ProviderRateLimited("tryingopen 全部出口限流中") from exc
             except httpx.HTTPError as exc:
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=False)
+                if attempt + 1 < total_rounds:
+                    await asyncio.sleep(2**min(attempt, 3))
+                    continue
                 raise ProviderError(f"tryingopen 网络请求失败: {str(exc)[:160]}") from exc
             except ProviderError:
                 if proxy_url:
