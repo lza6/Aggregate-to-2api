@@ -312,6 +312,7 @@ export async function fetchChatRemaining(): Promise<ChatRemaining> {
 export interface ChatAuthStatus {
   enabled: boolean;
   key_mask?: string;
+  key?: string;
   header: string;
   alt_headers: string[];
 }

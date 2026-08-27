@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, notify } from '../api';
 import { StatCard } from '../components/StatCard';
 import { BarChart } from '../components/BarChart';
 import { Gallery } from '../components/Gallery';
@@ -73,6 +73,21 @@ export function Dashboard() {
           {authStatus?.enabled && (
             <span className="tf-badge tf-badge-warning api-key-badge" title="全站写操作需携带此 Key">
               🔑 API Key: <code>{authStatus.key_mask ?? '…'}</code>
+              <button
+                type="button"
+                className="api-key-copy"
+                aria-label="复制完整 API Key"
+                onClick={async () => {
+                  const full = authStatus.key ?? '';
+                  if (!full) { notify('未获取到 Key', 'error'); return; }
+                  try {
+                    await navigator.clipboard.writeText(full);
+                    notify('API Key 已复制到剪贴板', 'success');
+                  } catch {
+                    notify('复制失败，请手动复制', 'error');
+                  }
+                }}
+              >📋 复制</button>
             </span>
           )}
           <button onClick={reload} className="tf-btn tf-btn-secondary">

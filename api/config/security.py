@@ -13,5 +13,3 @@ class SecuritySettings(BaseModel):
     api_keys: list[str] = Field(default_factory=list, validation_alias="IF_API_KEYS")
     # v4.4: 聊天端点每分钟限流（0 = 不限）
     chat_requests_per_minute: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
-    # v4.4: 聊天端点每分钟限流（0 = 不限）
-    chat_requests_per_minute: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")

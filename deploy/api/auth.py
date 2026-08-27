@@ -49,6 +49,16 @@ def public_keymask() -> str:
     return first[:12] + "***" if len(first) > 12 else first + "***"
 
 
+def first_key() -> str:
+    """返回当前生效首把完整 Key（供站长管理面板一键复制的接口/内置前端使用）。
+
+    注意：此接口会把 Key 返回给调用者本身。仅用于可信管理面（/admin UI 是
+    区分调用者的自取场景）；对公网匿名扫接口会在 auth/status 中被严格鉴权。
+    """
+    keys = _keys()
+    return keys[0] if keys else ""
+
+
 def _extract_key(request: Request) -> str:
     auth_header = request.headers.get("authorization") or ""
     if auth_header.lower().startswith("bearer "):
