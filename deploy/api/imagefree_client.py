@@ -212,19 +212,28 @@ async def submit_generate(
     aspect_ratio: str,
     turnstile_token: str,
     timeout: float = 30.0,
+    proxy: str | None = None,
 ) -> str:
     """提交生成任务，返回 taskId。
 
-    连接走模块级共享 client（H2，创建时绑定 config.PROXY），不逐调用新建。
+    连接默认走模块级共享 client（H2，创建时绑定 config.PROXY），不逐调用新建。
+    传入 proxy 时改用一次性 client 走该出口 —— 必须与解 token 时传给 cf_solver
+    的 proxy 同一 IP（Turnstile token 与 IP 绑定，见 _edit_client 同款约束）。
     通过全局信号量控制上游并发（IF_UPSTREAM_MAX_INFLIGHT）。
     """
     await upstream_semaphore.acquire()
+    own_client: httpx.AsyncClient | None = None
     try:
         if MOCK_UPSTREAM:
             return f"mock-task-{int(time.time() * 1000)}"
         url = f"{base_url}/api/generate"
         payload = {"prompt": prompt, "aspect_ratio": aspect_ratio, "turnstile_token": turnstile_token}
         client = _get_client()
+        if proxy:
+            # 直连被 429 → 换出口重试路径：一次性 client，绕过共享 H2 连接池
+            own_client = httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(30.0),
+                                           headers={"User-Agent": config.USER_AGENT})
+            client = own_client
         r = await client.post(url, json=payload, headers=_browser_headers(base_url),
                               timeout=httpx.Timeout(timeout))
         data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
@@ -236,9 +245,11 @@ async def submit_generate(
         task_id = data.get("taskId")
         if not task_id:
             raise ImagefreeError(f"generate 响应缺少 taskId: {data}")
-        log.info("generate 已提交 taskId=%s", task_id)
+        log.info("generate 已提交 taskId=%s%s", task_id, " (proxy)" if proxy else "")
         return task_id
     finally:
+        if own_client is not None:
+            await own_client.aclose()
         upstream_semaphore.release()
 
 

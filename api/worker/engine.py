@@ -132,6 +132,9 @@ class Engine:
         self._seq = 0  # 同优先级 FIFO 自增计数器
         self.token_pool_manager = TokenPoolManager(self)
         self.processing = 0          # 当前生成中的任务数（实时并发）
+        # v4.4.2: 429 直连降级 → 代理池出口轮换（懒导入避免循环依赖）
+        from ..proxy_pool import proxy_pool as _proxy_pool
+        self._proxy_pool = _proxy_pool
         self._started = False        # start() 后置真：池懒创建时才启动后台预取
         self._started_at = time.time()
         self._workers: list[_WorkerHandle] = []
@@ -567,7 +570,7 @@ class Engine:
                         },
                     ):
                         _up0 = time.monotonic()
-                        result = await self._generate_once(row, token)
+                        result = await self._generate_with_429_proxy_fallback(task_id, row, token)
                         _slow["upstream"] += (time.monotonic() - _up0) * 1000.0
                 except Exception as e:
                     last_error = str(e)
@@ -654,15 +657,16 @@ class Engine:
             except Exception as exc:
                 log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 
-    async def _generate_once(self, row: dict, token: str) -> dict:
+    async def _generate_once(self, row: dict, token: str, proxy: str | None = None) -> dict:
         """提交生成并轮询到出图。
 
+        proxy 非空时：提交走该出口（token 必须同为该出口所解，见调用方 _proxy_retry）。
         出图成功后若请求了 download，附带回 base64/mime；下载失败不影响出图结果
         （仍按 completed 返回 image_url，仅记录下载失败，HIGH-2）。
         """
         tid = await imagefree_client.submit_generate(
             config.BASE_URL, config.apply_model(row["prompt"], row.get("model", "default")),
-            row["aspect_ratio"], token, 30.0,
+            row["aspect_ratio"], token, 30.0, proxy=proxy,
         )
         result = await imagefree_client.poll_generate_status(
             config.BASE_URL, tid, config.GENERATE_TIMEOUT, config.GENERATE_POLL_INTERVAL,
@@ -680,6 +684,56 @@ class Engine:
             except Exception as e:
                 log.warning("图片下载失败（不影响出图结果）: %s", e)
         return out
+
+    async def _generate_with_429_proxy_fallback(self, task_id: str, row: dict, token: str) -> dict:
+        """v4.4.2: 直连 429 → 同 IP 配对重试（solver(proxy=P) + submit(proxy=P)）。
+
+        Turnstile token 与出口 IP 绑定，因此换 IP 必须重新解 token —— 复用
+        图生图链路已生产验证的模式。直连成功零额外成本；仅 429 时才消耗代理。
+        """
+        from ..imagefree_client import ImagefreeError
+        try:
+            return await self._generate_once(row, token)
+        except ImagefreeError as e:
+            if "429" not in str(e):
+                raise
+            log.warning("task %s 直连被上游 429，切换代理池重试", task_id)
+
+        last_error: Exception | None = None
+        for round_no in range(1, 4):  # 最多 3 个代理出口
+            proxy_url = await self._proxy_pool.acquire(prefer_source="residential")
+            if not proxy_url:
+                proxy_url = await self._proxy_pool.acquire(prefer_source="free")
+            if not proxy_url:
+                break  # 无可用出口 → 走耗尽路径
+            # 第一步：用同一出口解新 token（solver 失败 → 冷却该代理换下一个）
+            try:
+                fallback_token, _solve_ms = await turnstile_client.solve_turnstile(
+                    cf_solver_url=None, url=config.BASE_URL, sitekey=config.SITEKEY,
+                    timeout=min(config.TURNSTILE_TIMEOUT, 45.0), proxy=proxy_url,
+                )
+            except Exception as exc:
+                await self._proxy_pool.mark_failure(proxy_url, rate_limited=False)
+                last_error = exc
+                await asyncio.sleep(1.0 * round_no)
+                continue
+            # 第二步：同 IP 提交（429 → 冷却换下家；其他错误原样抛出）
+            try:
+                result = await self._generate_once(row, fallback_token, proxy=proxy_url)
+            except ImagefreeError as exc:
+                rate_limited = "429" in str(exc)
+                await self._proxy_pool.mark_failure(proxy_url, rate_limited=rate_limited)
+                last_error = exc
+                if not rate_limited or round_no == 3:
+                    raise
+                await asyncio.sleep(1.5 * round_no)
+                continue
+            else:
+                await self._proxy_pool.mark_success(proxy_url)
+                return result
+        raise ImagefreeError(
+            f"generate 提交失败: HTTP 429（代理重试耗尽{('，末次: ' + str(last_error)[:80]) if last_error else ''}）"
+        )
 
     # ── 实时状态 ──────────────────────────────────
     def snapshot(self) -> dict:
