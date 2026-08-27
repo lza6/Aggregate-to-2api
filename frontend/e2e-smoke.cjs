@@ -27,9 +27,9 @@ function findChromium() {
   console.log('① 首屏 Dashboard 降级态');
   await page.goto(BASE + '/admin/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2500);
-  ok('侧栏渲染', (await page.locator('.nav-link').count()) === 6);
-  ok('后端不可达时显示错误+重试', (await page.locator('.fb-retry-btn').count()) === 1);
-  const errText = await page.locator('.fb-error-text').textContent().catch(() => '');
+  ok('侧栏渲染(8 导航)', (await page.locator('.nav-item').count()) === 8);
+  ok('后端不可达时显示错误+重试', (await page.locator('.fb-error-btn').count()) === 1);
+  const errText = await page.locator('.fb-error-msg').textContent().catch(() => '');
   ok('错误文案含原因', errText.includes('加载失败'));
 
   // ② P-GALLERY：sessionStorage 刷新保留

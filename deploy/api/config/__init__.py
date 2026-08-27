@@ -308,6 +308,10 @@ class Settings(BaseSettings):
     mock_register: bool = Field(
         False, validation_alias="IF_MOCK_REGISTER"
     )
+    # AI 兜底邮件验证码/验证链接提取（默认关闭；正则未命中时降级 LLM）
+    if_mail_ai_extract: bool = Field(
+        False, validation_alias="IF_MAIL_AI_EXTRACT"
+    )
     if_provider_degrade_threshold: int = Field(
         3, validation_alias="IF_PROVIDER_DEGRADE_THRESHOLD"
     )
@@ -820,6 +824,7 @@ EMAIL_DB_FILE = settings.email_db_file
 NANOBANANA_ACCOUNT_TARGET = settings.nanobanana_account_target
 ACCOUNT_AUTO = settings.account_auto
 MOCK_REGISTER = settings.mock_register
+IF_MAIL_AI_EXTRACT = settings.if_mail_ai_extract
 IF_PROVIDER_DEGRADE_THRESHOLD = settings.if_provider_degrade_threshold
 IF_PROVIDER_RECOVER_INTERVAL = settings.if_provider_recover_interval
 IF_IDEMPOTENCY_ENABLED = settings.if_idempotency_enabled

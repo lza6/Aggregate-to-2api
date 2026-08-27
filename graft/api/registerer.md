@@ -19,12 +19,14 @@
 - _extract_code · function · L223-L229 — def _extract_code(mail: dict | None) -> str | None
 - _extract_verify_link · function · L232-L238 — def _extract_verify_link(mail: dict | None) -> str | None
 - _proxy_host · function · L241-L249 — def _proxy_host(proxy: str | None) -> str
-- _gen_password · function · L252-L266 — def _gen_password() -> str
-- _session_data_from_cookies · function · L269-L274 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
-- NanobananaRegisterer · class · L278-L618 — class NanobananaRegisterer
-- __init__ · method · L286-L294 — def __init__(self) -> None
-- _ensure_client · method · L296-L312 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
-- register_one · method · L314-L485 — async def register_one(self) -> dict | None
-- checkin · method · L487-L567 — async def checkin(self, acc: dict) -> int | None
-- re_login · method · L569-L618 — async def re_login(self, email: str, password: str) -> dict | None
-- build_registerers · function · L622-L625 — def build_registerers() -> dict[str, object]
+- _ip_to_proxy · function · L252-L273 — def _ip_to_proxy(ip_or_proxy: str) -> str | None
+- _mail_ai_extract_enabled · function · L276-L282 — def _mail_ai_extract_enabled() -> bool
+- _gen_password · function · L285-L299 — def _gen_password() -> str
+- _session_data_from_cookies · function · L302-L307 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
+- NanobananaRegisterer · class · L311-L659 — class NanobananaRegisterer
+- __init__ · method · L319-L327 — def __init__(self) -> None
+- _ensure_client · method · L329-L345 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
+- register_one · method · L347-L522 — async def register_one(self) -> dict | None
+- checkin · method · L524-L608 — async def checkin(self, acc: dict) -> int | None
+- re_login · method · L610-L659 — async def re_login(self, email: str, password: str) -> dict | None
+- build_registerers · function · L663-L666 — def build_registerers() -> dict[str, object]

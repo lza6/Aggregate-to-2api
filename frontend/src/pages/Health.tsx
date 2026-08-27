@@ -20,7 +20,7 @@ function levelOf(score: number, max: number): PoolScore['level'] {
 }
 
 export function HealthPage() {
-  const { data: diag, loading: diagLoading, error: diagError, reload: reloadDiag } = useApi(
+  const { data: diag, error: diagError, reload: reloadDiag } = useApi(
     () => fetchDiagnostics(),
     { intervalMs: 15000 },
   );

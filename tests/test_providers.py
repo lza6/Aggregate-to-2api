@@ -14,8 +14,13 @@ from api.meta import engine
 
 
 @pytest.fixture(autouse=True)
-def _bootstrap():
+def _bootstrap(monkeypatch):
     bootstrap()
+    # 隔离测试：确保 imagefree provider 的 engine 处于「未注入」的独立状态，
+    # 不因前序(集成)测试把全局 registry 单例的 engine 注入而污染 needsengine 分支。
+    _img = registry.providers.get("imagefree")
+    if _img is not None:
+        monkeypatch.setattr(_img, "engine", None)
     yield
 
 

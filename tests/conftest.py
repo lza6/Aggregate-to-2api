@@ -165,6 +165,12 @@ async def _app_instance(mock_cfsolver):
         _cfg.IF_PERSISTENT_QUEUE_ENABLED = False
         _cfg.IF_SOLVE_CIRCUIT_PROBE_SECONDS = 1
         _cfg.IF_SOLVE_CIRCUIT_THRESHOLD = 3
+        # P0-4 追加：api 模块已在本会话被 collection 提前 import 时，
+        # 把 IF_MOCK_UPSTREAM 同步进模块级快照，避免上游 mock 开关失效
+        # 导致集成测试对真实 imagefree.net 发 429（详见《下一步改进指南》P0-4 证据）。
+        import api.imagefree_client as _ifc  # noqa: PLC0415
+        _ifc.MOCK_UPSTREAM = True
+        _cfg.MOCK_UPSTREAM = True
 
     import api.config  # noqa: F401
     import api.main  # 首次导入，触发模块级代码执行

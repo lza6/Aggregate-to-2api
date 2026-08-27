@@ -74,6 +74,44 @@ function escapeHtml(text: string): string {
   });
 }
 
+/** P3-3: 模型能力分组 key（生图/对话/工具/多模态）——按 capabilities 集合匹配，避免重复计组。 */
+function capabilityGroupOf(caps: readonly string[] | undefined): ChatGroupKey | null {
+  if (!caps || caps.length === 0) return null;
+  const set = new Set(caps);
+  if (set.has('chat_vision') || set.has('img2img') || set.has('img2vid')) return 'multimodal';
+  if (set.has('chat_tools') || set.has('tools')) return 'tools';
+  if (set.has('chat')) return 'chat';
+  if (set.has('txt2img') || set.has('img2img')) return 'image';
+  return null;
+}
+
+type ChatGroupKey = 'image' | 'chat' | 'tools' | 'multimodal';
+
+const CHAT_GROUP_ORDER: ChatGroupKey[] = ['image', 'chat', 'tools', 'multimodal'];
+const CHAT_GROUP_META: Record<ChatGroupKey, { label: string; hint: string }> = {
+  image: { label: '🎨 生图模型', hint: '仅文本提示生成图像' },
+  chat: { label: '💬 对话模型', hint: '纯文本对话' },
+  tools: { label: '🔧 工具/智能体模型', hint: '支持函数调用' },
+  multimodal: { label: '🖼️ 多模态模型', hint: '支持图片输入' },
+};
+
+function groupedModels(models: ChatModelInfo[]): { key: ChatGroupKey; label: string; models: ChatModelInfo[] }[] {
+  const buckets = new Map<ChatGroupKey, ChatModelInfo[]>();
+  const fallback: ChatModelInfo[] = [];
+  for (const m of models) {
+    const key = capabilityGroupOf(m.capabilities);
+    if (!key) { fallback.push(m); continue; }
+    const list = buckets.get(key) ?? [];
+    list.push(m);
+    buckets.set(key, list);
+  }
+  const groups = CHAT_GROUP_ORDER
+    .filter(key => (buckets.get(key)?.length ?? 0) > 0)
+    .map(key => ({ key, label: CHAT_GROUP_META[key].label, models: buckets.get(key) ?? [] }));
+  if (fallback.length > 0) groups.push({ key: 'chat', label: '未分类模型', models: fallback });
+  return groups;
+}
+
 /** 先转义全部文本，再只生成受控的粗体、代码块和换行标签。 */
 function renderMarkdown(text: string): { __html: string } {
   const escaped = escapeHtml(text);
@@ -198,20 +236,29 @@ function MessageBubble({ message }: MessageBubbleProps) {
 }
 
 interface ModelPickerProps {
-  models: ChatModelInfo[];
+  groups: { key: ChatGroupKey; label: string; models: ChatModelInfo[] }[];
   value: string;
   loading: boolean;
+  hint?: string;
   onChange: (value: string) => void;
 }
 
-function ModelPicker({ models, value, loading, onChange }: ModelPickerProps) {
+function ModelPicker({ groups, value, loading, hint, onChange }: ModelPickerProps) {
+  const flatCount = groups.reduce((acc, g) => acc + g.models.length, 0);
   return (
     <label className="chat-control-field">
       <span>模型</span>
-      <select value={value} onChange={event => onChange(event.target.value)} disabled={loading || models.length === 0}>
-        {models.length === 0 && <option value="">{loading ? '加载模型中…' : '暂无可用模型'}</option>}
-        {models.map(model => <option key={model.id} value={model.id}>{model.display_name || model.id}</option>)}
+      <select value={value} onChange={event => onChange(event.target.value)} disabled={loading || flatCount === 0}>
+        {flatCount === 0 && <option value="">{loading ? '加载模型中…' : '暂无可用模型'}</option>}
+        {groups.map(group => (
+          <optgroup key={group.key} label={group.label}>
+            {group.models.map(model => (
+              <option key={model.id} value={model.id}>{model.display_name || model.id}</option>
+            ))}
+          </optgroup>
+        ))}
       </select>
+      {hint && <small>{hint}</small>}
     </label>
   );
 }
@@ -310,6 +357,17 @@ export function ChatPlayground() {
     link.click();
     URL.revokeObjectURL(url);
   }, [messages, model, effort]);
+
+  // P3-3: 模型「生图/对话/工具/多模态」分组下拉 + 选中模型上下文/价格提示
+  const modelGroups = useMemo(() => groupedModels(models), [models]);
+  const modelPickerHint = useMemo(() => {
+    const current = models.find(m => m.id === model);
+    if (!current) return undefined;
+    const parts: string[] = [];
+    if (current.context_window) parts.push(`上下文 ${(current.context_window / 1024).toFixed(0)}K`);
+    if (current.price_per_mtok) parts.push(`约 $${current.price_per_mtok}/M tokens`);
+    return parts.length ? parts.join(' · ') : undefined;
+  }, [models, model]);
 
   const consumeSse = useCallback(async (
     response: Response,
@@ -518,7 +576,7 @@ curl -X POST ${window.location.origin}/v1/messages \\
       )}
 
       <section className="tf-card chat-controls">
-        <ModelPicker models={models} value={model} loading={modelsLoading} onChange={setModel} />
+        <ModelPicker groups={modelGroups} value={model} loading={modelsLoading} hint={modelPickerHint} onChange={setModel} />
         <label className="chat-control-field">
           <span>思考深度</span>
           <select value={effort} onChange={event => setEffort(event.target.value as Effort)}>
