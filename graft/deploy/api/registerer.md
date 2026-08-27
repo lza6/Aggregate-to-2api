@@ -23,10 +23,10 @@
 - _mail_ai_extract_enabled · function · L276-L282 — def _mail_ai_extract_enabled() -> bool
 - _gen_password · function · L285-L299 — def _gen_password() -> str
 - _session_data_from_cookies · function · L302-L307 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
-- NanobananaRegisterer · class · L311-L659 — class NanobananaRegisterer
+- NanobananaRegisterer · class · L311-L660 — class NanobananaRegisterer
 - __init__ · method · L319-L327 — def __init__(self) -> None
 - _ensure_client · method · L329-L345 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
 - register_one · method · L347-L522 — async def register_one(self) -> dict | None
-- checkin · method · L524-L608 — async def checkin(self, acc: dict) -> int | None
-- re_login · method · L610-L659 — async def re_login(self, email: str, password: str) -> dict | None
-- build_registerers · function · L663-L666 — def build_registerers() -> dict[str, object]
+- checkin · method · L524-L609 — async def checkin(self, acc: dict) -> int | None
+- re_login · method · L611-L660 — async def re_login(self, email: str, password: str) -> dict | None
+- build_registerers · function · L664-L667 — def build_registerers() -> dict[str, object]

@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
 from typing import Any, Callable
 
 from . import config
@@ -89,7 +88,6 @@ async def _ai_extract_kind(
         {"role": "system", "content": system},
         {"role": "user", "content": f"{instruction}\n\n邮件内容：\n{blob}"},
     ]
-    t0 = time.monotonic()
     try:
         result = await chat_fn(model, messages)
     except Exception as exc:  # 网络/超时/上游错误 → 兜底失败，返回 None

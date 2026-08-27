@@ -15,10 +15,10 @@ import os
 import sys
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .base import _env_bool, _env_int, _env_str
+from .base import _env_int
 from .db import DBSettings
 from .http import HTTPSettings
 from .solver import SolverSettings
@@ -1034,6 +1034,7 @@ __all__ = [
     "NANOBANANA_ACCOUNT_TARGET",
     "ACCOUNT_AUTO",
     "MOCK_REGISTER",
+    "IF_MAIL_AI_EXTRACT",
     "IF_PROVIDER_DEGRADE_THRESHOLD",
     "IF_PROVIDER_RECOVER_INTERVAL",
     "IF_IDEMPOTENCY_ENABLED",

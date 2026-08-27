@@ -58,7 +58,9 @@ def _edit_mutex_stale(path: str) -> bool:
     except ProcessLookupError:
         return True
     except PermissionError:
-        return False
+        # 无权限探测时按「过期则回收」兜底：进程可能已死但 PID 被回收复用，
+        # 交给 EDIT_LOCK_MAX_AGE 时间上限兜底，避免活锁永久占用（P3-7 孤儿锁加固）。
+        return time.time() - ts > config.EDIT_LOCK_MAX_AGE
 
 
 async def _acquire_edit_mutex(key: str, timeout: float | None = None) -> str | None:

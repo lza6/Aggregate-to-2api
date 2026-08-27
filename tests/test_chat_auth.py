@@ -5,7 +5,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api import auth
 from api.config import Settings
 from api.routes.chat import router
 
@@ -81,20 +80,20 @@ def make_app_with_error_handler() -> FastAPI:
 
 
 @pytest.fixture()
-def client_with_auth(monkeypatch):
+def client_auth_handler(monkeypatch):
     monkeypatch.setenv("IF_API_KEYS", "sk-test-abc,sk-test-xyz")
     import api.config as config_module
     config_module.settings = Settings()
     return TestClient(make_app_with_error_handler())
 
 
-def test_completions_rejects_missing_key(client_with_auth):
-    resp = client_with_auth.post("/v1/chat/completions", json=PAYLOAD)
+def test_completions_rejects_missing_key(client_auth_handler):
+    resp = client_auth_handler.post("/v1/chat/completions", json=PAYLOAD)
     assert resp.status_code == 401
 
 
-def test_completions_rejects_wrong_key(client_with_auth):
-    resp = client_with_auth.post(
+def test_completions_rejects_wrong_key(client_auth_handler):
+    resp = client_auth_handler.post(
         "/v1/chat/completions",
         json=PAYLOAD,
         headers={"Authorization": "Bearer sk-wrong"},
@@ -102,7 +101,7 @@ def test_completions_rejects_wrong_key(client_with_auth):
     assert resp.status_code == 401
 
 
-def test_completions_accepts_valid_key(client_with_auth, monkeypatch):
+def test_completions_accepts_valid_key(client_auth_handler, monkeypatch):
     # mock provider，避免真实上游调用
     class FakeProvider:
         async def chat_collect(self, model, messages, **kw):
@@ -121,7 +120,7 @@ def test_completions_accepts_valid_key(client_with_auth, monkeypatch):
         {"Authorization": "Bearer sk-test-abc"},
         {"X-API-Key": "sk-test-xyz"},
     ):
-        resp = client_with_auth.post("/v1/chat/completions", json=PAYLOAD, headers=headers)
+        resp = client_auth_handler.post("/v1/chat/completions", json=PAYLOAD, headers=headers)
         assert resp.status_code == 200, headers
         assert resp.json()["choices"][0]["message"]["content"] == "pong"
 

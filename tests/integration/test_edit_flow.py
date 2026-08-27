@@ -37,8 +37,10 @@ class TestEditFlow:
         body = r.json()
         assert "id" in body
         job_id = body["id"]
-        # 图生图是后台异步任务，给更多时间完成
-        for _ in range(60):
+        # 图生图是后台异步任务，给更多时间完成；用墙钟 60s 截止轮询而非固定次数，
+        # 避免全量跑队列积压时固定轮询耗尽而误报超时。
+        deadline = asyncio.get_event_loop().time() + 60
+        while asyncio.get_event_loop().time() < deadline:
             r = await client.get(f"/v1/edit/tasks/{job_id}")
             assert r.status_code == 200
             t = r.json()
@@ -46,10 +48,10 @@ class TestEditFlow:
             if status == "completed":
                 return
             if status == "error":
-                if "验证 token 暂不可用" in (t.get("error") or "") or "cf_solver" in (t.get("error") or "").lower():
-                    # cf_solver 熔断降级属于系统承受的瞬态，此处判定为「降级通过」
+                errorMsg = t.get("error") or ""
+                if "验证 token 暂不可用" in errorMsg or "cf_solver" in errorMsg.lower():
                     return
-                pytest.fail(f"图生图任务失败: {t.get('error')}")
+                pytest.fail(f"图生图任务失败: {errorMsg}")
             await asyncio.sleep(0.5)
         pytest.fail(f"图生图任务超时未完成，最后状态: {body.get('status')}")
 

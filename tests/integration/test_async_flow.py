@@ -35,7 +35,10 @@ class TestAsyncFlow:
         assert "id" in body
         task_id = body["id"]
         assert body.get("status") in ("pending", "processing")
-        for _ in range(40):
+        # 会话级共享 app：全量跑时队列可能有积压，任务完成耗时 > 单独跑；
+        # 用墙钟 45s 截止轮询，而非固定次数，避免时序脆弱。
+        deadline = asyncio.get_event_loop().time() + 45
+        while asyncio.get_event_loop().time() < deadline:
             r = await client.get(f"/v1/tasks/{task_id}")
             assert r.status_code == 200
             t = r.json()

@@ -8,7 +8,6 @@
 - 信号量上限生效（并发超过上限时阻塞）
 """
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -27,11 +26,6 @@ class TestHttpPoolConfig:
         IF_UPSTREAM_MAX_INFLIGHT 由 system_spec 按本机规格自适应。"""
         import api.config as cfg
         from api.system_spec import ADAPTIVE_UPSTREAM_INFLIGHT
-
-        # 保存原始值
-        orig_max = getattr(cfg, "IF_HTTP_MAX_CONNECTIONS", None)
-        orig_keep = getattr(cfg, "IF_HTTP_KEEPALIVE", None)
-        orig_inflight = getattr(cfg, "IF_UPSTREAM_MAX_INFLIGHT", None)
 
         assert cfg.IF_HTTP_MAX_CONNECTIONS == 100, "默认 max_connections 应为 100"
         assert cfg.IF_HTTP_KEEPALIVE == 20, "默认 max_keepalive 应为 20"

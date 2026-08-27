@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3649,
-  "edgeCount": 6602,
+  "nodeCount": 3685,
+  "edgeCount": 6648,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3649,
+  "totalCount": 3685,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-27T13:03:26.969Z",
-  "lastFile": "gc-observability-change-report.html"
+  "syncedAt": "2026-08-27T14:19:38.925Z",
+  "lastFile": "dispatch_edit.py"
 }
