@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { chatCompletions, fetchChatModels, fetchChatRemaining, notify } from '../api';
+import { chatCompletions, fetchChatModels, fetchChatRemaining, getStoredApiKey, setStoredApiKey, notify } from '../api';
 import type { ChatModelInfo, ChatRemaining } from '../api';
 import { useApi } from '../hooks/useApi';
 
@@ -217,7 +217,7 @@ function ModelPicker({ models, value, loading, onChange }: ModelPickerProps) {
 }
 
 export function ChatPlayground() {
-  const { data: modelsData, loading: modelsLoading } = useApi<{ items: ChatModelInfo[]; count: number }>(fetchChatModels);
+  const { data: modelsData, loading: modelsLoading } = useApi<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>(fetchChatModels);
   const { data: remaining } = useApi<ChatRemaining>(fetchChatRemaining, { intervalMs: 30000 });
   const [model, setModel] = useState('');
   const [effort, setEffort] = useState<Effort>('balanced');
@@ -226,6 +226,9 @@ export function ChatPlayground() {
   const [stream, setStream] = useState(true);
   const [sending, setSending] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  // v4.4: API Key 管理（本地保存 + 接入示例展示）
+  const [apiKey, setApiKey] = useState(getStoredApiKey);
+  const [showApiPanel, setShowApiPanel] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -438,11 +441,60 @@ export function ChatPlayground() {
           <h1 className="page-title">在线聊天 <span className="title-badge">AI Playground</span></h1>
           <p className="page-desc">选择模型，直接体验统一 AI 聊天服务与流式响应能力</p>
         </div>
-        <div className={`chat-remaining-pill ${remainingClass}`}>
-          <span className="remaining-dot" />
-          剩余额度 <strong>{remaining ? formatNumber(remaining.remaining) : '-'}</strong>
+        <div className="chat-header-actions">
+          <button className="tf-btn tf-btn-secondary tf-btn-sm" onClick={() => setShowApiPanel(v => !v)}>
+            🔑 API 接入
+          </button>
+          <div className={`chat-remaining-pill ${remainingClass}`}>
+            <span className="remaining-dot" />
+            剩余额度 <strong>{remaining ? formatNumber(remaining.remaining) : '-'}</strong>
+          </div>
         </div>
       </div>
+
+      {showApiPanel && (
+        <section className="tf-card chat-api-panel">
+          <h3 className="chat-api-title">API 接入指南（OpenAI / Anthropic 兼容）</h3>
+          {modelsData?.auth_required !== false && (
+            <div className="chat-key-row">
+              <label htmlFor="chat-api-key-input">API Key（仅保存在本浏览器 localStorage，随请求 Bearer 头发送）</label>
+              <div className="chat-key-controls">
+                <input
+                  id="chat-api-key-input"
+                  type="password"
+                  value={apiKey}
+                  placeholder={modelsData?.auth_required ? '必填：sk-…' : '可选：未启用鉴权可留空'}
+                  onChange={event => setApiKey(event.target.value)}
+                />
+                <button
+                  className="tf-btn tf-btn-primary tf-btn-sm"
+                  onClick={() => {
+                    setStoredApiKey(apiKey);
+                    notify(apiKey.trim() ? 'API Key 已保存到本地' : 'API Key 已清除', 'success');
+                  }}
+                  disabled={!modelsData?.auth_required}
+                >保存 Key</button>
+              </div>
+            </div>
+          )}
+          <p className="chat-api-note">以下示例把 <code>&lt;key&gt;</code> 换成你的 Key；<code>BASE</code> 换成本站地址。</p>
+          <pre className="chat-api-code">{`# OpenAI 兼容（Codex / Cursor / Continue / 任意 OpenAI SDK）
+curl -X POST {window.location.origin}/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  ${apiKey.trim() ? '-H "Authorization: Bearer ' + apiKey.trim() + '" \\\n  ' : ''}-d '{"model":"${model || 'tryingopen/z-ai/glm-5.3-flash'}","messages":[{"role":"user","content":"你好"}],"stream":true}'
+
+# Anthropic 兼容（Claude Code）
+export ANTHROPIC_BASE_URL=${window.location.origin}/v1
+curl -X POST ${window.location.origin}/v1/messages \\
+  -H "Content-Type: application/json" \\
+  ${apiKey.trim() ? '-H "X-API-Key: ' + apiKey.trim() + '" \\\n  ' : ''}-d '{"model":"${model || 'tryingopen/qwen/qwen3.8-27b'}","max_tokens":1024,"messages":[{"role":"user","content":"hi"}]}'`}
+          </pre>
+          <div className="chat-api-models">
+            <strong>可用模型 ID：</strong>
+            <code>{models.map(m => m.id).join(' · ')}</code>
+          </div>
+        </section>
+      )}
 
       <section className="tf-card chat-controls">
         <ModelPicker models={models} value={model} loading={modelsLoading} onChange={setModel} />
@@ -506,6 +558,17 @@ export function ChatPlayground() {
       <style>{`
         .chat-page { display: flex; flex-direction: column; gap: 20px; min-height: calc(100vh - 112px); }
         .chat-page .page-header { margin-bottom: 0; }
+        .chat-header-actions { display: flex; align-items: center; gap: 12px; }
+        .chat-api-panel { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+        .chat-api-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+        .chat-key-row { display: flex; flex-direction: column; gap: 8px; }
+        .chat-key-row > label { font-size: 12px; color: var(--text-secondary); }
+        .chat-key-controls { display: flex; gap: 8px; }
+        .chat-key-controls input { flex: 1; max-width: 380px; font-family: ui-monospace, monospace; }
+        .chat-api-note { font-size: 12px; color: var(--text-muted); }
+        .chat-api-code { margin: 0; padding: 14px 16px; overflow-x: auto; border: 1px solid var(--border-default); border-radius: 10px; background: var(--bg-subtle); color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; white-space: pre; }
+        .chat-api-models { font-size: 11.5px; color: var(--text-secondary); line-height: 1.7; word-break: break-all; }
+        .chat-api-models code { color: var(--primary-500); }
         .chat-remaining-pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--success-border); background: var(--success-bg); color: var(--success-text); padding: 8px 13px; border-radius: var(--radius-full); font-size: 12px; white-space: nowrap; }
         .chat-remaining-pill.is-low { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger-text); }
         .remaining-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }

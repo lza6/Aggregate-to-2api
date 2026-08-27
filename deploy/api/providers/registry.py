@@ -244,7 +244,7 @@ class Registry:
         return list(self._models.values())
 
     def grouped(self) -> dict[str, list[dict]]:
-        """按提供商分组，供 /v1/models 与前端展示。"""
+        """按提供商分组，供 /v1/models 与前端展示（v4.4 起含聊天模型）。"""
         self._ensure_booted()
         out: dict[str, list[dict]] = {}
         for m in self._models.values():
@@ -258,6 +258,21 @@ class Registry:
                 "credits": m.credits,
                 "account_required": m.account_required,
                 "description": m.description,
+            })
+        # v4.4: 聊天模型并入同一目录（无 aspect_ratios/resolutions，附上下文窗口）
+        for spec in self.all_chat_models():
+            out.setdefault(spec.provider, []).append({
+                "id": spec.id,
+                "name": spec.display_name or spec.upstream_model,
+                "upstream_model": spec.upstream_model,
+                "capabilities": list(spec.capabilities),
+                "aspect_ratios": [],
+                "resolutions": [],
+                "credits": None,
+                "account_required": False,
+                "description": spec.description,
+                "kind": "chat",
+                "context_window": (spec.meta or {}).get("context_window", 0),
             })
         return out
 

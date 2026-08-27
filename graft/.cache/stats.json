@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3539,
-  "edgeCount": 6362,
+  "nodeCount": 3579,
+  "edgeCount": 6449,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3539,
+  "totalCount": 3579,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-26T23:33:58.746Z",
-  "lastFile": "api.ts"
+  "syncedAt": "2026-08-27T00:22:40.435Z",
+  "lastFile": "test_chat_auth.py"
 }

@@ -1,6 +1,6 @@
 # api/providers/registry.py
 
-- Registry · class · L21-L304 — class Registry
+- Registry · class · L21-L336 — class Registry
 - __init__ · method · L22-L39 — def __init__(self) -> None
 - _ensure_booted · method · L41-L44 — def _ensure_booted(self) -> None
 - register · method · L46-L54 — def register(self, provider: Provider) -> None
@@ -21,10 +21,10 @@
 - try_recover · method · L224-L229 — def try_recover(self, provider: str) -> None
 - try_recover_all · method · L231-L240 — def try_recover_all(self) -> None
 - all_models · method · L242-L244 — def all_models(self) -> list[ModelSpec]
-- grouped · method · L246-L262 — def grouped(self) -> dict[str, list[dict]]
-- provider_summary · method · L264-L280 — def provider_summary(self) -> dict[str, dict]
-- healthy_providers · method · L283-L288 — def healthy_providers(self) -> list[str]
-- health_check_all · method · L290-L304 — async def health_check_all(self) -> None
-- bootstrap · function · L311-L331 — def bootstrap() -> None
-- startup_all · function · L334-L345 — async def startup_all() -> None
-- shutdown_all · function · L348-L358 — async def shutdown_all() -> None
+- grouped · method · L246-L277 — def grouped(self) -> dict[str, list[dict]]
+- provider_summary · method · L279-L312 — def provider_summary(self) -> dict[str, dict]
+- healthy_providers · method · L315-L320 — def healthy_providers(self) -> list[str]
+- health_check_all · method · L322-L336 — async def health_check_all(self) -> None
+- bootstrap · function · L343-L363 — def bootstrap() -> None
+- startup_all · function · L366-L377 — async def startup_all() -> None
+- shutdown_all · function · L380-L390 — async def shutdown_all() -> None

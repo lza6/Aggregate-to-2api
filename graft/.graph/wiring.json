@@ -1,8 +1,8 @@
 {
   "meta": {
     "version": 1,
-    "nodeCount": 3539,
-    "edgeCount": 6362,
+    "nodeCount": 3579,
+    "edgeCount": 6449,
     "languages": [
       "javascript",
       "python",
@@ -1061,6 +1061,105 @@
       "owner": "AuditLog"
     },
     {
+      "id": "api/auth.py",
+      "name": "auth.py",
+      "kind": "file",
+      "path": "api/auth.py",
+      "span": "L1-L98",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "153f763519d4a7970704c1ab3c1ca00b36ca1c008bc6c0ebadd92fc89a35fcd3",
+      "chars": 3041,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#_extract_key",
+      "name": "_extract_key",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L42-L49",
+      "signature": "def _extract_key(request: Request) -> str",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "dc55a547bccb9c122406f1da4dca552805321e064d21cb0411cdc71b9ba41789",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#_keys",
+      "name": "_keys",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L29-L34",
+      "signature": "def _keys() -> list[str]",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "84167a17b3f7b222bc3ceedc84bfee62e184b501c119de297f33ac34f49efe82",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#auth_enabled",
+      "name": "auth_enabled",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L37-L39",
+      "signature": "def auth_enabled() -> bool",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b5d520b04250f6f3ce8bbccff43b2a8da0b63c3419069dca0d1c4b6472abaf97",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#check_api_key",
+      "name": "check_api_key",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L52-L69",
+      "signature": "def check_api_key(request: Request, *, scope: str = \"chat\") -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "488dbd786ef2d129e45c71a38355c43431aa730de7343f2b063fb6df8a82167c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#check_chat_rate_limit",
+      "name": "check_chat_rate_limit",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L72-L91",
+      "signature": "def check_chat_rate_limit(request: Request) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "27e7836fbf7f1c699b089feafb87e77dc6ad41ea5464d4142436ea4f3a5ea572",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/auth.py#guard_chat_request",
+      "name": "guard_chat_request",
+      "kind": "function",
+      "path": "api/auth.py",
+      "span": "L94-L97",
+      "signature": "def guard_chat_request(request: Request) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3da9d60daad5fc1eb6aabec97434c7c08fce031a71d1378d012f34eb684d5599",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "api/base64_store.py",
       "name": "base64_store.py",
       "kind": "file",
@@ -1839,12 +1938,12 @@
       "name": "__init__.py",
       "kind": "file",
       "path": "api/config/__init__.py",
-      "span": "L1-L1029",
+      "span": "L1-L1041",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "2d6e06e19a9b749532ca4f0d3d2c4fc7ab7ac8c5c41d0a1db5493d1c0485c471",
-      "chars": 38730,
+      "body_hash": "5e27772d71a7777b047778a94e07a620a88174a6a2578f4dfab92854578bb346",
+      "chars": 39330,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -1854,7 +1953,7 @@
       "name": "apply_model",
       "kind": "function",
       "path": "api/config/__init__.py",
-      "span": "L890-L893",
+      "span": "L901-L904",
       "signature": "def apply_model(prompt: str, model: str) -> str",
       "exported": true,
       "origin": "ast",
@@ -1868,11 +1967,11 @@
       "name": "Settings",
       "kind": "class",
       "path": "api/config/__init__.py",
-      "span": "L36-L684",
+      "span": "L36-L693",
       "signature": "class Settings(BaseSettings)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "801d8c9fba8953f379cc60b0e542832c8cc99a444a88188f31d7f19efeff9eb2",
+      "body_hash": "052036ab85766beec59506b6ca0f9cbbd55e22a3c6f9b268e40ca6e81d1a3e36",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -1882,7 +1981,7 @@
       "name": "_apply_adaptive_defaults",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L383-L411",
+      "span": "L390-L418",
       "signature": "def _apply_adaptive_defaults(self) -> None",
       "exported": false,
       "origin": "ast",
@@ -1897,7 +1996,7 @@
       "name": "_bool_str_coerce",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L377-L381",
+      "span": "L384-L388",
       "signature": "def _bool_str_coerce(cls, v: str | bool) -> bool",
       "exported": false,
       "origin": "ast",
@@ -1912,7 +2011,7 @@
       "name": "_proxy_empty_is_none",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L356-L360",
+      "span": "L363-L367",
       "signature": "def _proxy_empty_is_none(cls, v: str | None) -> str | None",
       "exported": false,
       "origin": "ast",
@@ -1927,11 +2026,11 @@
       "name": "_resolve_proxy_and_init_groups",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L414-L587",
+      "span": "L421-L596",
       "signature": "def _resolve_proxy_and_init_groups(self) -> \"Settings\"",
       "exported": false,
       "origin": "ast",
-      "body_hash": "99f826d2ca2b19df76998309cbf8d8767b1d0a225a8d5ed2d9dfbf5959d3f978",
+      "body_hash": "5e239d2ce6c4fdf04404bf28e4ddd420bc5bac3f81e4522c0e7f3ca89ac29e81",
       "summary_state": "pending",
       "summary": null,
       "crux": null,
@@ -1942,7 +2041,7 @@
       "name": "cache",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L605-L607",
+      "span": "L614-L616",
       "signature": "def cache(self) -> CacheSettings",
       "exported": true,
       "origin": "ast",
@@ -1957,7 +2056,7 @@
       "name": "db",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L590-L592",
+      "span": "L599-L601",
       "signature": "def db(self) -> DBSettings",
       "exported": true,
       "origin": "ast",
@@ -1972,7 +2071,7 @@
       "name": "edit",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L630-L632",
+      "span": "L639-L641",
       "signature": "def edit(self) -> EditSettings",
       "exported": true,
       "origin": "ast",
@@ -1987,7 +2086,7 @@
       "name": "http",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L595-L597",
+      "span": "L604-L606",
       "signature": "def http(self) -> HTTPSettings",
       "exported": true,
       "origin": "ast",
@@ -2002,7 +2101,7 @@
       "name": "observability",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L625-L627",
+      "span": "L634-L636",
       "signature": "def observability(self) -> ObservabilitySettings",
       "exported": true,
       "origin": "ast",
@@ -2017,7 +2116,7 @@
       "name": "pool",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L615-L617",
+      "span": "L624-L626",
       "signature": "def pool(self) -> PoolSettings",
       "exported": true,
       "origin": "ast",
@@ -2032,7 +2131,7 @@
       "name": "provider",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L610-L612",
+      "span": "L619-L621",
       "signature": "def provider(self) -> ProviderSettings",
       "exported": true,
       "origin": "ast",
@@ -2047,7 +2146,7 @@
       "name": "queue",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L620-L622",
+      "span": "L629-L631",
       "signature": "def queue(self) -> QueueSettings",
       "exported": true,
       "origin": "ast",
@@ -2062,7 +2161,7 @@
       "name": "security",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L635-L637",
+      "span": "L644-L646",
       "signature": "def security(self) -> SecuritySettings",
       "exported": true,
       "origin": "ast",
@@ -2077,7 +2176,7 @@
       "name": "settings_json",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L639-L652",
+      "span": "L648-L661",
       "signature": "def settings_json(self) -> dict",
       "exported": true,
       "origin": "ast",
@@ -2092,7 +2191,7 @@
       "name": "solver",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L600-L602",
+      "span": "L609-L611",
       "signature": "def solver(self) -> SolverSettings",
       "exported": true,
       "origin": "ast",
@@ -2107,7 +2206,7 @@
       "name": "validate",
       "kind": "method",
       "path": "api/config/__init__.py",
-      "span": "L654-L684",
+      "span": "L663-L693",
       "signature": "def validate(self) -> list[str]",
       "exported": true,
       "origin": "ast",
@@ -8199,12 +8298,12 @@
       "name": "registry.py",
       "kind": "file",
       "path": "api/providers/registry.py",
-      "span": "L1-L359",
+      "span": "L1-L391",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "383ce5ade3156af64c2b8137f3f032de3fddce1911a24f874a0ed1beb63cf922",
-      "chars": 14502,
+      "body_hash": "4a2d4369d6aca661495b785f0969e00204a54ff61d7686c2c2b5d2c211ba89fe",
+      "chars": 16216,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -8214,7 +8313,7 @@
       "name": "bootstrap",
       "kind": "function",
       "path": "api/providers/registry.py",
-      "span": "L311-L331",
+      "span": "L343-L363",
       "signature": "def bootstrap() -> None",
       "exported": true,
       "origin": "ast",
@@ -8228,11 +8327,11 @@
       "name": "Registry",
       "kind": "class",
       "path": "api/providers/registry.py",
-      "span": "L21-L304",
+      "span": "L21-L336",
       "signature": "class Registry",
       "exported": true,
       "origin": "ast",
-      "body_hash": "077bf0633fd74e6c5021f3e3e27687070e766d675b7c4d0390bc4d9d380c5e98",
+      "body_hash": "03504ac73d01904970410518c7917b73288badc8ef0689897428e64c76eeb906",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -8377,11 +8476,11 @@
       "name": "grouped",
       "kind": "method",
       "path": "api/providers/registry.py",
-      "span": "L246-L262",
+      "span": "L246-L277",
       "signature": "def grouped(self) -> dict[str, list[dict]]",
       "exported": true,
       "origin": "ast",
-      "body_hash": "ddffefaef12945688cdd4edf995bdacc2a1cc475458280013ccac94d9687faa8",
+      "body_hash": "7b3a74959e8419056815fca4cf809ae7f66e9ab64307a673797893340d60ebfd",
       "summary_state": "pending",
       "summary": null,
       "crux": null,
@@ -8392,7 +8491,7 @@
       "name": "health_check_all",
       "kind": "method",
       "path": "api/providers/registry.py",
-      "span": "L290-L304",
+      "span": "L322-L336",
       "signature": "async def health_check_all(self) -> None",
       "exported": true,
       "origin": "ast",
@@ -8407,7 +8506,7 @@
       "name": "healthy_providers",
       "kind": "method",
       "path": "api/providers/registry.py",
-      "span": "L283-L288",
+      "span": "L315-L320",
       "signature": "def healthy_providers(self) -> list[str]",
       "exported": true,
       "origin": "ast",
@@ -8482,11 +8581,11 @@
       "name": "provider_summary",
       "kind": "method",
       "path": "api/providers/registry.py",
-      "span": "L264-L280",
+      "span": "L279-L312",
       "signature": "def provider_summary(self) -> dict[str, dict]",
       "exported": true,
       "origin": "ast",
-      "body_hash": "9be8c46bef0c0f6faf523acea683b780fb4413bca0b67a31ab630e48ef7ab397",
+      "body_hash": "cc2ddb47c70a596d5206f55bc1f30a03684bf9dd376fa25d73dd7ac191cb5a20",
       "summary_state": "pending",
       "summary": null,
       "crux": null,
@@ -8602,7 +8701,7 @@
       "name": "shutdown_all",
       "kind": "function",
       "path": "api/providers/registry.py",
-      "span": "L348-L358",
+      "span": "L380-L390",
       "signature": "async def shutdown_all() -> None",
       "exported": true,
       "origin": "ast",
@@ -8616,7 +8715,7 @@
       "name": "startup_all",
       "kind": "function",
       "path": "api/providers/registry.py",
-      "span": "L334-L345",
+      "span": "L366-L377",
       "signature": "async def startup_all() -> None",
       "exported": true,
       "origin": "ast",
@@ -9843,12 +9942,26 @@
       "name": "request_guard.py",
       "kind": "file",
       "path": "api/request_guard.py",
-      "span": "L1-L78",
+      "span": "L1-L56",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "b08a9662af36356b615117696c38642771c534af401f1c1c198b418327478a4f",
-      "chars": 2393,
+      "body_hash": "96093aad8575840705bdc3e38f91744950744692d5db4c4d830cd7855e3fdf7f",
+      "chars": 1526,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/request_guard.py#_limit",
+      "name": "_limit",
+      "kind": "function",
+      "path": "api/request_guard.py",
+      "span": "L23-L25",
+      "signature": "def _limit() -> int",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "e1fc5601e205f56430dbeeed5a376f012cd1bf4983240e829a2065f68ff060ab",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -9858,25 +9971,11 @@
       "name": "check_generate_request",
       "kind": "function",
       "path": "api/request_guard.py",
-      "span": "L74-L77",
-      "signature": "def check_generate_request(request: Request, prompt: str) -> None",
+      "span": "L52-L55",
+      "signature": "def check_generate_request(request: Request, prompt: str = \"\") -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "7e81aa85f74fab07f3d91a0563fdc02132e6c3fe56504722077ade9dc3caf359",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "api/request_guard.py#check_prompt",
-      "name": "check_prompt",
-      "kind": "function",
-      "path": "api/request_guard.py",
-      "span": "L41-L49",
-      "signature": "def check_prompt(prompt: str) -> None",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "1aaf9ddaa7343c2105a0b1a1f93c3b8c3cc67687d944a301ab88d6a913d93019",
+      "body_hash": "6b621cb266bcf05fc2b640363582948bffee545f716a7e056fcceff4e77f0944",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -9886,25 +9985,11 @@
       "name": "check_rate_limit",
       "kind": "function",
       "path": "api/request_guard.py",
-      "span": "L52-L71",
+      "span": "L28-L49",
       "signature": "def check_rate_limit(request: Request) -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "67eb631fa9731ec8ef0faeb81155d1c82b4dc7a3f1067b237a13c7605708275d",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "api/request_guard.py#prompt_risk_category",
-      "name": "prompt_risk_category",
-      "kind": "function",
-      "path": "api/request_guard.py",
-      "span": "L32-L38",
-      "signature": "def prompt_risk_category(prompt: str) -> str | None",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "f774ed1f5cf7b4ec0f9b0134c0ebb55d1c0ca4922cb943baeea3d12c8569d88d",
+      "body_hash": "5d300e36b041d2d33b99776f974412c8a0ffda8cc4762aae976077006539ed89",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10315,12 +10400,12 @@
       "name": "chat.py",
       "kind": "file",
       "path": "api/routes/chat.py",
-      "span": "L1-L565",
+      "span": "L1-L606",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "e4eff4e322937a129345237ee951d00fe81022f0b9c3fd8d12e4d7c7b746af3c",
-      "chars": 19645,
+      "body_hash": "d4815df8469407af39c1201258003ef771a6fbf35c0349707a99e1c6d3fed3b8",
+      "chars": 21037,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10330,7 +10415,7 @@
       "name": "_anthropic_content",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L372-L394",
+      "span": "L374-L396",
       "signature": "def _anthropic_content( text: str, reasoning: str, tool_calls: list[dict[str, Any]] ) -> list[dict[str, Any]]",
       "exported": false,
       "origin": "ast",
@@ -10344,7 +10429,7 @@
       "name": "_anthropic_stop_reason",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L368-L369",
+      "span": "L370-L371",
       "signature": "def _anthropic_stop_reason(finish_reason: str, tool_calls: list[dict[str, Any]]) -> str",
       "exported": false,
       "origin": "ast",
@@ -10358,7 +10443,7 @@
       "name": "_anthropic_stream",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L426-L551",
+      "span": "L429-L554",
       "signature": "async def _anthropic_stream( request: MessagesRequest, messages: list[dict[str, Any]], provider: Any, )",
       "exported": false,
       "origin": "ast",
@@ -10372,7 +10457,7 @@
       "name": "_chat_collect",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L196-L238",
+      "span": "L197-L239",
       "signature": "async def _chat_collect( request: ChatCompletionsRequest | MessagesRequest, messages: list[dict[str, Any]], )",
       "exported": false,
       "origin": "ast",
@@ -10382,11 +10467,25 @@
       "crux": null
     },
     {
+      "id": "api/routes/chat.py#_chat_model_public",
+      "name": "_chat_model_public",
+      "kind": "function",
+      "path": "api/routes/chat.py",
+      "span": "L562-L576",
+      "signature": "def _chat_model_public(spec) -> dict[str, Any]",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "d82e16b724679e825ef2e7e842e9e8ef7a048535b4a9f705d757a6068eed85c5",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "api/routes/chat.py#_estimate_prompt_tokens",
       "name": "_estimate_prompt_tokens",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L95-L97",
+      "span": "L96-L98",
       "signature": "def _estimate_prompt_tokens(messages: list[dict[str, Any]]) -> int",
       "exported": false,
       "origin": "ast",
@@ -10400,7 +10499,7 @@
       "name": "_int_usage",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L100-L108",
+      "span": "L101-L109",
       "signature": "def _int_usage(usage: dict[str, Any], *keys: str) -> int | None",
       "exported": false,
       "origin": "ast",
@@ -10414,7 +10513,7 @@
       "name": "_messages_payload",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L64-L65",
+      "span": "L65-L66",
       "signature": "def _messages_payload(messages: list[BaseModel]) -> list[dict[str, Any]]",
       "exported": false,
       "origin": "ast",
@@ -10428,7 +10527,7 @@
       "name": "_normalize_usage",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L111-L131",
+      "span": "L112-L132",
       "signature": "def _normalize_usage( result: dict[str, Any], text: str, messages: list[dict[str, Any]] ) -> dict[str, int]",
       "exported": false,
       "origin": "ast",
@@ -10442,7 +10541,7 @@
       "name": "_openai_chunk",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L180-L193",
+      "span": "L181-L194",
       "signature": "def _openai_chunk( response_id: str, model: str, created: int, delta: dict[str, Any], finish_reason: str | None = None, ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -10456,7 +10555,7 @@
       "name": "_openai_effort",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L68-L69",
+      "span": "L69-L70",
       "signature": "def _openai_effort(value: str | None) -> str",
       "exported": false,
       "origin": "ast",
@@ -10470,7 +10569,7 @@
       "name": "_openai_response",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L241-L261",
+      "span": "L242-L262",
       "signature": "def _openai_response( model: str, text: str, reasoning: str, tool_calls: list[dict[str, Any]], finish_reason: str, usage: dict[str, int], ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -10484,7 +10583,7 @@
       "name": "_openai_stream",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L264-L351",
+      "span": "L265-L352",
       "signature": "async def _openai_stream( request: ChatCompletionsRequest, messages: list[dict[str, Any]], provider: Any, )",
       "exported": false,
       "origin": "ast",
@@ -10498,7 +10597,7 @@
       "name": "_provider_for",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L83-L92",
+      "span": "L84-L93",
       "signature": "def _provider_for(model: str)",
       "exported": false,
       "origin": "ast",
@@ -10512,7 +10611,7 @@
       "name": "_provider_kwargs",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L72-L80",
+      "span": "L73-L81",
       "signature": "def _provider_kwargs(request: BaseModel) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -10526,7 +10625,7 @@
       "name": "_record",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L142-L148",
+      "span": "L143-L149",
       "signature": "async def _record(**kwargs: Any) -> None",
       "exported": false,
       "origin": "ast",
@@ -10540,7 +10639,7 @@
       "name": "_record_args",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L151-L173",
+      "span": "L152-L174",
       "signature": "def _record_args( provider: str, model: str, usage: dict[str, int], duration_ms: float, success: bool, tool_calls_count: int, error: str | None = None, proxy_used: str | None = None, ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -10554,7 +10653,7 @@
       "name": "_result_parts",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L134-L139",
+      "span": "L135-L140",
       "signature": "def _result_parts(result: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], str]",
       "exported": false,
       "origin": "ast",
@@ -10568,7 +10667,7 @@
       "name": "_sse_data",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L176-L177",
+      "span": "L177-L178",
       "signature": "def _sse_data(payload: Any) -> str",
       "exported": false,
       "origin": "ast",
@@ -10582,7 +10681,7 @@
       "name": "AnthropicMessage",
       "kind": "class",
       "path": "api/routes/chat.py",
-      "span": "L47-L49",
+      "span": "L48-L50",
       "signature": "class AnthropicMessage(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -10592,15 +10691,29 @@
       "crux": null
     },
     {
+      "id": "api/routes/chat.py#chat_auth_status",
+      "name": "chat_auth_status",
+      "kind": "function",
+      "path": "api/routes/chat.py",
+      "span": "L591-L597",
+      "signature": "async def chat_auth_status()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d021a6b708d3280659063a7500d7690c0a87ebf03d0cb1847e5e3453606a4908",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "api/routes/chat.py#chat_completions",
       "name": "chat_completions",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L355-L365",
-      "signature": "async def chat_completions(request: ChatCompletionsRequest)",
+      "span": "L356-L367",
+      "signature": "async def chat_completions(request: ChatCompletionsRequest, raw_request: Request)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "97f12dfa17ca8821686f3429f2d34f12bf7f72f79e43ab9f22a8ab6530460a88",
+      "body_hash": "01e73fea0979562d00fd4cb8d7c1549c852444855648cfe416c11464adc22006",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10610,7 +10723,7 @@
       "name": "ChatCompletionsRequest",
       "kind": "class",
       "path": "api/routes/chat.py",
-      "span": "L34-L44",
+      "span": "L35-L45",
       "signature": "class ChatCompletionsRequest(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -10624,7 +10737,7 @@
       "name": "ChatMessage",
       "kind": "class",
       "path": "api/routes/chat.py",
-      "span": "L27-L31",
+      "span": "L28-L32",
       "signature": "class ChatMessage(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -10638,7 +10751,7 @@
       "name": "get_chat_remaining",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L560-L561",
+      "span": "L601-L602",
       "signature": "async def get_chat_remaining()",
       "exported": true,
       "origin": "ast",
@@ -10652,7 +10765,7 @@
       "name": "get_chat_usage",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L555-L556",
+      "span": "L558-L559",
       "signature": "async def get_chat_usage(period: Literal[\"1h\", \"24h\", \"7d\", \"30d\"] = Query(\"24h\"))",
       "exported": true,
       "origin": "ast",
@@ -10662,15 +10775,29 @@
       "crux": null
     },
     {
+      "id": "api/routes/chat.py#list_chat_models",
+      "name": "list_chat_models",
+      "kind": "function",
+      "path": "api/routes/chat.py",
+      "span": "L580-L587",
+      "signature": "async def list_chat_models()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d725362a22e7ea8db309a8981bda100fea0607a8b30d60cf9c4a7ea6aad6bcce",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "api/routes/chat.py#messages",
       "name": "messages",
       "kind": "function",
       "path": "api/routes/chat.py",
-      "span": "L398-L423",
-      "signature": "async def messages(request: MessagesRequest)",
+      "span": "L400-L426",
+      "signature": "async def messages(request: MessagesRequest, raw_request: Request)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "cf9f4b7c69b27ddc04391ddeb92064a8f30aeccf008ed802e5851e84d466bb10",
+      "body_hash": "8414045f70021ee6f8ab46ae1ea8db4c47bf90eee8a102a92b322f27f7af99bc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10680,7 +10807,7 @@
       "name": "MessagesRequest",
       "kind": "class",
       "path": "api/routes/chat.py",
-      "span": "L52-L61",
+      "span": "L53-L62",
       "signature": "class MessagesRequest(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -10694,12 +10821,26 @@
       "name": "generate.py",
       "kind": "file",
       "path": "api/routes/generate.py",
-      "span": "L1-L67",
+      "span": "L1-L76",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "ca8b305e2e621321dbb4c955e41c85d71553fbe08fd80e9960b924a528e493e2",
-      "chars": 2575,
+      "body_hash": "c76d4aeaa185c44a40aff827646149525e94a9dcf948971d5c9a27ff3f075464",
+      "chars": 2910,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/routes/generate.py#_guard",
+      "name": "_guard",
+      "kind": "function",
+      "path": "api/routes/generate.py",
+      "span": "L28-L30",
+      "signature": "def _guard(request: Request, prompt: str) -> None",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "36e73f01c20d8d3ef20a1bb989701ae5dae32b575c7806f2305355e418ae463f",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10709,11 +10850,11 @@
       "name": "edit_image_route",
       "kind": "function",
       "path": "api/routes/generate.py",
-      "span": "L58-L59",
-      "signature": "async def edit_image_route(req: EditRequest)",
+      "span": "L66-L68",
+      "signature": "async def edit_image_route(request: Request, req: EditRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "ba5e471e578dc19442eb51a26beb2c61c40a355fcea05c928da5932c0b97a321",
+      "body_hash": "b3eb8843c99a1f1039cd4138692572074a0a76b0e8bad6d335ef50c74fd0bcab",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10723,11 +10864,11 @@
       "name": "generate_async",
       "kind": "function",
       "path": "api/routes/generate.py",
-      "span": "L46-L54",
-      "signature": "async def generate_async(req: GenerateRequest)",
+      "span": "L53-L62",
+      "signature": "async def generate_async(request: Request, req: GenerateRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "0d5784a99033aa66bfd00742a9d4c3c7ef8e2fe172a58803b1666b302d6535eb",
+      "body_hash": "4cbad41b3a84106a3994a57e0ad5cc3db269ff909edd571395ae32cf16047dbc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10737,11 +10878,11 @@
       "name": "generate_sync",
       "kind": "function",
       "path": "api/routes/generate.py",
-      "span": "L28-L42",
+      "span": "L34-L49",
       "signature": "async def generate_sync(request: Request, req: GenerateRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "2b955a5670c28d6a126a132de3d4eab0b4b6e2b46010f111d65d2a7c9ac62334",
+      "body_hash": "5ee0ee0459b6d8d7938acb34d4335506926c1a5137144ece21c6d8916b1a16fc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -10751,7 +10892,7 @@
       "name": "get_edit_task",
       "kind": "function",
       "path": "api/routes/generate.py",
-      "span": "L63-L67",
+      "span": "L72-L76",
       "signature": "async def get_edit_task(job_id: str)",
       "exported": true,
       "origin": "ast",
@@ -14517,6 +14658,105 @@
       "owner": "AuditLog"
     },
     {
+      "id": "deploy/api/auth.py",
+      "name": "auth.py",
+      "kind": "file",
+      "path": "deploy/api/auth.py",
+      "span": "L1-L98",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "153f763519d4a7970704c1ab3c1ca00b36ca1c008bc6c0ebadd92fc89a35fcd3",
+      "chars": 3041,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#_extract_key",
+      "name": "_extract_key",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L42-L49",
+      "signature": "def _extract_key(request: Request) -> str",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "dc55a547bccb9c122406f1da4dca552805321e064d21cb0411cdc71b9ba41789",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#_keys",
+      "name": "_keys",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L29-L34",
+      "signature": "def _keys() -> list[str]",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "84167a17b3f7b222bc3ceedc84bfee62e184b501c119de297f33ac34f49efe82",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#auth_enabled",
+      "name": "auth_enabled",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L37-L39",
+      "signature": "def auth_enabled() -> bool",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b5d520b04250f6f3ce8bbccff43b2a8da0b63c3419069dca0d1c4b6472abaf97",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#check_api_key",
+      "name": "check_api_key",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L52-L69",
+      "signature": "def check_api_key(request: Request, *, scope: str = \"chat\") -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "488dbd786ef2d129e45c71a38355c43431aa730de7343f2b063fb6df8a82167c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#check_chat_rate_limit",
+      "name": "check_chat_rate_limit",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L72-L91",
+      "signature": "def check_chat_rate_limit(request: Request) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "27e7836fbf7f1c699b089feafb87e77dc6ad41ea5464d4142436ea4f3a5ea572",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/auth.py#guard_chat_request",
+      "name": "guard_chat_request",
+      "kind": "function",
+      "path": "deploy/api/auth.py",
+      "span": "L94-L97",
+      "signature": "def guard_chat_request(request: Request) -> None",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3da9d60daad5fc1eb6aabec97434c7c08fce031a71d1378d012f34eb684d5599",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/base64_store.py",
       "name": "base64_store.py",
       "kind": "file",
@@ -15295,12 +15535,12 @@
       "name": "__init__.py",
       "kind": "file",
       "path": "deploy/api/config/__init__.py",
-      "span": "L1-L1029",
+      "span": "L1-L1036",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "2d6e06e19a9b749532ca4f0d3d2c4fc7ab7ac8c5c41d0a1db5493d1c0485c471",
-      "chars": 38730,
+      "body_hash": "a6e537a71d307f0aadd3aa7357d96ba96665e0248b899570a41451fd3d811dcc",
+      "chars": 38983,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -15310,7 +15550,7 @@
       "name": "apply_model",
       "kind": "function",
       "path": "deploy/api/config/__init__.py",
-      "span": "L890-L893",
+      "span": "L896-L899",
       "signature": "def apply_model(prompt: str, model: str) -> str",
       "exported": true,
       "origin": "ast",
@@ -15324,11 +15564,11 @@
       "name": "Settings",
       "kind": "class",
       "path": "deploy/api/config/__init__.py",
-      "span": "L36-L684",
+      "span": "L36-L688",
       "signature": "class Settings(BaseSettings)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "801d8c9fba8953f379cc60b0e542832c8cc99a444a88188f31d7f19efeff9eb2",
+      "body_hash": "53e6e102c9047291f50e47593cf6fab07dd027a11f0ca35c11aaed157b962473",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -15338,7 +15578,7 @@
       "name": "_apply_adaptive_defaults",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L383-L411",
+      "span": "L387-L415",
       "signature": "def _apply_adaptive_defaults(self) -> None",
       "exported": false,
       "origin": "ast",
@@ -15353,7 +15593,7 @@
       "name": "_bool_str_coerce",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L377-L381",
+      "span": "L381-L385",
       "signature": "def _bool_str_coerce(cls, v: str | bool) -> bool",
       "exported": false,
       "origin": "ast",
@@ -15368,7 +15608,7 @@
       "name": "_proxy_empty_is_none",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L356-L360",
+      "span": "L360-L364",
       "signature": "def _proxy_empty_is_none(cls, v: str | None) -> str | None",
       "exported": false,
       "origin": "ast",
@@ -15383,7 +15623,7 @@
       "name": "_resolve_proxy_and_init_groups",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L414-L587",
+      "span": "L418-L591",
       "signature": "def _resolve_proxy_and_init_groups(self) -> \"Settings\"",
       "exported": false,
       "origin": "ast",
@@ -15398,7 +15638,7 @@
       "name": "cache",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L605-L607",
+      "span": "L609-L611",
       "signature": "def cache(self) -> CacheSettings",
       "exported": true,
       "origin": "ast",
@@ -15413,7 +15653,7 @@
       "name": "db",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L590-L592",
+      "span": "L594-L596",
       "signature": "def db(self) -> DBSettings",
       "exported": true,
       "origin": "ast",
@@ -15428,7 +15668,7 @@
       "name": "edit",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L630-L632",
+      "span": "L634-L636",
       "signature": "def edit(self) -> EditSettings",
       "exported": true,
       "origin": "ast",
@@ -15443,7 +15683,7 @@
       "name": "http",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L595-L597",
+      "span": "L599-L601",
       "signature": "def http(self) -> HTTPSettings",
       "exported": true,
       "origin": "ast",
@@ -15458,7 +15698,7 @@
       "name": "observability",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L625-L627",
+      "span": "L629-L631",
       "signature": "def observability(self) -> ObservabilitySettings",
       "exported": true,
       "origin": "ast",
@@ -15473,7 +15713,7 @@
       "name": "pool",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L615-L617",
+      "span": "L619-L621",
       "signature": "def pool(self) -> PoolSettings",
       "exported": true,
       "origin": "ast",
@@ -15488,7 +15728,7 @@
       "name": "provider",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L610-L612",
+      "span": "L614-L616",
       "signature": "def provider(self) -> ProviderSettings",
       "exported": true,
       "origin": "ast",
@@ -15503,7 +15743,7 @@
       "name": "queue",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L620-L622",
+      "span": "L624-L626",
       "signature": "def queue(self) -> QueueSettings",
       "exported": true,
       "origin": "ast",
@@ -15518,7 +15758,7 @@
       "name": "security",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L635-L637",
+      "span": "L639-L641",
       "signature": "def security(self) -> SecuritySettings",
       "exported": true,
       "origin": "ast",
@@ -15533,7 +15773,7 @@
       "name": "settings_json",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L639-L652",
+      "span": "L643-L656",
       "signature": "def settings_json(self) -> dict",
       "exported": true,
       "origin": "ast",
@@ -15548,7 +15788,7 @@
       "name": "solver",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L600-L602",
+      "span": "L604-L606",
       "signature": "def solver(self) -> SolverSettings",
       "exported": true,
       "origin": "ast",
@@ -15563,7 +15803,7 @@
       "name": "validate",
       "kind": "method",
       "path": "deploy/api/config/__init__.py",
-      "span": "L654-L684",
+      "span": "L658-L688",
       "signature": "def validate(self) -> list[str]",
       "exported": true,
       "origin": "ast",
@@ -15853,12 +16093,12 @@
       "name": "security.py",
       "kind": "file",
       "path": "deploy/api/config/security.py",
-      "span": "L1-L11",
+      "span": "L1-L17",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "dd400c057d58ef050c1e1e18d8edb6f6ad61fedc4644c038f843cab11007ecfc",
-      "chars": 263,
+      "body_hash": "605d9d580447f776e974592581e1e3d1241a10f224a7ceccac85c78a5f7a03c5",
+      "chars": 631,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -15868,11 +16108,11 @@
       "name": "SecuritySettings",
       "kind": "class",
       "path": "deploy/api/config/security.py",
-      "span": "L7-L11",
+      "span": "L7-L17",
       "signature": "class SecuritySettings(BaseModel)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "272b3e98b3e547d041c3af67c2df753357bad16755c1d81aed094baadfc40f72",
+      "body_hash": "bcc80fa43da228b378413ff1de334234e25ca6cefec53436d63eceef91ffd249",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -21655,12 +21895,12 @@
       "name": "registry.py",
       "kind": "file",
       "path": "deploy/api/providers/registry.py",
-      "span": "L1-L359",
+      "span": "L1-L376",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "383ce5ade3156af64c2b8137f3f032de3fddce1911a24f874a0ed1beb63cf922",
-      "chars": 14502,
+      "body_hash": "cd05cdb2a5f28409ce79ee704c73b6b3de972cb72d99916cdb01eaaf2a09904f",
+      "chars": 15495,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -21670,7 +21910,7 @@
       "name": "bootstrap",
       "kind": "function",
       "path": "deploy/api/providers/registry.py",
-      "span": "L311-L331",
+      "span": "L328-L348",
       "signature": "def bootstrap() -> None",
       "exported": true,
       "origin": "ast",
@@ -21684,11 +21924,11 @@
       "name": "Registry",
       "kind": "class",
       "path": "deploy/api/providers/registry.py",
-      "span": "L21-L304",
+      "span": "L21-L321",
       "signature": "class Registry",
       "exported": true,
       "origin": "ast",
-      "body_hash": "077bf0633fd74e6c5021f3e3e27687070e766d675b7c4d0390bc4d9d380c5e98",
+      "body_hash": "828f46baf6e068e280eeecbe6fa2e045ae2c6824b4a9d9f3af164b69aa35c52b",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -21848,7 +22088,7 @@
       "name": "health_check_all",
       "kind": "method",
       "path": "deploy/api/providers/registry.py",
-      "span": "L290-L304",
+      "span": "L307-L321",
       "signature": "async def health_check_all(self) -> None",
       "exported": true,
       "origin": "ast",
@@ -21863,7 +22103,7 @@
       "name": "healthy_providers",
       "kind": "method",
       "path": "deploy/api/providers/registry.py",
-      "span": "L283-L288",
+      "span": "L300-L305",
       "signature": "def healthy_providers(self) -> list[str]",
       "exported": true,
       "origin": "ast",
@@ -21938,11 +22178,11 @@
       "name": "provider_summary",
       "kind": "method",
       "path": "deploy/api/providers/registry.py",
-      "span": "L264-L280",
+      "span": "L264-L297",
       "signature": "def provider_summary(self) -> dict[str, dict]",
       "exported": true,
       "origin": "ast",
-      "body_hash": "9be8c46bef0c0f6faf523acea683b780fb4413bca0b67a31ab630e48ef7ab397",
+      "body_hash": "cc2ddb47c70a596d5206f55bc1f30a03684bf9dd376fa25d73dd7ac191cb5a20",
       "summary_state": "pending",
       "summary": null,
       "crux": null,
@@ -22058,7 +22298,7 @@
       "name": "shutdown_all",
       "kind": "function",
       "path": "deploy/api/providers/registry.py",
-      "span": "L348-L358",
+      "span": "L365-L375",
       "signature": "async def shutdown_all() -> None",
       "exported": true,
       "origin": "ast",
@@ -22072,7 +22312,7 @@
       "name": "startup_all",
       "kind": "function",
       "path": "deploy/api/providers/registry.py",
-      "span": "L334-L345",
+      "span": "L351-L362",
       "signature": "async def startup_all() -> None",
       "exported": true,
       "origin": "ast",
@@ -23299,12 +23539,26 @@
       "name": "request_guard.py",
       "kind": "file",
       "path": "deploy/api/request_guard.py",
-      "span": "L1-L78",
+      "span": "L1-L56",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "b08a9662af36356b615117696c38642771c534af401f1c1c198b418327478a4f",
-      "chars": 2393,
+      "body_hash": "96093aad8575840705bdc3e38f91744950744692d5db4c4d830cd7855e3fdf7f",
+      "chars": 1526,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#_limit",
+      "name": "_limit",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L23-L25",
+      "signature": "def _limit() -> int",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "e1fc5601e205f56430dbeeed5a376f012cd1bf4983240e829a2065f68ff060ab",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23314,25 +23568,11 @@
       "name": "check_generate_request",
       "kind": "function",
       "path": "deploy/api/request_guard.py",
-      "span": "L74-L77",
-      "signature": "def check_generate_request(request: Request, prompt: str) -> None",
+      "span": "L52-L55",
+      "signature": "def check_generate_request(request: Request, prompt: str = \"\") -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "7e81aa85f74fab07f3d91a0563fdc02132e6c3fe56504722077ade9dc3caf359",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "deploy/api/request_guard.py#check_prompt",
-      "name": "check_prompt",
-      "kind": "function",
-      "path": "deploy/api/request_guard.py",
-      "span": "L41-L49",
-      "signature": "def check_prompt(prompt: str) -> None",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "1aaf9ddaa7343c2105a0b1a1f93c3b8c3cc67687d944a301ab88d6a913d93019",
+      "body_hash": "6b621cb266bcf05fc2b640363582948bffee545f716a7e056fcceff4e77f0944",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23342,25 +23582,11 @@
       "name": "check_rate_limit",
       "kind": "function",
       "path": "deploy/api/request_guard.py",
-      "span": "L52-L71",
+      "span": "L28-L49",
       "signature": "def check_rate_limit(request: Request) -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "67eb631fa9731ec8ef0faeb81155d1c82b4dc7a3f1067b237a13c7605708275d",
-      "summary_state": "pending",
-      "summary": null,
-      "crux": null
-    },
-    {
-      "id": "deploy/api/request_guard.py#prompt_risk_category",
-      "name": "prompt_risk_category",
-      "kind": "function",
-      "path": "deploy/api/request_guard.py",
-      "span": "L32-L38",
-      "signature": "def prompt_risk_category(prompt: str) -> str | None",
-      "exported": true,
-      "origin": "ast",
-      "body_hash": "f774ed1f5cf7b4ec0f9b0134c0ebb55d1c0ca4922cb943baeea3d12c8569d88d",
+      "body_hash": "5d300e36b041d2d33b99776f974412c8a0ffda8cc4762aae976077006539ed89",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23771,12 +23997,12 @@
       "name": "chat.py",
       "kind": "file",
       "path": "deploy/api/routes/chat.py",
-      "span": "L1-L565",
+      "span": "L1-L606",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "e4eff4e322937a129345237ee951d00fe81022f0b9c3fd8d12e4d7c7b746af3c",
-      "chars": 19645,
+      "body_hash": "d4815df8469407af39c1201258003ef771a6fbf35c0349707a99e1c6d3fed3b8",
+      "chars": 21037,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23786,7 +24012,7 @@
       "name": "_anthropic_content",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L372-L394",
+      "span": "L374-L396",
       "signature": "def _anthropic_content( text: str, reasoning: str, tool_calls: list[dict[str, Any]] ) -> list[dict[str, Any]]",
       "exported": false,
       "origin": "ast",
@@ -23800,7 +24026,7 @@
       "name": "_anthropic_stop_reason",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L368-L369",
+      "span": "L370-L371",
       "signature": "def _anthropic_stop_reason(finish_reason: str, tool_calls: list[dict[str, Any]]) -> str",
       "exported": false,
       "origin": "ast",
@@ -23814,7 +24040,7 @@
       "name": "_anthropic_stream",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L426-L551",
+      "span": "L429-L554",
       "signature": "async def _anthropic_stream( request: MessagesRequest, messages: list[dict[str, Any]], provider: Any, )",
       "exported": false,
       "origin": "ast",
@@ -23828,7 +24054,7 @@
       "name": "_chat_collect",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L196-L238",
+      "span": "L197-L239",
       "signature": "async def _chat_collect( request: ChatCompletionsRequest | MessagesRequest, messages: list[dict[str, Any]], )",
       "exported": false,
       "origin": "ast",
@@ -23838,11 +24064,25 @@
       "crux": null
     },
     {
+      "id": "deploy/api/routes/chat.py#_chat_model_public",
+      "name": "_chat_model_public",
+      "kind": "function",
+      "path": "deploy/api/routes/chat.py",
+      "span": "L562-L576",
+      "signature": "def _chat_model_public(spec) -> dict[str, Any]",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "d82e16b724679e825ef2e7e842e9e8ef7a048535b4a9f705d757a6068eed85c5",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/routes/chat.py#_estimate_prompt_tokens",
       "name": "_estimate_prompt_tokens",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L95-L97",
+      "span": "L96-L98",
       "signature": "def _estimate_prompt_tokens(messages: list[dict[str, Any]]) -> int",
       "exported": false,
       "origin": "ast",
@@ -23856,7 +24096,7 @@
       "name": "_int_usage",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L100-L108",
+      "span": "L101-L109",
       "signature": "def _int_usage(usage: dict[str, Any], *keys: str) -> int | None",
       "exported": false,
       "origin": "ast",
@@ -23870,7 +24110,7 @@
       "name": "_messages_payload",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L64-L65",
+      "span": "L65-L66",
       "signature": "def _messages_payload(messages: list[BaseModel]) -> list[dict[str, Any]]",
       "exported": false,
       "origin": "ast",
@@ -23884,7 +24124,7 @@
       "name": "_normalize_usage",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L111-L131",
+      "span": "L112-L132",
       "signature": "def _normalize_usage( result: dict[str, Any], text: str, messages: list[dict[str, Any]] ) -> dict[str, int]",
       "exported": false,
       "origin": "ast",
@@ -23898,7 +24138,7 @@
       "name": "_openai_chunk",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L180-L193",
+      "span": "L181-L194",
       "signature": "def _openai_chunk( response_id: str, model: str, created: int, delta: dict[str, Any], finish_reason: str | None = None, ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -23912,7 +24152,7 @@
       "name": "_openai_effort",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L68-L69",
+      "span": "L69-L70",
       "signature": "def _openai_effort(value: str | None) -> str",
       "exported": false,
       "origin": "ast",
@@ -23926,7 +24166,7 @@
       "name": "_openai_response",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L241-L261",
+      "span": "L242-L262",
       "signature": "def _openai_response( model: str, text: str, reasoning: str, tool_calls: list[dict[str, Any]], finish_reason: str, usage: dict[str, int], ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -23940,7 +24180,7 @@
       "name": "_openai_stream",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L264-L351",
+      "span": "L265-L352",
       "signature": "async def _openai_stream( request: ChatCompletionsRequest, messages: list[dict[str, Any]], provider: Any, )",
       "exported": false,
       "origin": "ast",
@@ -23954,7 +24194,7 @@
       "name": "_provider_for",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L83-L92",
+      "span": "L84-L93",
       "signature": "def _provider_for(model: str)",
       "exported": false,
       "origin": "ast",
@@ -23968,7 +24208,7 @@
       "name": "_provider_kwargs",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L72-L80",
+      "span": "L73-L81",
       "signature": "def _provider_kwargs(request: BaseModel) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -23982,7 +24222,7 @@
       "name": "_record",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L142-L148",
+      "span": "L143-L149",
       "signature": "async def _record(**kwargs: Any) -> None",
       "exported": false,
       "origin": "ast",
@@ -23996,7 +24236,7 @@
       "name": "_record_args",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L151-L173",
+      "span": "L152-L174",
       "signature": "def _record_args( provider: str, model: str, usage: dict[str, int], duration_ms: float, success: bool, tool_calls_count: int, error: str | None = None, proxy_used: str | None = None, ) -> dict[str, Any]",
       "exported": false,
       "origin": "ast",
@@ -24010,7 +24250,7 @@
       "name": "_result_parts",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L134-L139",
+      "span": "L135-L140",
       "signature": "def _result_parts(result: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], str]",
       "exported": false,
       "origin": "ast",
@@ -24024,7 +24264,7 @@
       "name": "_sse_data",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L176-L177",
+      "span": "L177-L178",
       "signature": "def _sse_data(payload: Any) -> str",
       "exported": false,
       "origin": "ast",
@@ -24038,7 +24278,7 @@
       "name": "AnthropicMessage",
       "kind": "class",
       "path": "deploy/api/routes/chat.py",
-      "span": "L47-L49",
+      "span": "L48-L50",
       "signature": "class AnthropicMessage(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -24048,15 +24288,29 @@
       "crux": null
     },
     {
+      "id": "deploy/api/routes/chat.py#chat_auth_status",
+      "name": "chat_auth_status",
+      "kind": "function",
+      "path": "deploy/api/routes/chat.py",
+      "span": "L591-L597",
+      "signature": "async def chat_auth_status()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d021a6b708d3280659063a7500d7690c0a87ebf03d0cb1847e5e3453606a4908",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/routes/chat.py#chat_completions",
       "name": "chat_completions",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L355-L365",
-      "signature": "async def chat_completions(request: ChatCompletionsRequest)",
+      "span": "L356-L367",
+      "signature": "async def chat_completions(request: ChatCompletionsRequest, raw_request: Request)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "97f12dfa17ca8821686f3429f2d34f12bf7f72f79e43ab9f22a8ab6530460a88",
+      "body_hash": "01e73fea0979562d00fd4cb8d7c1549c852444855648cfe416c11464adc22006",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24066,7 +24320,7 @@
       "name": "ChatCompletionsRequest",
       "kind": "class",
       "path": "deploy/api/routes/chat.py",
-      "span": "L34-L44",
+      "span": "L35-L45",
       "signature": "class ChatCompletionsRequest(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -24080,7 +24334,7 @@
       "name": "ChatMessage",
       "kind": "class",
       "path": "deploy/api/routes/chat.py",
-      "span": "L27-L31",
+      "span": "L28-L32",
       "signature": "class ChatMessage(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -24094,7 +24348,7 @@
       "name": "get_chat_remaining",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L560-L561",
+      "span": "L601-L602",
       "signature": "async def get_chat_remaining()",
       "exported": true,
       "origin": "ast",
@@ -24108,7 +24362,7 @@
       "name": "get_chat_usage",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L555-L556",
+      "span": "L558-L559",
       "signature": "async def get_chat_usage(period: Literal[\"1h\", \"24h\", \"7d\", \"30d\"] = Query(\"24h\"))",
       "exported": true,
       "origin": "ast",
@@ -24118,15 +24372,29 @@
       "crux": null
     },
     {
+      "id": "deploy/api/routes/chat.py#list_chat_models",
+      "name": "list_chat_models",
+      "kind": "function",
+      "path": "deploy/api/routes/chat.py",
+      "span": "L580-L587",
+      "signature": "async def list_chat_models()",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "d725362a22e7ea8db309a8981bda100fea0607a8b30d60cf9c4a7ea6aad6bcce",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "deploy/api/routes/chat.py#messages",
       "name": "messages",
       "kind": "function",
       "path": "deploy/api/routes/chat.py",
-      "span": "L398-L423",
-      "signature": "async def messages(request: MessagesRequest)",
+      "span": "L400-L426",
+      "signature": "async def messages(request: MessagesRequest, raw_request: Request)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "cf9f4b7c69b27ddc04391ddeb92064a8f30aeccf008ed802e5851e84d466bb10",
+      "body_hash": "8414045f70021ee6f8ab46ae1ea8db4c47bf90eee8a102a92b322f27f7af99bc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24136,7 +24404,7 @@
       "name": "MessagesRequest",
       "kind": "class",
       "path": "deploy/api/routes/chat.py",
-      "span": "L52-L61",
+      "span": "L53-L62",
       "signature": "class MessagesRequest(BaseModel)",
       "exported": true,
       "origin": "ast",
@@ -24150,12 +24418,26 @@
       "name": "generate.py",
       "kind": "file",
       "path": "deploy/api/routes/generate.py",
-      "span": "L1-L67",
+      "span": "L1-L76",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "ca8b305e2e621321dbb4c955e41c85d71553fbe08fd80e9960b924a528e493e2",
-      "chars": 2575,
+      "body_hash": "c76d4aeaa185c44a40aff827646149525e94a9dcf948971d5c9a27ff3f075464",
+      "chars": 2910,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/routes/generate.py#_guard",
+      "name": "_guard",
+      "kind": "function",
+      "path": "deploy/api/routes/generate.py",
+      "span": "L28-L30",
+      "signature": "def _guard(request: Request, prompt: str) -> None",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "36e73f01c20d8d3ef20a1bb989701ae5dae32b575c7806f2305355e418ae463f",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24165,11 +24447,11 @@
       "name": "edit_image_route",
       "kind": "function",
       "path": "deploy/api/routes/generate.py",
-      "span": "L58-L59",
-      "signature": "async def edit_image_route(req: EditRequest)",
+      "span": "L66-L68",
+      "signature": "async def edit_image_route(request: Request, req: EditRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "ba5e471e578dc19442eb51a26beb2c61c40a355fcea05c928da5932c0b97a321",
+      "body_hash": "b3eb8843c99a1f1039cd4138692572074a0a76b0e8bad6d335ef50c74fd0bcab",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24179,11 +24461,11 @@
       "name": "generate_async",
       "kind": "function",
       "path": "deploy/api/routes/generate.py",
-      "span": "L46-L54",
-      "signature": "async def generate_async(req: GenerateRequest)",
+      "span": "L53-L62",
+      "signature": "async def generate_async(request: Request, req: GenerateRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "0d5784a99033aa66bfd00742a9d4c3c7ef8e2fe172a58803b1666b302d6535eb",
+      "body_hash": "4cbad41b3a84106a3994a57e0ad5cc3db269ff909edd571395ae32cf16047dbc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24193,11 +24475,11 @@
       "name": "generate_sync",
       "kind": "function",
       "path": "deploy/api/routes/generate.py",
-      "span": "L28-L42",
+      "span": "L34-L49",
       "signature": "async def generate_sync(request: Request, req: GenerateRequest)",
       "exported": true,
       "origin": "ast",
-      "body_hash": "2b955a5670c28d6a126a132de3d4eab0b4b6e2b46010f111d65d2a7c9ac62334",
+      "body_hash": "5ee0ee0459b6d8d7938acb34d4335506926c1a5137144ece21c6d8916b1a16fc",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -24207,7 +24489,7 @@
       "name": "get_edit_task",
       "kind": "function",
       "path": "deploy/api/routes/generate.py",
-      "span": "L63-L67",
+      "span": "L72-L76",
       "signature": "async def get_edit_task(job_id: str)",
       "exported": true,
       "origin": "ast",
@@ -28859,12 +29141,12 @@
       "name": "api.ts",
       "kind": "file",
       "path": "frontend/src/api.ts",
-      "span": "L1-L324",
+      "span": "L1-L354",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "a4739558eef8df63140a9b45ffe78d6f2d831727e9c25d932cf3bd8be6d62167",
-      "chars": 9702,
+      "body_hash": "32feafd40d608eb634463053c648d40e4d2179375ad955e2b35f6c1a6b21996d",
+      "chars": 10631,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -28912,15 +29194,43 @@
       "crux": null
     },
     {
+      "id": "frontend/src/api.ts#authHeaders",
+      "name": "authHeaders",
+      "kind": "function",
+      "path": "frontend/src/api.ts",
+      "span": "L336-L339",
+      "signature": "function authHeaders(): Record<string, string>",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "885787e5a3706a5b40bf27b07037a0930d0562cdb5c22a5c84bf4367538ded0e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "frontend/src/api.ts#ChatAuthStatus",
+      "name": "ChatAuthStatus",
+      "kind": "interface",
+      "path": "frontend/src/api.ts",
+      "span": "L311-L315",
+      "signature": "interface ChatAuthStatus",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "edc3742d4451b4bfef2257772b85b6a820e78872c24cad5cc9c2a3543ac2d6f2",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "frontend/src/api.ts#chatCompletions",
       "name": "chatCompletions",
       "kind": "function",
       "path": "frontend/src/api.ts",
-      "span": "L317-L324",
+      "span": "L347-L354",
       "signature": "async function chatCompletions(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response>",
       "exported": true,
       "origin": "ast",
-      "body_hash": "f5101d32d6be48d3ee6e807b1f4612621d74db428b117ac952c670bf774a03fb",
+      "body_hash": "92743721ab7ad791d5c171e5e89421460acd8ace2fa1429764f686f7c7139db1",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -29038,15 +29348,29 @@
       "crux": null
     },
     {
+      "id": "frontend/src/api.ts#fetchChatAuthStatus",
+      "name": "fetchChatAuthStatus",
+      "kind": "function",
+      "path": "frontend/src/api.ts",
+      "span": "L317-L320",
+      "signature": "async function fetchChatAuthStatus(): Promise<ChatAuthStatus>",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "12a4037da58952dbed96ddc358e2b8912d0f60ad227b40f9ec0fbc7abaab56f3",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "frontend/src/api.ts#fetchChatModels",
       "name": "fetchChatModels",
       "kind": "function",
       "path": "frontend/src/api.ts",
-      "span": "L311-L314",
-      "signature": "async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number }>",
+      "span": "L341-L344",
+      "signature": "async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>",
       "exported": true,
       "origin": "ast",
-      "body_hash": "8c559f3785af57ddf882598d0d98be029e219ad475f4c04aa7a0cab0dbef519c",
+      "body_hash": "795ec0c8302d37d069333f21d8afdb593fddffda4d55ce926df68db7906c09ce",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -29220,6 +29544,20 @@
       "crux": null
     },
     {
+      "id": "frontend/src/api.ts#getStoredApiKey",
+      "name": "getStoredApiKey",
+      "kind": "function",
+      "path": "frontend/src/api.ts",
+      "span": "L325-L327",
+      "signature": "function getStoredApiKey(): string",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c6f0a982aa5fb89f9ede0f749e72d863a15dd8c9b3f77a249b4acb259b6a2b9f",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
       "id": "frontend/src/api.ts#LogEntry",
       "name": "LogEntry",
       "kind": "interface",
@@ -29313,6 +29651,20 @@
       "exported": true,
       "origin": "ast",
       "body_hash": "58da6fc84d1247e82680f99639aef7b36811f366a000ee3acaf63bbe71244f15",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "frontend/src/api.ts#setStoredApiKey",
+      "name": "setStoredApiKey",
+      "kind": "function",
+      "path": "frontend/src/api.ts",
+      "span": "L329-L334",
+      "signature": "function setStoredApiKey(key: string): void",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "56b2cda3865e5f027e3e6431f40ed0f06daaede31ae47365bc9c8411501b7755",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -29949,12 +30301,12 @@
       "name": "ChatPlayground.tsx",
       "kind": "file",
       "path": "frontend/src/pages/ChatPlayground.tsx",
-      "span": "L1-L561",
+      "span": "L1-L624",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "09ba8716215a27fc7ca4d58bc47e8807ce36edcdca3b67bdbe97e91589df034d",
-      "chars": 26162,
+      "body_hash": "b825c19714dd3513da376c9a955e71094c0cfd0e19a7722fce51356f0f60b98e",
+      "chars": 29956,
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -30006,11 +30358,11 @@
       "name": "ChatPlayground",
       "kind": "function",
       "path": "frontend/src/pages/ChatPlayground.tsx",
-      "span": "L219-L560",
+      "span": "L219-L623",
       "signature": "function ChatPlayground()",
       "exported": true,
       "origin": "ast",
-      "body_hash": "82b5e875548d8ebc3d7021b234ca927b582f642f2434918c0e23c4994f112252",
+      "body_hash": "a8583f71c0fbb3a45d59c7f21448aac904544d2533fde2e8a20e24c1ee5ff7fd",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -30020,7 +30372,7 @@
       "name": "processLine",
       "kind": "function",
       "path": "frontend/src/pages/ChatPlayground.tsx",
-      "span": "L303-L342",
+      "span": "L306-L345",
       "signature": "processLine = (line: string)",
       "exported": true,
       "origin": "ast",
@@ -36327,6 +36679,219 @@
       "exported": true,
       "origin": "ast",
       "body_hash": "8bcd28288884ecb6e98635177b2745f78517517e77c62de3bb8f47407655ec3e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py",
+      "name": "test_chat_auth.py",
+      "kind": "file",
+      "path": "tests/test_chat_auth.py",
+      "span": "L1-L127",
+      "signature": null,
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "b8576a769eb79fbc6a86ae0019e615bda14f9d755414ad3b5893d607390282f7",
+      "chars": 4226,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#client_no_auth",
+      "name": "client_no_auth",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L19-L26",
+      "signature": "def client_no_auth(monkeypatch)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "e0276301339c8729dd69b7de19f915138c8b3d4efa0195f36f67a7c2b405b234",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#client_with_auth",
+      "name": "client_with_auth",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L30-L35",
+      "signature": "def client_with_auth(monkeypatch)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f7cb7381d2d82ece4b234e875c6befe64614105eb4440d57ae518b23a5f354ba",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#make_app",
+      "name": "make_app",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L12-L15",
+      "signature": "def make_app(auth_keys: str = \"\") -> FastAPI",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "3c015a0363244052a783741e874835fdc07d6d826d181fa3697ca7b92c19c6cd",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_auth_status_enabled",
+      "name": "test_auth_status_enabled",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L47-L50",
+      "signature": "def test_auth_status_enabled(client_with_auth)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "862d95d44469a81d38387d65e8ed9abb73276cd2a58aa4494e10a0dec7b67b45",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_auth_status_open",
+      "name": "test_auth_status_open",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L40-L44",
+      "signature": "def test_auth_status_open(client_no_auth)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "432cb0c92f3b1416b0abe82ef469832a29279edecc017042da62502ad7de7f8c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_chat_models_lists_tryingopen",
+      "name": "test_chat_models_lists_tryingopen",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L55-L64",
+      "signature": "def test_chat_models_lists_tryingopen(client_no_auth)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "de50a313a5a13841fb4aa0566ed0620737f9c47ecca2bc6712157ef75322c82a",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_accepts_valid_key",
+      "name": "test_completions_accepts_valid_key",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L89-L110",
+      "signature": "def test_completions_accepts_valid_key(client_with_auth, monkeypatch): # mock provider，避免真实上游调用",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "2b13c0432cf74698f9b7a272a6977c36d65dcfef733cf9df4cb1fd0ae6b5ea6e",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_accepts_valid_key.FakeProvider",
+      "name": "FakeProvider",
+      "kind": "class",
+      "path": "tests/test_chat_auth.py",
+      "span": "L91-L94",
+      "signature": "class FakeProvider",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "632022d653a34ed48f0ed3d1639578eb6a09d7f975de199af856b3d609bdf3bf",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_accepts_valid_key.FakeProvider.chat_collect",
+      "name": "chat_collect",
+      "kind": "method",
+      "path": "tests/test_chat_auth.py",
+      "span": "L92-L94",
+      "signature": "async def chat_collect(self, model, messages, **kw)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "c6deb5c98d64f3d9bfd2fdf04fbcc4c0eeb9f05390639418c87fbf1a0a6a1a48",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "FakeProvider"
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed",
+      "name": "test_completions_open_mode_no_key_needed",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L113-L126",
+      "signature": "def test_completions_open_mode_no_key_needed(client_no_auth, monkeypatch)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "8adfe79cbe21383f833d2ef9c52e1a2734ec834a2bbbd29415062c9e4670b29c",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed.FakeProvider",
+      "name": "FakeProvider",
+      "kind": "class",
+      "path": "tests/test_chat_auth.py",
+      "span": "L114-L116",
+      "signature": "class FakeProvider",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "9443aa79e845ad0b19ad2d6f0f9c11b724e3207f4b70828a26d5cd99c0948021",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed.FakeProvider.chat_collect",
+      "name": "chat_collect",
+      "kind": "method",
+      "path": "tests/test_chat_auth.py",
+      "span": "L115-L116",
+      "signature": "async def chat_collect(self, model, messages, **kw)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "80c92eb40cd43ee74a75d30fe0eb8ae870d0494589687fa693bee1e16f98bb07",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null,
+      "owner": "FakeProvider"
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_rejects_missing_key",
+      "name": "test_completions_rejects_missing_key",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L75-L77",
+      "signature": "def test_completions_rejects_missing_key(client_with_auth)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "1f574626f851a84686745917d4ff2bab7ed914e29df6d229d871dd1453610d47",
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "tests/test_chat_auth.py#test_completions_rejects_wrong_key",
+      "name": "test_completions_rejects_wrong_key",
+      "kind": "function",
+      "path": "tests/test_chat_auth.py",
+      "span": "L80-L86",
+      "signature": "def test_completions_rejects_wrong_key(client_with_auth)",
+      "exported": true,
+      "origin": "ast",
+      "body_hash": "f01b286ffd357a06ed9f084495282901a09c8291a90aa1aa25c27b3faf163af8",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -52510,6 +53075,120 @@
       "confidence": "extracted"
     },
     {
+      "source": "api/auth.py",
+      "target": "api/auth.py#_extract_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "api/auth.py#_keys",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "api/auth.py#auth_enabled",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "api/auth.py#check_api_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "api/auth.py#check_chat_rate_limit",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "api/auth.py#guard_chat_request",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": ".",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": ".errors",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "collections",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "fastapi",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "hmac",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "logging",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "threading",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py",
+      "target": "time",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py#auth_enabled",
+      "target": "api/auth.py#_keys",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py#check_api_key",
+      "target": "api/auth.py#_extract_key",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py#check_api_key",
+      "target": "api/auth.py#_keys",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py#guard_chat_request",
+      "target": "api/auth.py#check_api_key",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/auth.py#guard_chat_request",
+      "target": "api/auth.py#check_chat_rate_limit",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "api/base64_store.py",
       "target": "api/base64_store.py#_ensure_dir",
       "relation": "contains",
@@ -58528,6 +59207,12 @@
       "confidence": "extracted"
     },
     {
+      "source": "api/providers/registry.py#Registry.grouped",
+      "target": "api/providers/registry.py#Registry.all_chat_models",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "api/providers/registry.py#Registry.model",
       "target": "api/providers/registry.py#Registry._ensure_booted",
       "relation": "calls",
@@ -58548,6 +59233,12 @@
     {
       "source": "api/providers/registry.py#Registry.provider_summary",
       "target": "api/providers/registry.py#Registry._ensure_booted",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/providers/registry.py#Registry.provider_summary",
+      "target": "api/providers/registry.py#Registry.all_chat_models",
       "relation": "calls",
       "confidence": "extracted"
     },
@@ -59645,25 +60336,19 @@
     },
     {
       "source": "api/request_guard.py",
+      "target": "api/request_guard.py#_limit",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/request_guard.py",
       "target": "api/request_guard.py#check_generate_request",
       "relation": "contains",
       "confidence": "extracted"
     },
     {
       "source": "api/request_guard.py",
-      "target": "api/request_guard.py#check_prompt",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "api/request_guard.py",
       "target": "api/request_guard.py#check_rate_limit",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "api/request_guard.py",
-      "target": "api/request_guard.py#prompt_risk_category",
       "relation": "contains",
       "confidence": "extracted"
     },
@@ -59693,12 +60378,6 @@
     },
     {
       "source": "api/request_guard.py",
-      "target": "re",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "api/request_guard.py",
       "target": "threading",
       "relation": "imports",
       "confidence": "extracted"
@@ -59716,8 +60395,8 @@
       "confidence": "extracted"
     },
     {
-      "source": "api/request_guard.py#check_prompt",
-      "target": "api/request_guard.py#prompt_risk_category",
+      "source": "api/request_guard.py#check_rate_limit",
+      "target": "api/request_guard.py#_limit",
       "relation": "calls",
       "confidence": "extracted"
     },
@@ -60077,6 +60756,12 @@
     },
     {
       "source": "api/routes/chat.py",
+      "target": "api/routes/chat.py#_chat_model_public",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/chat.py",
       "target": "api/routes/chat.py#_estimate_prompt_tokens",
       "relation": "contains",
       "confidence": "extracted"
@@ -60167,6 +60852,12 @@
     },
     {
       "source": "api/routes/chat.py",
+      "target": "api/routes/chat.py#chat_auth_status",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/chat.py",
       "target": "api/routes/chat.py#chat_completions",
       "relation": "contains",
       "confidence": "extracted"
@@ -60197,6 +60888,12 @@
     },
     {
       "source": "api/routes/chat.py",
+      "target": "api/routes/chat.py#list_chat_models",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/chat.py",
       "target": "api/routes/chat.py#messages",
       "relation": "contains",
       "confidence": "extracted"
@@ -60205,6 +60902,12 @@
       "source": "api/routes/chat.py",
       "target": "api/routes/chat.py#MessagesRequest",
       "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/chat.py",
+      "target": "..",
+      "relation": "imports",
       "confidence": "extracted"
     },
     {
@@ -60454,6 +61157,12 @@
       "confidence": "inferred"
     },
     {
+      "source": "api/routes/chat.py#list_chat_models",
+      "target": "api/routes/chat.py#_chat_model_public",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "api/routes/chat.py#messages",
       "target": "api/routes/chat.py#_anthropic_content",
       "relation": "calls",
@@ -60494,6 +61203,12 @@
       "target": "BaseModel",
       "relation": "extends",
       "confidence": "inferred"
+    },
+    {
+      "source": "api/routes/generate.py",
+      "target": "api/routes/generate.py#_guard",
+      "relation": "contains",
+      "confidence": "extracted"
     },
     {
       "source": "api/routes/generate.py",
@@ -60563,6 +61278,12 @@
     },
     {
       "source": "api/routes/generate.py",
+      "target": "..request_guard",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/generate.py",
       "target": "..solver_guard",
       "relation": "imports",
       "confidence": "extracted"
@@ -60595,6 +61316,24 @@
       "source": "api/routes/generate.py",
       "target": "uuid",
       "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/generate.py#edit_image_route",
+      "target": "api/routes/generate.py#_guard",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/generate.py#generate_async",
+      "target": "api/routes/generate.py#_guard",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/routes/generate.py#generate_sync",
+      "target": "api/routes/generate.py#_guard",
+      "relation": "calls",
       "confidence": "extracted"
     },
     {
@@ -63337,6 +64076,120 @@
       "source": "deploy/api/audit.py#AuditLog",
       "target": "deploy/api/audit.py#AuditLog.record",
       "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#_extract_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#_keys",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#auth_enabled",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#check_api_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#check_chat_rate_limit",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "deploy/api/auth.py#guard_chat_request",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": ".",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": ".errors",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "collections",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "fastapi",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "hmac",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "logging",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "threading",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py",
+      "target": "time",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py#auth_enabled",
+      "target": "deploy/api/auth.py#_keys",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py#check_api_key",
+      "target": "deploy/api/auth.py#_extract_key",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py#check_api_key",
+      "target": "deploy/api/auth.py#_keys",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py#guard_chat_request",
+      "target": "deploy/api/auth.py#check_api_key",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/auth.py#guard_chat_request",
+      "target": "deploy/api/auth.py#check_chat_rate_limit",
+      "relation": "calls",
       "confidence": "extracted"
     },
     {
@@ -69382,6 +70235,12 @@
       "confidence": "extracted"
     },
     {
+      "source": "deploy/api/providers/registry.py#Registry.provider_summary",
+      "target": "deploy/api/providers/registry.py#Registry.all_chat_models",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "deploy/api/providers/registry.py#Registry.record_failure",
       "target": "deploy/api/providers/registry.py#Registry.degrade",
       "relation": "calls",
@@ -70475,25 +71334,19 @@
     },
     {
       "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#_limit",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
       "target": "deploy/api/request_guard.py#check_generate_request",
       "relation": "contains",
       "confidence": "extracted"
     },
     {
       "source": "deploy/api/request_guard.py",
-      "target": "deploy/api/request_guard.py#check_prompt",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "deploy/api/request_guard.py",
       "target": "deploy/api/request_guard.py#check_rate_limit",
-      "relation": "contains",
-      "confidence": "extracted"
-    },
-    {
-      "source": "deploy/api/request_guard.py",
-      "target": "deploy/api/request_guard.py#prompt_risk_category",
       "relation": "contains",
       "confidence": "extracted"
     },
@@ -70523,12 +71376,6 @@
     },
     {
       "source": "deploy/api/request_guard.py",
-      "target": "re",
-      "relation": "imports",
-      "confidence": "extracted"
-    },
-    {
-      "source": "deploy/api/request_guard.py",
       "target": "threading",
       "relation": "imports",
       "confidence": "extracted"
@@ -70546,8 +71393,8 @@
       "confidence": "extracted"
     },
     {
-      "source": "deploy/api/request_guard.py#check_prompt",
-      "target": "deploy/api/request_guard.py#prompt_risk_category",
+      "source": "deploy/api/request_guard.py#check_rate_limit",
+      "target": "deploy/api/request_guard.py#_limit",
       "relation": "calls",
       "confidence": "extracted"
     },
@@ -70907,6 +71754,12 @@
     },
     {
       "source": "deploy/api/routes/chat.py",
+      "target": "deploy/api/routes/chat.py#_chat_model_public",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/chat.py",
       "target": "deploy/api/routes/chat.py#_estimate_prompt_tokens",
       "relation": "contains",
       "confidence": "extracted"
@@ -70997,6 +71850,12 @@
     },
     {
       "source": "deploy/api/routes/chat.py",
+      "target": "deploy/api/routes/chat.py#chat_auth_status",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/chat.py",
       "target": "deploy/api/routes/chat.py#chat_completions",
       "relation": "contains",
       "confidence": "extracted"
@@ -71027,6 +71886,12 @@
     },
     {
       "source": "deploy/api/routes/chat.py",
+      "target": "deploy/api/routes/chat.py#list_chat_models",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/chat.py",
       "target": "deploy/api/routes/chat.py#messages",
       "relation": "contains",
       "confidence": "extracted"
@@ -71035,6 +71900,12 @@
       "source": "deploy/api/routes/chat.py",
       "target": "deploy/api/routes/chat.py#MessagesRequest",
       "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/chat.py",
+      "target": "..",
+      "relation": "imports",
       "confidence": "extracted"
     },
     {
@@ -71284,6 +72155,12 @@
       "confidence": "inferred"
     },
     {
+      "source": "deploy/api/routes/chat.py#list_chat_models",
+      "target": "deploy/api/routes/chat.py#_chat_model_public",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
       "source": "deploy/api/routes/chat.py#messages",
       "target": "deploy/api/routes/chat.py#_anthropic_content",
       "relation": "calls",
@@ -71324,6 +72201,12 @@
       "target": "BaseModel",
       "relation": "extends",
       "confidence": "inferred"
+    },
+    {
+      "source": "deploy/api/routes/generate.py",
+      "target": "deploy/api/routes/generate.py#_guard",
+      "relation": "contains",
+      "confidence": "extracted"
     },
     {
       "source": "deploy/api/routes/generate.py",
@@ -71393,6 +72276,12 @@
     },
     {
       "source": "deploy/api/routes/generate.py",
+      "target": "..request_guard",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/generate.py",
       "target": "..solver_guard",
       "relation": "imports",
       "confidence": "extracted"
@@ -71425,6 +72314,24 @@
       "source": "deploy/api/routes/generate.py",
       "target": "uuid",
       "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/generate.py#edit_image_route",
+      "target": "deploy/api/routes/generate.py#_guard",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/generate.py#generate_async",
+      "target": "deploy/api/routes/generate.py#_guard",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/routes/generate.py#generate_sync",
+      "target": "deploy/api/routes/generate.py#_guard",
+      "relation": "calls",
       "confidence": "extracted"
     },
     {
@@ -74867,6 +75774,18 @@
     },
     {
       "source": "frontend/src/api.ts",
+      "target": "frontend/src/api.ts#authHeaders",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts",
+      "target": "frontend/src/api.ts#ChatAuthStatus",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts",
       "target": "frontend/src/api.ts#chatCompletions",
       "relation": "contains",
       "confidence": "extracted"
@@ -74916,6 +75835,12 @@
     {
       "source": "frontend/src/api.ts",
       "target": "frontend/src/api.ts#fetchAccountPool",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts",
+      "target": "frontend/src/api.ts#fetchChatAuthStatus",
       "relation": "contains",
       "confidence": "extracted"
     },
@@ -74999,6 +75924,12 @@
     },
     {
       "source": "frontend/src/api.ts",
+      "target": "frontend/src/api.ts#getStoredApiKey",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts",
       "target": "frontend/src/api.ts#LogEntry",
       "relation": "contains",
       "confidence": "extracted"
@@ -75041,6 +75972,12 @@
     },
     {
       "source": "frontend/src/api.ts",
+      "target": "frontend/src/api.ts#setStoredApiKey",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts",
       "target": "frontend/src/api.ts#Stats",
       "relation": "contains",
       "confidence": "extracted"
@@ -75067,6 +76004,18 @@
       "source": "frontend/src/api.ts",
       "target": "frontend/src/api.ts#ToastType",
       "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts#authHeaders",
+      "target": "frontend/src/api.ts#getStoredApiKey",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "frontend/src/api.ts#chatCompletions",
+      "target": "frontend/src/api.ts#authHeaders",
+      "relation": "calls",
       "confidence": "extracted"
     },
     {
@@ -75581,6 +76530,12 @@
     },
     {
       "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
+      "target": "frontend/src/api.ts#setStoredApiKey",
+      "relation": "calls",
+      "confidence": "inferred"
+    },
+    {
+      "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
       "target": "frontend/src/hooks/useApi.ts#useApi",
       "relation": "calls",
       "confidence": "inferred"
@@ -75629,12 +76584,6 @@
     },
     {
       "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
-      "target": "frontend/src/api.ts#chatCompletions",
-      "relation": "references",
-      "confidence": "extracted"
-    },
-    {
-      "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
       "target": "frontend/src/api.ts#fetchChatModels",
       "relation": "references",
       "confidence": "extracted"
@@ -75647,13 +76596,7 @@
     },
     {
       "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
-      "target": "frontend/src/api.ts#notify",
-      "relation": "references",
-      "confidence": "extracted"
-    },
-    {
-      "source": "frontend/src/pages/ChatPlayground.tsx#ChatPlayground",
-      "target": "frontend/src/hooks/useApi.ts#useApi",
+      "target": "frontend/src/api.ts#getStoredApiKey",
       "relation": "references",
       "confidence": "extracted"
     },
@@ -80833,6 +81776,150 @@
       "source": "tests/test_cache_persist.py",
       "target": "time",
       "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#client_no_auth",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#client_with_auth",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#make_app",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_auth_status_enabled",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_auth_status_open",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_chat_models_lists_tryingopen",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_completions_accepts_valid_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_completions_rejects_missing_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "tests/test_chat_auth.py#test_completions_rejects_wrong_key",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "api",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "api.config.__init__",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "api.providers.base",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "api.providers.registry",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "api.routes.chat",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "fastapi",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "fastapi.testclient",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py",
+      "target": "pytest",
+      "relation": "imports",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#client_no_auth",
+      "target": "tests/test_chat_auth.py#make_app",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#client_with_auth",
+      "target": "tests/test_chat_auth.py#make_app",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#test_completions_accepts_valid_key",
+      "target": "tests/test_chat_auth.py#test_completions_accepts_valid_key.FakeProvider",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#test_completions_accepts_valid_key.FakeProvider",
+      "target": "tests/test_chat_auth.py#test_completions_accepts_valid_key.FakeProvider.chat_collect",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed",
+      "target": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed.FakeProvider",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed.FakeProvider",
+      "target": "tests/test_chat_auth.py#test_completions_open_mode_no_key_needed.FakeProvider.chat_collect",
+      "relation": "contains",
       "confidence": "extracted"
     },
     {
