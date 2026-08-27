@@ -28,6 +28,7 @@ if (-not $py) {
 $cfDir = $null
 $cfCandidates = @(
     Join-Path $PSScriptRoot "cf_solver"
+    Join-Path $PSScriptRoot "deploy\cf_solver"
     Join-Path $PSScriptRoot "..\cf_solver"
     Join-Path $PSScriptRoot "..\GPT自动化注册的项目\cf_solver"
 )

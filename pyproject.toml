@@ -31,4 +31,5 @@ markers = [
     "benchmark: performance benchmark tests (pytest-benchmark).",
     "chaos: fault injection / chaos engineering tests.",
     "integration: end-to-end / cross-component integration tests.",
+    "slow: slow / real-network tests.",
 ]
