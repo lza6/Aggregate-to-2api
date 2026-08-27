@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,6 +42,16 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+
+    # ── 空串环境变量容忍 ──
+    # 部署模板常以 `IF_XXX=` 留空表示「用默认」，pydantic 会因 int/bool 空串崩溃。
+    # 在组装层直接丢弃所有空字符串键 → 交由 Field 默认值或后续自适应接管。
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_blank_env(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if not (isinstance(v, str) and v.strip() == "")}
+        return data
 
     # ── Solver ──
     base_url: str = Field(
@@ -399,9 +410,9 @@ class Settings(BaseSettings):
         4C8G → worker=16, upstream=64, token=16, queue=5000
         8C16G+ → worker=48, upstream=192, token=48, queue=12000
         """
-        explicit = any(
-            os.environ.get(k) for k in ("IF_WORKERS", "IF_UPSTREAM_MAX_INFLIGHT",
-                                         "IF_TOKEN_POOL_SIZE", "IF_MAX_QUEUE")
+        explicit = bool(
+            _env_int("IF_WORKERS") or _env_int("IF_UPSTREAM_MAX_INFLIGHT")
+            or _env_int("IF_TOKEN_POOL_SIZE") or _env_int("IF_MAX_QUEUE")
         )
         if explicit:
             return
