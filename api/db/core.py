@@ -416,7 +416,8 @@ class DB:
                              ("type", "TEXT DEFAULT 'txt'"), ("model", "TEXT DEFAULT 'default'"),
                              ("upstream_task_id", "TEXT"),
                              ("day", "TEXT"), ("month", "TEXT"),
-                             ("proxy_used", "TEXT")):
+                             ("proxy_used", "TEXT"),
+                             ("client_ip", "TEXT")):
                 if col not in cols:
                     await conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {ddl}")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_created_status ON requests(created_at, status)")
@@ -424,7 +425,8 @@ class DB:
 
     # ── 写 ────────────────────────────────────────
     async def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool,
-                             type_: str = "txt", model: str = "default") -> None:
+                             type_: str = "txt", model: str = "default",
+                             client_ip: str | None = None) -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.create_request",
@@ -435,11 +437,19 @@ class DB:
             dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
             day = dt.strftime("%Y-%m-%d")
             month = dt.strftime("%Y-%m")
-            await self._enqueue_write(
-                "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at, type, model, day, month)"
-                " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
-                (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month),
-            )
+            if client_ip:
+                await self._enqueue_write(
+                    "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at,"
+                    " type, model, day, month, client_ip)"
+                    " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
+                    (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month, client_ip),
+                )
+            else:
+                await self._enqueue_write(
+                    "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at, type, model, day, month)"
+                    " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+                    (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month),
+                )
 
     async def mark_started(self, task_id: str) -> None:
         tracer = get_tracer()

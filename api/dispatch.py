@@ -242,7 +242,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
 
     task_id = str(uuid.uuid4())
-    await db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model)
+    await db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model,
+                            client_ip=getattr(req, "client_ip", None))
     t0 = time.monotonic()
     spec = registry.model(model)
 

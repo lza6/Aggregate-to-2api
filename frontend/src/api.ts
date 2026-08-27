@@ -38,6 +38,7 @@ export interface Task {
   duration_sec: number | null;
   created_at: number;
   model: string;
+  client_ip?: string | null;
 }
 
 export interface ProviderSummary {

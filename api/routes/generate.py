@@ -41,6 +41,8 @@ async def generate_sync(request: Request, req: GenerateRequest):
     _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
+    # v4.4.3: 服务端回填调用方真实 IP（用于防刷取证，客户端无需传）
+    req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
     try:
         task_id = await _dispatch_generate(req)
     except QueueFull as e:
@@ -60,6 +62,8 @@ async def generate_async(request: Request, req: GenerateRequest):
     _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
+    # v4.4.3: 服务端回填调用方真实 IP
+    req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
     try:
         task_id = await _dispatch_generate(req)
     except QueueFull as e:

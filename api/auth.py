@@ -110,3 +110,15 @@ def guard_chat_request(request: Request) -> None:
 def guard_generate_request(request: Request) -> None:
     """生图/图生图端点守卫：与聊天端点一致要求 Key（未配置时开放）。"""
     check_api_key(request, scope="generate")
+    # 把真实客户端 IP 挂到请求 state，供 dispatch 落库记录调用者（防刷取证）
+    request.state.client_ip = _client_ip_of(request)
+
+
+def _client_ip_of(request: Request) -> str:
+    """提取真实客户端 IP（优先 X-Forwarded-For 首段，回退 socket）。"""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        first = xff.split(",", 1)[0].strip()
+        if first and not first.lower().startswith(("127.", "10.", "192.168.", "::1", "unknown")):
+            return first
+    return (request.client.host if request.client else "unknown")

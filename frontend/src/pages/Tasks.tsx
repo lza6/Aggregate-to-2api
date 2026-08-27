@@ -70,6 +70,7 @@ export function TasksPage() {
                 <th>目标模型</th>
                 <th style={{ minWidth: 260 }}>提示词 (Prompt)</th>
                 <th>执行耗时</th>
+                <th>调用方 IP</th>
                 <th>创建时间</th>
               </tr>
             </thead>
@@ -94,6 +95,11 @@ export function TasksPage() {
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
                       {t.duration_sec != null ? `${t.duration_sec.toFixed(1)}s` : '-'}
                     </span>
+                  </td>
+                  <td>
+                    <code className="task-ip-pill" title={t.client_ip ?? '未记录'}>
+                      {t.client_ip ?? '—'}
+                    </code>
                   </td>
                   <td style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
                     {t.created_at ? new Date(t.created_at * 1000).toLocaleString() : '-'}
@@ -145,6 +151,18 @@ export function TasksPage() {
           white-space: nowrap;
           font-size: 12.5px;
           color: var(--text-primary);
+        }
+
+        .task-ip-pill {
+          display: inline-block;
+          font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 11px;
+          color: var(--primary-500);
+          background: var(--primary-50);
+          border: 1px solid var(--primary-100);
+          padding: 2px 7px;
+          border-radius: var(--radius-sm);
+          white-space: nowrap;
         }
       `}</style>
     </div>

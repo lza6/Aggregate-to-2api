@@ -121,4 +121,5 @@ def task_to_public(t: dict) -> dict:
         "model": t.get("model", "default"),
         "prompt": t.get("prompt"),
         "aspect_ratio": t.get("aspect_ratio"),
+        "client_ip": t.get("client_ip"),
     }

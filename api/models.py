@@ -19,6 +19,9 @@ class GenerateRequest(BaseModel):
                                   description="优先级：0=admin, 1=paid, 2=normal；不传默认 normal")
     idempotency_key: str | None = Field(None, max_length=128,
                                          description="幂等 key：同一 key 重复提交返回相同 task_id（IF_IDEMPOTENCY_ENABLED=1 时生效）")
+    # v4.4.3: 调用方真实 IP（服务端从 X-Forwarded-For / socket 自动填充，客户端无需传）
+    client_ip: str | None = Field(None, max_length=64,
+                                   description="调用方 IP（服务端自动回填，客户端无需传）")
 
 
 class EditRequest(BaseModel):
