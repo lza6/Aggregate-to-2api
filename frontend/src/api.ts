@@ -27,7 +27,7 @@ export interface Stats {
     rejected_total: number;
     token_pools: Record<string, { key: string; size: number; target: number; idle: boolean }>;
   };
-  base64_gc: {
+  base64_gc?: {
     total_files: number; total_gb: number;
     hot_files: number; hot_gb: number;
     cold_files: number; cold_gb: number;

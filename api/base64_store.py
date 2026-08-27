@@ -140,7 +140,11 @@ def gc_stats() -> dict:
     total_bytes = hot_bytes = cold_bytes = 0
     if os.path.isdir(d):
         now = time.time()
-        for fname in os.listdir(d):
+        try:
+            names = os.listdir(d)
+        except OSError:
+            names = []  # 目录存在但不可读（权限/瞬时错误）→ 视为空，避免 /v1/stats 500
+        for fname in names:
             fpath = os.path.join(d, fname)
             try:
                 if not os.path.isfile(fpath):

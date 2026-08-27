@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
 import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, notify } from '../api';
 import { StatCard } from '../components/StatCard';
-import { BarChart } from '../components/BarChart';
-import { Gallery } from '../components/Gallery';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus } from '../api';
@@ -10,6 +8,12 @@ import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUs
 const PWD_KEY = 'galleryPwd';
 
 declare global { interface Window { __galleryChangePassword?: (pwd: string) => void } }
+
+// P3-6: Gallery 亦为懒加载（图片列表较重），与 recharts 一并拆出主包
+const LazyGallery = lazy(() => import('../components/Gallery').then(m => ({ default: m.Gallery })));
+
+// P3-6: recharts 重依赖懒加载 —— 图表仅在数据就绪后按需加载，主包不再静态携带 recharts
+const LazyBarChart = lazy(() => import('../components/BarChart').then(m => ({ default: m.BarChart })));
 
 /** Token 数短格式化（1234567 -> 1.2M / 3456 -> 3.5k） */
 function formatTokens(n: number): string {
@@ -144,14 +148,14 @@ export function Dashboard() {
         />
         <StatCard
           label="base64 缓存"
-          value={stats?.base64_gc ? `${stats.base64_gc.total_files} 文件 / ${stats.base64_gc.total_gb} GB` : '-'}
+          value={stats?.base64_gc ? `${stats.base64_gc.total_files} 文件 / ${stats.base64_gc.total_gb.toFixed(2)} GB` : '-'}
           sub={stats?.base64_gc ? `热 ${stats.base64_gc.hot_files} · 冷 ${stats.base64_gc.cold_files} · 配额 ${stats.base64_gc.usage_pct}%` : undefined}
           icon="🧊"
         />
         <StatCard
           label="待清理"
           value={stats?.base64_gc ? `${stats.base64_gc.pending_cleanup_count} 个` : '-'}
-          sub={stats?.base64_gc ? `预计释放 ${stats.base64_gc.pending_cleanup_gb} GB` : undefined}
+          sub={stats?.base64_gc ? `预计释放 ${stats.base64_gc.pending_cleanup_gb.toFixed(2)} GB` : undefined}
           color={stats?.base64_gc && stats.base64_gc.pending_cleanup_count > 0 ? 'var(--warning, #e0a800)' : 'var(--success)'}
           icon="🗑️"
         />
@@ -208,7 +212,9 @@ export function Dashboard() {
       {/* 趋势图表区 */}
       {dailyChart.length > 0 ? (
         <div className="section-block">
-          <BarChart data={dailyChart} title="近 14 日出图总量趋势" height={230} />
+          <Suspense fallback={<div className="chart-fallback">图表加载中…</div>}>
+            <LazyBarChart data={dailyChart} title="近 14 日出图总量趋势" height={230} />
+          </Suspense>
         </div>
       ) : (
         <div className="section-block tf-card empty-chart-placeholder">
@@ -222,14 +228,16 @@ export function Dashboard() {
 
       {chatModelChart.length > 0 && (
         <div className="section-block">
-          <BarChart
-            data={chatModelChart}
-            title="近 24h 各模型调用分布"
-            sub="按聊天模型统计调用次数"
-            unit="次"
-            metricLabel="调用量"
-            height={170}
-          />
+          <Suspense fallback={<div className="chart-fallback">图表加载中…</div>}>
+            <LazyBarChart
+              data={chatModelChart}
+              title="近 24h 各模型调用分布"
+              sub="按聊天模型统计调用次数"
+              unit="次"
+              metricLabel="调用量"
+              height={170}
+            />
+          </Suspense>
         </div>
       )}
 
@@ -311,7 +319,9 @@ export function Dashboard() {
             <span className="section-sub">实时生成的图片缩略图及耗时元数据</span>
           </div>
         </div>
-        <Gallery password={galleryPwd} />
+        <Suspense fallback={<div className="gallery-fallback">作品加载中…</div>}>
+          <LazyGallery password={galleryPwd} />
+        </Suspense>
       </div>
 
       {/* MAB-EWMA 自适应智能路由 */}
@@ -418,6 +428,8 @@ export function Dashboard() {
       </div>
 
       <style>{`
+        .chart-fallback { padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
+        .gallery-fallback { padding: 32px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
         .dashboard-container {
           display: flex;
           flex-direction: column;

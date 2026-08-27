@@ -201,3 +201,17 @@ def test_gc_stats_usage_pct(monkeypatch, tmp_path):
     _make_file(tmp_path, "a.png", _GIB // 2)  # 0.5GB
     s = store.gc_stats()
     assert s["usage_pct"] == pytest.approx(50.0, rel=1e-6)
+
+
+def test_gc_stats_unreadable_dir_does_not_raise(monkeypatch, tmp_path):
+    """目录存在但不可读（os.listdir 抛 OSError）→ 返回全零，不向 /v1/stats 抛 500。"""
+    _use_dir(monkeypatch, tmp_path)
+    _make_file(tmp_path, "a.png", 1000, time.time())
+    # 无法在非特权进程可靠触发真实目录权限失败，直接 patch os.listdir 抛
+    # PermissionError，验证 gc_stats 内部容错（monkeypatch 自动还原）。
+    def _deny(_p):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("os.listdir", _deny)
+    s = store.gc_stats()
+    assert s["total_files"] == 0 and s["hot_files"] == 0 and s["cold_files"] == 0
