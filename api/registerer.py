@@ -524,22 +524,32 @@ class NanobananaRegisterer:
     async def checkin(self, acc: dict) -> int | None:
         """每日签到（Next.js Server Action claimDailyCheckinAction），返回新余额。
 
-        关键：better-auth 会话与「注册出口 IP」绑定（session_data.ipAddress）。
-        签到必须复用该同一出口 IP，否则 Server Action 被上游拒（返回 HTML 错误页，
-        claimed=False）。故不再随机换免费代理，而是优先用 acc['register_ip'] 固定
-        该账号的签到出口；无 register_ip（如老数据/直连注册）时退回直连/config.PROXY。
+        协议级路径（与注册一致，用户已用真实浏览器验证可行）：
+        1. 先用 cf 求解 + /api/auth/sign-in/email 重新登录，拿【新鲜】better-auth 会话
+           （会话绑定本次出口 IP，不再依赖可能失效/异 IP 的旧 cookie）
+        2. 用新会话查 daily-checkin/status
+        3. 若需 captcha 则同一出口解 turnstile
+        4. 调 claimDailyCheckinAction 领取
+        关键：登录与签到必须用同一出口（config.PROXY 或直连），否则会话 IP 不匹配被拒。
         """
         if MOCK_REGISTER:
             return int(acc.get("credits", 0)) + 4
-        # 固定使用会话绑定的出口 IP（register_ip），不再随机轮换免费代理
-        # _ip_to_proxy 是模块级函数（同文件 252 行），不是类方法
-        self.proxy = _ip_to_proxy(acc.get("register_ip") or "")
-        self._ensure_client()
-        cookie = acc.get("cookie")
-        if not cookie:
-            return None
+        email = acc.get("email")
+        password = acc.get("password")
+        # 出口统一：直连/服务器出口（config.PROXY 已空 → 直连），与会话绑定 IP 一致
+        self._ensure_client(email)
         try:
-            # 1) 查状态：是否需要 captcha
+            # 步骤 0：重新登录拿新鲜会话（cf 求解 + sign-in 端点）
+            fresh = await self.re_login(email, password) if password else None
+            if fresh and fresh.get("cookie"):
+                cookie = fresh["cookie"]
+            else:
+                # 退路：沿用旧 cookie（但大概率因 IP/过期被拒，仅作最后尝试）
+                cookie = acc.get("cookie")
+            if not cookie:
+                return None
+
+            # 步骤 1：查状态
             st = await _th(
                 self.client.get,
                 f"{self.base}/api/credits/daily-checkin/status",
@@ -554,7 +564,7 @@ class NanobananaRegisterer:
                 )
                 return int((bal.json() or {}).get("credits", 0))
 
-            # 2) Server Action 领取
+            # 步骤 2：Server Action 领取（需要 captcha 则同一出口解）
             body = [{"captchaToken": ""}]
             if data.get("requiresCaptcha"):
                 try:
@@ -563,8 +573,7 @@ class NanobananaRegisterer:
                         self.turnstile_page,
                         self.SITEKEY,
                         config.TURNSTILE_TIMEOUT,
-                        # 与 register_one 保持一致：传入当前出口代理，避免签到求解直连导致 IP 分散/风控
-                        proxy=self.proxy or config.PROXY,
+                        proxy=config.PROXY,   # 同一出口，与登录一致
                     )
                     body = [{"captchaToken": captcha}]
                 except Exception:
