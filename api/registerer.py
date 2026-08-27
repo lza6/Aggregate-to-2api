@@ -221,7 +221,7 @@ async def _th(fn, *a, **k):
 
 
 def _extract_code(mail: dict | None) -> str | None:
-    """从验证码邮件提取 6 位数字。"""
+    """从验证码邮件提取 6 位数字（同步正则快路径，供测试与历史调用）。"""
     if not mail:
         return None
     blob = str(mail.get("bodyPreview") or "") + str(mail.get("bodyHtml") or "") + str(mail.get("subject") or "")
@@ -230,7 +230,7 @@ def _extract_code(mail: dict | None) -> str | None:
 
 
 def _extract_verify_link(mail: dict | None) -> str | None:
-    """从验证邮件提取 verify-email 链接。"""
+    """从验证邮件提取 verify-email 链接（同步正则快路径，供测试与历史调用）。"""
     if not mail:
         return None
     blob = str(mail.get("bodyHtml") or "") + str(mail.get("bodyPreview") or "")
@@ -247,6 +247,39 @@ def _proxy_host(proxy: str | None) -> str:
         s = s.split("@", 1)[-1]
     host = s.split(":", 1)[0]
     return host
+
+
+def _ip_to_proxy(ip_or_proxy: str) -> str | None:
+    """把 register_ip（可能是裸 IP 或完整代理串）还原成签到可用出口。
+
+    优先从代理池里找一个 host 与 register_ip 匹配的条目（地址复用，token 绑定同 IP）；
+    匹配不到时返回 register_ip 本身（若是完整代理则原样，若是裸 IP 则直连 = None）。
+    """
+    ip_or_proxy = (ip_or_proxy or "").strip()
+    if not ip_or_proxy:
+        return None
+    # 已是完整代理（含 :// 或 host:port）
+    if "://" in ip_or_proxy or ":" in ip_or_proxy.replace("://", ""):
+        return ip_or_proxy
+    # 裸 IP：在池里找 host 相同者（若存在），否则直连
+    try:
+        from .proxy_pool import proxy_pool
+        host_target = ip_or_proxy
+        for entry in proxy_pool.entries:
+            if _proxy_host(entry.url) == host_target:
+                return entry.url
+    except Exception:
+        pass
+    return None
+
+
+def _mail_ai_extract_enabled() -> bool:
+    """AI 兜底邮件提取总开关：IF_MAIL_AI_EXTRACT=1 且能拿到配置。"""
+    try:
+        from .mail_extract import _ai_enabled
+        return _ai_enabled()
+    except Exception:
+        return False
 
 
 def _gen_password() -> str:
@@ -401,6 +434,10 @@ class NanobananaRegisterer:
             # 阶段 4: 收取验证链接（如超时仍允许尝试直接登录）
             mail = await email_pool.wait_for_mail(email, session.email_state, 90.0, "Verify")
             link = _extract_verify_link(mail)
+            if not link and _mail_ai_extract_enabled():
+                # AI 兜底：正则未命中时尝试 LLM 提取（默认关闭，失败返回 None 不阻塞）
+                from .mail_extract import extract_verify_link as _ai_extract_link
+                link = await _ai_extract_link(mail, ai=True)
             if not link:
                 log.info("nanobanana %s 未收到验证链接，尝试直接登录", email)
             else:
@@ -485,13 +522,17 @@ class NanobananaRegisterer:
             return None
 
     async def checkin(self, acc: dict) -> int | None:
-        """每日签到（Next.js Server Action claimDailyCheckinAction），返回新余额。"""
+        """每日签到（Next.js Server Action claimDailyCheckinAction），返回新余额。
+
+        关键：better-auth 会话与「注册出口 IP」绑定（session_data.ipAddress）。
+        签到必须复用该同一出口 IP，否则 Server Action 被上游拒（返回 HTML 错误页，
+        claimed=False）。故不再随机换免费代理，而是优先用 acc['register_ip'] 固定
+        该账号的签到出口；无 register_ip（如老数据/直连注册）时退回直连/config.PROXY。
+        """
         if MOCK_REGISTER:
             return int(acc.get("credits", 0)) + 4
-        # 签到走独立出口代理：从 proxy_pool 获取一个新代理并绑定到 self.proxy，
-        # 避免沿用上次注册残留的代理或直连。
-        if not MOCK_REGISTER:
-            self.proxy = await proxy_pool.acquire()
+        # 固定使用会话绑定的出口 IP（register_ip），不再随机轮换免费代理
+        self.proxy = self._ip_to_proxy(acc.get("register_ip") or "")
         self._ensure_client()
         cookie = acc.get("cookie")
         if not cookie:
