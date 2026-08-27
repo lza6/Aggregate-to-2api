@@ -122,6 +122,56 @@ def clean_expired(ttl: float) -> int:
     return deleted
 
 
+def gc_stats() -> dict:
+    """统计 base64 缓存目录的 GC 水位（P3-2 可观测闭环）。
+
+    按 mtime 区分：
+    - hot：mtime 在 TTL 内（未过期，视为"热"数据）
+    - cold：mtime 超过 TTL（待清理，视为"冷"数据）
+
+    返回字段：
+    total_files / total_gb / hot_files / hot_gb / cold_files / cold_gb /
+    quota_gb / usage_pct / pending_cleanup_count / pending_cleanup_gb
+    """
+    d = os.path.abspath(config.IF_BASE64_DIR)
+    ttl = config.IF_BASE64_FILE_TTL
+    quota_gb = config.IF_IMG_MAX_GB
+    total_files = hot_files = cold_files = 0
+    total_bytes = hot_bytes = cold_bytes = 0
+    if os.path.isdir(d):
+        now = time.time()
+        for fname in os.listdir(d):
+            fpath = os.path.join(d, fname)
+            try:
+                if not os.path.isfile(fpath):
+                    continue
+                size = os.path.getsize(fpath)
+                total_files += 1
+                total_bytes += size
+                if now - os.path.getmtime(fpath) > ttl:
+                    cold_files += 1
+                    cold_bytes += size
+                else:
+                    hot_files += 1
+                    hot_bytes += size
+            except OSError:
+                continue
+    _gib = 1024 ** 3
+    usage_pct = (total_bytes / (quota_gb * _gib) * 100) if quota_gb > 0 else 0.0
+    return {
+        "total_files": total_files,
+        "total_gb": total_bytes / _gib,
+        "hot_files": hot_files,
+        "hot_gb": hot_bytes / _gib,
+        "cold_files": cold_files,
+        "cold_gb": cold_bytes / _gib,
+        "quota_gb": quota_gb,
+        "usage_pct": usage_pct,
+        "pending_cleanup_count": cold_files,
+        "pending_cleanup_gb": cold_bytes / _gib,
+    }
+
+
 # ── S-14: 配额保护 ──────────────────────────────────
 
 

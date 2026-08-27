@@ -143,6 +143,19 @@ export function Dashboard() {
           icon="🛡️"
         />
         <StatCard
+          label="base64 缓存"
+          value={stats?.base64_gc ? `${stats.base64_gc.total_files} 文件 / ${stats.base64_gc.total_gb} GB` : '-'}
+          sub={stats?.base64_gc ? `热 ${stats.base64_gc.hot_files} · 冷 ${stats.base64_gc.cold_files} · 配额 ${stats.base64_gc.usage_pct}%` : undefined}
+          icon="🧊"
+        />
+        <StatCard
+          label="待清理"
+          value={stats?.base64_gc ? `${stats.base64_gc.pending_cleanup_count} 个` : '-'}
+          sub={stats?.base64_gc ? `预计释放 ${stats.base64_gc.pending_cleanup_gb} GB` : undefined}
+          color={stats?.base64_gc && stats.base64_gc.pending_cleanup_count > 0 ? 'var(--warning, #e0a800)' : 'var(--success)'}
+          icon="🗑️"
+        />
+        <StatCard
           label="Worker 集群健康"
           value={diag ? `${diag.workers.alive} / ${diag.workers.total}` : '…'}
           color={diag && diag.workers.stale_count > 0 ? 'var(--danger)' : 'var(--success)'}

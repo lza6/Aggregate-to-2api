@@ -146,7 +146,21 @@ def test_completions_open_mode_no_key_needed(client_no_auth, monkeypatch):
 
 def test_chat_router_is_mounted_on_api_router():
     from api.routes import api_router
-    mounted_paths = {getattr(r, "path", "") for r in api_router.routes}
+
+    def _flatten(router):
+        """递归展平 FastAPI 0.141 的 _IncludedRouter（嵌套 API Router）。"""
+        out: set[str] = set()
+        for r in router.routes:
+            orig = getattr(r, "original_router", None)
+            if orig is not None:
+                out |= _flatten(orig)
+            else:
+                p = getattr(r, "path", "")
+                if p:
+                    out.add(p)
+        return out
+
+    mounted_paths = _flatten(api_router)
     assert "/v1/chat/completions" in mounted_paths
     assert "/v1/chat/models" in mounted_paths
     assert "/v1/messages" in mounted_paths

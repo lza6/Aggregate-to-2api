@@ -210,6 +210,11 @@ class E2ERunner:
         self.check("统计 HTTP 200", r["status"] == 200)
         j = r.get("json") or {}
         self.check("统计含 total_requests", "total_requests" in j)
+        # P3-2: GC 可观测闭环
+        gc = j.get("base64_gc") or {}
+        self.check("统计含 base64_gc", "base64_gc" in j)
+        self.check("base64_gc 含 pending_cleanup_count",
+                   "pending_cleanup_count" in gc)
         r = self.get("/v1/gallery")
         self.check("画廊 HTTP 200", r["status"] == 200)
         r = self.get("/v1/errors")

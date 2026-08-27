@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3616,
-  "edgeCount": 6540,
+  "nodeCount": 3626,
+  "edgeCount": 6546,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3616,
+  "totalCount": 3626,
   "readyCount": 0,
   "staleCount": 0,
-  "dirty": false,
+  "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-27T10:18:41.085Z",
-  "lastFile": "pyproject.toml"
+  "syncedAt": "2026-08-27T10:03:28.824Z",
+  "lastFile": "ChatPlayground.tsx"
 }

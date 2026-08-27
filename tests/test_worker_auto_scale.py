@@ -251,7 +251,7 @@ async def test_resume_from_queue_without_db_returns_zero(tmp_db):
     """未启用持久化队列（_queue_db=None）→ 恢复 0 条。"""
     from api.worker import Engine
     engine = Engine(tmp_db)
-    assert engine._resume_from_queue() == 0
+    assert await engine._resume_from_queue() == 0
 
 
 @pytest.mark.asyncio

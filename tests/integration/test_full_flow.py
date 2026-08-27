@@ -76,6 +76,12 @@ class TestFullFlow:
         assert "processing" in body
         assert "daily" in body
         assert "monthly" in body
+        # P3-2: GC 可观测闭环
+        assert "base64_gc" in body
+        gc = body["base64_gc"]
+        for k in ("total_files", "hot_files", "cold_files",
+                  "pending_cleanup_count", "quota_gb", "usage_pct"):
+            assert k in gc, f"base64_gc 缺少字段 {k}"
 
     async def test_gallery_endpoint(self, app_with_mocks):
         """画廊端点返回 items 和 count。"""

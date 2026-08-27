@@ -290,6 +290,27 @@ export function ChatPlayground() {
     URL.revokeObjectURL(url);
   }, [messages]);
 
+  // P3-3: 导出完整会话为 JSON（保留 role/reasoning/toolCalls/usage/durationMs 全字段）
+  const exportJson = useCallback(() => {
+    if (messages.length === 0) {
+      notify('当前没有可导出的对话', 'info');
+      return;
+    }
+    const payload = {
+      exported_at: new Date().toISOString(),
+      model,
+      effort,
+      messages,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `chat-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [messages, model, effort]);
+
   const consumeSse = useCallback(async (
     response: Response,
     onDelta: (delta: { content?: string; reasoning?: string; toolCall?: string }) => void,
@@ -514,6 +535,7 @@ curl -X POST ${window.location.origin}/v1/messages \\
         <div className="chat-control-actions">
           <button className="tf-btn tf-btn-secondary tf-btn-sm" onClick={clearConversation} disabled={messages.length === 0}>清空对话</button>
           <button className="tf-btn tf-btn-secondary tf-btn-sm" onClick={exportMarkdown} disabled={messages.length === 0}>导出 Markdown</button>
+          <button className="tf-btn tf-btn-secondary tf-btn-sm" onClick={exportJson} disabled={messages.length === 0}>导出 JSON</button>
         </div>
       </section>
 

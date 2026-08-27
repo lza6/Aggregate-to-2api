@@ -114,7 +114,7 @@ class TestPrefetchLoopIntegration:
             solves.append(("solve", time.monotonic()))
             return "mock-token", 0.5  # 快速求解
 
-        monkeypatch.setattr("api.worker.turnstile_client.solve_turnstile", _fake_solve)
+        monkeypatch.setattr("api.turnstile_client.solve_turnstile", _fake_solve)
 
         task = asyncio.create_task(pool.prefetch_loop())
         await asyncio.sleep(0.2)  # 等 solve 完成 + 进入 sleep
@@ -141,7 +141,7 @@ class TestPrefetchLoopIntegration:
             solve_count += 1
             return "mock-token", 0.5
 
-        monkeypatch.setattr("api.worker.turnstile_client.solve_turnstile", _fake_solve)
+        monkeypatch.setattr("api.turnstile_client.solve_turnstile", _fake_solve)
 
         t0 = time.monotonic()
         task = asyncio.create_task(pool.prefetch_loop())
@@ -170,7 +170,9 @@ class TestPrefetchLoopIntegration:
 
         # mock 掉 _solve_turnstile 让它返回一个 mock token
         monkeypatch.setattr(turnstile_client, "_solve_turnstile", _fake_solve)
-        monkeypatch.setattr(turnstile_client.solver_guard, "record_success", lambda d: None)
+        # v4.2 回归：solver_guard.record_success 现有签名带 node_url，允许任意 kwargs 不破坏旧测试
+        monkeypatch.setattr(turnstile_client.solver_guard, "record_success",
+                            lambda d, **kw: None)
 
         result = await turnstile_client.solve_turnstile(
             "http://mock", "http://test.com", "sitekey", 30,

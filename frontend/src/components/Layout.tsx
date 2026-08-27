@@ -56,6 +56,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">在线聊天</span>
             <span className="nav-pip" />
           </NavLink>
+          <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+            <span className="nav-icon">🩺</span>
+            <span className="nav-text">健康体检</span>
+            <span className="nav-pip" />
+          </NavLink>
         </nav>
 
         {/* Sidebar Footer */}

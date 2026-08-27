@@ -163,10 +163,12 @@ class _TokenPool:
         return 1
 
     def _get_prefetch_delay(self) -> float:
-        """计算预取延迟：自适应延迟。"""
+        """计算预取延迟：固定配置优先，否则自适应（EMA 指数衰减）。"""
         if config.IF_PREFETCH_AFTER_SOLVE_DELAY > 0:
             return config.IF_PREFETCH_AFTER_SOLVE_DELAY
-        return max(0.2, min(self._ema * 0.3, 2.0))
+        # v4.2 回归：测试与旧版注释均约定“EMA 的一半”语义。
+        # 原实现 *0.3 与配置文档 IF_PREFETCH_EMA_HALF 命名冲突，恢复为 *0.5。
+        return max(0.5, min(self._ema * 0.5, 3.0))
 
     async def prefetch_loop(self) -> None:
         """双缓冲预热循环：依次填满 Active 与 Standby 队列。"""

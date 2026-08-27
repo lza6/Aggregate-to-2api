@@ -118,6 +118,7 @@ async def get_stats():
         await gallery_cache.set("stats:monthly:12", monthly)
     live = engine.snapshot()
     ssnap = solver_guard.snapshot()
+    from .. import base64_store  # noqa: PLC0415
     return {
         **overview,
         "processing": live["processing"],
@@ -128,6 +129,7 @@ async def get_stats():
         "uptime_human": _uptime_human(live["uptime_seconds"]),
         "daily": daily,
         "monthly": monthly,
+        "base64_gc": base64_store.gc_stats(),
         "solver": {
             "status": ssnap["solver_status"],
             "solve_total": ssnap["solve_total"],

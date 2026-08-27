@@ -13,10 +13,10 @@
 - test_delay_with_fixed_config · method · L72-L76 — def test_delay_with_fixed_config(self, monkeypatch)
 - test_delay_with_fixed_config_zero · method · L78-L84 — def test_delay_with_fixed_config_zero(self, monkeypatch)
 - test_delay_respects_ema_change · method · L86-L93 — def test_delay_respects_ema_change(self)
-- TestPrefetchLoopIntegration · class · L96-L183 — class TestPrefetchLoopIntegration
+- TestPrefetchLoopIntegration · class · L96-L185 — class TestPrefetchLoopIntegration
 - test_prefetch_loop_uses_adaptive_delay · method · L100-L129 — async def test_prefetch_loop_uses_adaptive_delay(self, monkeypatch)
 - _fake_solve · function · L111-L115 — async def _fake_solve(*a, **kw)
 - test_prefetch_loop_fixed_delay · method · L132-L161 — async def test_prefetch_loop_fixed_delay(self, monkeypatch)
 - _fake_solve · function · L139-L142 — async def _fake_solve(*a, **kw)
-- test_solve_turnstile_returns_duration · method · L164-L183 — async def test_solve_turnstile_returns_duration(self, monkeypatch)
+- test_solve_turnstile_returns_duration · method · L164-L185 — async def test_solve_turnstile_returns_duration(self, monkeypatch)
 - _fake_solve · function · L168-L169 — async def _fake_solve(*a, **kw)

@@ -27,6 +27,13 @@ export interface Stats {
     rejected_total: number;
     token_pools: Record<string, { key: string; size: number; target: number; idle: boolean }>;
   };
+  base64_gc: {
+    total_files: number; total_gb: number;
+    hot_files: number; hot_gb: number;
+    cold_files: number; cold_gb: number;
+    quota_gb: number; usage_pct: number;
+    pending_cleanup_count: number; pending_cleanup_gb: number;
+  };
 }
 
 export interface Task {
@@ -245,6 +252,45 @@ export interface RoutingNode {
 
 export async function fetchRoutingRecords(limit = 50): Promise<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }> {
   const res = await fetch(`${API_BASE}/v1/routing/records?limit=${limit}`);
+  return res.json();
+}
+
+// ── 代理池（P3-4 健康体检复用） ──
+export interface ProxyPoolEntry {
+  url: string;
+  source: string;
+  daily_uses: number;
+  use_count: number;
+  cooling: boolean;
+  cooldown_seconds: number;
+  fails: number;
+  country: string;
+  country_code: string;
+  country_emoji: string;
+  latency_ms: number;
+  checked_ago_seconds: number;
+  protocols: unknown;
+}
+
+export interface ProxyPoolSnapshot {
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  residential: number;
+  free: number;
+  available: number;
+  cooldown: number;
+  items: ProxyPoolEntry[];
+  top: ProxyPoolEntry[];
+}
+
+export async function fetchProxyPool(params: { page?: number; pageSize?: number } = {}): Promise<ProxyPoolSnapshot> {
+  const q = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  const res = await fetch(`${API_BASE}/v1/proxy-pool?${q}`);
   return res.json();
 }
 

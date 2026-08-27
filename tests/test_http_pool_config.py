@@ -24,8 +24,9 @@ class TestHttpPoolConfig:
 
     def test_defaults_are_correct(self):
         """IF_HTTP_MAX_CONNECTIONS 默认 100，IF_HTTP_KEEPALIVE 默认 20，
-        IF_UPSTREAM_MAX_INFLIGHT 默认 30。"""
+        IF_UPSTREAM_MAX_INFLIGHT 由 system_spec 按本机规格自适应。"""
         import api.config as cfg
+        from api.system_spec import ADAPTIVE_UPSTREAM_INFLIGHT
 
         # 保存原始值
         orig_max = getattr(cfg, "IF_HTTP_MAX_CONNECTIONS", None)
@@ -34,7 +35,13 @@ class TestHttpPoolConfig:
 
         assert cfg.IF_HTTP_MAX_CONNECTIONS == 100, "默认 max_connections 应为 100"
         assert cfg.IF_HTTP_KEEPALIVE == 20, "默认 max_keepalive 应为 20"
-        assert cfg.IF_UPSTREAM_MAX_INFLIGHT == 30, "默认 upstream_max_inflight 应为 30"
+
+        # 上游并发上限是自适应值（默认 30 → 按规格自适应），必须与 system_spec 一致
+        # 而非硬编码 30。四档规格取值为：12 / 24 / 64(向下取 2*核心) 。
+        assert cfg.IF_UPSTREAM_MAX_INFLIGHT == ADAPTIVE_UPSTREAM_INFLIGHT, (
+            f"默认 upstream_max_inflight 应与自适应规格一致，"
+            f"实际 {cfg.IF_UPSTREAM_MAX_INFLIGHT} != 自适应 {ADAPTIVE_UPSTREAM_INFLIGHT}"
+        )
 
     def test_env_overrides(self, monkeypatch):
         """环境变量能覆盖默认值。"""
