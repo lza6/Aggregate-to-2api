@@ -36,17 +36,31 @@ def _guard(request: Request, prompt: str) -> None:
     check_generate_request(request, prompt)
 
 
-@router.post("/v1/generate", response_model=TaskInfo, summary="生成图片/视频（同步等待）")
-async def generate_sync(request: Request, req: GenerateRequest):
+def _prepare(request: Request, req: GenerateRequest) -> None:
+    """同步/异步共用的提交前置：鉴权限流 → 模型/比例校验 → 调用方真实 IP 回填。
+
+    v4.2 P3-1: sync 与 async 唯一差别只在“是否等待”，提交前必须走完全同一路径，
+    确保鉴权/校验/IP 取证三者语义一致，不各自实现。
+    """
     _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
-    # v4.4.3: 服务端回填调用方真实 IP（用于防刷取证，客户端无需传）
     req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
+
+
+async def _submit(req: GenerateRequest) -> str:
+    """统一提交入口：入队/幂等命中均返回 task_id，同步轮询与异步直接返回共用。"""
     try:
-        task_id = await _dispatch_generate(req)
+        return await _dispatch_generate(req)
     except QueueFull as e:
         raise AppError(ErrorCodes.QUEUE_FULL, str(e), 429)
+
+
+@router.post("/v1/generate", response_model=TaskInfo, summary="生成图片/视频（同步等待）")
+async def generate_sync(request: Request, req: GenerateRequest):
+    _prepare(request, req)
+    task_id = await _submit(req)
+    # 短轮询等待：客户端断开只取消等待协程，生成任务仍由引擎继续（与 async 语义一致）
     task = await engine.wait_result(task_id, config.SYNC_TIMEOUT)
     if task["status"] in ("completed", "error"):
         return TaskInfo(**task_to_public(task))
@@ -59,15 +73,8 @@ async def generate_sync(request: Request, req: GenerateRequest):
 
 @router.post("/v1/generate/async", response_model=TaskInfo, summary="生成图片/视频（异步，立即返回）")
 async def generate_async(request: Request, req: GenerateRequest):
-    _guard(request, req.prompt)
-    _validate_ratio(req.aspect_ratio)
-    _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
-    # v4.4.3: 服务端回填调用方真实 IP
-    req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
-    try:
-        task_id = await _dispatch_generate(req)
-    except QueueFull as e:
-        raise AppError(ErrorCodes.QUEUE_FULL, str(e), 429)
+    _prepare(request, req)
+    task_id = await _submit(req)
     headers = {"Location": f"/v1/tasks/{task_id}"}
     return TaskInfo(**task_to_public(await db.get_public(task_id)))
 
