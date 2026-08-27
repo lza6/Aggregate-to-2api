@@ -11,9 +11,10 @@ graph, not in these files: `graft callers <symbol>` is the only way to read them
 
 ## Concepts
 
+- [probe_free_proxy](probe_free_proxy.md) — probe_free_proxy
 - [probe_tryingopen](probe_tryingopen.md) — probe_tryingopen
 
 ## Files
 
-278 per-file wiring cards mirror the source tree under `graft/` (251 carry extracted symbols). They are deliberately not enumerated here —
+279 per-file wiring cards mirror the source tree under `graft/` (252 carry extracted symbols). They are deliberately not enumerated here —
 `grep` a symbol or `find`/`ls` a filename under `graft/` to land on the card for that file.

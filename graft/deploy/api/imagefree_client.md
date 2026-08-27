@@ -17,12 +17,12 @@
 - _get_client · function · L167-L180 — def _get_client() -> httpx.AsyncClient
 - close_client · function · L183-L188 — async def close_client() -> None
 - _browser_headers · function · L191-L206 — def _browser_headers(base_url: str, referer: str | None = None) -> dict
-- submit_generate · function · L209-L242 — async def submit_generate( base_url: str, prompt: str, aspect_ratio: str, turnstile_token: str, timeout: float = 30.0, ) -> str
-- poll_generate_status · function · L245-L290 — async def poll_generate_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, ) -> dict
-- download_image · function · L293-L334 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
-- to_base64 · function · L337-L339 — def to_base64(data: bytes, mime: str = "image/png") -> str
-- detect_mime · function · L342-L354 — def detect_mime(data: bytes) -> str
-- _edit_client · function · L367-L372 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
-- upload_edit_image · function · L375-L399 — async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None) -> str
-- submit_edit · function · L402-L423 — async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None) -> str
-- poll_edit_status · function · L426-L461 — async def poll_edit_status(base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None) -> dict
+- submit_generate · function · L209-L253 — async def submit_generate( base_url: str, prompt: str, aspect_ratio: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None, ) -> str
+- poll_generate_status · function · L256-L301 — async def poll_generate_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, ) -> dict
+- download_image · function · L304-L345 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
+- to_base64 · function · L348-L350 — def to_base64(data: bytes, mime: str = "image/png") -> str
+- detect_mime · function · L353-L365 — def detect_mime(data: bytes) -> str
+- _edit_client · function · L378-L383 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
+- upload_edit_image · function · L386-L410 — async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None) -> str
+- submit_edit · function · L413-L434 — async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None) -> str
+- poll_edit_status · function · L437-L472 — async def poll_edit_status(base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None) -> dict

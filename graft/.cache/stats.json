@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3582,
-  "edgeCount": 6456,
+  "nodeCount": 3586,
+  "edgeCount": 6470,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3582,
+  "totalCount": 3586,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-27T01:25:53.489Z",
-  "lastFile": "engine.py"
+  "syncedAt": "2026-08-27T03:01:18.681Z",
+  "lastFile": "request_guard.py"
 }
