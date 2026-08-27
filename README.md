@@ -110,8 +110,36 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `POST /v1/chat/completions` | 同步/SSE | **OpenAI 兼容对话补全（支持流式/非流式/思考链/工具调用/多模态）** |
 | `POST /v1/messages` | 同步/SSE | **Anthropic 协议端点（Claude Code / Continue / Cursor 直接接入）** |
 | `GET /v1/chat/models` | — | **聊天模型目录（含上下文长度、Token单价、工具/图片能力标签）** |
+| `GET /v1/chat/auth/status` | — | **鉴权状态探测（是否需要 Key，不泄露 Key 本体）** |
 | `GET /v1/chat/usage` | — | **全站聊天实时用量（Token消耗、调用量、时延、各模型分布）** |
 | `GET /v1/chat/remaining` | — | **基于代理池多出口自动推算的实时可用额度预测** |
+
+### 🔑 聊天 API 鉴权（防滥用）
+
+聊天端点（`/v1/chat/completions`、`/v1/messages`）受固定 Key 保护：
+服务端配置环境变量 `IF_API_KEYS=<key1>,<key2>` 即启用；为空则开放。客户端三种传法任选其一：
+
+```
+Authorization: Bearer <key>
+X-API-Key: <key>
+?url参数 ?api_key=<key>
+```
+
+未携带/错误 Key 返回 `401 {"error":{"code":"AUTH.001",...}}`。生图主链路 `/v1/generate*` 保持公益开放不受影响。
+
+**curl 示例：**
+
+```bash
+# OpenAI 兼容
+curl -X POST https://imagefree.tingfengai.art/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TFAI_KEY" \
+  -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"你好"}],"stream":true}'
+
+# Anthropic 兼容（Claude Code）
+export ANTHROPIC_BASE_URL=https://imagefree.tingfengai.art/v1
+export ANTHROPIC_API_KEY=$TFAI_KEY
+```
 | `GET /v1/providers` | — | 提供商状态看板 |
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊（支持密码保护） |
