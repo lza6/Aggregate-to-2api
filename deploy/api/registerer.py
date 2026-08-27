@@ -532,7 +532,8 @@ class NanobananaRegisterer:
         if MOCK_REGISTER:
             return int(acc.get("credits", 0)) + 4
         # 固定使用会话绑定的出口 IP（register_ip），不再随机轮换免费代理
-        self.proxy = self._ip_to_proxy(acc.get("register_ip") or "")
+        # _ip_to_proxy 是模块级函数（同文件 252 行），不是类方法
+        self.proxy = _ip_to_proxy(acc.get("register_ip") or "")
         self._ensure_client()
         cookie = acc.get("cookie")
         if not cookie:
