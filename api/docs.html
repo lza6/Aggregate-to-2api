@@ -483,7 +483,7 @@
     <div class="brand-tags">
       <span class="brand-tag"><span class="dot"></span>服务运行中</span>
       <span class="brand-tag">3 大提供商 · 33+ 模型</span>
-      <span class="brand-tag">公开访问 · 无需鉴权</span>
+      <span class="brand-tag">🔑 API Key 鉴权</span>
       <span class="brand-tag">微信 Tf00798</span>
     </div>
   </div>
@@ -918,9 +918,11 @@
   <section class="card" id="quickstart">
     <h2><span class="n">01</span>快速开始</h2>
     <p>生成一张图只需一个 <code>POST</code> 请求。Turnstile 人机验证在服务端自动完成，调用方无需关心。高并发下推荐使用 <a href="#async">异步模式</a>。</p>
+    <p class="muted"><strong>鉴权：</strong>写接口（生成 / 图生图 / 聊天）需携带 <code>Authorization: Bearer &lt;key&gt;</code> 或 <code>X-API-Key: &lt;key&gt;</code> 头（key 由站方提供）。</p>
     <pre><code><span class="c"># 同步生成（等待出图，典型 20~45 秒）</span>
 curl -X POST https://<span class="s" id="host">YOUR-DOMAIN</span>/v1/generate \
   -H <span class="s">"Content-Type: application/json"</span> \
+  -H <span class="s">"Authorization: Bearer $API_KEY"</span> \
   -d <span class="s">'{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'</span>
 
 <span class="c"># 返回</span>
@@ -1253,7 +1255,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         <span>负责人：听风</span>
         <span>GitHub：<a href="https://github.com/lza6/" target="_blank" rel="noopener">github.com/lza6</a></span>
         <span>慢请求看板：<a href="/v1/slow/view" target="_blank" rel="noopener">打开</a></span>
-        <span>开放接口 · 无鉴权 · 请合理使用</span>
+        <span>🔑 写接口需 API Key（聊天 / 生成 / 图生图） · 请合理使用</span>
         <span><a href="/v1/honor" style="text-decoration:none">☕ 请我喝咖啡</a> · <span style="font-size:11px;opacity:.6">v4.2.1</span></span>
       </div>
     </div>

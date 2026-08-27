@@ -591,9 +591,10 @@ async def list_chat_models():
 
 @router.get("/v1/chat/auth/status")
 async def chat_auth_status():
-    """鉴权状态：前端/调用方探测是否需要携带 Key（不泄露 Key 本体）。"""
+    """鉴权状态：前端/调用方探测是否需要携带 Key（不泄露 Key 本体，仅脱敏前缀）。"""
     return {
         "enabled": auth.auth_enabled(),
+        "key_mask": auth.public_keymask(),      # 用于 UI 实时显示当前 Key 前缀
         "header": "Authorization: Bearer <key>",
         "alt_headers": ["X-API-Key", "?api_key="],
     }

@@ -26,7 +26,13 @@ router = APIRouter()
 
 
 def _guard(request: Request, prompt: str) -> None:
-    """入口防护：per-IP 限速（突发脚本刷量时提前 429，保护上游与号池）。"""
+    """入口防护：per-IP 限速 + API Key 鉴权（全站写操作统一要求）。
+
+    生图/图生图端点现在与聊天端点一致，必须携带有效 API Key
+    （Authorization: Bearer / X-API-Key / ?api_key=）。未配置 IF_API_KEYS 时保持开放兼容。
+    """
+    from .. import auth
+    auth.guard_generate_request(request)
     check_generate_request(request, prompt)
 
 

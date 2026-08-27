@@ -3,8 +3,9 @@
 设计：
 - 固定静态 Key 池由环境变量 IF_API_KEYS 注入（逗号分隔）；空 = 开放模式。
 - 支持三种传递方式（按优先级）：Authorization: Bearer <key> / X-API-Key: <key> / ?api_key=<key>。
-- 图像主链路默认开放（公益站定位不变）；聊天端点强制走 check_api_key()。
-- 管理面 /admin/* 与 healthz/metrics 等运维端点不走此鉴权（有独立的画廊密码/DLQ 权限模型）。
+- v4.4.2：全站写操作（生图 /v1/generate*、图生图 /v1/edit、聊天 /v1/chat/*、/v1/messages）统一强制 Key。
+- 只读端点（/v1/stats、/v1/providers、/v1/models、/v1/meta、/v1/healthz 等）与运维端点保持公开/独立权限。
+- public_keymask() 用于 UI 展示脱敏前缀（不泄露完整 Key）。
 """
 from __future__ import annotations
 
@@ -37,6 +38,15 @@ def _keys() -> list[str]:
 def auth_enabled() -> bool:
     """是否启用鉴权：只要配置了至少一个 Key 即开启。"""
     return bool(_keys())
+
+
+def public_keymask() -> str:
+    """返回脱敏后的 Key 展示（如 sk-tfai-7f77***）。供 UI 实时显示，不泄露完整 Key。"""
+    keys = _keys()
+    if not keys:
+        return ""
+    first = keys[0]
+    return first[:12] + "***" if len(first) > 12 else first + "***"
 
 
 def _extract_key(request: Request) -> str:
@@ -95,3 +105,8 @@ def guard_chat_request(request: Request) -> None:
     """聊天端点组合守卫：Key 校验 + 频控。"""
     check_api_key(request, scope="chat")
     check_chat_rate_limit(request)
+
+
+def guard_generate_request(request: Request) -> None:
+    """生图/图生图端点守卫：与聊天端点一致要求 Key（未配置时开放）。"""
+    check_api_key(request, scope="generate")

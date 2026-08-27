@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus } from '../api';
 import { StatCard } from '../components/StatCard';
 import { BarChart } from '../components/BarChart';
 import { Gallery } from '../components/Gallery';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining } from '../api';
+import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus } from '../api';
 
 const PWD_KEY = 'galleryPwd';
 
@@ -29,6 +29,7 @@ export function Dashboard() {
   const { data: sys } = useApi<SystemSpec>(() => fetchSystemSpec(), { intervalMs: 60000 });
   const { data: chatUsage } = useApi<ChatUsageStats>(() => fetchChatUsage('24h'), { intervalMs: 15000 });
   const { data: chatRemaining } = useApi<ChatRemaining>(() => fetchChatRemaining(), { intervalMs: 15000 });
+  const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(), { intervalMs: 30000 });
   const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -68,9 +69,16 @@ export function Dashboard() {
           </h1>
           <p className="page-desc">全节点图像生成任务调度、集群负载与核心业务指标一览</p>
         </div>
-        <button onClick={reload} className="tf-btn tf-btn-secondary">
-          <span>🔄</span> 刷新数据
-        </button>
+        <div className="dashboard-header-actions">
+          {authStatus?.enabled && (
+            <span className="tf-badge tf-badge-warning api-key-badge" title="全站写操作需携带此 Key">
+              🔑 API Key: <code>{authStatus.key_mask ?? '…'}</code>
+            </span>
+          )}
+          <button onClick={reload} className="tf-btn tf-btn-secondary">
+            <span>🔄</span> 刷新数据
+          </button>
+        </div>
       </div>
 
       {/* 核心指标卡片矩阵 */}

@@ -1,8 +1,8 @@
 {
   "meta": {
     "version": 1,
-    "nodeCount": 3586,
-    "edgeCount": 6470,
+    "nodeCount": 3588,
+    "edgeCount": 6474,
     "languages": [
       "javascript",
       "python",
@@ -9942,12 +9942,26 @@
       "name": "request_guard.py",
       "kind": "file",
       "path": "api/request_guard.py",
-      "span": "L1-L56",
+      "span": "L1-L72",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "96093aad8575840705bdc3e38f91744950744692d5db4c4d830cd7855e3fdf7f",
-      "chars": 1526,
+      "body_hash": "2a3d1b18381dc6ec188c7a1125b688c839cba614ffa881a4d8e5450ecf0c25fa",
+      "chars": 2069,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "api/request_guard.py#_client_ip",
+      "name": "_client_ip",
+      "kind": "function",
+      "path": "api/request_guard.py",
+      "span": "L33-L42",
+      "signature": "def _client_ip(request: Request) -> str",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "e86f09cef8a6995079a4ea22f302c4a6ad253316eef47739c8453cf163fed82d",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -9957,7 +9971,7 @@
       "name": "_limit",
       "kind": "function",
       "path": "api/request_guard.py",
-      "span": "L23-L25",
+      "span": "L28-L30",
       "signature": "def _limit() -> int",
       "exported": false,
       "origin": "ast",
@@ -9971,7 +9985,7 @@
       "name": "check_generate_request",
       "kind": "function",
       "path": "api/request_guard.py",
-      "span": "L52-L55",
+      "span": "L68-L71",
       "signature": "def check_generate_request(request: Request, prompt: str = \"\") -> None",
       "exported": true,
       "origin": "ast",
@@ -9985,11 +9999,11 @@
       "name": "check_rate_limit",
       "kind": "function",
       "path": "api/request_guard.py",
-      "span": "L28-L49",
+      "span": "L45-L65",
       "signature": "def check_rate_limit(request: Request) -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "5d300e36b041d2d33b99776f974412c8a0ffda8cc4762aae976077006539ed89",
+      "body_hash": "174b0da3f1ae92826f941546b7a42c6bab98e3f757927b100a687befa325361e",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23554,12 +23568,26 @@
       "name": "request_guard.py",
       "kind": "file",
       "path": "deploy/api/request_guard.py",
-      "span": "L1-L56",
+      "span": "L1-L72",
       "signature": null,
       "exported": true,
       "origin": "ast",
-      "body_hash": "96093aad8575840705bdc3e38f91744950744692d5db4c4d830cd7855e3fdf7f",
-      "chars": 1526,
+      "body_hash": "2a3d1b18381dc6ec188c7a1125b688c839cba614ffa881a4d8e5450ecf0c25fa",
+      "chars": 2069,
+      "summary_state": "pending",
+      "summary": null,
+      "crux": null
+    },
+    {
+      "id": "deploy/api/request_guard.py#_client_ip",
+      "name": "_client_ip",
+      "kind": "function",
+      "path": "deploy/api/request_guard.py",
+      "span": "L33-L42",
+      "signature": "def _client_ip(request: Request) -> str",
+      "exported": false,
+      "origin": "ast",
+      "body_hash": "e86f09cef8a6995079a4ea22f302c4a6ad253316eef47739c8453cf163fed82d",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -23569,7 +23597,7 @@
       "name": "_limit",
       "kind": "function",
       "path": "deploy/api/request_guard.py",
-      "span": "L23-L25",
+      "span": "L28-L30",
       "signature": "def _limit() -> int",
       "exported": false,
       "origin": "ast",
@@ -23583,7 +23611,7 @@
       "name": "check_generate_request",
       "kind": "function",
       "path": "deploy/api/request_guard.py",
-      "span": "L52-L55",
+      "span": "L68-L71",
       "signature": "def check_generate_request(request: Request, prompt: str = \"\") -> None",
       "exported": true,
       "origin": "ast",
@@ -23597,11 +23625,11 @@
       "name": "check_rate_limit",
       "kind": "function",
       "path": "deploy/api/request_guard.py",
-      "span": "L28-L49",
+      "span": "L45-L65",
       "signature": "def check_rate_limit(request: Request) -> None",
       "exported": true,
       "origin": "ast",
-      "body_hash": "5d300e36b041d2d33b99776f974412c8a0ffda8cc4762aae976077006539ed89",
+      "body_hash": "174b0da3f1ae92826f941546b7a42c6bab98e3f757927b100a687befa325361e",
       "summary_state": "pending",
       "summary": null,
       "crux": null
@@ -60437,6 +60465,12 @@
     },
     {
       "source": "api/request_guard.py",
+      "target": "api/request_guard.py#_client_ip",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/request_guard.py",
       "target": "api/request_guard.py#_limit",
       "relation": "contains",
       "confidence": "extracted"
@@ -60492,6 +60526,12 @@
     {
       "source": "api/request_guard.py#check_generate_request",
       "target": "api/request_guard.py#check_rate_limit",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "api/request_guard.py#check_rate_limit",
+      "target": "api/request_guard.py#_client_ip",
       "relation": "calls",
       "confidence": "extracted"
     },
@@ -71465,6 +71505,12 @@
     },
     {
       "source": "deploy/api/request_guard.py",
+      "target": "deploy/api/request_guard.py#_client_ip",
+      "relation": "contains",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py",
       "target": "deploy/api/request_guard.py#_limit",
       "relation": "contains",
       "confidence": "extracted"
@@ -71520,6 +71566,12 @@
     {
       "source": "deploy/api/request_guard.py#check_generate_request",
       "target": "deploy/api/request_guard.py#check_rate_limit",
+      "relation": "calls",
+      "confidence": "extracted"
+    },
+    {
+      "source": "deploy/api/request_guard.py#check_rate_limit",
+      "target": "deploy/api/request_guard.py#_client_ip",
       "relation": "calls",
       "confidence": "extracted"
     },
