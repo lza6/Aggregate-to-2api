@@ -24,17 +24,22 @@ def make_app() -> FastAPI:
 def client(monkeypatch):
     monkeypatch.setenv("IF_API_KEYS", "sk-test-abc,sk-test-xyz")
     monkeypatch.setenv("IF_REQUESTS_PER_MINUTE", "0")  # 关闭 per-IP 限流隔离 Key 测试
+    # TestClient 的对端是 'testclient'，不属受信代理；把该对端加入受信代理使 XFF 可被解析（仅测试环境）。
+    # Settings 单例在 import 时固化 env，故需同时刷新模块级常量（request_guard 读模块常量）。
+    monkeypatch.setenv("IF_TRUSTED_PROXIES", "testclient,127.0.0.1,::1")
     import api.config as config_module
     config_module.settings = Settings()
+    config_module.IF_TRUSTED_PROXIES = config_module.settings.if_trusted_proxies
     return TestClient(make_app())
 
 
 def test_client_ip_xff_preferred():
+    """ISSUE-02 安全加固后：socket 非受信代理时 XFF 不生效（回退 socket）。"""
     from types import SimpleNamespace
     class Req:
         headers = {"x-forwarded-for": "203.0.113.99, 10.0.0.5"}
         client = SimpleNamespace(host="172.25.0.1")
-    assert _client_ip_of(Req()) == "203.0.113.99"
+    assert _client_ip_of(Req()) == "172.25.0.1"
 
 
 def test_client_ip_falls_back_to_socket():
@@ -43,6 +48,15 @@ def test_client_ip_falls_back_to_socket():
         headers = {}
         client = SimpleNamespace(host="8.8.8.8")
     assert _client_ip_of(Req2()) == "8.8.8.8"
+
+
+def test_client_ip_trusted_proxy_rightmost():
+    """受信代理（127.0.0.1）+ 客户端前置 XFF 时应取 XFF 最右非代理段。"""
+    from types import SimpleNamespace
+    class Req3:
+        headers = {"x-forwarded-for": "203.0.113.5, 198.51.100.7"}
+        client = SimpleNamespace(host="127.0.0.1")
+    assert _client_ip_of(Req3()) == "198.51.100.7"
 
 
 def test_keymask_hides_tail(monkeypatch):

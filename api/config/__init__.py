@@ -79,6 +79,19 @@ class Settings(BaseSettings):
     proxy: str | None = Field(
         default=None, validation_alias="IF_PROXY"
     )
+
+    @field_validator("proxy", mode="after")
+    @classmethod
+    def _normalize_empty_proxy(cls, v: str | None) -> str | None:
+        """空串代理统一归一化为 None（直连）。
+
+        docker-compose 里 IF_PROXY= 显式清空代理时会注入空字符串；
+        httpx 对空串抛 "Unknown scheme for proxy URL URL('')"，
+        在源头归一化，所有 proxy=config.PROXY 的调用点自然安全。
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
@@ -118,6 +131,13 @@ class Settings(BaseSettings):
     )
     solve_stats_window_seconds: int = Field(
         300, validation_alias="IF_SOLVE_STATS_WINDOW_SECONDS"
+    )
+
+    # ── 存储驱动（ISSUE-01 Storage Adapter）──
+    # IF_STORAGE_BACKEND: 'sqlite'（默认单机，无需外置依赖）| 'redis'（集群）
+    # IF_REDIS_URL 复用「缓存/Redis」分组的 if_redis_url 字段（见下），不另设。
+    if_storage_backend: str = Field(
+        "sqlite", validation_alias="IF_STORAGE_BACKEND"
     )
 
     # ── 超时 / 轮询 ──
@@ -362,6 +382,39 @@ class Settings(BaseSettings):
     if_requests_per_minute: int = Field(
         10, validation_alias="IF_REQUESTS_PER_MINUTE"
     )
+
+    # ── 动态 IP 风控（ISSUE-02）────────────────────────────
+    # 白名单：逗号分隔 IP，白名单 IP 直接绕过封禁与限速（如运维/监控探针）
+    if_ip_whitelist: str = Field(
+        "", validation_alias="IF_IP_WHITELIST"
+    )
+    # 受信代理：逗号分隔 IP。仅当 socket 对端命中时才解析 X-Forwarded-For（取最右非代理段），
+    # 否则一律以 socket 对端为准（防 XFF 伪造绕过封禁/限流）。默认仅信任本机反代。
+    if_trusted_proxies: str = Field(
+        "127.0.0.1,::1", validation_alias="IF_TRUSTED_PROXIES"
+    )
+    # 频繁超限自动入黑名单：连续在窗口内超限达到阈值的 IP，自动封禁 TTL 秒
+    if_auto_block_enabled: bool = Field(
+        True, validation_alias="IF_AUTO_BLOCK_ENABLED"
+    )
+    if_auto_block_threshold: int = Field(
+        3, validation_alias="IF_AUTO_BLOCK_THRESHOLD"
+    )
+    if_auto_block_window_seconds: int = Field(
+        300, validation_alias="IF_AUTO_BLOCK_WINDOW_SECONDS"
+    )
+    if_auto_block_ttl_seconds: int = Field(
+        3600, validation_alias="IF_AUTO_BLOCK_TTL_SECONDS"
+    )
+    # ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
+    # 优先使用独立管理 Key；为空则继承 IF_API_KEYS；两者皆空默认拒绝管理操作
+    if_admin_keys: str = Field(
+        "", validation_alias="IF_ADMIN_KEYS"
+    )
+    # 显式开放模式：仅当配置为空且设置 IF_ADMIN_KEY_OPEN=1（本地运维/内网）时放行管理端
+    if_admin_key_open: bool = Field(
+        False, validation_alias="IF_ADMIN_KEY_OPEN"
+    )
     _db: DBSettings | None = None
     _http: HTTPSettings | None = None
     _solver: SolverSettings | None = None
@@ -393,6 +446,8 @@ class Settings(BaseSettings):
         "mock_register",
         "if_idempotency_enabled",
         "if_dlq_enabled",
+        "if_auto_block_enabled",
+        "if_admin_key_open",
         mode="before",
     )
     @classmethod
@@ -858,6 +913,23 @@ REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
 # 公开接口限速（0 = 关闭）
 IF_REQUESTS_PER_MINUTE = settings.if_requests_per_minute
 
+# ── 存储驱动（ISSUE-01）──────────────────────────
+IF_STORAGE_BACKEND = settings.if_storage_backend
+IF_REDIS_URL = settings.if_redis_url
+IF_REDIS_ENABLED = settings.if_redis_enabled
+
+# ── 动态 IP 风控（ISSUE-02）──────────────────────
+IF_IP_WHITELIST = settings.if_ip_whitelist
+IF_TRUSTED_PROXIES = settings.if_trusted_proxies
+IF_AUTO_BLOCK_ENABLED = settings.if_auto_block_enabled
+IF_AUTO_BLOCK_THRESHOLD = settings.if_auto_block_threshold
+IF_AUTO_BLOCK_WINDOW_SECONDS = settings.if_auto_block_window_seconds
+IF_AUTO_BLOCK_TTL_SECONDS = settings.if_auto_block_ttl_seconds
+
+# ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
+IF_ADMIN_KEYS = settings.if_admin_keys
+IF_ADMIN_KEY_OPEN = settings.if_admin_key_open
+
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
 
@@ -1048,6 +1120,17 @@ __all__ = [
     "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
     "IF_REQUESTS_PER_MINUTE",
+    "IF_STORAGE_BACKEND",
+    "IF_REDIS_URL",
+    "IF_REDIS_ENABLED",
+    "IF_IP_WHITELIST",
+    "IF_TRUSTED_PROXIES",
+    "IF_ADMIN_KEYS",
+    "IF_ADMIN_KEY_OPEN",
+    "IF_AUTO_BLOCK_ENABLED",
+    "IF_AUTO_BLOCK_THRESHOLD",
+    "IF_AUTO_BLOCK_WINDOW_SECONDS",
+    "IF_AUTO_BLOCK_TTL_SECONDS",
     "CORS_ORIGINS",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",

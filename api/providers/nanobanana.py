@@ -19,21 +19,29 @@ import asyncio
 import json
 import logging
 import time
+from typing import Any
 
 import httpx
 
 from .. import config
+from .action_sniffer import action_sniffer, is_stale_action_response
 from .base import CAP_IMG2IMG, CAP_TXT2IMG, MOCK_REGISTER, GenerationResult, ModelSpec, Provider, ProviderError, ProviderRateLimited
 
 log = logging.getLogger("providers.nanobanana")
 
 DEFAULT_BASE = "https://nanobanana-pro.com"
 
-# 逆向确认的 Server Action ID（站点改版需重新抓取；契约见 README）
+# 逆向确认的 Server Action ID（站点改版需重新抓取；契约见 README）。
+# 运行时经 ActionSniffer 动态解析（ISSUE-03），嗅探失败才回退到下列静态兜底值。
 ACTION_GENERATE_IMG = "7fb61a58991c7ab2bd6f0caa88d76a8194a714d6e3"
 ACTION_EDIT_IMG = "7f89ceae4364ecc4c8405d5cdb0aaa7da0ba5a87d0"
-# 每日签到领取 claimDailyCheckinAction；与生成/图生图 Action 统一管理，站点改版需重新抓取
+# 每日签到领取 claimDailyCheckinAction；与生成/图生图 Action 统一由 ActionSniffer 管理
 ACTION_CLAIM_DAILY_CHECKIN = "7fa3d4d28767dbc090ad4228dff062a1e20d421ce2"
+
+# 内部 Action kind → Sniffer 逻辑名（STATIC_ACTION_IDS 键）
+_KIND_GENERATE = "generate"
+_KIND_EDIT = "edit"
+_KIND_CLAIM = "claim_daily_checkin"
 
 # 上游模型清单（ID → (显示名, 能力)）
 _UPSTREAM_MODELS = {
@@ -59,6 +67,8 @@ class NanobananaProvider(Provider):
         self.accounts: list[dict] = []
         self._acc_idx = 0
         self._client: httpx.AsyncClient | None = None
+        # ActionSniffer 实例；None → 用模块级共享单例（测试可注入 Fake）
+        self._action_sniffer: Any | None = None
         self._build_models()
 
     def _build_models(self) -> None:
@@ -78,12 +88,18 @@ class NanobananaProvider(Provider):
         self._client = httpx.AsyncClient(proxy=config.PROXY, timeout=httpx.Timeout(60.0),
                                          headers={"User-Agent": config.USER_AGENT})
         self.accounts = self._load_accounts()
+        # ISSUE-03: 启动后台 keepalive 嗅探（默认 6h 一次，提前发现上游改版自愈），幂等
+        (self._action_sniffer or action_sniffer).start_keepalive()
         log.info("nanobanana 号池加载 %d 账号", len(self.accounts))
 
     async def shutdown(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
+        sniffer = self._action_sniffer or action_sniffer
+        sniffer.stop_keepalive()
+        if self._action_sniffer is None:
+            await sniffer.aclose()
 
     def _load_accounts(self) -> list[dict]:
         from ..account_pool import account_pool
@@ -107,6 +123,13 @@ class NanobananaProvider(Provider):
     async def credits(self) -> int | None:
         from ..account_pool import account_pool
         return account_pool.total_credits("nanobanana")
+
+    async def health(self) -> dict:
+        """健康摘要：额外暴露 Action Sniffer 缓存/嗅探状态（ISSUE-03）。"""
+        out = await super().health()
+        sniffer = self._action_sniffer or action_sniffer
+        out["action_sniffer"] = sniffer.status()
+        return out
 
     # ── 生成（Next.js Server Action）───────────────
     def _rsc_encode(self, obj: dict) -> str:
@@ -158,13 +181,10 @@ class NanobananaProvider(Provider):
         body = [{"prompt": prompt, "model": upstream, "aspectRatio": aspect_ratio,
                  "resolution": resolution, "outputFormat": "png",
                  "googleSearch": False, "grokQualityMode": "fast"}]
-        r = await self._client.post(f"{self.base_url}/zh",
-                                    headers=self._action_headers(cookie, ACTION_GENERATE_IMG),
-                                    content=self._rsc_encode(body))
+        r = await self._post_with_self_heal(_KIND_GENERATE, cookie, body)
         return await self._parse_action_response(r)
 
     async def _submit_edit(self, cookie, upstream, prompt, aspect_ratio, images) -> str:
-        import base64
         # 图生图：先上传（multipart file + model）→ 拿 /api/assets/{id}/preview → 作为 imageUrls
         up = await self._client.post(
             f"{self.base_url}/api/upload/nano-banana",
@@ -179,10 +199,28 @@ class NanobananaProvider(Provider):
         body = [{"prompt": prompt, "model": upstream, "imageUrls": [url],
                  "aspectRatio": aspect_ratio, "resolution": "1K", "outputFormat": "png",
                  "googleSearch": False, "grokQualityMode": "fast"}]
-        r = await self._client.post(f"{self.base_url}/zh",
-                                    headers=self._action_headers(cookie, ACTION_EDIT_IMG),
-                                    content=self._rsc_encode(body))
+        r = await self._post_with_self_heal(_KIND_EDIT, cookie, body)
         return await self._parse_action_response(r)
+
+    async def _get_action(self, kind: str, *, force_refresh: bool = False) -> str:
+        """经 ActionSniffer 动态解析 Action ID（嗅探失败时回退静态兜底）。"""
+        sniffer = self._action_sniffer or action_sniffer
+        return await sniffer.get_action_id(kind, force_refresh=force_refresh)
+
+    async def _post_with_self_heal(self, kind: str, cookie: str, body: list) -> httpx.Response:
+        """提交 Server Action；遇 404 / Action 不匹配时 force_refresh 嗅探并自愈重试一次。"""
+        action_id = await self._get_action(kind)
+        r = await self._client.post(f"{self.base_url}/zh",
+                                    headers=self._action_headers(cookie, action_id),
+                                    content=self._rsc_encode(body))
+        if is_stale_action_response(r):
+            log.warning("nanobanana %s Action 失配(%s)，触发嗅探自愈", kind, r.status_code)
+            fresh_id = await self._get_action(kind, force_refresh=True)
+            if fresh_id and fresh_id != action_id:
+                r = await self._client.post(f"{self.base_url}/zh",
+                                            headers=self._action_headers(cookie, fresh_id),
+                                            content=self._rsc_encode(body))
+        return r
 
     async def _parse_action_response(self, r: httpx.Response) -> str:
         if r.status_code != 200:

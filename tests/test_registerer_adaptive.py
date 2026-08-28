@@ -128,7 +128,7 @@ def test_registration_session_failure():
 async def test_nanobanana_cf_blocked_handling(monkeypatch):
     """测试 nanobanana 遇到 Turnstile 求解失败时的自适应分类与 solver_guard 标记。"""
     reg = NanobananaRegisterer()
-    monkeypatch.setattr(config, "MOCK_REGISTER", False)
+    monkeypatch.setattr("api.registerer.MOCK_REGISTER", False)
 
     async def fake_allocate(provider):
         return "user1@temp.tf", {"source": "temp.tf"}
@@ -151,7 +151,7 @@ async def test_nanobanana_cf_blocked_handling(monkeypatch):
 async def test_nanobanana_email_timeout_and_source_cooldown(monkeypatch):
     """测试 nanobanana 验证链接收取超时时触发邮箱源退避切源。"""
     reg = NanobananaRegisterer()
-    monkeypatch.setattr(config, "MOCK_REGISTER", False)
+    monkeypatch.setattr("api.registerer.MOCK_REGISTER", False)
 
     async def fake_allocate(provider):
         return "nbuser@22.do", {"source": "22.do"}
@@ -186,7 +186,7 @@ async def test_nanobanana_email_timeout_and_source_cooldown(monkeypatch):
 async def test_ip_blocked_force_rotate_client(monkeypatch):
     """测试遇到 403 风控拦截时触发强制代理客户端轮换。"""
     reg = NanobananaRegisterer()
-    monkeypatch.setattr(config, "MOCK_REGISTER", False)
+    monkeypatch.setattr("api.registerer.MOCK_REGISTER", False)
 
     async def fake_allocate(provider):
         return "ipblock@22.do", {"source": "22.do"}
