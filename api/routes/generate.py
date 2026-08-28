@@ -37,7 +37,7 @@ def _guard(request: Request, prompt: str) -> None:
 
 
 def _prepare(request: Request, req: GenerateRequest) -> None:
-    """同步/异步共用的提交前置：鉴权限流 → 模型/比例校验 → 调用方真实 IP 回填。
+    """同步/异步共用的提交前置：鉴权限流 → 模型/比例校验 → 调用方真实 IP与客户端标识回填。
 
     v4.2 P3-1: sync 与 async 唯一差别只在“是否等待”，提交前必须走完全同一路径，
     确保鉴权/校验/IP 取证三者语义一致，不各自实现。
@@ -46,6 +46,7 @@ def _prepare(request: Request, req: GenerateRequest) -> None:
     _validate_ratio(req.aspect_ratio)
     _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
     req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
+    req.user_agent = request.headers.get("user-agent", "")[:500] if request.headers.get("user-agent") else "Unknown"
 
 
 async def _submit(req: GenerateRequest) -> str:

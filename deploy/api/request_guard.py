@@ -24,10 +24,12 @@ _requests: dict[str, deque[float]] = {}
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
 
-# 恶意/封禁 IP 黑名单（精准隔离刷量攻击源）
-_BLOCKED_IPS: set[str] = {
-    "47.112.162.80",
+# 恶意/受限 IP 特殊规则（IP -> 每日最多允许调用次数）
+_IP_DAILY_LIMITS: dict[str, int] = {
+    "47.112.162.80": 1,  # 恶意刷量 IP：一天最多调用 1 次
 }
+_ip_daily_records: dict[str, list[float]] = {}
+_DAY_SECONDS = 86400.0
 
 
 def _limit() -> int:
@@ -53,13 +55,23 @@ def _client_ip(request: Request) -> str:
 def check_rate_limit(request: Request) -> None:
     """滑动窗口 per-IP 限速与 IP 黑名单防护；窗口过期记录自动清理。"""
     key = _client_ip(request)
-    if key in _BLOCKED_IPS:
-        raise AppError(ErrorCodes.FORBIDDEN, "IP 已被系统安全策略封禁", 403)
+    now = time.monotonic()
 
+    # 1. 严格日级别限流检查（针对刷量 IP 实施 1 天 1 次硬限制）
+    daily_limit = _IP_DAILY_LIMITS.get(key)
+    if daily_limit is not None:
+        with _lock:
+            records = _ip_daily_records.setdefault(key, [])
+            # 过滤出 24 小时内的请求
+            records[:] = [t for t in records if now - t < _DAY_SECONDS]
+            if len(records) >= daily_limit:
+                raise AppError(ErrorCodes.FORBIDDEN, f"该 IP 触发安全风控，已被系统限制为每天最多 {daily_limit} 次调用", 403)
+            records.append(now)
+
+    # 2. 基础滑动窗口限流
     limit = _limit()
     if limit <= 0:
         return
-    now = time.monotonic()
     with _lock:
         bucket = _requests.setdefault(key, deque())
         while bucket and now - bucket[0] >= _WINDOW_SECONDS:

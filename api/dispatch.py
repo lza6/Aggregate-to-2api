@@ -229,7 +229,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         task_id = await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
                                                model.split("/", 1)[-1],
                                                priority=priority,
-                                               client_ip=getattr(req, "client_ip", None))
+                                               client_ip=getattr(req, "client_ip", None),
+                                               user_agent=getattr(req, "user_agent", None))
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)
@@ -244,7 +245,8 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
 
     task_id = str(uuid.uuid4())
     await db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model,
-                            client_ip=getattr(req, "client_ip", None))
+                            client_ip=getattr(req, "client_ip", None),
+                            user_agent=getattr(req, "user_agent", None))
     t0 = time.monotonic()
     spec = registry.model(model)
 

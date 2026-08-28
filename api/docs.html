@@ -483,7 +483,10 @@
     <div class="brand-tags">
       <span class="brand-tag"><span class="dot"></span>服务运行中</span>
       <span class="brand-tag">3 大提供商 · 33+ 模型</span>
-      <span class="brand-tag">🔑 API Key 鉴权</span>
+      <span class="brand-tag" id="ui-key-tag" style="display:none;background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.3);color:var(--primary);cursor:pointer" title="点击复制 API Key">
+        🔑 API Key: <code id="ui-key-mask" style="font-family:monospace;font-weight:600">sk-tfai-***</code> <span style="font-size:11px;opacity:.8">📋复制</span>
+      </span>
+      <span class="brand-tag" id="ui-no-key-tag">🔑 API Key 鉴权已开启</span>
       <span class="brand-tag">微信 Tf00798</span>
     </div>
   </div>
@@ -853,9 +856,9 @@
     <div style="overflow-x:auto">
       <table id="task-table" style="font-size:13px">
         <thead><tr>
-          <th>任务 ID</th><th>状态</th><th>模型</th><th>调用方 IP</th><th>耗时</th><th>创建时间</th><th>操作</th>
+          <th>任务 ID</th><th>状态</th><th>模型</th><th>调用方 IP</th><th>客户端 / 标识</th><th>耗时</th><th>创建时间</th><th>操作</th>
         </tr></thead>
-        <tbody id="task-tbody"><tr><td colspan="7" class="empty" style="padding:30px 0">⏳ 加载中…</td></tr></tbody>
+        <tbody id="task-tbody"><tr><td colspan="8" class="empty" style="padding:30px 0">⏳ 加载中…</td></tr></tbody>
       </table>
     </div>
     <div id="task-pagination" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;font-size:13px">
@@ -880,6 +883,7 @@
       <div class="pool-stat"><span>路由执行</span><b id="tm-provider" style="color:var(--primary)">–</b></div>
       <div class="pool-stat"><span>比例</span><b id="tm-ratio">–</b></div>
       <div class="pool-stat"><span>调用方 IP</span><b id="tm-client_ip" style="font-family:monospace">–</b></div>
+      <div class="pool-stat"><span>客户端程序 / 设备</span><b id="tm-user_agent" style="font-family:monospace;font-size:12px;word-break:break-all">–</b></div>
       <div class="pool-stat"><span>类型</span><b id="tm-type">–</b></div>
       <div class="pool-stat"><span>提示词</span><b id="tm-prompt" style="word-break:break-all;font-weight:400">–</b></div>
       <div class="pool-stat"><span>图片地址</span><b id="tm-image_url" style="word-break:break-all;font-weight:400;font-size:12px">–</b></div>
@@ -1653,11 +1657,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       }
       var model = esc(t.model || 'default');
       var clientIp = esc(t.client_ip || '—');
+      var ua = esc(t.user_agent || '—');
+      var uaShort = ua.length > 25 ? ua.slice(0, 25) + '…' : ua;
       return '<tr>' +
         '<td><code title="' + esc(t.id) + '">' + esc(idShort) + '</code></td>' +
         '<td>' + taskStatusHtml(t.status) + '</td>' +
         '<td>' + model + '</td>' +
         '<td><code style="font-size:11px">' + clientIp + '</code></td>' +
+        '<td><span title="' + ua + '" style="font-size:11px;color:var(--muted);cursor:help">' + uaShort + '</span></td>' +
         '<td>' + dur + '</td>' +
         '<td>' + created + '</td>' +
         '<td><button class="btn secondary" style="padding:4px 10px;margin-top:0;font-size:12px" onclick="showTaskDetail(\'' + esc(t.id) + '\')">查看详情</button></td>' +
@@ -1711,6 +1718,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       document.getElementById('tm-type').textContent = d.type === 'img' ? '🎨 图生图' : '🖼️ 文生图';
       document.getElementById('tm-ratio').textContent = esc(d.aspect_ratio || '—');
       document.getElementById('tm-client_ip').textContent = esc(d.client_ip || '—');
+      document.getElementById('tm-user_agent').textContent = esc(d.user_agent || '—');
       document.getElementById('tm-prompt').textContent = esc(d.prompt || '—');
       document.getElementById('tm-prompt').style.display = d.prompt ? 'block' : 'none';
       document.getElementById('tm-image_url').textContent = esc(d.image_url || '—');
@@ -1797,6 +1805,21 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
   safeJson('/v1/meta').then(function (d) {
     document.getElementById('sitekey').textContent = d.sitekey;
+    if (d.api_key_mask) {
+      var tag = document.getElementById('ui-key-tag');
+      var mask = document.getElementById('ui-key-mask');
+      var noTag = document.getElementById('ui-no-key-tag');
+      if (tag && mask) {
+        mask.textContent = d.api_key_mask;
+        tag.style.display = 'inline-flex';
+        if (noTag) noTag.style.display = 'none';
+        tag.onclick = function () {
+          navigator.clipboard.writeText(d.api_key_mask).then(function() {
+            showToast('已复制 Key 前缀: ' + d.api_key_mask);
+          });
+        };
+      }
+    }
   }).catch(function () {});
 
   // ── 检查 aifreeforever 代理池状态 ──

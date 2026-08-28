@@ -22,6 +22,8 @@ class GenerateRequest(BaseModel):
     # v4.4.3: 调用方真实 IP（服务端从 X-Forwarded-For / socket 自动填充，客户端无需传）
     client_ip: str | None = Field(None, max_length=64,
                                    description="调用方 IP（服务端自动回填，客户端无需传）")
+    user_agent: str | None = Field(None, max_length=512,
+                                   description="客户端程序标识（User-Agent，服务端自动回填）")
 
 
 class EditRequest(BaseModel):
@@ -47,3 +49,5 @@ class TaskInfo(BaseModel):
     model: str = "default"
     prompt: str | None = None
     aspect_ratio: str | None = None
+    client_ip: str | None = None
+    user_agent: str | None = None

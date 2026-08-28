@@ -122,4 +122,5 @@ def task_to_public(t: dict) -> dict:
         "prompt": t.get("prompt"),
         "aspect_ratio": t.get("aspect_ratio"),
         "client_ip": t.get("client_ip"),
+        "user_agent": t.get("user_agent"),
     }

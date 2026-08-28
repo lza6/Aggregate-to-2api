@@ -192,7 +192,8 @@ class Engine:
 
     async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool,
                               model: str = "default", priority: int = 2,
-                              client_ip: str | None = None) -> str:
+                              client_ip: str | None = None,
+                              user_agent: str | None = None) -> str:
         """登记并入队（指定优先级）。队列满抛 QueueFull → 调用方回 429。
 
         priority: 0=admin, 1=paid, 2=normal。各级队列超过独立上限时返回 429。
@@ -200,7 +201,7 @@ class Engine:
         """
         task_id = str(uuid.uuid4())
         await self.db.create_request(task_id, prompt, aspect_ratio, download, "txt", model,
-                                     client_ip=client_ip)
+                                     client_ip=client_ip, user_agent=user_agent)
         limits = {0: config.ADMIN_QUEUE_MAX, 1: config.HIGH_QUEUE_MAX, 2: config.NORMAL_QUEUE_MAX}
         try:
             if config.IF_WORKER_BATCH_ENABLED and self.queue.is_full(priority):
