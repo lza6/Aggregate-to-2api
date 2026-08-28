@@ -32,6 +32,7 @@ log = logging.getLogger("imagefree_api")
 
 
 @router.get("/v1/models")
+@router.get("/v1/model")  # 兼容单数别名，防止用户把路径写错返回 404
 async def models():
     """全提供商模型列表。"""
     from ..providers.registry import bootstrap as providers_bootstrap
