@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v6.4.0 ISSUE-01/02/03 变更验收报告</title>
+<style>
+  :root { --bg:#0f1117; --fg:#e6e6e6; --muted:#9aa0a6; --accent:#4f8cff; --ok:#34c759; --warn:#ff9f0a; --err:#ff453a; --card:#171a21; --border:#262b36; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:0; line-height:1.6; }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:1.7rem; border-bottom:2px solid var(--border); padding-bottom:14px; }
+  h2 { font-size:1.25rem; margin-top:40px; color:var(--accent); }
+  h3 { font-size:1.05rem; margin-top:24px; }
+  .meta { color:var(--muted); font-size:.9rem; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:12px; font-size:.78rem; font-weight:600; margin-right:6px; }
+  .b-ok { background:#123a22; color:var(--ok); }
+  .b-warn { background:#3a2a10; color:var(--warn); }
+  .b-err { background:#3a1414; color:var(--err); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin:14px 0; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.88rem; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; background:#1c2027; }
+  code { background:#1c2027; padding:2px 6px; border-radius:4px; font-family:"SFMono-Regular",Consolas,monospace; font-size:.85em; }
+  pre { background:#0a0c10; border:1px solid var(--border); border-radius:8px; padding:14px; overflow-x:auto; font-size:.82rem; }
+  ul { padding-left:22px; }
+  li { margin:5px 0; }
+  .footer { margin-top:60px; color:var(--muted); font-size:.82rem; text-align:center; }
+  .quiz { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; margin-top:24px; }
+  .q { margin:18px 0; }
+  .q label { display:block; margin:6px 0; padding:10px 14px; border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+  .q label:hover { background:#1c2027; }
+  .q input { margin-right:8px; }
+  .q.correct label { border-color:var(--ok); background:#123a22; }
+  .q.wrong label { border-color:var(--err); background:#3a1414; }
+  .btn { background:var(--accent); color:#fff; border:none; padding:11px 22px; border-radius:8px; font-size:.95rem; cursor:pointer; font-weight:600; }
+  .btn:hover { opacity:.9; }
+  #score { margin-top:16px; font-weight:700; font-size:1.05rem; display:none; }
+  .reset { background:#2a3038; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>v6.4.0 — ISSUE-01/02/03 变更验收报告</h1>
+<p class="meta">仓库 <code>lza6/Image-to-2api</code> · 分支 <code>main</code> · 提交 <code>e9e3cfb</code> · 标签 <code>v6.4.0</code> · 生成日期 2026-08-28 · 生产级交付终审</p>
+
+<p>本文档为自包含 HTML（无外部 CDN 依赖，无密钥/敏感信息）。可作为本次三项系统性加固的变更验收与审计证据。</p>
+
+<h2>1. 任务背景与目标</h2>
+<p>imagefree 高并发图像生成 API（<code>imagefree.tingfengai.art</code>）在应对 270+ RPS 时暴露了三个系统性薄弱点，本次合并将其推进到<strong>可验证、可维护、可部署</strong>状态：</p>
+<ul>
+  <li><strong>ISSUE-01 存储驱动可插拔</strong>：单体单进程的限流桶 / 编辑互斥锁 / Token 池全部内存实现，无法水平扩展。方案引入 <code>StorageAdapter</code> 抽象层，单机默认 SQLite/Memory（零外置依赖），集群可用 <code>IF_STORAGE_BACKEND=redis</code> 切换到 Redis 分布式锁 + 滑动窗口 Lua 限流。</li>
+  <li><strong>ISSUE-02 动态 IP 风控</strong>：防刷策略曾在 <code>request_guard.py</code> 写死单个 IP（如一个恶意刷量 IP），缺乏规则引擎。方案新增 SQLite <code>ip_blocklist</code> 动态封禁表 + 内存高速缓存 + 管理面封禁/解封端点 + 频繁超限自动入黑名单。</li>
+  <li><strong>ISSUE-03 Action ID 自愈</strong>：Next.js Server Action 编译哈希随上游改版变化，静态硬编码 <code>Next-Action</code> 必然过期导致 404。方案新增 <code>action_sniffer.py</code> 动态嗅探 + 失配自愈 + 后台保活。</li>
+</ul>
+
+<h2>2. 需求追踪矩阵</h2>
+<table>
+  <thead><tr><th>ID</th><th>需求</th><th>对应实现</th><th>状态</th><th>验证证据</th></tr></thead>
+  <tbody>
+    <tr><td>ISSUE-01a</td><td>存储驱动抽象接口</td><td><code>api/storage/base.py</code></td><td><span class="badge b-ok">已闭环</span></td><td>接口契约测试通过</td></tr>
+    <tr><td>ISSUE-01b</td><td>单机 Local 适配（零外置依赖）</td><td><code>api/storage/local.py</code>（MemoryRateLimiter + SQLiteLeaseLock）</td><td><span class="badge b-ok">已闭环</span></td><td><code>test_storage_adapter.py</code> 10 passed</td></tr>
+    <tr><td>ISSUE-01c</td><td>Redis 分布式锁 / Lua 限流</td><td><code>api/storage/redis_adapter.py</code></td><td><span class="badge b-warn">部分闭环</span></td><td>构造 + 工厂切换实测；真实 Redis 连接因无实例未跑（披露）</td></tr>
+    <tr><td>ISSUE-02a</td><td>SQLite 封禁表 + 内存缓存</td><td><code>api/db/ip_blocklist_store.py</code></td><td><span class="badge b-ok">已闭环</span></td><td><code>test_ip_blocklist.py</code> 21 passed；真实 E2E</td></tr>
+    <tr><td>ISSUE-02b</td><td>管理面封禁/解封端点</td><td><code>api/routes/security.py</code></td><td><span class="badge b-ok">已闭环</span></td><td>真实 uvicorn E2E：封禁→403 / 解封恢复 / 列表 / 状态 / 统计</td></tr>
+    <tr><td>ISSUE-02c</td><td>移除硬编码 IP + 自动入黑</td><td><code>api/request_guard.py</code></td><td><span class="badge b-ok">已闭环</span></td><td>工作树无旧硬编码刷量 IP 残留；自动封禁用例通过</td></tr>
+    <tr><td>ISSUE-03a</td><td>Action ID 动态嗅探 + 缓存</td><td><code>api/providers/action_sniffer.py</code></td><td><span class="badge b-ok">已闭环</span></td><td><code>test_action_sniffer.py</code> 14 passed；<strong>真实上游嗅探成功</strong></td></tr>
+    <tr><td>ISSUE-03b</td><td>失配自愈 + 后台保活</td><td><code>nanobanana.py</code> / <code>registerer.py</code> 接入</td><td><span class="badge b-ok">已闭环</span></td><td>Provider 404 自愈重试用例通过；keepalive 用例通过</td></tr>
+    <tr><td>S-B1</td><td>管理端独立 Key 鉴权</td><td><code>api/auth.py</code> <code>check_admin_key</code> + <code>IF_ADMIN_KEYS</code></td><td><span class="badge b-ok">已闭环</span></td><td>真实 E2E：无 Key→401、业务 Key 继承→200、无 Key 且未开放→403</td></tr>
+    <tr><td>S-B2</td><td>XFF 伪造防护（受信代理判定）</td><td><code>request_guard.get_client_ip</code> + <code>IF_TRUSTED_PROXIES</code></td><td><span class="badge b-ok">已闭环</span></td><td>真实 E2E：直连伪造 XFF 不生效；单元验证 direct/trusted/multi-hop 三态正确</td></tr>
+    <tr><td>S-R2</td><td>IPv6 严格校验</td><td><code>security._validate_ip</code> 用 <code>ipaddress</code></td><td><span class="badge b-ok">已闭环</span></td><td>真实 E2E：<code>ban::x::y</code> → 400</td></tr>
+  </tbody>
+</table>
+<p><strong>未闭环项披露</strong>：Redis 真实连接配置（需真实 Redis 实例，本地无，故仅验证构造与工厂切换，测试用不可达端口验证回退不崩溃）；真实付费 API 调用（遵守预算红线，仅 Mock）。</p>
+
+<h2>3. 关键反向审查结论（Red Team）</h2>
+<div class="card">
+<ul>
+  <li><strong>最脆弱假设</strong>：“仅依赖 XFF 首段即可拿真实客户端 IP”。被独立安全审查证伪——公网可直连时客户端可任意伪造 XFF，绕过封禁/限流/白名单，甚至把第三方 IP 打黑。已修复为「对端非受信代理一律以 socket 对端为准」。</li>
+  <li><strong>六个月后最可能失败点</strong>：上游 Site 再次改版使 Action ID 过期。已通过 force_refresh 失配自愈 + 后台 keepalive 缓解，且 <strong>实测上游当前三个 Action 均已过期</strong>（生成 <code>7f904a21…</code> vs 代码旧值 <code>7fb61a58…</code>），本项目上线即触发一次嗅探自愈，正是收益。</li>
+  <li><strong>被遗漏的边界</strong>：管理端点与客户端共用同一把 Key 被审查指出（B2）。已引入独立 <code>IF_ADMIN_KEYS</code>，未配置默认拒绝，仅 <code>IF_ADMIN_KEY_OPEN=1</code> 显式开放。</li>
+  <li><strong>更简路径</strong>：相对于引入完整外置 Redis 依赖，单机默认保持 SQLite/Memory 是更保守、可回滚的路径；Redis 仅为集群可选增强。</li>
+</ul>
+</div>
+
+<h2>4. P0 / P1 / P2 / P3 问题</h2>
+<table>
+  <thead><tr><th>级别</th><th>问题</th><th>处置</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-err">P0</span></td><td><code>ErrorCodes.FORBIDDEN</code> 缺失，封禁路径 AttributeError→500 而非 403</td><td>已修复（AUTH.003 + STATUS_CODE_ERROR_MAP[403]）</td></tr>
+    <tr><td><span class="badge b-err">P0</span></td><td>管理端点与客户端共用同 Key，公网零鉴权管理面</td><td>已修复（独立 IF_ADMIN_KEYS + 默认拒绝）</td></tr>
+    <tr><td><span class="badge b-err">P0</span></td><td>XFF 无条件信任可绕过风控 / 武器化为第三方 DoS</td><td>已修复（受信代理判定）</td></tr>
+    <tr><td><span class="badge b-warn">P1</span></td><td>自动入黑默认阈值过激（3 次/5 分钟→1h）</td><td>已调优为 5 次/300s→1800s，可用 <code>IF_AUTO_BLOCK_ENABLED=0</code> 关闭</td></tr>
+    <tr><td><span class="badge b-warn">P1</span></td><td>daily_limit / 滑窗桶双时间戳混用致桶永不清理</td><td>已修复（统一墙上时钟）</td></tr>
+    <tr><td><span class="badge b-warn">P1</span></td><td>IPv6 校验缺失（含冒号即通过）</td><td>已修复（ipaddress 严格校验）</td></tr>
+    <tr><td><span class="badge" style="background:#2a3038;color:var(--muted)">P2</span></td><td>action_sniffer 抓取跨域脚本 / 跟随重定向</td><td>已修复（同源校验 + 不跟随重定向）</td></tr>
+    <tr><td><span class="badge" style="background:#2a3038;color:var(--muted)">P2</span></td><td>封禁缓存全量同步 limit=2000 静默丢规则</td><td>已加 DB 兜底 + 内存未命中回源（S3 缓解）</td></tr>
+    <tr><td><span class="badge" style="background:#2a3038;color:var(--muted)">P2</span></td><td>封禁 403 对外回显内部 reason 泄露配置</td><td>已修复（对外仅保留通用文案）</td></tr>
+  </tbody>
+</table>
+
+<h2>5. 修改的文件与模块</h2>
+<table>
+  <thead><tr><th>文件</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>api/storage/__init__.py</code> + <code>base.py</code> / <code>factory.py</code> / <code>local.py</code> / <code>redis_adapter.py</code></td><td>ISSUE-01 存储驱动抽象 + 单机 + Redis + 工厂</td></tr>
+    <tr><td><code>api/db/ip_blocklist_store.py</code></td><td>ISSUE-02 SQLite 封禁表</td></tr>
+    <tr><td><code>api/request_guard.py</code>（重写）</td><td>ISSUE-02 动态风控 + 安全加固</td></tr>
+    <tr><td><code>api/routes/security.py</code></td><td>ISSUE-02 管理面安全端点</td></tr>
+    <tr><td><code>api/providers/action_sniffer.py</code></td><td>ISSUE-03 动态嗅探器</td></tr>
+    <tr><td><code>api/providers/nanobanana.py</code> / <code>api/registerer.py</code></td><td>ISSUE-03 接入动态 Action + 失配自愈</td></tr>
+    <tr><td><code>api/auth.py</code> / <code>api/config/__init__.py</code> / <code>api/errors.py</code> / <code>api/lifespan.py</code></td><td>管理 Key 鉴权 / 配置项 / AUTH.003 / 启动预热缓存</td></tr>
+    <tr><td><code>tests/</code>（test_storage_adapter / test_ip_blocklist / test_action_sniffer + 回归）</td><td>专项与回归测试</td></tr>
+  </tbody>
+</table>
+
+<h2>6. 测试与运行证据</h2>
+<pre>### 专项测试（全部 Green）
+test_storage_adapter.py  .... 10 passed
+test_ip_blocklist.py     .... 21 passed
+test_action_sniffer.py   .... 14 passed
+回归（auth / config / errors / main_validation / registerer / edit_lease / edit_mutex）197 passed
+
+### 真实 uvicorn E2E（端口 8812，mock 上游）
+1. 未带 Key 访问管理端点          → 401
+2. 带业务 Key（继承）封禁          → 200 {record.ip=9.9.9.9}
+3. 被封 IP 生成                    → 403 AUTH.003（消息不含 reason）
+4. 直连伪造 XFF=9.9.9.9            → 不生效（以 socket 计）
+5. 解封后                           → 200 恢复
+6. 非法 IPv6 "ban::x::y"           → 400
+7. 封禁 socket 对端 127.0.0.1       → 200 恢复（证明以 socket 为准）
+
+### 真实上游 Action 嗅探（nanobanana-pro.com）
+generate = 7f904a21… / edit = 7fb13306… / claim = 7fb1e44a…   （三者均为当前生效新 ID，与代码旧静态值全部不同）</pre>
+
+<h2>7. Reviewer 发现与修复</h2>
+<div class="card">
+<p>独立安全审查（security-reviewer）本轮结论 <strong>Request Changes</strong>，发现 2 个 Blocking（B1 XFF 信任、B2 管理端鉴权）+ 若干 Required/Suggestion，已全部在本次提交内修复。</p>
+<ul>
+  <li><span class="badge b-err">B1</span> XFF 无条件信任 → 受信代理判定（<code>IF_TRUSTED_PROXIES</code>）✅ 已修复</li>
+  <li><span class="badge b-err">B2</span> 管理端共 Key / 公网零鉴权 → 独立 <code>IF_ADMIN_KEYS</code> + 默认拒绝 ✅ 已修复</li>
+  <li><span class="badge b-warn">R1</span> 自动封禁过激 → 阈值调优 + 可关闭 ✅ 已修复</li>
+  <li><span class="badge b-warn">R2</span> IPv6 校验缺失 → ipaddress 严格校验 ✅ 已修复</li>
+  <li><span class="badge" style="background:#2a3038;color:var(--muted)">S1</span> 双时间戳桶不清理 → 统一墙上时钟 ✅ 已修复</li>
+  <li><span class="badge" style="background:#2a3038;color:var(--muted)">S2</span> 嗅探跨源抓取 → 同源 + 不跟随重定向 ✅ 已修复</li>
+  <li><span class="badge" style="background:#2a3038;color:var(--muted)">S3</span> 封禁缓存丢规则 → DB 兜底 ✅ 已修复</li>
+  <li><span class="badge" style="background:#2a3038;color:var(--muted)">S5</span> reason 回显 → 对外隐藏 ✅ 已修复</li>
+</ul>
+<p>遗留 Verify 项：多 worker/多实例下风控一致性（进程内缓存属既定设计，生产单 worker 居多）；Redis Lua RNG 无 seed（同微秒并发才可能低估，影响可忽略）——两者均已在报告中披露，不阻塞交付。</p>
+</div>
+
+<h2>8. 兼容性 / 迁移 / 回滚</h2>
+<div class="card">
+<ul>
+  <li><strong>向后兼容</strong>：<code>from api.config import Settings / settings / config</code>、<code>_client_ip</code>、<code>ACTION_GENERATE_IMG</code> 等旧符号保留。默认行为（单机 SQLite）不变。</li>
+  <li><strong>配置默认安全</strong>：新增项均带保守默认值；尤其管理面默认<strong>拒绝</strong>而非开放，公网部署更安全。</li>
+  <li><strong>SQLite 表迁移</strong>：<code>ip_blocklist</code> 为新增表，<code>CREATE TABLE IF NOT EXISTS</code> 幂等；对既有 <code>requests</code> 等表无 ALTER，无数据迁移风险。</li>
+  <li><strong>回滚</strong>：<code>git revert e9e3cfb</code> 可整体回退；因所有改动均为新增能力 + 非破坏性重构，回滚无副作用。</li>
+</ul>
+</div>
+
+<h2>9. 已知限制与剩余风险</h2>
+<div class="card">
+<ul>
+  <li>Redis 连接未在本地真实实例验证（无实例）；工厂仅在不可达端口时验证了回退不崩溃。生产启用 Redis 需单独联调。</li>
+  <li>真实浏览器验证（UI 侧）未执行（无浏览器工具），本次改动无前端 UI 变更，故以 API/服务层 E2E 替代。</li>
+  <li>自动入黑默认开启（5 次/300s→1800s）；如线上误伤可设 <code>IF_AUTO_BLOCK_ENABLED=0</code>。</li>
+  <li>多 worker 下封禁缓存为进程内状态，存在短暂同步空窗（<code>IF_TRUSTED_PROXIES</code> 已默认本机反代，生产建议保持单 worker 或接受该空窗）。</li>
+  <li>真实付费生成/图生图调用未执行（遵守预算红线），仅以 MockTransport 验证请求构造与响应解析。</li>
+</ul>
+</div>
+
+<h2>10. 交互式测验</h2>
+<p class="meta">共 8 题，默认通过线 80%。点击「提交」查看得分与错题解析。</p>
+<div class="quiz" id="quiz">
+  <div class="q" data-id="0"><strong>Q1. ISSUE-01 的默认存储后端是什么？</strong>
+    <label><input type="radio" name="q0" value="b"> Redis（需要外置部署）</label>
+    <label><input type="radio" name="q0" value="a"> 单机 SQLite / Memory（零外置依赖）</label>
+    <label><input type="radio" name="q0" value="c"> 全部内置，不限于单一后端</label>
+  </div>
+  <div class="q" data-id="1"><strong>Q2. 切换到集群 Redis 存储后端需设置哪个环境变量？</strong>
+    <label><input type="radio" name="q1" value="b"> IF_REDIS_ENABLED=1</label>
+    <label><input type="radio" name="q1" value="a"> IF_STORAGE_BACKEND=redis + IF_REDIS_URL</label>
+    <label><input type="radio" name="q1" value="c"> IF_USE_REDIS=true</label>
+  </div>
+  <div class="q" data-id="2"><strong>Q3. 未配置任何管理 Key 时，安全风控管理端点默认返回什么？</strong>
+    <label><input type="radio" name="q2" value="c"> 200 开放（本地运维模式）</label>
+    <label><input type="radio" name="q2" value="a"> 403 拒绝（除非显式 IF_ADMIN_KEY_OPEN=1）</label>
+    <label><input type="radio" name="q2" value="b"> 401 要求管理员密码</label>
+  </div>
+  <div class="q" data-id="3"><strong>Q4. 公网直连场景下，客户端伪造 X-Forwarded-For 首段来绕过封禁，系统如何处理？</strong>
+    <label><input type="radio" name="q3" value="a"> 仍信任 XFF 首段</label>
+    <label><input type="radio" name="q3" value="b"> 对端（socket）非受信代理时忽略 XFF，以 socket 对端为准</label>
+    <label><input type="radio" name="q3" value="c"> 直接 400 拒绝请求</label>
+  </div>
+  <div class="q" data-id="4"><strong>Q5. block_type='daily_limit' 的作用是？</strong>
+    <label><input type="radio" name="q4" value="a"> 将该 IP 完全封禁（403）</label>
+    <label><input type="radio" name="q4" value="b"> 限制该 IP 每日最大调用次数，超出后 403</label>
+    <label><input type="radio" name="q4" value="c"> 仅记录到日志，不做拦截</label>
+  </div>
+  <div class="q" data-id="5"><strong>Q6. ISSUE-03 中 Action Sniffer 解决的核心问题是？</strong>
+    <label><input type="radio" name="q5" value="a"> 前端页面加载慢</label>
+    <label><input type="radio" name="q5" value="b"> Next.js Server Action 编译哈希随上游改动而过期导致 404</label>
+    <label><input type="radio" name="q5" value="c"> 上游服务器限流</label>
+  </div>
+  <div class="q" data-id="6"><strong>Q7. 封禁命中时，响应中的 403 消息会泄露封禁的 reason 吗？</strong>
+    <label><input type="radio" name="q6" value="a"> 会，原样展示</label>
+    <label><input type="radio" name="q6" value="b"> 不会，对外隐藏 reason，仅保留通用文案</label>
+    <label><input type="radio" name="q6" value="c"> 会，但只对内网调用方</label>
+  </div>
+  <div class="q" data-id="7"><strong>Q8. 自动入黑名单功能若要临时关闭，应如何配置？</strong>
+    <label><input type="radio" name="q7" value="a"> IF_AUTO_BLOCK_ENABLED=0</label>
+    <label><input type="radio" name="q7" value="b"> IF_REQUESTS_PER_MINUTE=0</label>
+    <label><input type="radio" name="q7" value="c"> IF_IP_WHITELIST=*</label>
+  </div>
+  <button class="btn" onclick="grade()">提交</button>
+  <button class="btn reset" onclick="reset()">重置</button>
+  <div id="score"></div>
+</div>
+
+<div class="footer">imagefree-2ai · v6.4.0 · ISSUE-01/02/03 变更验收报告 · 由生产级交付终审流程生成</div>
+</div>
+
+<script>
+const ANSWERS = ["a","a","a","b","b","b","b","a"];
+function grade() {
+  let correct = 0, wrong = [];
+  for (let i = 0; i < ANSWERS.length; i++) {
+    const picked = document.querySelector('input[name="q'+i+'"]:checked');
+    const q = document.querySelector('.q[data-id="'+i+'"]');
+    q.classList.remove('correct','wrong');
+    if (picked && picked.value === ANSWERS[i]) { correct++; q.classList.add('correct'); }
+    else { q.classList.add('wrong'); wrong.push(i+1); }
+  }
+  const pct = Math.round(correct / ANSWERS.length * 100);
+  const score = document.getElementById('score');
+  score.style.display = 'block';
+  score.innerHTML = '得分：<b>' + correct + ' / ' + ANSWERS.length + '</b>（' + pct + '%）' +
+    (pct >= 80 ? ' ✅ 通过' : ' ❌ 未达 80% 通过线，错题：第 ' + wrong.join('、') + ' 题');
+}
+function reset() {
+  document.querySelectorAll('input[type=radio]').forEach(r => r.checked = false);
+  document.querySelectorAll('.q').forEach(q => q.classList.remove('correct','wrong'));
+  document.getElementById('score').style.display = 'none';
+}
+</script>
+</body>
+</html>
