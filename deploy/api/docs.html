@@ -2189,6 +2189,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
   function fmtInt(n) {
     return (n == null ? '0' : Number(n)).toLocaleString();
   }
+  // v6.3.4: Token 用量以 M/B (百万/十亿) 大单位格式化，更直观
+  function fmtTokens(n) {
+    var v = Number(n) || 0;
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return String(Math.round(v));
+  }
   function loadChatUsage() {
     var periodSel = document.getElementById('chat-usage-period');
     var period = periodSel ? periodSel.value : '24h';
@@ -2197,13 +2205,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         var el = document.getElementById(id);
         if (el) el.textContent = v;
       };
+      var totalTokens = (d.prompt_tokens || 0) + (d.completion_tokens || 0) + (d.reasoning_tokens || 0);
       set('cu-calls', fmtInt(d.total_calls));
       set('cu-calls-sub', '成功 ' + fmtInt(d.ok_calls) + ' / 失败 ' + fmtInt(d.fail_calls));
-      set('cu-prompt', fmtInt(d.prompt_tokens));
-      set('cu-comp', fmtInt(d.completion_tokens));
-      set('cu-reasoning', '推理 ' + fmtInt(d.reasoning_tokens));
-      set('cu-total', fmtInt((d.prompt_tokens || 0) + (d.completion_tokens || 0) + (d.reasoning_tokens || 0)));
-      set('cu-today', '今日 ' + fmtInt(d.today_calls) + ' 次 / ' + fmtInt(d.today_tokens) + ' tokens');
+      set('cu-prompt', fmtTokens(d.prompt_tokens));
+      set('cu-comp', fmtTokens(d.completion_tokens));
+      set('cu-reasoning', '推理 ' + fmtTokens(d.reasoning_tokens));
+      set('cu-total', fmtTokens(totalTokens));
+      set('cu-today', '今日 ' + fmtInt(d.today_calls) + ' 次 / ' + fmtTokens(d.today_tokens) + ' tokens');
       set('cu-avg', d.avg_duration_ms != null ? (d.avg_duration_ms / 1000).toFixed(1) + 's' : '—');
       set('cu-tools', fmtInt(d.tool_calls));
       var tbody = document.getElementById('chat-usage-tbody');
@@ -2216,9 +2225,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           return '<tr style="border-bottom:1px solid var(--line)">' +
             '<td style="padding:8px 6px"><code style="font-size:11px">' + esc(r.model) + '</code></td>' +
             '<td style="padding:8px 6px">' + fmtInt(r.calls) + '</td>' +
-            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtInt(r.prompt_tokens) + '</td>' +
-            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtInt(r.completion_tokens) + '</td>' +
-            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums;color:var(--primary)">' + fmtInt((r.prompt_tokens || 0) + (r.completion_tokens || 0)) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtTokens(r.prompt_tokens) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtTokens(r.completion_tokens) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums;color:var(--primary)">' + fmtTokens((r.prompt_tokens || 0) + (r.completion_tokens || 0)) + '</td>' +
             '</tr>';
         }).join('');
       }
