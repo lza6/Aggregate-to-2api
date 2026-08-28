@@ -613,12 +613,19 @@ class NanobananaRegisterer:
             )
             data = (st.json() or {}).get("data") or {}
             if data.get("hasClaimedToday"):
+                # 已签状态也回传统一画像 dict（当前周期天从 status 响应取 currentCycleDay），
+                # 让 account_pool 落库 checkin_total/credits 画像，而非只回 int 导致统计缺失
                 bal = await _th(
                     self.client.get,
                     f"{self.base}/api/credits/balance",
                     headers={"Cookie": cookie, "User-Agent": config.USER_AGENT},
                 )
-                return int((bal.json() or {}).get("credits", 0))
+                profile = {
+                    "credits": int((bal.json() or {}).get("credits", 0)),
+                    "cycle_day": int(data.get("currentCycleDay") or 0),
+                    "reward": 0,  # 今天已领过，无新增
+                }
+                return profile
 
             # 步骤 2：Server Action 领取（需要 captcha 则同一出口解）
             body = [{"captchaToken": ""}]
