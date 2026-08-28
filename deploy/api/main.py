@@ -59,14 +59,24 @@ if _FRONTEND_DIR.exists():
         from fastapi.staticfiles import StaticFiles
 
         class SPAStaticFiles(StaticFiles):
-            """SPA 深链回退：/admin/tasks 刷新时回退 index.html（BrowserRouter 路由接管）。"""
+            """SPA 深链回退：/admin/tasks 等前端路由刷新时回退 index.html（BrowserRouter 接管）。
+
+            兼容两代 starlette 行为：
+            - 旧版 get_response 返回 status_code=404 的 Response 对象 → 走 response.status_code 分支；
+            - 新版（starlette ≥ 0.36 风格，生产 1.6.0 实测）直接 raise HTTPException(404)
+              → 捕获异常后回退 index.html。
+            assets/ 静态资源 404 保持 404（资源缺失应显式报错，不能回退成 HTML）。
+            """
 
             async def get_response(self, path: str, scope):
-                response = await super().get_response(path, scope)
-                if response.status_code == 404:
-                    if not path.startswith("assets/"):
-                        response = await super().get_response("index.html", scope)
-                return response
+                from starlette.exceptions import HTTPException as StarletteHTTPException
+
+                try:
+                    return await super().get_response(path, scope)
+                except StarletteHTTPException as exc:
+                    if exc.status_code == 404 and not path.startswith("assets/"):
+                        return await super().get_response("index.html", scope)
+                    raise
 
         app.mount("/admin", SPAStaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
         log.info("前端管理面板已挂载到 /admin（含 SPA 深链回退）")
