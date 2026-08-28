@@ -22,6 +22,7 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone as _datetime_tz
 from typing import Any
 
 import httpx
@@ -205,6 +206,21 @@ class AdaptiveRegistrationBackoff:
 adaptive_backoff = AdaptiveRegistrationBackoff()
 
 
+def _parse_iso_ts(value: Any) -> float | None:
+    """把 ISO 时间字符串（如 2026-08-29T07:00:00.000Z）解析成 Unix 时间戳；失败返回 None。"""
+    if not value:
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.fromisoformat(s).replace(tzinfo=_datetime_tz.utc).timestamp()
+    except Exception:
+        return None
+
+
 def _browser_headers(origin: str, referer: str | None = None) -> dict[str, str]:
     return {
         "User-Agent": config.USER_AGENT,
@@ -367,13 +383,7 @@ class NanobananaRegisterer:
             if data.get("cycleDay") is not None:
                 out["cycle_day"] = int(data.get("cycleDay") or 0)
             if data.get("nextClaimAt"):
-                try:
-                    from datetime import datetime, timezone as _tz
-                    out["next_claim_at"] = datetime.fromisoformat(
-                        str(data["nextClaimAt"]).replace("Z", "+00:00")
-                    ).timestamp()
-                except Exception:
-                    pass
+                out["next_claim_at"] = _parse_iso_ts(data.get("nextClaimAt"))
             if out:
                 break
         return out
@@ -624,6 +634,8 @@ class NanobananaRegisterer:
                     "credits": int((bal.json() or {}).get("credits", 0)),
                     "cycle_day": int(data.get("currentCycleDay") or 0),
                     "reward": 0,  # 今天已领过，无新增
+                    # 下次签到时间从 status.nextClaimAt 提取（美区时区重置点）
+                    "next_claim_at": _parse_iso_ts(data.get("nextClaimAt")),
                 }
                 return profile
 
