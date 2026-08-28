@@ -30,7 +30,8 @@ class AdaptiveRetryStrategy:
     TIMEOUT_MARKERS = ("timeout",)
     SERVER_ERROR_MARKERS = ("5xx", "503", "502", "504", "500")
     NETWORK_ERROR_MARKERS = ("connectionerror", "connection refused", "connection reset")
-    PERMANENT_MARKERS = ("422", "400", "404")
+    # 401/403 无权限、400/404 永久错误一律不重试（重试纯浪费 CF 求解与号池资源）
+    PERMANENT_MARKERS = ("401", "403", "422", "400", "404", "unauthorized", "forbidden", "authentication", "permission")
 
     @staticmethod
     def classify(error: object) -> str:
@@ -58,6 +59,9 @@ class AdaptiveRetryStrategy:
                     if 500 <= status_code < 600:
                         return "server_error"
                     if status_code in (422, 404):
+                        return "permanent"
+                    # 401/403：无权限 / 被拒 —— 永久错误，重试只会浪费 CF 求解资源
+                    if status_code in (401, 403):
                         return "permanent"
                     if status_code == 400:
                         err_body = str(error).lower()
