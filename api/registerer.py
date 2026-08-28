@@ -326,6 +326,58 @@ class NanobananaRegisterer:
         )
         self.last_session: RegistrationSession | None = None
 
+    @staticmethod
+    def _claim_response_ok(r: httpx.Response) -> bool:
+        """解析签到 Server Action 响应，判断是否领取成功（0: 行含 success / rewardAmount）。"""
+        for line in (r.text or "").splitlines():
+            line = line.strip()
+            if not line.startswith("0:"):
+                continue
+            try:
+                resp = json.loads(line[2:].strip().replace("$$", "$"))
+                if resp.get("success") or resp.get("data", {}).get("rewardAmount") is not None:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    @staticmethod
+    def parse_claim_profile(r: httpx.Response) -> dict:
+        """v6.3.4: 从签到 claim 响应提取完整画像（rewardAmount/cycleDay/nextClaimAt）。
+
+        抓包确认响应形如（RSC 0: 行，JSON 内 data 字段）：
+        {"success":true,"data":{"rewardAmount":3,"cycleDay":2,"nextDay":3,
+          "nextClaimAt":"2026-08-29T07:00:00.000Z","currentPeriod":"daily-checkin:..."}}
+        解析失败返回空 dict（调用方按 0 值兜底，不阻塞签到主流程）。
+        """
+        out: dict = {}
+        for line in (r.text or "").splitlines():
+            line = line.strip()
+            if not line.startswith("0:"):
+                continue
+            try:
+                resp = json.loads(line[2:].strip().replace("$$", "$"))
+            except Exception:
+                continue
+            data = resp.get("data") or {}
+            if not isinstance(data, dict):
+                continue
+            if data.get("rewardAmount") is not None:
+                out["reward"] = int(data.get("rewardAmount") or 0)
+            if data.get("cycleDay") is not None:
+                out["cycle_day"] = int(data.get("cycleDay") or 0)
+            if data.get("nextClaimAt"):
+                try:
+                    from datetime import datetime, timezone as _tz
+                    out["next_claim_at"] = datetime.fromisoformat(
+                        str(data["nextClaimAt"]).replace("Z", "+00:00")
+                    ).timestamp()
+                except Exception:
+                    pass
+            if out:
+                break
+        return out
+
     def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None:
         if force_rotate:
             want = config.PROXY
@@ -580,29 +632,40 @@ class NanobananaRegisterer:
                     return None
 
             payload = json.dumps(body).replace("$", "$$") if "$" in json.dumps(body) else json.dumps(body)
+            from .providers.action_sniffer import action_sniffer, is_stale_action_response
+            claim_action = await action_sniffer.get_action_id("claim_daily_checkin")
             r = await _th(
                 self.client.post,
                 f"{self.base}/zh",
                 headers={
                     "Cookie": cookie,
                     "User-Agent": config.USER_AGENT,
-                    "Next-Action": ACTION_CLAIM_DAILY_CHECKIN,
+                    "Next-Action": claim_action or ACTION_CLAIM_DAILY_CHECKIN,
                     "Accept": "text/x-component",
                     "Content-Type": "text/plain;charset=UTF-8",
                 },
                 content=payload,
             )
 
-            claimed = False
-            for line in (r.text or "").splitlines():
-                line = line.strip()
-                if line.startswith("0:"):
-                    try:
-                        resp = json.loads(line[2:].strip().replace("$$", "$"))
-                        if resp.get("success") or resp.get("data", {}).get("rewardAmount") is not None:
-                            claimed = True
-                    except Exception:
-                        pass
+            claimed = self._claim_response_ok(r)
+            if not claimed and is_stale_action_response(r):
+                # ISSUE-03: 404 / Action 不匹配 → force_refresh 嗅探自愈，用新 ID 重试一次
+                fresh = await action_sniffer.get_action_id("claim_daily_checkin", force_refresh=True)
+                if fresh and fresh != claim_action:
+                    log.warning("nanobanana 签到 Action 失效，嗅探到新 ID %s...，自愈重试", fresh[:12])
+                    r = await _th(
+                        self.client.post,
+                        f"{self.base}/zh",
+                        headers={
+                            "Cookie": cookie,
+                            "User-Agent": config.USER_AGENT,
+                            "Next-Action": fresh,
+                            "Accept": "text/x-component",
+                            "Content-Type": "text/plain;charset=UTF-8",
+                        },
+                        content=payload,
+                    )
+                    claimed = self._claim_response_ok(r)
             if not claimed:
                 log.warning("nanobanana 签到领取响应异常: %s", (r.text or "")[:120])
                 return None
@@ -612,7 +675,10 @@ class NanobananaRegisterer:
                 f"{self.base}/api/credits/balance",
                 headers={"Cookie": cookie, "User-Agent": config.USER_AGENT},
             )
-            return int((bal.json() or {}).get("credits", 0))
+            # v6.3.4: 签到画像随余额一起返回，供 account_pool 落库累计签到/周期天数
+            profile = self.parse_claim_profile(r)
+            profile["credits"] = int((bal.json() or {}).get("credits", 0))
+            return profile
         except Exception as e:
             log.warning("nanobanana 签到失败 %s: %s", acc.get("email", "?"), e)
         return None

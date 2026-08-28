@@ -173,6 +173,15 @@ class AccountPool:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN borrowed_at REAL")
                 if "register_ip" not in cols:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN register_ip TEXT")
+                # v6.3.4: 签到周期画像（上游 claim 响应的 cycleDay/rewardAmount 落库）
+                if "checkin_cycle_day" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN checkin_cycle_day INTEGER DEFAULT 0")
+                if "checkin_total" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN checkin_total INTEGER DEFAULT 0")
+                if "credits_earned_total" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN credits_earned_total INTEGER DEFAULT 0")
+                if "next_claim_at" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN next_claim_at REAL")
             except Exception as e:
                 log.debug("Schema migration check: %s", e)
             self._conn.commit()
@@ -457,6 +466,30 @@ class AccountPool:
                                (checkin_at, provider, email))
             self._conn.commit()
 
+    def set_checkin_profile(
+        self, provider: str, email: str, checkin_at: float,
+        cycle_day: int = 0, reward: int = 0, next_claim_at: float | None = None,
+    ) -> None:
+        """v6.3.4: 签到成功后一次性落库完整画像。
+
+        - checkin_at：本次签到时间戳
+        - checkin_cycle_day：上游 claim 响应的 cycleDay（7 天周期内第几天）
+        - checkin_total：累计签到天数（自增 1）
+        - credits_earned_total：累计获得积分（累计 reward）
+        - next_claim_at：上游 nextClaimAt（美区时区重置点）
+        """
+        with self._lock:
+            self._conn.execute(
+                "UPDATE accounts SET checkin_at=?, checkin_cycle_day=?,"
+                " checkin_total=COALESCE(checkin_total,0)+1,"
+                " credits_earned_total=COALESCE(credits_earned_total,0)+?,"
+                " next_claim_at=?, updated_at=?"
+                " WHERE provider=? AND email=?",
+                (checkin_at, int(cycle_day or 0), int(reward or 0),
+                 next_claim_at, time.time(), provider, email),
+            )
+            self._conn.commit()
+
     def counts(self) -> dict:
         """返回全状态细分统计 (映射为标准 key 与历史 key 兼容)。"""
         rows = self._conn.execute(
@@ -597,8 +630,21 @@ class AccountPool:
                     try:
                         ok = await reg.checkin(acc)
                         if ok:
-                            self.set_checkin(provider, acc["email"], time.time())
-                            self.update_credits(provider, acc["email"], ok)
+                            # v6.3.4: checkin 现返回 {credits, reward?, cycle_day?, next_claim_at?} 画像 dict
+                            # 兼容旧的 int 返回（仅余额）
+                            if isinstance(ok, dict):
+                                credits = int(ok.get("credits") or 0)
+                                self.set_checkin_profile(
+                                    provider, acc["email"], time.time(),
+                                    cycle_day=int(ok.get("cycle_day") or 0),
+                                    reward=int(ok.get("reward") or 0),
+                                    next_claim_at=ok.get("next_claim_at"),
+                                )
+                            else:
+                                credits = int(ok or 0)
+                                self.set_checkin(provider, acc["email"], time.time())
+                            if credits:
+                                self.update_credits(provider, acc["email"], credits)
                             self.mark(provider, acc["email"], "active")
                             continue
                         # checkin 返回 None（cookie 失效）→ 尝试用保存的密码重新登录续期

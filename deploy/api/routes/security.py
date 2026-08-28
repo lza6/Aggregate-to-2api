@@ -1,7 +1,9 @@
 """安全风控管理端点（ISSUE-02）。
 
-提供动态封禁 / 解封 / 列表 / 统计，沿用全站 API Key 鉴权边界
-（写操作与生图一致需 Key；未配置 Key 时开放=本地运维模式）。
+提供动态封禁 / 解封 / 列表 / 统计。鉴权边界（ISSUE-02 加固）：
+- 优先使用独立管理 Key 池 IF_ADMIN_KEYS；
+- 未配置管理 Key 时继承业务 Key IF_API_KEYS（兼容降级）；
+- 两者均未配置 → 默认拒绝管理操作，仅显式 IF_ADMIN_KEY_OPEN=1（本地运维/内网）时放行。
 """
 from __future__ import annotations
 
@@ -10,8 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 
-from .. import config
-from ..auth import check_api_key
+from ..auth import check_admin_key
 from ..db.ip_blocklist_store import ip_blocklist_store
 from ..errors import AppError, ErrorCodes
 from ..request_guard import apply_ip_rule, invalidate_ip_cache
@@ -22,22 +23,20 @@ log = logging.getLogger("imagefree_api.security")
 
 
 def _require_admin_key(request: Request) -> None:
-    """安全管理端点鉴权：与生图一致采用全局 API Key；未配置时本地运维模式放行。"""
-    if not getattr(config.settings, "if_api_keys", ""):
-        return  # 未配置 Key = 开放（本地/受信内网）
-    check_api_key(request, scope="admin-security")
+    """安全管理端点鉴权：独立管理 Key（未配置时继承业务 Key，两者皆空默认拒绝）。"""
+    check_admin_key(request, scope="admin-security")
 
 
 def _validate_ip(ip: str) -> str:
-    """IP 基础格式校验（IPv4 / IPv6 字面量）。"""
+    """IP 基础格式校验（IPv4 / IPv6 字面量，严格校验）。"""
     ip = (ip or "").strip()
     if not ip:
         raise AppError(ErrorCodes.BAD_REQUEST, "ip 不能为空", 400)
-    # IPv4 段校验
-    if ":" not in ip:
-        parts = ip.split(".")
-        if len(parts) != 4 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
-            raise AppError(ErrorCodes.BAD_REQUEST, f"ip 格式非法: {ip}", 400)
+    try:
+        import ipaddress
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise AppError(ErrorCodes.BAD_REQUEST, f"ip 格式非法: {ip}", 400)
     return ip
 
 

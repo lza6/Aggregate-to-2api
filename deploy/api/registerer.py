@@ -341,6 +341,43 @@ class NanobananaRegisterer:
                 continue
         return False
 
+    @staticmethod
+    def parse_claim_profile(r: httpx.Response) -> dict:
+        """v6.3.4: 从签到 claim 响应提取完整画像（rewardAmount/cycleDay/nextClaimAt）。
+
+        抓包确认响应形如（RSC 0: 行，JSON 内 data 字段）：
+        {"success":true,"data":{"rewardAmount":3,"cycleDay":2,"nextDay":3,
+          "nextClaimAt":"2026-08-29T07:00:00.000Z","currentPeriod":"daily-checkin:..."}}
+        解析失败返回空 dict（调用方按 0 值兜底，不阻塞签到主流程）。
+        """
+        out: dict = {}
+        for line in (r.text or "").splitlines():
+            line = line.strip()
+            if not line.startswith("0:"):
+                continue
+            try:
+                resp = json.loads(line[2:].strip().replace("$$", "$"))
+            except Exception:
+                continue
+            data = resp.get("data") or {}
+            if not isinstance(data, dict):
+                continue
+            if data.get("rewardAmount") is not None:
+                out["reward"] = int(data.get("rewardAmount") or 0)
+            if data.get("cycleDay") is not None:
+                out["cycle_day"] = int(data.get("cycleDay") or 0)
+            if data.get("nextClaimAt"):
+                try:
+                    from datetime import datetime, timezone as _tz
+                    out["next_claim_at"] = datetime.fromisoformat(
+                        str(data["nextClaimAt"]).replace("Z", "+00:00")
+                    ).timestamp()
+                except Exception:
+                    pass
+            if out:
+                break
+        return out
+
     def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None:
         if force_rotate:
             want = config.PROXY
@@ -638,7 +675,10 @@ class NanobananaRegisterer:
                 f"{self.base}/api/credits/balance",
                 headers={"Cookie": cookie, "User-Agent": config.USER_AGENT},
             )
-            return int((bal.json() or {}).get("credits", 0))
+            # v6.3.4: 签到画像随余额一起返回，供 account_pool 落库累计签到/周期天数
+            profile = self.parse_claim_profile(r)
+            profile["credits"] = int((bal.json() or {}).get("credits", 0))
+            return profile
         except Exception as e:
             log.warning("nanobanana 签到失败 %s: %s", acc.get("email", "?"), e)
         return None

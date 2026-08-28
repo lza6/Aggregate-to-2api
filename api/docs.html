@@ -566,7 +566,8 @@
   </div>
 </nav>
 
-<section class="stats">
+<!-- ── 出图概览 + Solver 统计：仅在「🖼️ 在线使用」tab 显示（tab 切换 JS 控制）── -->
+<section class="stats" id="stats-band">
   <div class="stats-grid">
     <div class="stat-card"><div class="label">总请求</div><div class="value" id="st-req">–</div><div class="delta">接口调用次数</div></div>
     <div class="stat-card"><div class="label">总出图</div><div class="value" id="st-img">–</div><div class="delta">成功生成的图片</div></div>
@@ -580,8 +581,8 @@
   </div>
 </section>
 
-<!-- ── Solver 求解统计详情 ── -->
-<section class="card" id="solver-sec" style="max-width:1180px;margin:12px auto 0;padding:14px 20px;">
+<!-- ── Solver 求解统计详情（归属「🖼️ 在线使用」tab）── -->
+<section class="card" id="solver-sec" style="max-width:1180px;margin:12px auto 0;padding:14px 20px;display:none">
   <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:13px;color:var(--muted)">
     <span>🔄 Window: <b id="solver-win-count" style="color:var(--text)">–</b> 次求解 | 成功率 <b id="solver-win-rate" style="color:var(--text)">–</b></span>
     <span>⏱ 平均耗时 <b id="solver-win-avg" style="color:var(--text)">–</b></span>
@@ -773,13 +774,16 @@
   <div class="pool-grid" id="pool-grid"><div class="empty">⏳ 加载中…</div></div>
   <div id="email-pool-box" style="margin-top:16px"></div>
 
-  <!-- ── 账号明细与每日签到透明度面板 ── -->
+  <!-- ── 账号明细与每日签到透明度面板（分页版，v6.3.4）── -->
   <div style="margin-top:24px;border-top:1px solid var(--line);padding-top:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <h3 style="margin:0;font-size:15px;display:flex;align-items:center;gap:6px">
-        <span>👤</span> <span>长效账号活跃明细（积分/签到时间/下次签到）</span>
+        <span>👤</span> <span>长效账号活跃明细（签到天数/存活/累计积分）</span>
       </h3>
-      <button class="btn secondary" id="btn-refresh-accounts" style="padding:4px 12px;font-size:12px;margin:0">🔄 刷新账号状态</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="acc-search" placeholder="🔍 搜索邮箱…" style="width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:12px">
+        <button class="btn secondary" id="btn-refresh-accounts" style="padding:4px 12px;font-size:12px;margin:0">🔄 刷新</button>
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table style="width:100%;font-size:12px;border-collapse:collapse" id="accounts-table">
@@ -788,15 +792,23 @@
             <th style="padding:8px 6px">邮箱 (脱敏)</th>
             <th style="padding:8px 6px">当前积分</th>
             <th style="padding:8px 6px">账号状态</th>
-            <th style="padding:8px 6px">注册入池时间</th>
-            <th style="padding:8px 6px">上次签到时间</th>
-            <th style="padding:8px 6px">预计下次自动签到</th>
+            <th style="padding:8px 6px">累计签到</th>
+            <th style="padding:8px 6px">本轮第几天</th>
+            <th style="padding:8px 6px">累计获得积分</th>
+            <th style="padding:8px 6px">存活天数</th>
+            <th style="padding:8px 6px">上次签到</th>
+            <th style="padding:8px 6px">下次签到</th>
           </tr>
         </thead>
         <tbody id="accounts-tbody">
-          <tr><td colspan="6" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">⏳ 暂无入池账号明细</td></tr>
+          <tr><td colspan="9" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">⏳ 暂无入池账号明细</td></tr>
         </tbody>
       </table>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;font-size:13px">
+      <button id="acc-prev" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:12px" disabled>← 上一页</button>
+      <span id="acc-info" style="color:var(--muted)">第 1 页 / 共 1 页</span>
+      <button id="acc-next" class="btn secondary" style="padding:6px 14px;margin-top:0;font-size:12px" disabled>下一页 →</button>
     </div>
   </div>
 </section>
@@ -1609,6 +1621,12 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         var el = document.getElementById(id);
         if (el) {
           // docs-sec 点击时同时显示 stats-sec + task-sec（聚合页）
+          // stats-band / solver-sec：出图概览与求解统计仅归属「🖼️ 在线使用」tab（playground）
+          var statsBand = document.getElementById('stats-band');
+          var solverSec = document.getElementById('solver-sec');
+          var showGlobal = (target === 'playground');
+          if (statsBand) statsBand.style.display = showGlobal ? '' : 'none';
+          if (solverSec) solverSec.style.display = showGlobal ? '' : 'none';
           if (target === 'docs-sec') {
             el.style.display = (id === 'docs-sec' || id === 'stats-sec' || id === 'task-sec' || id === 'quickstart-sec') ? '' : 'none';
           } else {
@@ -1622,6 +1640,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       if (target === 'logs-sec') startLogPolling();
       if (target === 'proxy-sec') startProxyPolling();
       if (target === 'gallery-sec') loadGallery();
+      if (target === 'chat-usage-sec') startChatUsagePolling();
       if (target === 'docs-sec') { loadTasks(); loadStats(); }
     };
   });
@@ -2165,6 +2184,60 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     };
   }
 
+  // ── 聊天用量面板（/v1/chat/usage）：加载 + 周期切换 + 刷新按钮 ──
+  var chatUsageTimer = null;
+  function fmtInt(n) {
+    return (n == null ? '0' : Number(n)).toLocaleString();
+  }
+  function loadChatUsage() {
+    var periodSel = document.getElementById('chat-usage-period');
+    var period = periodSel ? periodSel.value : '24h';
+    safeJson('/v1/chat/usage?period=' + period).then(function (d) {
+      var set = function (id, v) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = v;
+      };
+      set('cu-calls', fmtInt(d.total_calls));
+      set('cu-calls-sub', '成功 ' + fmtInt(d.ok_calls) + ' / 失败 ' + fmtInt(d.fail_calls));
+      set('cu-prompt', fmtInt(d.prompt_tokens));
+      set('cu-comp', fmtInt(d.completion_tokens));
+      set('cu-reasoning', '推理 ' + fmtInt(d.reasoning_tokens));
+      set('cu-total', fmtInt((d.prompt_tokens || 0) + (d.completion_tokens || 0) + (d.reasoning_tokens || 0)));
+      set('cu-today', '今日 ' + fmtInt(d.today_calls) + ' 次 / ' + fmtInt(d.today_tokens) + ' tokens');
+      set('cu-avg', d.avg_duration_ms != null ? (d.avg_duration_ms / 1000).toFixed(1) + 's' : '—');
+      set('cu-tools', fmtInt(d.tool_calls));
+      var tbody = document.getElementById('chat-usage-tbody');
+      if (!tbody) return;
+      var rows = d.by_model || [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">📭 当前周期内暂无对话调用记录（去「🖼️ 在线使用 → 💬 对话聊天」发起对话后即可看到统计）</td></tr>';
+      } else {
+        tbody.innerHTML = rows.map(function (r) {
+          return '<tr style="border-bottom:1px solid var(--line)">' +
+            '<td style="padding:8px 6px"><code style="font-size:11px">' + esc(r.model) + '</code></td>' +
+            '<td style="padding:8px 6px">' + fmtInt(r.calls) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtInt(r.prompt_tokens) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + fmtInt(r.completion_tokens) + '</td>' +
+            '<td style="padding:8px 6px;font-variant-numeric:tabular-nums;color:var(--primary)">' + fmtInt((r.prompt_tokens || 0) + (r.completion_tokens || 0)) + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+    }).catch(function () {
+      var tbody = document.getElementById('chat-usage-tbody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty" style="padding:20px 0;text-align:center;color:var(--err)">❌ 用量数据加载失败（/v1/chat/usage）</td></tr>';
+    });
+  }
+  function startChatUsagePolling() {
+    loadChatUsage();
+    if (!chatUsageTimer) chatUsageTimer = setInterval(loadChatUsage, 30000);
+  }
+  (function bindChatUsageControls() {
+    var refreshBtn = document.getElementById('chat-usage-refresh');
+    var periodSel = document.getElementById('chat-usage-period');
+    if (refreshBtn) refreshBtn.onclick = loadChatUsage;
+    if (periodSel) periodSel.onchange = loadChatUsage;
+  })();
+
   // ── 检查 aifreeforever 代理池状态 ──
   function checkAifreeProxy() {
     safeJson('/v1/proxy-pool').then(function (d) {
@@ -2289,8 +2362,14 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     });
   }
 
+  // v6.3.4: 号池账号分页状态
+  var ACC_PAGE_SIZE = 20;
+  var accPage = 1;
+  var accSearch = '';
+
   function loadPool() {
-    safeJson('/v1/account-pool').then(function (d) {
+    var qs = '?page=' + accPage + '&page_size=' + ACC_PAGE_SIZE + '&search=' + encodeURIComponent(accSearch);
+    safeJson('/v1/account-pool' + qs).then(function (d) {
       var box = document.getElementById('pool-grid');
       if (!box) return;
 
@@ -2334,39 +2413,74 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           esc(JSON.stringify(d.email_pool.by_provider || {})) + '</p>';
       }
 
-      // 渲染账号明细列表
+      // 渲染账号明细列表（v6.3.4: 分页 + 签到画像 + 存活天数）
       var accItems = d.items || [];
       var tbody = document.getElementById('accounts-tbody');
       if (tbody) {
         if (!accItems.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">📭 暂无入库账号（后台持续补号激活中…）</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">📭 暂无入库账号（后台持续补号激活中…）</td></tr>';
         } else {
           tbody.innerHTML = accItems.map(function (it) {
             var cTime = it.created_at ? new Date(it.created_at * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
             var chkTime = it.checkin_at ? new Date(it.checkin_at * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '尚未签到';
-            var nextChk = '今日已签';
-            if (!it.checkin_at || (Date.now() - it.checkin_at * 1000 > 20 * 3600 * 1000)) {
-              nextChk = '<span style="color:#10b981;font-weight:600">⚡ 待签到 (自动触发)</span>';
+            // 下次签到：优先用上游 nextClaimAt（美区 15:00 重置）
+            var nextChk = '—';
+            if (it.next_claim_at) {
+              nextChk = new Date(it.next_claim_at * 1000).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+            } else if (it.checkin_at && (Date.now() - it.checkin_at * 1000 <= 20 * 3600 * 1000)) {
+              nextChk = new Date(it.checkin_at * 1000 + 24 * 3600 * 1000).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) + ' 之后';
             } else {
-              var nextTs = new Date(it.checkin_at * 1000 + 24 * 3600 * 1000);
-              nextChk = nextTs.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) + ' 之后';
+              nextChk = '<span style="color:#10b981;font-weight:600">⚡ 待签到</span>';
             }
-            var statusBadge = it.status === 'ok' ? '<span class="pill ok">正常</span>' : '<span class="pill err">' + esc(it.status) + '</span>';
+            var stColor = it.status === 'ok' || it.status === 'active' ? '#10b981' : (it.status === 'dead' || it.status === 'banned' ? '#f87171' : '#f59e0b');
+            var statusBadge = '<span class="pill ' + (it.status === 'ok' || it.status === 'active' ? 'ok' : 'err') + '">' + esc(it.status) + '</span>';
+            var ageDays = it.age_days != null ? it.age_days + ' 天' : '—';
+            var cycleDay = it.checkin_total > 0 ? (it.checkin_cycle_day || 0) + ' / 7' : '—';
             return '<tr style="border-bottom:1px solid var(--line)">' +
               '<td style="padding:8px 6px"><code>' + esc(it.email) + '</code></td>' +
               '<td style="padding:8px 6px;color:#10b981;font-weight:600">' + (it.credits || 0) + ' 分</td>' +
-              '<td style="padding:8px 6px">' + statusBadge + '</td>' +
-              '<td style="padding:8px 6px;color:var(--muted)">' + cTime + '</td>' +
+              '<td style="padding:8px 6px"><span style="color:' + stColor + '">●</span> ' + statusBadge + '</td>' +
+              '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + (it.checkin_total || 0) + ' 次</td>' +
+              '<td style="padding:8px 6px;font-variant-numeric:tabular-nums">' + cycleDay + '</td>' +
+              '<td style="padding:8px 6px;font-variant-numeric:tabular-nums;color:var(--primary)">' + (it.credits_earned_total || 0) + ' 分</td>' +
+              '<td style="padding:8px 6px;font-variant-numeric:tabular-nums;color:var(--muted)" title="入池于 ' + esc(cTime) + '">' + ageDays + '</td>' +
               '<td style="padding:8px 6px;color:var(--muted)">' + chkTime + '</td>' +
               '<td style="padding:8px 6px">' + nextChk + '</td>' +
               '</tr>';
           }).join('');
         }
+        // 分页控件状态
+        var totalPages = d.total_pages || 1;
+        var curPage = d.page || 1;
+        var info = document.getElementById('acc-info');
+        if (info) info.textContent = '第 ' + curPage + ' 页 / 共 ' + totalPages + ' 页（' + (d.items_total || 0) + ' 个账号）';
+        var prev = document.getElementById('acc-prev');
+        var next = document.getElementById('acc-next');
+        if (prev) prev.disabled = curPage <= 1;
+        if (next) next.disabled = curPage >= totalPages;
       }
     }).catch(function () {
       document.getElementById('pool-grid').innerHTML = '<div class="empty">号池未启动（IF_ACCOUNT_AUTO=0）</div>';
     });
   }
+
+  // v6.3.4: 账号分页 / 搜索事件绑定
+  (function bindAccountPager() {
+    var prev = document.getElementById('acc-prev');
+    var next = document.getElementById('acc-next');
+    var searchInput = document.getElementById('acc-search');
+    if (prev) prev.onclick = function () { if (accPage > 1) { accPage--; loadPool(); } };
+    if (next) next.onclick = function () { accPage++; loadPool(); };
+    if (searchInput) {
+      searchInput.onkeydown = function (e) {
+        if (e.key === 'Enter') {
+          accSearch = searchInput.value.trim();
+          accPage = 1;
+          loadPool();
+        }
+      };
+    }
+  })();
 
   function loadProviders() {
     safeJson('/v1/providers').then(function (d) {

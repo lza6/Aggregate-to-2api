@@ -101,17 +101,25 @@ async def account_pool_dashboard(
         provider="nanobanana", page=page, page_size=page_size, search=search,
     )
     desensitized = []
+    now_ts = time.time()
     for item in page_data["items"]:
         em = item.get("email", "")
         parts = em.split("@")
         safe_em = (parts[0][:3] + "***@" + parts[1]) if len(parts) == 2 else em
+        created = item.get("created_at")
         desensitized.append({
             "email": safe_em,
             "credits": item.get("credits", 0),
             "status": item.get("status", "ok"),
-            "created_at": item.get("created_at"),
+            "created_at": created,
             "checkin_at": item.get("checkin_at"),
             "register_ip": item.get("register_ip"),
+            # v6.3.4: 签到画像与存活天数（前端直接可渲染）
+            "checkin_total": int(item.get("checkin_total") or 0),
+            "checkin_cycle_day": int(item.get("checkin_cycle_day") or 0),
+            "credits_earned_total": int(item.get("credits_earned_total") or 0),
+            "next_claim_at": item.get("next_claim_at"),
+            "age_days": round((now_ts - created) / 86400.0, 1) if created else None,
         })
     return {
         "accounts": account_pool.dashboard(),
