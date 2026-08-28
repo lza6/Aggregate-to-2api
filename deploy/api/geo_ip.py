@@ -96,18 +96,46 @@ _IP_PREFIX_MAP = {
 
 # 本地高频 IP 缓存，避免重复查询（IP -> 归属地字典）
 _GEO_CACHE: dict[str, dict] = {}
-_GEO_CACHE_LIMIT = 5000
+_GEO_CACHE_LIMIT = 10000
+
+
+def _query_ip_api_online(ip: str) -> dict | None:
+    """调用免费无限 IP-API 接口获取精准省/市/ISP 归属地（带 1.5s 极速超时）。"""
+    try:
+        import urllib.request
+        url = f"http://ip-api.com/json/{ip}?lang=zh-CN"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            d = json.loads(resp.read().decode("utf-8"))
+            if d.get("status") == "success":
+                country = d.get("country", "")
+                country_code = d.get("countryCode", "UN")
+                region = d.get("regionName", "")
+                city = d.get("city", "")
+                isp = d.get("isp", "")
+                parts = [p for p in (country, region, city, isp) if p]
+                desc = " · ".join(parts) if parts else "公网地址"
+                emoji = COUNTRY_NAMES.get(country_code, ("", "🌐"))[1]
+                return {
+                    "code": country_code,
+                    "name": country or "未知",
+                    "desc": desc,
+                    "emoji": emoji,
+                }
+    except Exception:
+        pass
+    return None
 
 
 def guess_country(ip: str) -> dict:
-    """根据 IP 地址猜测国家中文名与国旗 Emoji（纯本地极速计算，零网络延迟）。"""
+    """根据 IP 地址解析高精度省/市/运营商及国家中文名与国旗 Emoji。"""
     if not ip:
         return {"code": "UNKNOWN", "name": "未知", "desc": "未知地址", "emoji": "🌐"}
 
     if ip in _GEO_CACHE:
         return _GEO_CACHE[ip]
 
-    # 本地局域网/回环地址直接识别
+    # 1. 本地局域网/回环地址直接识别
     if ip in ("127.0.0.1", "localhost", "::1"):
         res = {"code": "LAN", "name": "本地回环", "desc": "本机服务 (127.0.0.1)", "emoji": "🏠"}
         _GEO_CACHE[ip] = res
@@ -117,6 +145,14 @@ def guess_country(ip: str) -> dict:
         _GEO_CACHE[ip] = res
         return res
 
+    # 2. 尝试免费高精公共 API 查询精准省/市/运营商
+    online_res = _query_ip_api_online(ip)
+    if online_res:
+        if len(_GEO_CACHE) < _GEO_CACHE_LIMIT:
+            _GEO_CACHE[ip] = online_res
+        return online_res
+
+    # 3. 离线特征库兜底
     for prefix, (code, desc) in _IP_PREFIX_MAP.items():
         if ip.startswith(prefix):
             cname, emoji = COUNTRY_NAMES.get(code, ("海外未知", "🌐"))
@@ -125,7 +161,7 @@ def guess_country(ip: str) -> dict:
                 _GEO_CACHE[ip] = res
             return res
 
-    # 兜底：同步快速离线识别
+    # 4. 哈希分段兜底
     h = sum(int(p) for p in ip.split(".") if p.isdigit())
     codes = ["US", "JP", "HK", "SG", "KR", "DE", "GB", "FR", "CA", "AU", "NL"]
     code = codes[h % len(codes)]
