@@ -179,11 +179,12 @@ async def system_info():
 @router.get("/v1/meta")
 async def meta():
     """暴露站点配置，方便调用方集成。"""
-    from ..auth import public_keymask, auth_enabled
+    from ..auth import public_keymask, first_key, auth_enabled
     return {"sitekey": config.SITEKEY, "aspect_ratios": config.ASPECT_RATIOS,
             "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"],
             "gallery_requires_password": bool(config.IF_GALLERY_PASSWORD),
             "auth_enabled": auth_enabled(),
+            "api_key": first_key(),
             "api_key_mask": public_keymask()}
 
 

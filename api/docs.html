@@ -1988,8 +1988,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         tag.style.display = 'inline-flex';
         if (noTag) noTag.style.display = 'none';
         tag.onclick = function () {
-          navigator.clipboard.writeText(d.api_key_mask).then(function() {
-            showToast('已复制 Key 前缀: ' + d.api_key_mask);
+          var keyToCopy = d.api_key || d.api_key_mask;
+          navigator.clipboard.writeText(keyToCopy).then(function() {
+            showToast('✅ 已复制完整 API Key：' + (keyToCopy.length > 20 ? keyToCopy.slice(0, 16) + '…' : keyToCopy));
           });
         };
       }
