@@ -377,6 +377,7 @@ class TryingopenChatProvider(ChatProvider):
             "model": model.split("/", 1)[1] if model.startswith("tryingopen/") else model,
             "effort": effort,
             "messages": messages,
+            "stream": True,  # 显式要求上游开启 SSE 增量流式，否则上游按整段返回、客户端无逐 token 体验
         }
 
     async def chat_stream(self, model: str, messages: list[dict], tools: list | None = None,
