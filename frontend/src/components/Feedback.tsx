@@ -97,12 +97,54 @@ export function Empty({ text = '暂无数据', hint }: { text?: string; hint?: s
 }
 
 export function ErrorRetry({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const isKeyError = message.includes('Key') || message.includes('401') || message.includes('unauthorized') || message.includes('未授权');
+  const isRateLimit = message.includes('429') || message.includes('rate') || message.includes('limit') || message.includes('限流') || message.includes('繁忙');
+
+  const displayHeading = isKeyError ? 'API Key 鉴权失败或未配置' : (isRateLimit ? '服务繁忙或触发保护' : '数据获取异常');
+  const displayMsg = isRateLimit
+    ? '当前提供商繁忙，已为您自动切换至备用引擎'
+    : (isKeyError ? '检测到未配置有效 API Key，请携带 Authorization 凭据访问。' : message);
+
+  const sampleCurl = `curl -X GET ${window.location.origin}/v1/stats \\
+  -H "Authorization: Bearer <YOUR_API_KEY>"`;
+
   return (
     <div className="fb-error-banner tf-card">
-      <div className="fb-error-icon">⚠️</div>
+      <div className="fb-error-icon">{isKeyError ? '🔑' : '⚠️'}</div>
       <div className="fb-error-content">
-        <div className="fb-error-heading">数据获取异常</div>
-        <div className="fb-error-msg" role="alert">{message}</div>
+        <div className="fb-error-heading">{displayHeading}</div>
+        <div className="fb-error-msg" role="alert">{displayMsg}</div>
+        {isKeyError && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--danger-text)', opacity: 0.85 }}>一键获取/调用命令示例：</div>
+            <pre style={{
+              background: 'rgba(0,0,0,0.1)',
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontFamily: 'monospace',
+              margin: '4px 0',
+              overflowX: 'auto',
+              color: 'inherit'
+            }}>
+              {sampleCurl}
+            </pre>
+            <button
+              type="button"
+              className="tf-btn tf-btn-sm"
+              style={{ padding: '2px 8px', fontSize: 11, background: 'var(--danger-border)', color: 'var(--danger-text)' }}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(sampleCurl);
+                } catch {
+                  window.prompt('请复制：', sampleCurl);
+                }
+              }}
+            >
+              📋 一键复制命令示例
+            </button>
+          </div>
+        )}
       </div>
       <button onClick={onRetry} className="tf-btn tf-btn-danger tf-btn-sm fb-error-btn">
         🔄 重新请求

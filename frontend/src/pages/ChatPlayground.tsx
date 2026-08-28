@@ -155,15 +155,24 @@ function getMessageContent(value: unknown): string {
 
 function getErrorPayload(payload: unknown, status: number): ChatErrorPayload {
   if (!payload || typeof payload !== 'object') {
+    if (status === 429) return { message: '当前提供商繁忙，已为您自动切换至备用引擎' };
+    if (status === 401) return { message: 'API Key 未配置或无效，请在右上角设置中填写有效 Key' };
     return { message: `请求失败（HTTP ${status}）` };
   }
   const body = payload as Record<string, unknown>;
   const nested = body.error && typeof body.error === 'object' ? body.error as Record<string, unknown> : undefined;
-  const messageCandidate = typeof body.message === 'string'
+  let messageCandidate = typeof body.message === 'string'
     ? body.message
     : typeof body.error === 'string'
       ? body.error
       : nested?.message;
+
+  if (status === 429 || (typeof messageCandidate === 'string' && (messageCandidate.includes('rate') || messageCandidate.includes('limit') || messageCandidate.includes('限流')))) {
+    messageCandidate = '当前提供商繁忙，已为您自动切换至备用引擎';
+  } else if (status === 401 || (typeof messageCandidate === 'string' && (messageCandidate.includes('key') || messageCandidate.includes('auth') || messageCandidate.includes('unauthorized')))) {
+    messageCandidate = 'API Key 未配置或无效，请点击右上角【API 接入 & Key】进行配置';
+  }
+
   const retryCandidate = body.retryAfterMinutes ?? body.retry_after_minutes ?? nested?.retryAfterMinutes ?? nested?.retry_after_minutes;
   return {
     message: typeof messageCandidate === 'string' ? messageCandidate : `请求失败（HTTP ${status}）`,

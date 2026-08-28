@@ -259,6 +259,20 @@
     border: 1px solid var(--line); display: block; }
   .pg-dl-link { display: inline-block; margin-top: 10px; font-size: 13px; }
 
+  /* 渐进式进度步骤条 */
+  .pg-stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0 10px; padding: 12px 14px; background: var(--bg-soft); border-radius: 10px; border: 1px solid var(--line); }
+  .pg-step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); opacity: 0.6; transition: all 0.3s ease; }
+  .pg-step.active { opacity: 1; color: var(--brand); font-weight: 600; transform: translateY(-1px); }
+  .pg-step.done { opacity: 1; color: var(--ok); font-weight: 500; }
+  .pg-step-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--card); border: 1px solid var(--line); font-size: 11px; flex-shrink: 0; }
+  .pg-step.active .pg-step-icon { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 0 10px var(--brand-soft); animation: tf-pulse 1.8s infinite; }
+  .pg-step.done .pg-step-icon { background: var(--ok); color: #fff; border-color: var(--ok); }
+  .pg-step-line { flex: 1; height: 2px; background: var(--line); margin: 0 4px; border-radius: 1px; }
+  .pg-step-line.done { background: var(--ok); }
+  .pg-actionable-err { margin-top: 12px; padding: 14px 16px; border-radius: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: var(--text); font-size: 13px; }
+  .pg-actionable-err .err-title { color: var(--err); font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .pg-actionable-err pre { margin: 8px 0 4px; padding: 8px 12px; font-size: 12px; }
+
   .pg-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
   .pg-tab { border: 1px solid var(--line); background: var(--card); color: var(--text);
     border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 600;
@@ -618,7 +632,17 @@
       <label class="pg-dl"><input type="checkbox" id="pg-download"> 返回 base64（可直接下载）</label>
       <button id="pg-btn" class="pg-btn">✨ 生成</button>
     </div>
+    <div id="pg-stepper" class="pg-stepper" style="display:none">
+      <div class="pg-step" id="step-queue"><span class="pg-step-icon">1</span><span>排队中</span></div>
+      <div class="pg-step-line" id="line-1"></div>
+      <div class="pg-step" id="step-turnstile"><span class="pg-step-icon">2</span><span>Turnstile 求解</span></div>
+      <div class="pg-step-line" id="line-2"></div>
+      <div class="pg-step" id="step-render"><span class="pg-step-icon">3</span><span>上游渲染</span></div>
+      <div class="pg-step-line" id="line-3"></div>
+      <div class="pg-step" id="step-distribute"><span class="pg-step-icon">4</span><span>下载分发</span></div>
+    </div>
     <div id="pg-status" class="pg-status"></div>
+    <div id="pg-actionable-err" class="pg-actionable-err" style="display:none"></div>
     <div id="pg-result" class="pg-result"></div>
     <div id="pg-guide" class="muted" style="text-align:center;padding:22px 0;font-size:14px;color:var(--muted)">
       💡 输入提示词 → 点击生成 → 等待出图
@@ -2380,9 +2404,80 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     };
   });
 
+  function updateStepper(stepIndex) {
+    var stepper = document.getElementById('pg-stepper');
+    if (!stepper) return;
+    if (stepIndex <= 0) {
+      stepper.style.display = 'none';
+      return;
+    }
+    stepper.style.display = 'flex';
+    var steps = ['step-queue', 'step-turnstile', 'step-render', 'step-distribute'];
+    var lines = ['line-1', 'line-2', 'line-3'];
+    steps.forEach(function (id, idx) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.className = 'pg-step';
+      if (idx + 1 < stepIndex) {
+        el.classList.add('done');
+      } else if (idx + 1 === stepIndex) {
+        el.classList.add('active');
+      }
+    });
+    lines.forEach(function (id, idx) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (idx + 1 < stepIndex) {
+        el.classList.add('done');
+      } else {
+        el.classList.remove('done');
+      }
+    });
+  }
+
+  function renderActionableError(rawMsg) {
+    var errBox = document.getElementById('pg-actionable-err');
+    if (!errBox) return;
+    var msg = String(rawMsg || '');
+    errBox.innerHTML = '';
+
+    // 1. 上游限流/提供商繁忙
+    if (msg.indexOf('429') !== -1 || msg.indexOf('rate') !== -1 || msg.indexOf('limit') !== -1 || msg.indexOf('限流') !== -1 || msg.indexOf('busy') !== -1) {
+      errBox.innerHTML = '<div class="err-title">⚡ 自动故障转移保护</div>' +
+        '<div>当前提供商繁忙或触发上游限流，已为您自动切换至备用引擎进行平滑重试。</div>' +
+        '<div style="margin-top:6px;font-size:12px;color:var(--muted)">若持续失败，请稍候 10~30 秒或切换为 <code>imagefree/default</code> 模型重试。</div>';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    // 2. 缺少/未配置 Key 或 401 鉴权失败
+    if (msg.indexOf('401') !== -1 || msg.indexOf('API Key') !== -1 || msg.indexOf('unauthorized') !== -1 || msg.indexOf('未授权') !== -1 || msg.indexOf('密钥') !== -1) {
+      var sampleCurl = 'curl -X POST https://' + (window.location.host || 'api.imagefree.net') + '/v1/generate \\\n' +
+        '  -H "Authorization: Bearer <YOUR_API_KEY>" \\\n' +
+        '  -H "Content-Type: application/json" \\\n' +
+        '  -d \'{"prompt":"cute orange cat"}\'';
+      errBox.innerHTML = '<div class="err-title">🔑 API Key 鉴权失败或未配置</div>' +
+        '<div>请在请求头或客户端设置中携带有效的 <code>Authorization: Bearer &lt;key&gt;</code> 凭据。</div>' +
+        '<div style="margin-top:8px;font-weight:600;font-size:12px">📋 复制标准调用命令示例：</div>' +
+        '<pre><code>' + esc(sampleCurl) + '</code></pre>' +
+        '<button class="btn secondary" style="padding:4px 12px;font-size:12px;margin-top:6px" onclick="copyTextSafe(\'' + esc(sampleCurl).replace(/\n/g, '\\n') + '\', \'✅ 已复制 cURL 示例命令\')">📋 一键复制命令</button>';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    errBox.style.display = 'none';
+  }
+
   function pgShowErr(el, msg) {
-    el.textContent = '❌ ' + msg;
+    updateStepper(0);
+    var friendly = String(msg || '生成失败');
+    // 翻译或润色上游限流
+    if (friendly.indexOf('429') !== -1 || friendly.indexOf('rate') !== -1 || friendly.indexOf('limit') !== -1 || friendly.indexOf('限流') !== -1) {
+      friendly = '当前提供商繁忙，已为您自动切换至备用引擎';
+    }
+    el.textContent = '❌ ' + friendly;
     el.className = 'pg-status err';
+    renderActionableError(msg);
   }
 
   function renderResultInfo(container, d, isEdit) {
@@ -2432,7 +2527,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 
   function pgPoll(id) {
     var rounds = 0;
-    // 优先开启 SSE 实时主动推流监听（淘汰短轮询，极速零网络开销）
+    updateStepper(1); // 步骤 1: 排队中
     var sse = null;
     try {
       sse = new EventSource('/v1/events/tasks');
@@ -2440,9 +2535,13 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         try {
           var payload = JSON.parse(e.data);
           if (payload.task_id === id) {
-            sse.close();
-            clearTimeout(pgTimer);
-            if (payload.status === 'completed') {
+            if (payload.status === 'processing') {
+              updateStepper(3); // 步骤 3: 上游渲染中
+              pgStatus.textContent = '⚙️ 上游模型渲染中…';
+            } else if (payload.status === 'completed') {
+              updateStepper(4); // 步骤 4: 下载分发
+              sse.close();
+              clearTimeout(pgTimer);
               safeJson('/v1/tasks/' + id).then(function (d) {
                 var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + ' 秒' : '完成';
                 pgStatus.textContent = '✅ 出图完成 (SSE实时推流)，耗时 ' + dur;
@@ -2456,6 +2555,8 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
                 setBtnLoading(pgBtn, false);
               });
             } else if (payload.status === 'error') {
+              sse.close();
+              clearTimeout(pgTimer);
               pgShowErr(pgStatus, (payload.data && payload.data.error) || '生成失败');
               setBtnLoading(pgBtn, false);
             }
@@ -2467,7 +2568,19 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     (function tick() {
       safeJson('/v1/tasks/' + id).then(function (d) {
         rounds++;
-        if (d.status === 'completed') {
+        if (d.status === 'pending') {
+          if (rounds > 2) {
+            updateStepper(2); // 求解中
+            pgStatus.textContent = '🛡️ Turnstile 人机验证与凭证求解中…';
+          } else {
+            updateStepper(1); // 排队中
+            pgStatus.textContent = '⏳ 任务已入队，正在分配 Worker…';
+          }
+        } else if (d.status === 'processing') {
+          updateStepper(3); // 上游渲染中
+          pgStatus.textContent = '⚙️ 上游模型推理计算中… (已耗时 ' + (rounds * 3) + 's)';
+        } else if (d.status === 'completed') {
+          updateStepper(4);
           if (sse) sse.close();
           var dur = d.duration_sec != null ? d.duration_sec.toFixed(1) + ' 秒' : '未知';
           pgStatus.textContent = '✅ 出图完成，耗时 ' + dur;
@@ -2482,8 +2595,13 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
           setBtnLoading(pgBtn, false);
           return;
         }
-        if (d.status === 'error') { if (sse) sse.close(); pgShowErr(pgStatus, d.error || '生成失败'); showToast('❌ ' + (d.error || '生成失败'), 'error'); setBtnLoading(pgBtn, false); return; }
-        pgStatus.textContent = '⏳ 上游模型推理计算中（SSE 实时流监听已就绪）…';
+        if (d.status === 'error') {
+          if (sse) sse.close();
+          pgShowErr(pgStatus, d.error || '生成失败');
+          showToast('❌ ' + (d.error || '生成失败'), 'error');
+          setBtnLoading(pgBtn, false);
+          return;
+        }
         pgStatus.className = 'pg-status';
         clearTimeout(pgTimer);
         pgTimer = setTimeout(tick, 3000);

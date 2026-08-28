@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface LogEntry {
   timestamp: string;
@@ -7,27 +7,89 @@ interface LogEntry {
   message: string;
 }
 
+type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
+
 export function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState('');
-  const [connected, setConnected] = useState(false);
+  const [connStatus, setConnStatus] = useState<ConnectionStatus>('disconnected');
+  const [lastHeartbeat, setLastHeartbeat] = useState<Date | null>(null);
+  const [reconnectCount, setReconnectCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const unmountedRef = useRef(false);
 
-  useEffect(() => {
+  const connectWs = useCallback(() => {
+    if (unmountedRef.current) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/v1/logs/ws`;
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const entry = JSON.parse(event.data);
-        setLogs(prev => [...prev.slice(-500), entry]);
-      } catch { /* ignore */ }
+
+    try {
+      setConnStatus(prev => prev === 'connected' ? 'reconnecting' : prev);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (unmountedRef.current) { ws.close(); return; }
+        setConnStatus('connected');
+        setReconnectCount(0);
+        setLastHeartbeat(new Date());
+      };
+
+      ws.onclose = () => {
+        if (unmountedRef.current) return;
+        setConnStatus('reconnecting');
+        setReconnectCount(c => c + 1);
+        // 指数退避重连：1s, 2s, 4s, 最大 10s
+        const delay = Math.min(1000 * Math.pow(1.5, reconnectCount), 10000);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connectWs();
+        }, delay);
+      };
+
+      ws.onerror = () => {
+        if (unmountedRef.current) return;
+        setConnStatus('reconnecting');
+      };
+
+      ws.onmessage = (event) => {
+        setLastHeartbeat(new Date());
+        try {
+          const entry = JSON.parse(event.data);
+          setLogs(prev => [...prev.slice(-500), entry]);
+        } catch { /* ignore */ }
+      };
+    } catch {
+      setConnStatus('disconnected');
+    }
+  }, [reconnectCount]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    connectWs();
+
+    // 心跳保活定时器：每 10 秒发送心跳检测 ping
+    const heartbeatTimer = window.setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'ping' }));
+          setLastHeartbeat(new Date());
+        } catch { /* ignore */ }
+      }
+    }, 10000);
+
+    return () => {
+      unmountedRef.current = true;
+      clearInterval(heartbeatTimer);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
-    return () => ws.close();
-  }, []);
+  }, [connectWs]);
 
   useEffect(() => {
     if (autoScroll) {
@@ -49,18 +111,45 @@ export function LogsPage() {
     }
   };
 
+  const getStatusBadge = () => {
+    if (connStatus === 'connected') {
+      return (
+        <span className="tf-badge tf-badge-success">
+          <span className="tf-dot tf-dot-pulse" style={{ background: 'var(--success)' }} />
+          WebSocket 实时连通
+        </span>
+      );
+    }
+    if (connStatus === 'reconnecting') {
+      return (
+        <span className="tf-badge tf-badge-warning ws-reconnecting-badge">
+          <span className="tf-dot ws-spinner-dot" />
+          正在重连中 (第 {reconnectCount} 次)...
+        </span>
+      );
+    }
+    return (
+      <span className="tf-badge tf-badge-danger">
+        <span className="tf-dot" style={{ background: 'var(--danger)' }} />
+        连接中断
+      </span>
+    );
+  };
+
   return (
     <div className="logs-container">
       <div className="page-header">
         <div>
           <h1 className="page-title">
             实时集群日志
-            <span className={`tf-badge ${connected ? 'tf-badge-success' : 'tf-badge-danger'}`}>
-              <span className={`tf-dot ${connected ? 'tf-dot-pulse' : ''}`} style={{ background: connected ? 'var(--success)' : 'var(--danger)' }} />
-              {connected ? 'WebSocket 已连通' : '连接中断'}
-            </span>
+            {getStatusBadge()}
+            {lastHeartbeat && (
+              <span className="heartbeat-indicator" title={`心跳最后保活时间: ${lastHeartbeat.toLocaleTimeString()}`}>
+                💓 心跳正常 ({lastHeartbeat.toLocaleTimeString()})
+              </span>
+            )}
           </h1>
-          <p className="page-desc">实时跟踪服务端 Worker 处理、求解器调用、代理轮换及请求流日志</p>
+          <p className="page-desc">实时跟踪服务端 Worker 处理、求解器调用、代理轮换及请求流日志（具备断线重连与心跳保活）</p>
         </div>
         <div className="logs-action-bar">
           <button
@@ -72,6 +161,11 @@ export function LogsPage() {
           <button onClick={() => setLogs([])} className="tf-btn tf-btn-secondary tf-btn-sm">
             🗑️ 清屏
           </button>
+          {connStatus !== 'connected' && (
+            <button onClick={() => connectWs()} className="tf-btn tf-btn-primary tf-btn-sm">
+              ⚡ 立即重连
+            </button>
+          )}
         </div>
       </div>
 
@@ -102,7 +196,7 @@ export function LogsPage() {
         <div className="terminal-body">
           {filtered.length === 0 ? (
             <div className="terminal-empty">
-              <span>⚡ 等待服务端日志流推入中…</span>
+              <span>⚡ {connStatus === 'reconnecting' ? '正在尝试恢复 WebSocket 连接…' : '等待服务端日志流推入中…'}</span>
             </div>
           ) : (
             filtered.map((l) => (

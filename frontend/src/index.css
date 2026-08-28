@@ -419,6 +419,96 @@ code, kbd, samp, pre {
   50% { transform: scale(2); opacity: 0; }
 }
 
+/* WebSocket 重新连接指示器与心跳 */
+.ws-reconnecting-badge {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--warning);
+  color: var(--warning-text);
+  animation: ws-blink 1.2s ease-in-out infinite alternate;
+}
+
+.ws-spinner-dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--warning);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ws-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes ws-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ws-blink {
+  from { opacity: 0.75; }
+  to { opacity: 1; }
+}
+
+.heartbeat-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 窄屏 375px (iPhone SE) 响应式适配打磨 */
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page-header > div:last-child,
+  .dashboard-header-actions,
+  .logs-action-bar,
+  .tasks-filter-bar {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .api-key-badge {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .heartbeat-indicator {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 375px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .tf-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+  .page-title {
+    font-size: 17px;
+  }
+  .page-desc {
+    font-size: 12px;
+  }
+  .tf-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
 /* 滚动条美化 */
 ::-webkit-scrollbar {
   width: 6px;

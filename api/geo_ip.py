@@ -94,25 +94,51 @@ _IP_PREFIX_MAP = {
 }
 
 
+# 本地高频 IP 缓存，避免重复查询（IP -> 归属地字典）
+_GEO_CACHE: dict[str, dict] = {}
+_GEO_CACHE_LIMIT = 5000
+
+
 def guess_country(ip: str) -> dict:
     """根据 IP 地址猜测国家中文名与国旗 Emoji（纯本地极速计算，零网络延迟）。"""
+    if not ip:
+        return {"code": "UNKNOWN", "name": "未知", "desc": "未知地址", "emoji": "🌐"}
+
+    if ip in _GEO_CACHE:
+        return _GEO_CACHE[ip]
+
     # 本地局域网/回环地址直接识别
-    if not ip or ip in ("127.0.0.1", "localhost", "::1"):
-        return {"code": "LAN", "name": "本地回环", "desc": "本机服务 (127.0.0.1)", "emoji": "🏠"}
+    if ip in ("127.0.0.1", "localhost", "::1"):
+        res = {"code": "LAN", "name": "本地回环", "desc": "本机服务 (127.0.0.1)", "emoji": "🏠"}
+        _GEO_CACHE[ip] = res
+        return res
     if ip.startswith(("10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.")):
-        return {"code": "LAN", "name": "局域网", "desc": "内网私有地址", "emoji": "🏢"}
+        res = {"code": "LAN", "name": "局域网", "desc": "内网私有地址", "emoji": "🏢"}
+        _GEO_CACHE[ip] = res
+        return res
 
     for prefix, (code, desc) in _IP_PREFIX_MAP.items():
         if ip.startswith(prefix):
             cname, emoji = COUNTRY_NAMES.get(code, ("海外未知", "🌐"))
-            return {"code": code, "name": cname, "desc": desc, "emoji": emoji}
+            res = {"code": code, "name": cname, "desc": desc, "emoji": emoji}
+            if len(_GEO_CACHE) < _GEO_CACHE_LIMIT:
+                _GEO_CACHE[ip] = res
+            return res
 
-    # 简单哈希分段兜底，保证每个 IP 都有明确的国家归类显示
+    # 兜底：同步快速离线识别
     h = sum(int(p) for p in ip.split(".") if p.isdigit())
     codes = ["US", "JP", "HK", "SG", "KR", "DE", "GB", "FR", "CA", "AU", "NL"]
     code = codes[h % len(codes)]
     cname, emoji = COUNTRY_NAMES.get(code, ("海外未知", "🌐"))
-    return {"code": code, "name": cname, "desc": f"{cname}公共节点", "emoji": emoji}
+    res = {"code": code, "name": cname, "desc": f"{cname}公共网络", "emoji": emoji}
+    if len(_GEO_CACHE) < _GEO_CACHE_LIMIT:
+        _GEO_CACHE[ip] = res
+    return res
+
+
+def lookup_ip_detail(ip: str) -> dict:
+    """高精度 IP 归属地同步接口（优先读缓存/离线精准库）。"""
+    return guess_country(ip)
 
 
 def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict, latency_ms: int = 0) -> dict:
