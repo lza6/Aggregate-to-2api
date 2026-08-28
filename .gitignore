@@ -37,6 +37,9 @@ api.tar
 .env
 !deploy/.env.example
 
+# Local probe scripts (often contain real credentials; never commit)
+probe_*.py
+
 # Deploy artifacts
 deploy/cf_solver/debug_logs/
 deploy/cf_solver/proxies.txt
