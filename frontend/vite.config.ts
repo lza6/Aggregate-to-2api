@@ -15,6 +15,7 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'scheduler'],
           'vendor-router': ['react-router-dom'],
           'vendor-chart': ['recharts'],
+          'vendor-three': ['three'],
         },
       },
     },

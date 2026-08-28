@@ -11,6 +11,7 @@ const AccountsPage = lazy(() => import('./pages/Accounts').then(m => ({ default:
 const LogsPage = lazy(() => import('./pages/Logs').then(m => ({ default: m.LogsPage })));
 const DLQPage = lazy(() => import('./pages/DLQ').then(m => ({ default: m.DLQPage })));
 const ChatPlayground = lazy(() => import('./pages/ChatPlayground').then(m => ({ default: m.ChatPlayground })));
+const SolarSystem = lazy(() => import('./pages/SolarSystem').then(m => ({ default: m.SolarSystem })));
 const HealthPage = lazy(() => import('./pages/Health').then(m => ({ default: m.HealthPage })));
 
 function PageFallback() {
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/dlq" element={<DLQPage />} />
             <Route path="/chat" element={<ChatPlayground />} />
+            <Route path="/solar" element={<SolarSystem />} />
             <Route path="/health" element={<HealthPage />} />
           </Routes>
         </Suspense>

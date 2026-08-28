@@ -13,11 +13,13 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "three": "0.160.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.160.0",
     "@vitejs/plugin-react": "^4.3.0",
     "playwright-core": "^1.62.1",
     "typescript": "~5.7.0",
