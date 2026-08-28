@@ -34,12 +34,34 @@ log = logging.getLogger("imagefree_api")
 @router.get("/v1/models")
 @router.get("/v1/model")  # 兼容单数别名，防止用户把路径写错返回 404
 async def models():
-    """全提供商模型列表。"""
+    """全提供商模型列表。
+
+    返回同时兼容两套契约：
+    - `items` / `count`：本服务前端 docs.html 使用的自有分组格式；
+    - `data` / `object`：OpenAI 标准 `/v1/models` 契约（Cherry Studio、OpenAI SDK、
+      Cursor、NextChat 等客户端按此解析模型列表，缺 `data` 字段会提示"检测不到模型"）。
+    """
     from ..providers.registry import bootstrap as providers_bootstrap
     providers_bootstrap()
     groups = registry.grouped()
-    return {"items": groups, "count": sum(len(v) for v in groups.values()),
-            "note": "模型 id 命名：<提供商前缀>/<上游真实模型名>；capabilities 含 txt2img/img2img/txt2vid"}
+    # OpenAI 兼容 data 数组：拍平分组为 [{"id","object","created","owned_by"}, ...]
+    data_list = [
+        {
+            "id": m["id"],
+            "object": "model",
+            "created": 0,
+            "owned_by": m["id"].split("/", 1)[0] if "/" in m["id"] else "imagefree",
+        }
+        for mods in groups.values()
+        for m in mods
+    ]
+    return {
+        "object": "list",
+        "data": data_list,
+        "items": groups,
+        "count": len(data_list),
+        "note": "模型 id 命名：<提供商前缀>/<上游真实模型名>；capabilities 含 txt2img/img2img/txt2vid",
+    }
 
 
 @router.get("/v1/providers")
