@@ -354,6 +354,22 @@ class TryingopenChatProvider(ChatProvider):
                     called.append(f"{name}({arguments})")
                 if called:
                     parts.append({"type": "text", "text": "[called " + "; ".join(called) + ";]"})
+            # OpenAI role=tool 消息（工具结果回传）——上游只接受 user/assistant，
+            # 不转换会得到 HTTP 400 "Invalid messages"。包装为函数结果标记交回模型。
+            if role == "tool":
+                role = "user"
+                call_id = str(message.get("tool_call_id") or "unknown")
+                tool_text = _content_text(message.get("content")) or "(empty result)"
+                if not parts:
+                    parts = [{"type": "text", "text": tool_text}]
+                converted.append({
+                    "id": str(message.get("id") or f"msg-{uuid.uuid4().hex[:12]}"),
+                    "role": role,
+                    "parts": [
+                        {"type": "text", "text": f"[TOOL RESULT for {call_id}]\n{tool_text}\n[/TOOL RESULT]"},
+                    ],
+                })
+                continue
             item_id = message.get("id") or f"msg-{uuid.uuid4().hex[:12]}"
             converted.append({"id": str(item_id), "role": role, "parts": parts})
 
