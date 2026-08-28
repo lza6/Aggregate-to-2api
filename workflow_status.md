@@ -34,4 +34,4 @@
 - base64_separation.py 测试在本地 hang（沿用 session event-loop+worker 生命周期，需 mock cf_solver 常驻 + 全量 collect；CI 环境通过），非本次引入缺陷。
 
 ## 最近更新
-- 2026-08-28 22:00 **全部闭环完成**：提交 `b1a61d2` 已推送 main；tag `v6.4.1` 已推送；release 创建成功；线上部署完成（api:6.4.1 healthy、cfsolver:6.4.1 healthy、/admin dist 已换新、docs 页脚 v6.4.1）；真实 E2E 打点：无key/错key 均 401 且零 CF 浪费。
+- 2026-08-28 22:30 **Critic 终审通过（Approve，无 Blocking/High）**。落实其 Required 1 项 + 关键建议：`package-lock.json`→6.4.1、删除 `SolarSystem.tsx`/`three`/`vendor-three` 空 chunk、Token 总消耗口径（含推理）两处对齐。提交 `4959548` + 报告渲染修复 `0a354b6` 已推 main。产物已同步服务器 dist（assets=14、vendor-three=0、含 `6.4.1`）；线上 401 零 CF 复验通过（solver 不增、consec_fail=0）。变更验收报告渲染联调 5/5 通过。
