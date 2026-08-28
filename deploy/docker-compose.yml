@@ -56,6 +56,8 @@ services:
       - IF_PORT=8100
       - IF_BASE_URL=https://imagefree.net
       - IF_SITEKEY=0x4AAAAAACE-XLGoQUckKKm_
+      - IF_API_KEYS=${IF_API_KEYS}
+      - IF_REQUESTS_PER_MINUTE=${IF_REQUESTS_PER_MINUTE:-30}
       # 免费代理池（aifreeforever 每 IP 每日限额必须）
       - IF_FREE_PROXY=1
       - IF_FREE_PROXY_REFRESH_MIN=10

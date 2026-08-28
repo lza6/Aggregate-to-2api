@@ -24,10 +24,18 @@ _requests: dict[str, deque[float]] = {}
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
 
+# 恶意/封禁 IP 黑名单（精准隔离刷量攻击源）
+_BLOCKED_IPS: set[str] = {
+    "47.112.162.80",
+}
+
 
 def _limit() -> int:
-    """每分钟每 IP 允许的提交次数；0 表示关闭限速。"""
-    return int(getattr(config, "IF_REQUESTS_PER_MINUTE", 0) or 0)
+    """每分钟每 IP 允许的提交次数；默认 30 次/分钟，防刷裸奔。"""
+    val = getattr(config, "IF_REQUESTS_PER_MINUTE", None)
+    if val is not None and str(val).strip() != "":
+        return int(val)
+    return _DEFAULT_REQUESTS_PER_MINUTE
 
 
 def _client_ip(request: Request) -> str:
@@ -43,11 +51,14 @@ def _client_ip(request: Request) -> str:
 
 
 def check_rate_limit(request: Request) -> None:
-    """滑动窗口 per-IP 限速；窗口过期记录自动清理。"""
+    """滑动窗口 per-IP 限速与 IP 黑名单防护；窗口过期记录自动清理。"""
+    key = _client_ip(request)
+    if key in _BLOCKED_IPS:
+        raise AppError(ErrorCodes.FORBIDDEN, "IP 已被系统安全策略封禁", 403)
+
     limit = _limit()
     if limit <= 0:
         return
-    key = _client_ip(request)
     now = time.monotonic()
     with _lock:
         bucket = _requests.setdefault(key, deque())
