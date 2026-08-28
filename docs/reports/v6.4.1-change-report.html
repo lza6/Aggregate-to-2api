@@ -112,32 +112,32 @@
   <div class="q" data-ans="1"><div class="qt">1. 前端侧栏显示的版本号来自哪里？</div>
     <button class="opt" data-v="0">硬编码在 Layout.tsx</button>
     <button class="opt" data-v="1">build-time 从 package.json 注入 __APP_VERSION__</button>
-    <button class="opt" data-v="0">后端 /v1/system 返回</button>
-    <button class="opt" data-v="0">从浏览器 localStorage 读取</button>
+    <button class="opt" data-v="2">后端 /v1/system 返回</button>
+    <button class="opt" data-v="3">从浏览器 localStorage 读取</button>
   </div>
-  <div class="q" data-ans="2"><div class="qt">2. 聊天用量面板「总量 tokens」现在的呈现方式是？</div>
-    <button class="opt" data-v="0">与 Prompt/Completion 并列的普通小卡</button>
-    <button class="opt" data-v="1">主卡置顶（grid-column:span 2 + 主题色边框）</button>
-    <button class="opt" data-v="0">悬浮 Tooltip 里才显示</button>
-    <button class="opt" data-v="0">图表 Secondary 轴</button>
+  <div class="q" data-ans="0"><div class="qt">2. 聊天用量面板「总量 tokens」现在的呈现方式是？</div>
+    <button class="opt" data-v="0">主卡置顶（grid-column:span 2 + 主题色边框）</button>
+    <button class="opt" data-v="1">与 Prompt/Completion 并列的普通小卡</button>
+    <button class="opt" data-v="2">悬浮 Tooltip 里才显示</button>
+    <button class="opt" data-v="3">图表 Secondary 轴</button>
   </div>
   <div class="q" data-ans="0"><div class="qt">3. formatTokens/fmtTokens 对 1234567890 的输出是？</div>
     <button class="opt" data-v="0">1.23B</button>
     <button class="opt" data-v="1">1234.6M</button>
-    <button class="opt" data-v="0">1.2G</button>
-    <button class="opt" data-v="0">1234567890</button>
+    <button class="opt" data-v="2">1.2G</button>
+    <button class="opt" data-v="3">1234567890</button>
   </div>
   <div class="q" data-ans="1"><div class="qt">4. 无 API Key / 错误 Key 调用写接口会怎样？</div>
     <button class="opt" data-v="0">先过 CF 求解再返回错误</button>
     <button class="opt" data-v="1">立即返回 401，不触发任何 CF 求解</button>
-    <button class="opt" data-v="0">进入死信队列重试 3 次</button>
-    <button class="opt" data-v="0">自动降级到其它提供商</button>
+    <button class="opt" data-v="2">进入死信队列重试 3 次</button>
+    <button class="opt" data-v="3">自动降级到其它提供商</button>
   </div>
   <div class="q" data-ans="0"><div class="qt">5. 本轮发布的 tag 是？</div>
     <button class="opt" data-v="0">v6.4.1</button>
     <button class="opt" data-v="1">v6.3.0</button>
-    <button class="opt" data-v="0">v6.4.0</button>
-    <button class="opt" data-v="0">v6.3.3</button>
+    <button class="opt" data-v="2">v6.4.0</button>
+    <button class="opt" data-v="3">v6.3.3</button>
   </div>
   <button class="btn" id="submit" onclick="grade()">提交测验</button>
   <div id="result"></div>
