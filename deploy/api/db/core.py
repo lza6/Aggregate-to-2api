@@ -513,11 +513,11 @@ class DB:
     # ── 读 ────────────────────────────────────────
     _PUBLIC_COLS = (
         "id", "status", "image_url", "image_base64", "image_mime", "error",
-        "created_at", "duration_sec", "type", "model",
+        "created_at", "duration_sec", "type", "model", "client_ip", "user_agent",
     )
     _TASK_LIST_COLS = (
         "id", "status", "image_url", "error",
-        "created_at", "duration_sec", "type", "model", "aspect_ratio",
+        "created_at", "duration_sec", "type", "model", "aspect_ratio", "client_ip", "user_agent",
     )
     _GALLERY_COLS = (
         "id", "status", "image_url", "image_mime", "error",
