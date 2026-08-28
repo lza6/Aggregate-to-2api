@@ -383,6 +383,10 @@ class NanobananaRegisterer:
             want = config.PROXY
         else:
             want = self.proxy or config.PROXY
+        # 空串代理（如环境变量 IF_PROXY="" 解析成 ""）会让 httpx 抛
+        # "Unknown scheme for proxy URL URL('')"——统一归一化为 None（直连）
+        if isinstance(want, str) and not want.strip():
+            want = None
 
         if self._current_proxy != want or force_rotate:
             try:
