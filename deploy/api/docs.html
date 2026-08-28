@@ -605,6 +605,7 @@
   <div class="pg-tabs">
     <button class="pg-tab on" data-pane="txt">文生图</button>
     <button class="pg-tab" data-pane="img">图生图</button>
+    <button class="pg-tab" data-pane="chat">💬 对话聊天</button>
   </div>
 
   <!-- 文生图 -->
@@ -671,6 +672,52 @@
     <div id="pe-result" class="pg-result"></div>
     <div id="pe-guide" class="muted" style="text-align:center;padding:22px 0;font-size:14px;color:var(--muted)">
       💡 选择图片 → 输入指令 → 生成变体
+    </div>
+  </div>
+
+  <!-- 对话聊天 (OpenAI/Anthropic 兼容在线体验) -->
+  <div class="pg-pane" id="pane-chat">
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <label class="pg-dl" style="font-weight:600">对话模型
+        <select id="chat-model" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px">
+          <option value="tryingopen/z-ai/glm-5.3-flash">GLM-5.3 Flash (tryingopen)</option>
+          <option value="tryingopen/deepseek/deepseek-v4-pro-0813">DeepSeek V4 Pro (tryingopen)</option>
+          <option value="tryingopen/moonshotai/kimi-k3">Kimi K3 (tryingopen)</option>
+          <option value="tryingopen/openai/gpt-oss-120b">GPT OSS 120B (tryingopen)</option>
+          <option value="tryingopen/qwen/qwen3.8-27b">Qwen 3.8 27B (tryingopen)</option>
+        </select>
+      </label>
+      <label class="pg-dl">推理力度
+        <select id="chat-effort" class="pg-ratio-btn" style="border-radius:8px;padding:6px 10px;margin-left:6px">
+          <option value="medium">Balanced (均衡)</option>
+          <option value="low">Quick (极速)</option>
+          <option value="high">Deep (深度思考)</option>
+        </select>
+      </label>
+      <button class="btn secondary" id="chat-clear-btn" style="padding:4px 10px;font-size:12px;margin:0">🧹 清空会话</button>
+    </div>
+
+    <!-- 消息对话窗口 -->
+    <div id="chat-box" style="height:360px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <span style="font-size:20px">🤖</span>
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6">
+          你好！我是听风AI 文本对话网关助手，支持 GLM-5.3、DeepSeek V4、Kimi K3 等顶尖大模型。欢迎发送消息进行测试！
+        </div>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div style="display:flex;gap:10px;align-items:flex-end">
+      <textarea id="chat-input" class="pg-prompt" style="margin:0;min-height:56px;max-height:160px" placeholder="输入对话消息（按 Enter 发送，Shift+Enter 换行）…"></textarea>
+      <button id="chat-send-btn" class="pg-btn" style="height:56px;padding:0 24px;display:flex;align-items:center;justify-content:center;gap:6px">
+        <span>🚀</span><span>发送</span>
+      </button>
+    </div>
+    <div id="chat-metrics-bar" style="margin-top:8px;font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
+      <span>📊 Token 消耗: <b id="cm-tokens" style="color:var(--text)">0</b> (Prompt: <span id="cm-prompt">0</span>, Output: <span id="cm-comp">0</span>)</span>
+      <span>⏱ 延迟: <b id="cm-latency" style="color:var(--text)">0.0s</b></span>
+      <span>🔌 协议标准: <code style="font-size:11px">OpenAI /v1/chat/completions</code></span>
     </div>
   </div>
 </section>
@@ -980,6 +1027,7 @@
   <nav class="toc">
     <a href="#quickstart">快速开始</a>
     <a href="#endpoints">接口总览</a>
+    <a href="#chat-api">对话接口 & CLI 接入</a>
     <a href="#gen">生成图片</a>
     <a href="#async">异步任务</a>
     <a href="#edit">图生图</a>
@@ -1019,6 +1067,9 @@ curl -X POST https://<span class="s" id="host">YOUR-DOMAIN</span>/v1/generate \
       <tr><td><code>/v1/generate/async</code></td><td><span class="pill info">POST</span></td><td>异步生成，立即返回任务 ID，<b>高并发推荐</b></td></tr>
       <tr><td><code>/v1/edit</code></td><td><span class="pill info">POST</span></td><td>图生图（AI 照片编辑）：传图（最多 3 张）+ 指令，异步出变体</td></tr>
       <tr><td><code>/v1/edit/tasks/{id}</code></td><td><span class="pill ok">GET</span></td><td>查询图生图任务结果</td></tr>
+      <tr><td><code>/v1/chat/completions</code></td><td><span class="pill info">POST</span></td><td>OpenAI 标准聊天接口（流式/非流式 + 自动 Token 计量）</td></tr>
+      <tr><td><code>/v1/messages</code></td><td><span class="pill info">POST</span></td><td>Anthropic Claude 标准消息接口（兼容 Claude CLI/Code）</td></tr>
+      <tr><td><code>/v1/chat/usage</code></td><td><span class="pill ok">GET</span></td><td>聊天模型用量与 Token 消耗透明统计（1h / 24h / 7d / 30d）</td></tr>
       <tr><td><code>/v1/models</code></td><td><span class="pill ok">GET</span></td><td>模型/风格预设列表（model 参数取值）</td></tr>
       <tr><td><code>/v1/tasks/{id}</code></td><td><span class="pill ok">GET</span></td><td>查询异步任务结果</td></tr>
       <tr><td><code>/v1/stats</code></td><td><span class="pill ok">GET</span></td><td>用量统计（总量 + 实时并发 + 日/月 + 平均耗时）</td></tr>
@@ -1032,8 +1083,52 @@ curl -X POST https://<span class="s" id="host">YOUR-DOMAIN</span>/v1/generate \
     </table>
   </section>
 
+  <section class="card" id="chat-api">
+    <h2><span class="n">03</span>对话接口 & 各大 CLI / 客户端接入指南</h2>
+    <p>听风AI 提供高可用对话网关，100% 兼容 <b>OpenAI (<code>/v1/chat/completions</code>)</b> 与 <b>Anthropic (<code>/v1/messages</code>)</b> 标准协议，支持流式 (SSE) 输出、多轮会话上下文、Token 消耗统计与客户端标识审计。</p>
+
+    <h3>1. 常用 CLI 与智能助手一键接入</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin:16px 0">
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px">
+        <h4 style="margin:0 0 8px;font-size:14px;color:var(--primary)">🤖 Claude Code (CLI)</h4>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">在终端配置环境变量，无缝将 Claude Code 流量接入本站网关：</p>
+        <pre style="margin:0;font-size:12px"><code>export ANTHROPIC_BASE_URL="https://imagefree.tingfengai.art"
+export ANTHROPIC_API_KEY="sk-tfai-..."</code></pre>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px">
+        <h4 style="margin:0 0 8px;font-size:14px;color:var(--primary)">💻 Cursor / Windsurf</h4>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">在设置 → Models → OpenAI API 中填入：</p>
+        <div style="font-size:12px;line-height:1.8">
+          <div><b>Base URL:</b> <code>https://imagefree.tingfengai.art/v1</code></div>
+          <div><b>API Key:</b> <code>sk-tfai-...</code></div>
+          <div><b>Model:</b> <code>tryingopen/z-ai/glm-5.3-flash</code></div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px">
+        <h4 style="margin:0 0 8px;font-size:14px;color:var(--primary)">⚡ Aider / OpenWebUI / NextChat</h4>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:8px">直接使用标准 OpenAI Base URL 启动：</p>
+        <pre style="margin:0;font-size:12px"><code>aider --openai-api-base https://imagefree.tingfengai.art/v1 \
+      --openai-api-key sk-tfai-... \
+      --model openai/tryingopen/z-ai/glm-5.3-flash</code></pre>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px">
+        <h4 style="margin:0 0 8px;font-size:14px;color:var(--primary)">🌐 curl 命令行直调</h4>
+        <pre style="margin:0;font-size:12px"><code>curl -X POST https://imagefree.tingfengai.art/v1/chat/completions \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"你好"}]}'</code></pre>
+      </div>
+    </div>
+
+    <h3>2. Token 消耗与用量透明度</h3>
+    <p>所有对话请求均在 SQLite <code>chat_usage</code> 独立落盘，自动记录 <code>prompt_tokens</code>、<code>completion_tokens</code>、<code>reasoning_tokens</code>、耗时以及 <code>user_agent</code> 客户端标识。可随时调用 <code>GET /v1/chat/usage?period=24h</code> 查询聚合大盘。</p>
+  </section>
+
   <section class="card" id="gen">
-    <h2><span class="n">03</span>生成图片</h2>
+    <h2><span class="n">04</span>生成图片</h2>
     <p><span class="method m-post">POST</span><span class="endpoint-title">/v1/generate</span></p>
     <p>提交后等待直到出图或失败；高并发下请求会进入有界队列（上限 <code>queue_capacity</code>），队列满返回 <code>429</code>。适合低频、需要立即拿结果的场景。</p>
     <p><b>请求体</b>（<code>application/json</code>）：</p>
@@ -1900,6 +1995,123 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       }
     }
   }).catch(function () {});
+
+  // ── 对话聊天客户端交互逻辑 ──
+  var chatMessages = [];
+  var chatInput = document.getElementById('chat-input');
+  var chatSendBtn = document.getElementById('chat-send-btn');
+  var chatBox = document.getElementById('chat-box');
+  var chatClearBtn = document.getElementById('chat-clear-btn');
+
+  if (chatClearBtn) {
+    chatClearBtn.onclick = function () {
+      chatMessages = [];
+      if (chatBox) {
+        chatBox.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-start">' +
+          '<span style="font-size:20px">🤖</span>' +
+          '<div style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6">' +
+          '会话已清空。请输入您想咨询的问题！' +
+          '</div></div>';
+      }
+      document.getElementById('cm-tokens').textContent = '0';
+      document.getElementById('cm-prompt').textContent = '0';
+      document.getElementById('cm-comp').textContent = '0';
+      document.getElementById('cm-latency').textContent = '0.0s';
+    };
+  }
+
+  function appendChatMessage(role, text) {
+    if (!chatBox) return null;
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'flex-start';
+    if (role === 'user') {
+      row.style.justifyContent = 'flex-end';
+      row.innerHTML = '<div style="background:var(--primary);color:#fff;border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6;word-break:break-all">' +
+        esc(text) + '</div><span style="font-size:20px">👤</span>';
+    } else {
+      row.innerHTML = '<span style="font-size:20px">🤖</span>' +
+        '<div class="ai-msg-content" style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6;word-break:break-all">' +
+        esc(text) + '</div>';
+    }
+    chatBox.appendChild(row);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return row.querySelector('.ai-msg-content');
+  }
+
+  async function sendChatMessage() {
+    if (!chatInput) return;
+    var content = chatInput.value.trim();
+    if (!content) return;
+    chatInput.value = '';
+
+    appendChatMessage('user', content);
+    chatMessages.push({ role: 'user', content: content });
+
+    var model = document.getElementById('chat-model').value;
+    var effort = document.getElementById('chat-effort').value;
+    var aiContentEl = appendChatMessage('assistant', '💭 正在思考中…');
+
+    var t0 = Date.now();
+    if (chatSendBtn) { chatSendBtn.disabled = true; chatSendBtn.textContent = '⏳'; }
+
+    try {
+      var apiKey = localStorage.getItem('api_key') || 'sk-tfai-1248809261a2b51ca8ce15d596f3145f5571a72772d9dd5e';
+      var res = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey,
+          'User-Agent': 'TingFeng-WebChat/1.0'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: chatMessages,
+          stream: false,
+          reasoning_effort: effort
+        })
+      });
+
+      var lat = ((Date.now() - t0) / 1000).toFixed(1);
+      document.getElementById('cm-latency').textContent = lat + 's';
+
+      if (!res.ok) {
+        var errBody = await res.json().catch(function() { return {}; });
+        var errStr = errBody.error ? (errBody.error.message || JSON.stringify(errBody.error)) : ('HTTP ' + res.status);
+        if (aiContentEl) aiContentEl.textContent = '❌ 请求失败: ' + errStr;
+        return;
+      }
+
+      var d = await res.json();
+      var reply = d.choices && d.choices[0] && d.choices[0].message ? d.choices[0].message.content : '';
+      if (aiContentEl) aiContentEl.textContent = reply || '(空回复)';
+      chatMessages.push({ role: 'assistant', content: reply });
+
+      if (d.usage) {
+        var pt = d.usage.prompt_tokens || 0;
+        var ct = d.usage.completion_tokens || 0;
+        document.getElementById('cm-prompt').textContent = pt;
+        document.getElementById('cm-comp').textContent = ct;
+        document.getElementById('cm-tokens').textContent = pt + ct;
+      }
+    } catch (e) {
+      if (aiContentEl) aiContentEl.textContent = '❌ 网络异常: ' + e.message;
+    } finally {
+      if (chatSendBtn) { chatSendBtn.disabled = false; chatSendBtn.innerHTML = '<span>🚀</span><span>发送</span>'; }
+      if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  }
+
+  if (chatSendBtn) chatSendBtn.onclick = sendChatMessage;
+  if (chatInput) {
+    chatInput.onkeydown = function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    };
+  }
 
   // ── 检查 aifreeforever 代理池状态 ──
   function checkAifreeProxy() {

@@ -1996,6 +1996,123 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     }
   }).catch(function () {});
 
+  // ── 对话聊天客户端交互逻辑 ──
+  var chatMessages = [];
+  var chatInput = document.getElementById('chat-input');
+  var chatSendBtn = document.getElementById('chat-send-btn');
+  var chatBox = document.getElementById('chat-box');
+  var chatClearBtn = document.getElementById('chat-clear-btn');
+
+  if (chatClearBtn) {
+    chatClearBtn.onclick = function () {
+      chatMessages = [];
+      if (chatBox) {
+        chatBox.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-start">' +
+          '<span style="font-size:20px">🤖</span>' +
+          '<div style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6">' +
+          '会话已清空。请输入您想咨询的问题！' +
+          '</div></div>';
+      }
+      document.getElementById('cm-tokens').textContent = '0';
+      document.getElementById('cm-prompt').textContent = '0';
+      document.getElementById('cm-comp').textContent = '0';
+      document.getElementById('cm-latency').textContent = '0.0s';
+    };
+  }
+
+  function appendChatMessage(role, text) {
+    if (!chatBox) return null;
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'flex-start';
+    if (role === 'user') {
+      row.style.justifyContent = 'flex-end';
+      row.innerHTML = '<div style="background:var(--primary);color:#fff;border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6;word-break:break-all">' +
+        esc(text) + '</div><span style="font-size:20px">👤</span>';
+    } else {
+      row.innerHTML = '<span style="font-size:20px">🤖</span>' +
+        '<div class="ai-msg-content" style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13.5px;max-width:85%;line-height:1.6;word-break:break-all">' +
+        esc(text) + '</div>';
+    }
+    chatBox.appendChild(row);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return row.querySelector('.ai-msg-content');
+  }
+
+  async function sendChatMessage() {
+    if (!chatInput) return;
+    var content = chatInput.value.trim();
+    if (!content) return;
+    chatInput.value = '';
+
+    appendChatMessage('user', content);
+    chatMessages.push({ role: 'user', content: content });
+
+    var model = document.getElementById('chat-model').value;
+    var effort = document.getElementById('chat-effort').value;
+    var aiContentEl = appendChatMessage('assistant', '💭 正在思考中…');
+
+    var t0 = Date.now();
+    if (chatSendBtn) { chatSendBtn.disabled = true; chatSendBtn.textContent = '⏳'; }
+
+    try {
+      var apiKey = localStorage.getItem('api_key') || 'sk-tfai-1248809261a2b51ca8ce15d596f3145f5571a72772d9dd5e';
+      var res = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey,
+          'User-Agent': 'TingFeng-WebChat/1.0'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: chatMessages,
+          stream: false,
+          reasoning_effort: effort
+        })
+      });
+
+      var lat = ((Date.now() - t0) / 1000).toFixed(1);
+      document.getElementById('cm-latency').textContent = lat + 's';
+
+      if (!res.ok) {
+        var errBody = await res.json().catch(function() { return {}; });
+        var errStr = errBody.error ? (errBody.error.message || JSON.stringify(errBody.error)) : ('HTTP ' + res.status);
+        if (aiContentEl) aiContentEl.textContent = '❌ 请求失败: ' + errStr;
+        return;
+      }
+
+      var d = await res.json();
+      var reply = d.choices && d.choices[0] && d.choices[0].message ? d.choices[0].message.content : '';
+      if (aiContentEl) aiContentEl.textContent = reply || '(空回复)';
+      chatMessages.push({ role: 'assistant', content: reply });
+
+      if (d.usage) {
+        var pt = d.usage.prompt_tokens || 0;
+        var ct = d.usage.completion_tokens || 0;
+        document.getElementById('cm-prompt').textContent = pt;
+        document.getElementById('cm-comp').textContent = ct;
+        document.getElementById('cm-tokens').textContent = pt + ct;
+      }
+    } catch (e) {
+      if (aiContentEl) aiContentEl.textContent = '❌ 网络异常: ' + e.message;
+    } finally {
+      if (chatSendBtn) { chatSendBtn.disabled = false; chatSendBtn.innerHTML = '<span>🚀</span><span>发送</span>'; }
+      if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  }
+
+  if (chatSendBtn) chatSendBtn.onclick = sendChatMessage;
+  if (chatInput) {
+    chatInput.onkeydown = function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    };
+  }
+
   // ── 检查 aifreeforever 代理池状态 ──
   function checkAifreeProxy() {
     safeJson('/v1/proxy-pool').then(function (d) {
