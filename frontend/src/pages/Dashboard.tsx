@@ -181,7 +181,7 @@ export function Dashboard() {
           <StatCard label="聊天调用（24h）" value={chatUsage?.total_calls ?? '-'} icon="💬" />
           <StatCard
             label="Token 消耗（24h）"
-            value={chatUsage ? formatTokens(chatUsage.prompt_tokens + chatUsage.completion_tokens) : '-'}
+            value={chatUsage ? formatTokens(chatUsage.prompt_tokens + chatUsage.completion_tokens + chatUsage.reasoning_tokens) : '-'}
             sub={chatUsage ? `推理 ${formatTokens(chatUsage.reasoning_tokens)}` : undefined}
             icon="📝"
           />
