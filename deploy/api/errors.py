@@ -30,6 +30,7 @@ class ErrorCodes:
     # ── AUTH: 认证/授权 ──
     UNAUTHORIZED = "AUTH.001"                # 401 未授权
     API_KEY_EXPIRED = "AUTH.002"             # 401 API Key 过期
+    FORBIDDEN = "AUTH.003"                   # 403 无权（IP 封禁 / 安全风控拦截）
 
     # ── VAL: 参数校验 ──
     INVALID_MODEL = "VAL.001"                # 422 模型不存在
@@ -88,6 +89,10 @@ ERROR_MESSAGES: dict[str, dict[str, str]] = {
     ErrorCodes.API_KEY_EXPIRED: {
         "zh": "API Key 已过期，请重新生成",
         "en": "API Key has expired, please regenerate",
+    },
+    ErrorCodes.FORBIDDEN: {
+        "zh": "请求被拒绝：{detail}",
+        "en": "Request forbidden: {detail}",
     },
     ErrorCodes.INVALID_MODEL: {
         "zh": "未知模型：{model}，可选模型见 GET /v1/models",
@@ -168,7 +173,7 @@ def get_error_message(code: str, lang: str = "zh", **kwargs: Any) -> str:
 STATUS_CODE_ERROR_MAP: dict[int, str] = {
     400: ErrorCodes.BAD_REQUEST,
     401: ErrorCodes.UNAUTHORIZED,
-    403: ErrorCodes.UNAUTHORIZED,
+    403: ErrorCodes.FORBIDDEN,
     404: ErrorCodes.NOT_FOUND,
     408: ErrorCodes.TASK_TIMEOUT,
     409: ErrorCodes.IDEMPOTENCY_KEY_EXISTS,

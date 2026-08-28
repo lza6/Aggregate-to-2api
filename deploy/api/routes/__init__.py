@@ -9,6 +9,7 @@ from . import tasks
 from . import generate
 from . import admin
 from . import chat
+from . import security
 
 # ── 注册所有路由 ──
 api_router = APIRouter()
@@ -18,5 +19,6 @@ api_router.include_router(tasks.router)
 api_router.include_router(generate.router)
 api_router.include_router(admin.router)
 api_router.include_router(chat.router)
+api_router.include_router(security.router)
 
 __all__ = ["api_router"]

@@ -55,6 +55,12 @@ async def lifespan(_app):
     restored = await gallery_cache.restore_from_db()
     if restored:
         log.info("缓存从 DB 恢复完成: %d 个条目", restored)
+    # ISSUE-02: 启动即加载 IP 封禁表 → 内存高速缓存，重启后风控立刻生效
+    from .request_guard import sync_blocklist_cache
+    try:
+        await sync_blocklist_cache()
+    except Exception as e:
+        log.warning("IP 封禁表缓存预热失败（可忽略）: %s", e)
     _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     _background_task = asyncio.create_task(run_background_tasks(
         db, engine, registry, solver_guard, worker_health, gallery_cache))

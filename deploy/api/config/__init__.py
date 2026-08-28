@@ -120,6 +120,13 @@ class Settings(BaseSettings):
         300, validation_alias="IF_SOLVE_STATS_WINDOW_SECONDS"
     )
 
+    # ── 存储驱动（ISSUE-01 Storage Adapter）──
+    # IF_STORAGE_BACKEND: 'sqlite'（默认单机，无需外置依赖）| 'redis'（集群）
+    # IF_REDIS_URL 复用「缓存/Redis」分组的 if_redis_url 字段（见下），不另设。
+    if_storage_backend: str = Field(
+        "sqlite", validation_alias="IF_STORAGE_BACKEND"
+    )
+
     # ── 超时 / 轮询 ──
     generate_timeout: int = Field(300, validation_alias="IF_GENERATE_TIMEOUT")
     generate_poll_interval: float = Field(
@@ -362,6 +369,25 @@ class Settings(BaseSettings):
     if_requests_per_minute: int = Field(
         10, validation_alias="IF_REQUESTS_PER_MINUTE"
     )
+
+    # ── 动态 IP 风控（ISSUE-02）────────────────────────────
+    # 白名单：逗号分隔 IP，白名单 IP 直接绕过封禁与限速（如运维/监控探针）
+    if_ip_whitelist: str = Field(
+        "", validation_alias="IF_IP_WHITELIST"
+    )
+    # 频繁超限自动入黑名单：连续在窗口内超限达到阈值的 IP，自动封禁 TTL 秒
+    if_auto_block_enabled: bool = Field(
+        True, validation_alias="IF_AUTO_BLOCK_ENABLED"
+    )
+    if_auto_block_threshold: int = Field(
+        3, validation_alias="IF_AUTO_BLOCK_THRESHOLD"
+    )
+    if_auto_block_window_seconds: int = Field(
+        300, validation_alias="IF_AUTO_BLOCK_WINDOW_SECONDS"
+    )
+    if_auto_block_ttl_seconds: int = Field(
+        3600, validation_alias="IF_AUTO_BLOCK_TTL_SECONDS"
+    )
     _db: DBSettings | None = None
     _http: HTTPSettings | None = None
     _solver: SolverSettings | None = None
@@ -393,6 +419,7 @@ class Settings(BaseSettings):
         "mock_register",
         "if_idempotency_enabled",
         "if_dlq_enabled",
+        "if_auto_block_enabled",
         mode="before",
     )
     @classmethod
@@ -858,6 +885,18 @@ REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
 # 公开接口限速（0 = 关闭）
 IF_REQUESTS_PER_MINUTE = settings.if_requests_per_minute
 
+# ── 存储驱动（ISSUE-01）──────────────────────────
+IF_STORAGE_BACKEND = settings.if_storage_backend
+IF_REDIS_URL = settings.if_redis_url
+IF_REDIS_ENABLED = settings.if_redis_enabled
+
+# ── 动态 IP 风控（ISSUE-02）──────────────────────
+IF_IP_WHITELIST = settings.if_ip_whitelist
+IF_AUTO_BLOCK_ENABLED = settings.if_auto_block_enabled
+IF_AUTO_BLOCK_THRESHOLD = settings.if_auto_block_threshold
+IF_AUTO_BLOCK_WINDOW_SECONDS = settings.if_auto_block_window_seconds
+IF_AUTO_BLOCK_TTL_SECONDS = settings.if_auto_block_ttl_seconds
+
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
 
@@ -1048,6 +1087,14 @@ __all__ = [
     "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
     "IF_REQUESTS_PER_MINUTE",
+    "IF_STORAGE_BACKEND",
+    "IF_REDIS_URL",
+    "IF_REDIS_ENABLED",
+    "IF_IP_WHITELIST",
+    "IF_AUTO_BLOCK_ENABLED",
+    "IF_AUTO_BLOCK_THRESHOLD",
+    "IF_AUTO_BLOCK_WINDOW_SECONDS",
+    "IF_AUTO_BLOCK_TTL_SECONDS",
     "CORS_ORIGINS",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",

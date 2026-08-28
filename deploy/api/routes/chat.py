@@ -22,7 +22,11 @@ router = APIRouter()
 log = logging.getLogger("imagefree_api.chat")
 
 _ROLE = Literal["user", "assistant", "system", "tool"]
-_REASONING_EFFORT = {"low": "quick", "medium": "balanced", "high": "deep"}
+_REASONING_EFFORT = {
+    "minimal": "quick", "low": "quick", "quick": "quick",
+    "medium": "balanced", "balanced": "balanced", "none": "balanced", "": "balanced",
+    "high": "deep", "max": "deep", "ultra": "deep", "deep": "deep",
+}
 
 
 class ChatMessage(BaseModel):
@@ -39,7 +43,9 @@ class ChatCompletionsRequest(BaseModel):
     temperature: float | None = None
     top_p: float | None = None
     max_tokens: int | None = Field(default=None, ge=1)
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    # 宽容接受任意取值（minimal/low/medium/high/max 等），未知值静默落回 balanced，
+    # 避免 OpenAI 客户端（如 Cherry Studio 默认发 max）因枚举校验被 422 拒绝
+    reasoning_effort: str | None = None
     tools: list[dict[str, Any]] | None = None
     tool_choice: Any = None
     stream_options: dict[str, Any] | None = None
@@ -67,7 +73,9 @@ def _messages_payload(messages: list[BaseModel]) -> list[dict[str, Any]]:
 
 
 def _openai_effort(value: str | None) -> str:
-    return _REASONING_EFFORT.get(value or "", "balanced")
+    if not value:
+        return "balanced"
+    return _REASONING_EFFORT.get(str(value).strip().lower(), "balanced")
 
 
 def _provider_kwargs(request: BaseModel) -> dict[str, Any]:

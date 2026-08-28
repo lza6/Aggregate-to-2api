@@ -387,11 +387,48 @@ class TryingopenChatProvider(ChatProvider):
         attempts = _env_int("IF_TRYINGOPEN_MAX_ATTEMPTS", 3)
         # v4.4.1: N 轮代理轮换全部失败后，追加一次直连兜底（本机 IP 常比随机免费代理更稳）
         total_rounds = attempts + 1
+        # 带工具调用时走聚合路径（工具是纯文本 JSON，需完整上下文才能剥离）；
+        # 普通对话走「真流式增量」——上游 reasoning-delta/text-delta 逐 token 透传，
+        # 客户端思考区与正文区并行增量显示，而非等模型写完才一次性返回。
+        streaming = not (tools and tool_choice != "none")
         for attempt in range(total_rounds):
             is_direct_fallback = attempt >= attempts
             proxy_url = None if is_direct_fallback else await proxy_pool.acquire(prefer_source="free")
             try:
-                result = await _resolve(self._request_once(payload, proxy_url))
+                if streaming:
+                    usage: dict[str, int] | None = None
+                    finish_reason = "stop"
+                    async for kind, event in self._request_stream_events(payload, proxy_url):
+                        if kind == "reasoning-delta":
+                            delta = str(event.get("delta") or "")
+                            if delta:
+                                yield {"type": "reasoning", "text": delta}
+                        elif kind == "text-delta":
+                            delta = str(event.get("delta") or "")
+                            if delta:
+                                yield {"type": "text", "text": delta}
+                        elif kind == "finish":
+                            finish_reason = str(event.get("finishReason") or "stop")
+                            usage = self._usage(event.get("messageMetadata") or {})
+                            error_message = str(
+                                event.get("errorText")
+                                or (event.get("messageMetadata") or {}).get("errorText")
+                                or (event.get("messageMetadata") or {}).get("error")
+                                or ""
+                            )
+                            if finish_reason == "error" and error_message:
+                                raise ProviderError(f"tryingopen 上游错误: {error_message[:200]}")
+                        elif kind == "error":
+                            raise ProviderError(
+                                f"tryingopen 上游错误: {str(event.get('errorText') or 'unknown')[:200]}"
+                            )
+                    if usage:
+                        yield {"type": "usage", "usage": usage}
+                    yield {"type": "finish", "finish_reason": finish_reason or "stop"}
+                else:
+                    result = await _resolve(self._request_once(payload, proxy_url))
+                    async for event in self._result_events(result, tools, tool_choice):
+                        yield event
             except _TryingopenRateLimited as exc:
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=True)
@@ -417,10 +454,55 @@ class TryingopenChatProvider(ChatProvider):
                 raise
             if proxy_url:
                 await proxy_pool.mark_success(proxy_url)
-            async for event in self._result_events(result, tools, tool_choice):
-                yield event
             return
         raise ProviderRateLimited("tryingopen 全部出口限流中")
+
+    async def _request_stream_events(
+        self, payload: dict[str, Any], proxy_url: str | None
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """逐行透传上游 SSE：每收到一个事件就 yield (event_type, event)，实现真增量流式。"""
+        request_proxy = proxy_url or config.PROXY
+        client: Any = None
+        close_client = False
+        if self._client is not None and request_proxy == config.PROXY:
+            client = self._client
+        else:
+            client = httpx.AsyncClient(proxy=request_proxy, timeout=_HTTP_TIMEOUT)
+            close_client = True
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "Origin": self.base_url,
+            "Referer": f"{self.base_url}/",
+            "User-Agent": config.USER_AGENT,
+        }
+        try:
+            async with client.stream("POST", f"{self.base_url}{OPEN_PATH}", headers=headers, json=payload) as response:
+                status = int(getattr(response, "status_code", 200))
+                if status == 429:
+                    body = await self._response_body(response)
+                    raise _TryingopenRateLimited(self._error_text(body))
+                if status < 200 or status >= 300:
+                    body = await self._response_body(response)
+                    raise ProviderError(f"tryingopen HTTP {status}: {self._error_text(body)}")
+                async for line in self._response_lines(response):
+                    if not line:
+                        continue
+                    raw = line.decode("utf-8", "replace") if isinstance(line, bytes) else str(line)
+                    if not raw.startswith("data:"):
+                        continue
+                    data = raw[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        log.debug("忽略 tryingopen 非 JSON SSE: %s", data[:200])
+                        continue
+                    yield (str(event.get("type") or ""), event)
+        finally:
+            if close_client:
+                await client.aclose()
 
     async def _result_events(self, result: _AttemptResult, tools: list | None,
                              tool_choice: Any) -> AsyncIterator[dict]:

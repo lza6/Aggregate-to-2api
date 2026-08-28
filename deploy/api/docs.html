@@ -560,6 +560,7 @@
     <button class="nav-tab" data-nav="logs-sec">📋 实时日志</button>
     <button class="nav-tab" data-nav="proxy-sec">🌐 代理池状态</button>
     <button class="nav-tab" data-nav="gallery-sec">🎨 画廊</button>
+    <button class="nav-tab" data-nav="chat-usage-sec">💬 聊天用量</button>
     <button class="nav-tab" data-nav="docs-sec">📚 文档与任务</button>
     <button class="nav-tab theme-toggle" id="theme-toggle" style="margin-left:auto" title="切换主题">🌙</button>
   </div>
@@ -919,6 +920,55 @@
       <h3>近 12 月出图</h3>
       <div class="legend">每月成功出图数（柱高）· 失败数（红色）</div>
       <div class="bars" id="chart-monthly"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 聊天用量与调用日志 ── -->
+<section class="card" id="chat-usage-sec" style="max-width:1180px;margin:24px auto 0;padding:24px 26px;display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div>
+      <h2 style="margin:0 0 4px">💬 文本对话用量与 Token 消耗</h2>
+      <p class="muted" style="margin:0">聊天模型调用日志、Token 用量与耗时透明度（实时刷新）。</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:12px;color:var(--muted)">统计周期</span>
+      <select id="chat-usage-period" style="width:auto;min-width:100px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px">
+        <option value="1h">近 1 小时</option>
+        <option value="24h" selected>近 24 小时</option>
+        <option value="7d">近 7 天</option>
+        <option value="30d">近 30 天</option>
+      </select>
+      <button class="btn secondary" id="chat-usage-refresh" style="padding:6px 14px;margin-top:0;font-size:13px">🔄 刷新</button>
+    </div>
+  </div>
+
+  <!-- 汇总统计卡 -->
+  <div class="proxy-stats" id="chat-usage-cards" style="margin-top:8px">
+    <div class="stat-card"><div class="label">调用次数</div><div class="value small" id="cu-calls">–</div><div class="delta" id="cu-calls-sub">成功 – / 失败 –</div></div>
+    <div class="stat-card"><div class="label">Prompt 输入 tokens</div><div class="value small" id="cu-prompt">–</div><div class="delta">输入上下文字符量</div></div>
+    <div class="stat-card"><div class="label">Completion 输出 tokens</div><div class="value small" id="cu-comp">–</div><div class="delta" id="cu-reasoning">推理 –</div></div>
+    <div class="stat-card"><div class="label">总量 tokens</div><div class="value small" id="cu-total">–</div><div class="delta" id="cu-today">今日 – 次 / – tokens</div></div>
+    <div class="stat-card"><div class="label">平均响应耗时</div><div class="value small" id="cu-avg">–</div><div class="delta">含推理与网络</div></div>
+    <div class="stat-card"><div class="label">工具调用</div><div class="value small" id="cu-tools">–</div><div class="delta">函数调用次数</div></div>
+  </div>
+
+  <!-- 按模型分组明细 -->
+  <div style="margin-top:20px;border-top:1px solid var(--line);padding-top:14px">
+    <h3 style="margin:0 0 10px;font-size:14px;color:var(--text);display:flex;align-items:center;gap:6px"><span>🧩</span>按模型统计明细</h3>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12.5px;border-collapse:collapse" id="chat-usage-table">
+        <thead><tr style="border-bottom:1px solid var(--line);text-align:left;color:var(--muted)">
+          <th style="padding:8px 6px">模型 ID</th>
+          <th style="padding:8px 6px">调用次数</th>
+          <th style="padding:8px 6px">Prompt tokens</th>
+          <th style="padding:8px 6px">Completion tokens</th>
+          <th style="padding:8px 6px">总 tokens</th>
+        </tr></thead>
+        <tbody id="chat-usage-tbody">
+          <tr><td colspan="5" class="empty" style="padding:20px 0;text-align:center;color:var(--muted)">📭 暂无对话调用记录（去「🖼️ 在线使用 → 💬 对话聊天」发起对话后即可看到统计）</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -1542,6 +1592,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     'logs-sec': 'logs-sec',
     'proxy-sec': 'proxy-sec',
     'gallery-sec': 'gallery-sec',
+    'chat-usage-sec': 'chat-usage-sec',
     'docs-sec': 'docs-sec',
     // 聚合页：docs-sec 点击同时展示 stats-sec 与 task-sec
     'stats-sec': 'stats-sec',
