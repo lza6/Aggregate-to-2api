@@ -56,11 +56,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">在线聊天</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/solar" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
-            <span className="nav-icon">🪐</span>
-            <span className="nav-text">宇宙星图</span>
-            <span className="nav-pip" />
-          </NavLink>
           <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
             <span className="nav-icon">🩺</span>
             <span className="nav-text">健康体检</span>
@@ -74,7 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="system-dot" />
             <span className="system-status">服务运行正常</span>
           </div>
-          <div className="system-version">v4.3.3 SaaS Enterprise</div>
+          <div className="system-version">v{__APP_VERSION__} SaaS Enterprise</div>
         </div>
       </aside>
 

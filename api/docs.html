@@ -955,12 +955,14 @@
     </div>
   </div>
 
-  <!-- 汇总统计卡 -->
+  <!-- 汇总统计卡：总量 tokens 作为主卡置顶，Prompt/Completion 合并为副行，其余为次要信息 -->
   <div class="proxy-stats" id="chat-usage-cards" style="margin-top:8px">
+    <div class="stat-card" style="grid-column:span 2;background:var(--card);border:1px solid var(--primary);position:relative;overflow:hidden">
+      <div class="label">💬 对话总消耗 Tokens</div>
+      <div class="value" id="cu-total">–</div>
+      <div class="delta" id="cu-today">今日 – 次 / – tokens</div>
+    </div>
     <div class="stat-card"><div class="label">调用次数</div><div class="value small" id="cu-calls">–</div><div class="delta" id="cu-calls-sub">成功 – / 失败 –</div></div>
-    <div class="stat-card"><div class="label">Prompt 输入 tokens</div><div class="value small" id="cu-prompt">–</div><div class="delta">输入上下文字符量</div></div>
-    <div class="stat-card"><div class="label">Completion 输出 tokens</div><div class="value small" id="cu-comp">–</div><div class="delta" id="cu-reasoning">推理 –</div></div>
-    <div class="stat-card"><div class="label">总量 tokens</div><div class="value small" id="cu-total">–</div><div class="delta" id="cu-today">今日 – 次 / – tokens</div></div>
     <div class="stat-card"><div class="label">平均响应耗时</div><div class="value small" id="cu-avg">–</div><div class="delta">含推理与网络</div></div>
     <div class="stat-card"><div class="label">工具调用</div><div class="value small" id="cu-tools">–</div><div class="delta">函数调用次数</div></div>
   </div>
@@ -1479,18 +1481,9 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
 	</section>
 
 <footer>
-  <div class="foot-brand">
-    <img src="/static/logo.png" alt="听风AI">
-    <div>
-      <b>听风AI（逆向号池）</b> · 多提供商 AI 生成网关
-      <div class="foot-contact">
-        <span>微信联系：<span class="wx">Tf00798</span></span>
-        <span>负责人：听风</span>
-        <span>GitHub：<a href="https://github.com/lza6/" target="_blank" rel="noopener">github.com/lza6</a></span>
-        <span>慢请求看板：<a href="/v1/slow/view" target="_blank" rel="noopener">打开</a></span>
-        <span>🔑 写接口需 API Key（聊天 / 生成 / 图生图） · 请合理使用</span>
-        <span><a href="/v1/honor" style="text-decoration:none">☕ 请我喝咖啡</a> · <span style="font-size:11px;opacity:.6">v6.3.0</span></span>
-      </div>
+  <div class="foot-brand" style="font-size:12px">
+    <div style="color:var(--muted)">
+      <span>负责人：听风</span> · <span>GitHub：<a href="https://github.com/lza6/" target="_blank" rel="noopener">github.com/lza6</a></span> · <span>慢请求看板：<a href="/v1/slow/view" target="_blank" rel="noopener">打开</a></span> · <span>🔑 写接口需 API Key（聊天 / 生成 / 图生图） · 请合理使用</span> · <a href="/v1/honor" style="text-decoration:none">☕ 请我喝咖啡</a> · <span style="opacity:.6">v6.4.1</span>
     </div>
   </div>
 </footer>
@@ -2206,13 +2199,10 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         if (el) el.textContent = v;
       };
       var totalTokens = (d.prompt_tokens || 0) + (d.completion_tokens || 0) + (d.reasoning_tokens || 0);
-      set('cu-calls', fmtInt(d.total_calls));
-      set('cu-calls-sub', '成功 ' + fmtInt(d.ok_calls) + ' / 失败 ' + fmtInt(d.fail_calls));
-      set('cu-prompt', fmtTokens(d.prompt_tokens));
-      set('cu-comp', fmtTokens(d.completion_tokens));
-      set('cu-reasoning', '推理 ' + fmtTokens(d.reasoning_tokens));
       set('cu-total', fmtTokens(totalTokens));
       set('cu-today', '今日 ' + fmtInt(d.today_calls) + ' 次 / ' + fmtTokens(d.today_tokens) + ' tokens');
+      set('cu-calls', fmtInt(d.total_calls));
+      set('cu-calls-sub', '成功 ' + fmtInt(d.ok_calls) + ' / 失败 ' + fmtInt(d.fail_calls));
       set('cu-avg', d.avg_duration_ms != null ? (d.avg_duration_ms / 1000).toFixed(1) + 's' : '—');
       set('cu-tools', fmtInt(d.tool_calls));
       var tbody = document.getElementById('chat-usage-tbody');

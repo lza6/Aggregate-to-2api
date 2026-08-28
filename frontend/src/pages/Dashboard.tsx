@@ -15,11 +15,12 @@ const LazyGallery = lazy(() => import('../components/Gallery').then(m => ({ defa
 // P3-6: recharts 重依赖懒加载 —— 图表仅在数据就绪后按需加载，主包不再静态携带 recharts
 const LazyBarChart = lazy(() => import('../components/BarChart').then(m => ({ default: m.BarChart })));
 
-/** Token 数短格式化（1234567 -> 1.2M / 3456 -> 3.5k） */
+/** Token 数短格式化（82548 -> 82.5K / 1234567 -> 1.2M / 1234567890 -> 1.23B） */
 function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
 }
 
