@@ -34,4 +34,4 @@
 - base64_separation.py 测试在本地 hang（沿用 session event-loop+worker 生命周期，需 mock cf_solver 常驻 + 全量 collect；CI 环境通过），非本次引入缺陷。
 
 ## 最近更新
-- 2026-08-28 21:40 前端修复完成（formatTokens B档+大写K、version 注入、移除 solar 路由），tsc/build/smoke 全绿；docs.html 聊天用量主卡 + 页脚去重 + 版本 v6.4.1；version 统一 6.4.1（pyproject/main/package/docker-compose/README）；sync_deploy 一致。等待后端+UI 后台审计完成后进入部署。
+- 2026-08-28 22:00 **全部闭环完成**：提交 `b1a61d2` 已推送 main；tag `v6.4.1` 已推送；release 创建成功；线上部署完成（api:6.4.1 healthy、cfsolver:6.4.1 healthy、/admin dist 已换新、docs 页脚 v6.4.1）；真实 E2E 打点：无key/错key 均 401 且零 CF 浪费。
