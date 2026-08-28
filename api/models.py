@@ -50,4 +50,6 @@ class TaskInfo(BaseModel):
     prompt: str | None = None
     aspect_ratio: str | None = None
     client_ip: str | None = None
+    client_location: str | None = None
     user_agent: str | None = None
+    timings: dict | None = None

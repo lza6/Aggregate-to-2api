@@ -259,6 +259,20 @@
     border: 1px solid var(--line); display: block; }
   .pg-dl-link { display: inline-block; margin-top: 10px; font-size: 13px; }
 
+  /* 渐进式进度步骤条 */
+  .pg-stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0 10px; padding: 12px 14px; background: var(--bg-soft); border-radius: 10px; border: 1px solid var(--line); }
+  .pg-step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); opacity: 0.6; transition: all 0.3s ease; }
+  .pg-step.active { opacity: 1; color: var(--brand); font-weight: 600; transform: translateY(-1px); }
+  .pg-step.done { opacity: 1; color: var(--ok); font-weight: 500; }
+  .pg-step-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--card); border: 1px solid var(--line); font-size: 11px; flex-shrink: 0; }
+  .pg-step.active .pg-step-icon { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 0 10px var(--brand-soft); animation: tf-pulse 1.8s infinite; }
+  .pg-step.done .pg-step-icon { background: var(--ok); color: #fff; border-color: var(--ok); }
+  .pg-step-line { flex: 1; height: 2px; background: var(--line); margin: 0 4px; border-radius: 1px; }
+  .pg-step-line.done { background: var(--ok); }
+  .pg-actionable-err { margin-top: 12px; padding: 14px 16px; border-radius: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: var(--text); font-size: 13px; }
+  .pg-actionable-err .err-title { color: var(--err); font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .pg-actionable-err pre { margin: 8px 0 4px; padding: 8px 12px; font-size: 12px; }
+
   .pg-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
   .pg-tab { border: 1px solid var(--line); background: var(--card); color: var(--text);
     border-radius: 999px; padding: 7px 18px; font-size: 14px; font-weight: 600;
@@ -407,6 +421,51 @@
   @media (max-width: 480px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .grid { grid-template-columns: 1fr; gap: 8px; }
+    .nav-bar { padding: 4px; gap: 3px; }
+    .nav-tab { padding: 6px 10px; font-size: 12px; }
+    .brand { padding: 16px 12px 42px; }
+    .brand-title h1 { font-size: 17px; }
+    .brand-title .sub { font-size: 12px; }
+    .brand-tags { gap: 4px; }
+    .brand-tag { font-size: 11px; padding: 2px 8px; }
+    .topbar-actions, .dashboard-header-actions { flex-wrap: wrap; gap: 6px; }
+    .api-key-badge { max-width: 100%; word-break: break-all; font-size: 11px; }
+    .chart { padding: 10px 12px; }
+    .bars { height: 90px; gap: 3px; }
+    .stat-card { padding: 8px 10px; }
+    .stat-card .value { font-size: 16px; }
+    .stat-card .label { font-size: 11px; }
+    .stat-card .delta { font-size: 10px; }
+  }
+  @media (max-width: 375px) {
+    body { font-size: 13px; }
+    .brand { padding: 14px 10px 38px; }
+    .brand-logo { width: 44px; height: 44px; border-radius: 12px; }
+    .brand-title h1 { font-size: 15px; }
+    .brand-title .sub { font-size: 11px; }
+    .nav { margin: -32px auto 0; padding: 0 8px; }
+    .nav-bar { padding: 3px; gap: 2px; }
+    .nav-tab { padding: 5px 8px; font-size: 11.5px; }
+    .stats { padding: 0 8px; }
+    .stats-grid { grid-template-columns: 1fr; gap: 6px; }
+    .stat-card { padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; }
+    .stat-card .value { font-size: 16px; margin: 0; }
+    .stat-card .delta { display: none; }
+    .pg-tabs { gap: 4px; }
+    .pg-tab { padding: 5px 12px; font-size: 12px; }
+    .pg-row { gap: 8px; }
+    .pg-ratio-btn { font-size: 11px; padding: 4px 8px; }
+    .pg-btn, .btn { padding: 8px 16px; font-size: 13px; }
+    .chart h3 { font-size: 12.5px; margin-bottom: 6px; }
+    .chart .legend { font-size: 10px; margin-bottom: 6px; }
+    .bars { height: 80px; }
+    .bar-label { font-size: 9px; }
+    .proxy-stats { grid-template-columns: 1fr; gap: 6px; }
+    table { font-size: 11.5px; }
+    th, td { padding: 6px 8px; }
+    pre { font-size: 11.5px; padding: 10px 12px; }
+    #task-modal > div { padding: 16px 18px; width: 95%; }
+  }
     .prov-grid, .pool-grid { grid-template-columns: 1fr; gap: 10px; }
     .brand { padding: 16px 12px 44px; }
     .brand-logo { width: 44px; height: 44px; border-radius: 14px; }
@@ -573,7 +632,17 @@
       <label class="pg-dl"><input type="checkbox" id="pg-download"> 返回 base64（可直接下载）</label>
       <button id="pg-btn" class="pg-btn">✨ 生成</button>
     </div>
+    <div id="pg-stepper" class="pg-stepper" style="display:none">
+      <div class="pg-step" id="step-queue"><span class="pg-step-icon">1</span><span>排队中</span></div>
+      <div class="pg-step-line" id="line-1"></div>
+      <div class="pg-step" id="step-turnstile"><span class="pg-step-icon">2</span><span>Turnstile 求解</span></div>
+      <div class="pg-step-line" id="line-2"></div>
+      <div class="pg-step" id="step-render"><span class="pg-step-icon">3</span><span>上游渲染</span></div>
+      <div class="pg-step-line" id="line-3"></div>
+      <div class="pg-step" id="step-distribute"><span class="pg-step-icon">4</span><span>下载分发</span></div>
+    </div>
     <div id="pg-status" class="pg-status"></div>
+    <div id="pg-actionable-err" class="pg-actionable-err" style="display:none"></div>
     <div id="pg-result" class="pg-result"></div>
     <div id="pg-guide" class="muted" style="text-align:center;padding:22px 0;font-size:14px;color:var(--muted)">
       💡 输入提示词 → 点击生成 → 等待出图
@@ -856,7 +925,7 @@
     <div style="overflow-x:auto">
       <table id="task-table" style="font-size:13px">
         <thead><tr>
-          <th>任务 ID</th><th>状态</th><th>模型</th><th>调用方 IP</th><th>客户端 / 标识</th><th>耗时</th><th>创建时间</th><th>操作</th>
+          <th>任务 ID</th><th>状态</th><th>模型</th><th>调用方 IP (归属地)</th><th>客户端 / 标识</th><th>耗时 (阶段拆解)</th><th>创建时间</th><th>操作</th>
         </tr></thead>
         <tbody id="task-tbody"><tr><td colspan="8" class="empty" style="padding:30px 0">⏳ 加载中…</td></tr></tbody>
       </table>
@@ -883,11 +952,13 @@
       <div class="pool-stat"><span>路由执行</span><b id="tm-provider" style="color:var(--primary)">–</b></div>
       <div class="pool-stat"><span>比例</span><b id="tm-ratio">–</b></div>
       <div class="pool-stat"><span>调用方 IP</span><b id="tm-client_ip" style="font-family:monospace">–</b></div>
+      <div class="pool-stat"><span>IP 归属地</span><b id="tm-client_loc">–</b></div>
       <div class="pool-stat"><span>客户端程序 / 设备</span><b id="tm-user_agent" style="font-family:monospace;font-size:12px;word-break:break-all">–</b></div>
       <div class="pool-stat"><span>类型</span><b id="tm-type">–</b></div>
       <div class="pool-stat"><span>提示词</span><b id="tm-prompt" style="word-break:break-all;font-weight:400">–</b></div>
       <div class="pool-stat"><span>图片地址</span><b id="tm-image_url" style="word-break:break-all;font-weight:400;font-size:12px">–</b></div>
-      <div class="pool-stat"><span>耗时</span><b id="tm-dur">–</b></div>
+      <div class="pool-stat"><span>总耗时</span><b id="tm-dur">–</b></div>
+      <div class="pool-stat"><span>CF/排队阶段拆解</span><b id="tm-timings" style="font-size:12px;color:var(--primary)">–</b></div>
       <div class="pool-stat"><span>创建时间</span><b id="tm-created">–</b></div>
     </div>
     <div id="tm-error" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;font-size:13px;color:var(--err);word-break:break-all">
@@ -1657,13 +1728,15 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       }
       var model = esc(t.model || 'default');
       var clientIp = esc(t.client_ip || '—');
+      var loc = esc(t.client_location || '');
+      var ipDisplay = loc ? clientIp + '<br><span style="font-size:10px;color:var(--muted)">' + loc + '</span>' : clientIp;
       var ua = esc(t.user_agent || '—');
       var uaShort = ua.length > 25 ? ua.slice(0, 25) + '…' : ua;
       return '<tr>' +
         '<td><code title="' + esc(t.id) + '">' + esc(idShort) + '</code></td>' +
         '<td>' + taskStatusHtml(t.status) + '</td>' +
         '<td>' + model + '</td>' +
-        '<td><code style="font-size:11px">' + clientIp + '</code></td>' +
+        '<td><code style="font-size:11px">' + ipDisplay + '</code></td>' +
         '<td><span title="' + ua + '" style="font-size:11px;color:var(--muted);cursor:help">' + uaShort + '</span></td>' +
         '<td>' + dur + '</td>' +
         '<td>' + created + '</td>' +
@@ -1718,11 +1791,17 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
       document.getElementById('tm-type').textContent = d.type === 'img' ? '🎨 图生图' : '🖼️ 文生图';
       document.getElementById('tm-ratio').textContent = esc(d.aspect_ratio || '—');
       document.getElementById('tm-client_ip').textContent = esc(d.client_ip || '—');
+      document.getElementById('tm-client_loc').textContent = esc(d.client_location || '—');
       document.getElementById('tm-user_agent').textContent = esc(d.user_agent || '—');
       document.getElementById('tm-prompt').textContent = esc(d.prompt || '—');
       document.getElementById('tm-prompt').style.display = d.prompt ? 'block' : 'none';
       document.getElementById('tm-image_url').textContent = esc(d.image_url || '—');
       document.getElementById('tm-dur').textContent = d.duration_sec != null ? d.duration_sec.toFixed(1) + 's' : '—';
+      var timingsHtml = '—';
+      if (d.timings && d.timings.total_sec != null) {
+        timingsHtml = '总计 ' + d.timings.total_sec + 's';
+      }
+      document.getElementById('tm-timings').innerHTML = timingsHtml;
       var created = '—';
       if (d.created_at) {
         created = new Date(d.created_at * 1000).toLocaleString('zh-CN');

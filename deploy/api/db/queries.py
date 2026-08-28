@@ -97,6 +97,7 @@ class QueueDB:
 
 def task_to_public(t: dict) -> dict:
     """数据库行 → API 响应结构。"""
+    from ..geo_ip import guess_country
     b64 = t.get("image_base64")
     if b64 and isinstance(b64, str) and b64.startswith("file://"):
         path = b64[7:]
@@ -108,6 +109,17 @@ def task_to_public(t: dict) -> dict:
                 b64 = None
         except OSError:
             b64 = None
+
+    ip = t.get("client_ip") or ""
+    loc_info = guess_country(ip) if ip else None
+    loc_str = f"{loc_info['emoji']} {loc_info['desc']}" if loc_info else "—"
+
+    # 阶段耗时拆解（从 error / slow / duration 提炼）
+    dur = t.get("duration_sec")
+    timings = {}
+    if dur is not None:
+        timings["total_sec"] = round(dur, 2)
+
     return {
         "id": t["id"],
         "status": t["status"],
@@ -122,5 +134,7 @@ def task_to_public(t: dict) -> dict:
         "prompt": t.get("prompt"),
         "aspect_ratio": t.get("aspect_ratio"),
         "client_ip": t.get("client_ip"),
+        "client_location": loc_str,
         "user_agent": t.get("user_agent"),
+        "timings": timings,
     }
