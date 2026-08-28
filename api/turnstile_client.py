@@ -47,8 +47,12 @@ def _get_client() -> httpx.AsyncClient:
     """惰性创建共享 client：复用连接，避免每任务 TLS 握手。"""
     global _client
     if _client is None:
+        # 空串代理（IF_PROXY="" 等）会被 httpx 拒绝：Unknown scheme for proxy URL
+        proxy = config.PROXY if (isinstance(config.PROXY, str) and config.PROXY.strip()) or config.PROXY is None else None
+        if isinstance(proxy, str) and not proxy.strip():
+            proxy = None
         _client = httpx.AsyncClient(
-            proxy=config.PROXY,
+            proxy=proxy,
             timeout=httpx.Timeout(30.0),
             headers={"User-Agent": config.USER_AGENT},
             limits=httpx.Limits(

@@ -79,6 +79,19 @@ class Settings(BaseSettings):
     proxy: str | None = Field(
         default=None, validation_alias="IF_PROXY"
     )
+
+    @field_validator("proxy", mode="after")
+    @classmethod
+    def _normalize_empty_proxy(cls, v: str | None) -> str | None:
+        """空串代理统一归一化为 None（直连）。
+
+        docker-compose 里 IF_PROXY= 显式清空代理时会注入空字符串；
+        httpx 对空串抛 "Unknown scheme for proxy URL URL('')"，
+        在源头归一化，所有 proxy=config.PROXY 的调用点自然安全。
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
