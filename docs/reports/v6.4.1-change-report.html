@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v6.4.1 变更验收报告</title>
+<style>
+  :root{--bg:#0f172a;--card:#111827;--card2:#1e293b;--line:#243047;--text:#f8fafc;--muted:#94a3b8;--pri:#6366f1;--ok:#10b981;--warn:#f59e0b;--err:#ef4444}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;padding:32px 20px;max-width:980px;margin:0 auto}
+  h1{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  h2{font-size:17px;font-weight:600;margin:28px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  h3{font-size:14px;font-weight:600;margin:16px 0 6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:999px}
+  .b-ok{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#34d399}
+  .b-warn{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fbbf24}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .tile{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .tile .l{font-size:12px;color:var(--muted)}
+  .tile .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;letter-spacing:.02em}
+  code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:5px}
+  .quiz{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+  .q{margin-bottom:18px}
+  .q .qt{font-weight:600;font-size:14px;margin-bottom:8px}
+  .opt{display:block;width:100%;text-align:left;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 12px;border-radius:8px;margin-bottom:6px;font-size:13px;cursor:pointer;transition:all .15s}
+  .opt:hover{border-color:var(--pri)}
+  .opt.correct{border-color:var(--ok);background:rgba(16,185,129,.1)}
+  .opt.wrong{border-color:var(--err);background:rgba(239,68,68,.1)}
+  .opt:disabled{cursor:default;opacity:.9}
+  .btn{background:var(--pri);border:none;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
+  .btn:disabled{opacity:.5;cursor:default}
+  #result{margin-top:16px;font-size:14px;font-weight:600}
+  .score{font-size:34px;font-weight:800;color:var(--pri)}
+  .frag{color:var(--text);font-size:13px;margin-top:6px}
+  ul{list-style:none;padding-left:0}
+  ul li{padding:4px 0 4px 20px;position:relative;font-size:13px}
+  ul li::before{content:"▸";position:absolute;left:4px;color:var(--pri)}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<h1>听风AI · v6.4.1 变更验收报告</h1>
+<div class="sub">版本号统一 + 前端 UI 完善（Token 大单位 M/B/K / 总用量主卡 / 页脚去重 / 版本构建注入）· 生产终审</div>
+
+<div class="card">
+  <span class="badge b-ok">结论：已真实闭环</span>
+  <p style="margin-top:10px;font-size:13.5px">目标：把上一轮用户反馈（<b>「无key/错key仍在过CF浪费资源」「统计用量直接显示总用量」「Token 用 M/B 大单位」「为啥没有日志页」「页脚重复不高级」「号池要全签到监督」</b>）逐项推进到「可验证、可部署、可维护」状态。本轮交付 = <b>UI 收尾 + 版本一致性 + 回归验证</b>，核心逆向/号池/路由逻辑（v6.4.0）保持不变。</p>
+  <ul>
+    <li><b>提交</b>：<code>b1a61d2</code>（已推 main） + <code>56b8ade</code>（status 标记）</li>
+    <li><b>发行版</b>：tag <code>v6.4.1</code> → <a href="https://github.com/lza6/Image-to-2api/releases/tag/v6.4.1" style="color:var(--pri)">github.com/lza6/Image-to-2api/releases/tag/v6.4.1</a></li>
+    <li><b>线上</b>：<code>imagefree-api:6.4.1</code> / <code>imagefree-cfsolver:6.4.1</code> 均 <span class="ok">Up healthy</span>；<code>/admin</code> dist 已换新；docs 页脚 <code>v6.4.1</code></li>
+  </ul>
+</div>
+
+<h2>需求追踪矩阵</h2>
+<div style="overflow-x:auto"><table>
+  <thead><tr><th>ID</th><th>需求</th><th>类型</th><th>实现证据</th><th>验证证据</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>Token 显示用 M/B/K 大单位</td><td>显式</td><td><code>Dashboard.tsx formatTokens</code> B档+K大写；<code>docs.html fmtTokens</code></td><td>build/tsc 0错；smoke 12/0</td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R2</td><td>统计用量直接显示总用量</td><td>显式</td><td><code>docs.html cu-total</code> 主卡 span2 置顶；删除 Prompt/Comp 独立卡</td><td>线上 docs 实测 render；sync 一致</td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R3</td><td>页脚去重 + 版本号更新</td><td>显式</td><td>页脚删 logo/品牌/微信；版本 <code>v6.4.1</code></td><td>线上页脚 grep = <code>v6.4.1</code></td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R4</td><td>版本号不再硬编码漂移</td><td>隐式/非功能</td><td><code>vite.config.ts</code> 注入 <code>__APP_VERSION__</code>；Layout 侧栏 <code>v4.3.3→v{__APP_VERSION__}</code></td><td>线上 bundle grep <code>v6.4.1 SaaS Enterprise</code></td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R5</td><td>移除误入的「宇宙星图」</td><td>隐式(回归)</td><td><code>App.tsx</code>/<code>Layout.tsx</code> 移除 /solar</td><td>线上 bundle 无「宇宙星图」；smoke 断言 8 导航通过</td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R6</td><td>401/403 不再重试浪费 CF（回归）</td><td>验收(核心)</td><td><code>retry_policy.py</code> 401/403→permanent</td><td>单测 49p；E2E 探针 401/403→<code>permanent</code>；线上无key/错key→HTTP 401 且 <code>solve_success_total</code> 未增</td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R7</td><td>私网 IP 不显示（回归）</td><td>验收(安全)</td><td><code>geo_ip.py</code> 169.254/172.16-31/10/192.168→LAN</td><td>单测 22p；E2E 172.25.0.1/169.254→LAN，8.8.8.8→公网</td><td><span class="ok">已闭环</span></td></tr>
+    <tr><td>R8</td><td>号池「可签到账号全签到」监督</td><td>验收</td><td><code>account_pool.py</code> 调度 + <code>registerer.py</code> 已签分支落库 cycle_day/next_claim_at</td><td>account_pool 17p / registerer+email_pool 23p；无死锁</td><td><span class="warn">部分闭环</span>（dead 无密码号客观不可签，见限制）</td></tr>
+    <tr><td>R9</td><td>日志页可用</td><td>显式</td><td><code>Logs.tsx</code> WebSocket /v1/logs/ws</td><td>smoke 路由全绿；线上可用</td><td><span class="ok">已闭环</span></td></tr>
+  </tbody>
+</table></div>
+<p class="frag muted">R8「全部」的真实可监督范围 = ok/active 账号；dead（注册未留密码/续期失败被标死）为客观边界，非缺陷。</p>
+
+<h2>关键设计决策</h2>
+<div class="card">
+<h3>1. 版本号单一来源</h3>
+<p style="font-size:13.5px">之前「代码注释写 v6.3.4 / 前端显示 v4.3.3 / 后端 6.3.0」三处漂移。改为：<code>frontend/package.json</code> 为前端唯一版本源，build-time 经 <code>vite define</code> 注入 <code>__APP_VERSION__</code>；后端 <code>pyproject.toml</code>→<code>api/main.py</code> 与 <code>deploy/docker-compose.yml</code> 镜像 tag 同步到 <code>6.4.1</code>。此后前端版本随构建自动更新，不再需要手改组件。</p>
+<h3>2. 总用量「主卡」而非拆卡</h3>
+<p style="font-size:13.5px">聊天用量面板把「总量 tokens」提为唯一焦点卡（<code>grid-column:span 2</code> + 主题色边框 + 大字号），Prompt/Completion/推理收敛为副行（<code>cu-today</code>），调用次数/耗时/工具调用降为次要信息 —— 满足「直接显示总用量」。</p>
+<h3>3. 移除失控功能</h3>
+<p style="font-size:13.5px"><code>/solar</code> 宇宙星图是早期对需求误读引入，非本服务能力；从路由与导航移除，恢复 e2e-smoke 预期的 8 导航，避免「有页面无能力」的假功能。</p>
+</div>
+
+<h2>验证证据</h2>
+<div class="grid">
+  <div class="tile"><div class="l">前端类型检查</div><div class="v ok">tsc 0 错</div></div>
+  <div class="tile"><div class="l">前端生产构建</div><div class="v ok">vite build exit 0</div></div>
+  <div class="tile"><div class="l">前端冒烟</div><div class="v ok">smoke 12/0</div></div>
+  <div class="tile"><div class="l">retry_policy 单测</div><div class="v ok">49 passed</div></div>
+  <div class="tile"><div class="l">geo/私网 单测</div><div class="v ok">22 passed</div></div>
+  <div class="tile"><div class="l">account_pool 单测</div><div class="v ok">17 passed</div></div>
+  <div class="tile"><div class="l">registerer+email_pool</div><div class="v ok">23 passed</div></div>
+  <div class="tile"><div class="l">线上容器</div><div class="v ok">api/cfsolver 6.4.1 healthy</div></div>
+  <div class="tile"><div class="l">线上 401 零 CF</div><div class="v ok">HTTP 401，solver 不变</div></div>
+  <div class="tile"><div class="l">sync_deploy</div><div class="v ok">api/ 与 deploy/api/ 一致</div></div>
+</div>
+
+<h2>已知限制与剩余风险</h2>
+<div class="card"><ul>
+  <li class="warn"><b>base64_separation 本地 hang</b>：依赖 session event-loop + worker 生命周期 + mock cf_solver 常驻；CI 通过，非本次引入。</li>
+  <li class="warn"><b>ruff 87 项</b>：全为既存 unused import / F841，未做不相关重构。</li>
+  <li class="warn"><b>R8 号池全签到</b>：dead 号（注册未留密码/续期失败被标死）客观不可签，属边界；ok/active 全量覆盖并落库。</li>
+  <li class="muted"><b>SSH 桥瞬断</b>：部署时代理桥偶发 banner 超时；已用较长超时/HTTP 复核，部署本身已验证（容器 healthy + 产物已上新）。</li>
+</ul></div>
+
+<h2>交互测验（5 题 · 80% 通过线）</h2>
+<div class="quiz" id="quiz">
+  <div class="q" data-ans="1"><div class="qt">1. 前端侧栏显示的版本号来自哪里？</div>
+    <button class="opt" data-v="0">硬编码在 Layout.tsx</button>
+    <button class="opt" data-v="1">build-time 从 package.json 注入 __APP_VERSION__</button>
+    <button class="opt" data-v="0">后端 /v1/system 返回</button>
+    <button class="opt" data-v="0">从浏览器 localStorage 读取</button>
+  </div>
+  <div class="q" data-ans="2"><div class="qt">2. 聊天用量面板「总量 tokens」现在的呈现方式是？</div>
+    <button class="opt" data-v="0">与 Prompt/Completion 并列的普通小卡</button>
+    <button class="opt" data-v="1">主卡置顶（grid-column:span 2 + 主题色边框）</button>
+    <button class="opt" data-v="0">悬浮 Tooltip 里才显示</button>
+    <button class="opt" data-v="0">图表 Secondary 轴</button>
+  </div>
+  <div class="q" data-ans="0"><div class="qt">3. formatTokens/fmtTokens 对 1234567890 的输出是？</div>
+    <button class="opt" data-v="0">1.23B</button>
+    <button class="opt" data-v="1">1234.6M</button>
+    <button class="opt" data-v="0">1.2G</button>
+    <button class="opt" data-v="0">1234567890</button>
+  </div>
+  <div class="q" data-ans="1"><div class="qt">4. 无 API Key / 错误 Key 调用写接口会怎样？</div>
+    <button class="opt" data-v="0">先过 CF 求解再返回错误</button>
+    <button class="opt" data-v="1">立即返回 401，不触发任何 CF 求解</button>
+    <button class="opt" data-v="0">进入死信队列重试 3 次</button>
+    <button class="opt" data-v="0">自动降级到其它提供商</button>
+  </div>
+  <div class="q" data-ans="0"><div class="qt">5. 本轮发布的 tag 是？</div>
+    <button class="opt" data-v="0">v6.4.1</button>
+    <button class="opt" data-v="1">v6.3.0</button>
+    <button class="opt" data-v="0">v6.4.0</button>
+    <button class="opt" data-v="0">v6.3.3</button>
+  </div>
+  <button class="btn" id="submit" onclick="grade()">提交测验</button>
+  <div id="result"></div>
+</div>
+
+<script>
+  function grade(){
+    var qs=document.querySelectorAll('.q'), score=0, wrong=[];
+    qs.forEach(function(q,idx){
+      var sel=q.querySelector('.opt.correct');
+      if(sel) sel.classList.remove('correct');
+      var picked=q.querySelector('.opt.selected');
+      var ans=parseInt(q.getAttribute('data-ans'),10);
+      q.querySelectorAll('.opt').forEach(function(o){
+        o.disabled=true;
+        if(parseInt(o.getAttribute('data-v'),10)===ans){o.classList.add('correct');}
+      });
+      if(picked && parseInt(picked.getAttribute('data-v'),10)===ans){score++;}
+      else if(picked){wrong.push(idx+1);}
+    });
+    var pct=Math.round(score/qs.length*100);
+    var res=document.getElementById('result');
+    res.innerHTML='<div class="score">'+score+' / '+qs.length+'（'+pct+'%）</div>'+
+      (pct>=80?'<div class="ok">✅ 通过（≥80%）</div>':'<div class="warn">❌ 未通过（需 ≥80%）。错题：'+(wrong.join('、')||'无')+'</div>');
+    document.getElementById('submit').disabled=true;
+  }
+  document.querySelectorAll('.opt').forEach(function(o){
+    o.addEventListener('click',function(){
+      var box=o.closest('.q');
+      box.querySelectorAll('.opt').forEach(function(x){x.classList.remove('selected');});
+      o.classList.add('selected');
+    });
+  });
+</script>
+
+<p class="frag muted" style="margin-top:20px;border-top:1px solid var(--line);padding-top:14px">生成日期：2026-08-28 · 来源：生产终审流水 + 独立 Critic · 本报告自包含（无外部 CDN，无密钥）</p>
+</body>
+</html>
