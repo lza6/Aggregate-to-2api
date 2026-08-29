@@ -13,6 +13,28 @@ interface GenState {
   error?: string;
 }
 
+/** 生成错误分级/可行动化提示（P2-4）：把后端高频错误映射成可读 + 可行动文案。 */
+function friendlierGenError(raw: unknown): string {
+  const msg = (typeof raw === 'string' ? raw : raw instanceof Error ? raw.message : String(raw ?? '')).trim();
+  const low = msg.toLowerCase();
+  if (low.includes('401') || low.includes('unauthorized') || low.includes('api key')) {
+    return 'API Key 未配置或无效 — 请点击右上角「配置 API Key」填入有效 Key（写接口需 Key）。';
+  }
+  if (low.includes('429') || low.includes('queue_full') || low.includes('queue full') || low.includes('繁忙')) {
+    return '当前上游繁忙或队列已满 — 已自动切换备用引擎，请稍后重试或调大调小并发。';
+  }
+  if (low.includes('限流') || low.includes('rate')) {
+    return '触发限流 — 请降低请求频率后重试。';
+  }
+  if (low.includes('403') || low.includes('forbidden')) {
+    return '请求被拒绝（403）— 请检查 API Key 权限或调用频率。';
+  }
+  if (low.includes('timeout') || low.includes('超时')) {
+    return '上游超时 — 已自动切换备用引擎，请稍后重试。';
+  }
+  return msg || '生成失败，请稍后重试。';
+}
+
 const ASPECT_OPTIONS = ['1:1', '3:4', '4:3', '9:16', '16:9', '3:2', '2:3', '21:9'];
 const RES_OPTIONS = ['1K', '2K', '4K', '480p', '720p'];
 
@@ -35,11 +57,13 @@ export function GeneratePage() {
   const [resolution, setResolution] = useState('1K');
   const [apiKey, setApiKey] = useState(getStoredApiKey);
   const [showKeyPanel, setShowKeyPanel] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [genState, setGenState] = useState<GenState>({ status: 'idle' });
   const [editImages, setEditImages] = useState<{ name: string; data: string }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
 
   // 生图模型（含 txt2img）/ 图生图模型（含 img2img）
   const txtModels = useMemo(() => flatModels(modelsData?.items, 'txt2img'), [modelsData]);
@@ -48,6 +72,7 @@ export function GeneratePage() {
 
   const clearPoll = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
   }, []);
 
   useEffect(() => clearPoll, [clearPoll]);
@@ -85,6 +110,52 @@ export function GeneratePage() {
     pollRef.current = setInterval(poll, 4000);
   }, [clearPoll]);
 
+  /** 文生图走每任务 SSE（/v1/tasks/{id}/events，无鉴权，浏览器可直接 EventSource）。
+   *  终态 result/error 到达后拉一次完整任务（补 model/duration_sec/image_url 字段展示）再关流。
+   *  若流意外断开且任务仍未终态 → 回退 4s 轮询兜底（保持既有能力）。
+   */
+  const startTxtSse = useCallback((taskId: string) => {
+    clearPoll();
+    const es = new EventSource(`/v1/tasks/${taskId}/events`);
+    sseRef.current = es;
+    const close = () => { es.close(); if (sseRef.current === es) sseRef.current = null; };
+    es.onmessage = () => {/* ping/保活事件忽略 */};
+    es.addEventListener('result', () => {
+      void fetchTask(taskId).then((t) => {
+        clearPoll();
+        setGenState({ status: 'done', task: t });
+        notify('生成完成', 'success');
+      }).catch(() => { clearPoll(); }).finally(close);
+    });
+    es.addEventListener('error', (ev) => {
+      const raw = (ev as MessageEvent).data ?? '';
+      void fetchTask(taskId).then((t) => {
+        clearPoll();
+        const msg = friendlierGenError(t.error || raw);
+        setGenState({ status: 'error', error: msg, task: t });
+        notify(msg, 'error');
+      }).catch(() => {
+        clearPoll();
+        setGenState({ status: 'error', error: friendlierGenError(raw) });
+      }).finally(close);
+    });
+    es.onerror = () => {
+      // 网络断连或服务端在终态后关流（服务端不回 self-close，可能留在 15s 心跳）——
+      // 主动查一次任务：已终态则收尾，未终态则转轮询兜底。
+      void fetchTask(taskId).then((t) => {
+        clearPoll();
+        if (t.status === 'completed' || t.status === 'error') {
+          if (t.status === 'completed') { setGenState({ status: 'done', task: t }); notify('生成完成', 'success'); }
+          else { setGenState({ status: 'error', error: t.error ?? undefined, task: t }); notify(t.error ?? '生成失败', 'error'); }
+          close();
+        } else {
+          // 未终态：回退轮询（startPoll 内部会 clearPoll）
+          startPoll(taskId, false);
+        }
+      }).catch(() => { close(); });
+    };
+  }, [clearPoll, startPoll]);
+
   const handleGenerate = useCallback(async () => {
     const text = prompt.trim();
     if (!text) { notify('请输入提示词', 'error'); return; }
@@ -102,8 +173,9 @@ export function GeneratePage() {
           notify('生成完成', 'success');
           setGenState({ status: 'done', task: t });
         } else {
+          // v6.6.0: 文生图优先走每任务 SSE；若事件流未消费到终态，es.onerror 会回退到轮询。
           setGenState({ status: 'running', task: t });
-          startPoll(t.id, false);
+          startTxtSse(t.id);
         }
       } else {
         const images = editImages.map(im => im.data);
@@ -112,11 +184,11 @@ export function GeneratePage() {
         startPoll(t.id, true);
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = friendlierGenError(e);
       setGenState({ status: 'error', error: msg });
       notify(msg, 'error');
     }
-  }, [prompt, model, mode, aspect, resolution, editImages, genState.status, startPoll]);
+  }, [prompt, model, mode, aspect, resolution, editImages, genState.status, startTxtSse, startPoll]);
 
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
@@ -168,15 +240,27 @@ export function GeneratePage() {
       {showKeyPanel && (
         <div className="gen-key-panel tf-card">
           <label className="chat-control-field">
-            <span>API Key（仅存浏览器 localStorage，永不上传）</span>
-            <input
-              type="password"
-              value={apiKey}
-              placeholder="sk-tfai-..."
-              onChange={e => setApiKey(e.target.value)}
-              className="tf-input"
-              autoComplete="off"
-            />
+            <span>API Key（仅存浏览器 localStorage，永不上传；勿在公共电脑保存）</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                placeholder="sk-tfai-..."
+                onChange={e => setApiKey(e.target.value)}
+                className="tf-input"
+                style={{ flex: 1 }}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="tf-btn tf-btn-secondary"
+                aria-label="切换 Key 明文/掩码"
+                onClick={() => setShowKey(v => !v)}
+              >
+                {showKey ? '🙈 掩码' : '👁 显示'}
+              </button>
+            </div>
+            <small style={{ color: 'var(--text-muted)' }}>🔒 仅保存在本机浏览器 localStorage，关闭页面即离开；公共电脑请勿保存。</small>
           </label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -306,6 +390,9 @@ export function GeneratePage() {
                   <span>模型 {task?.model}</span>
                   <span>耗时 {task?.duration_sec != null ? `${task.duration_sec.toFixed(1)}s` : '—'}</span>
                   <a href={resultUrl} target="_blank" rel="noopener noreferrer">打开原图 ↗</a>
+                  <button type="button" className="tf-btn tf-btn-secondary tf-btn-sm" onClick={() => void handleGenerate()}>
+                    🔁 重新生成相同 Prompt
+                  </button>
                 </div>
               </div>
             )}
@@ -337,7 +424,7 @@ export function GeneratePage() {
         .gen-error { color: var(--danger); font-size: 13px; padding: 10px 12px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-sm); }
         .gen-done { display: flex; flex-direction: column; gap: 10px; }
         .gen-done img { max-width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border-default); }
-        .gen-done-meta { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--text-muted); }
+        .gen-done-meta { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-muted); flex-wrap: wrap; }
       `}</style>
     </div>
   );

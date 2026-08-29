@@ -240,6 +240,8 @@ class ChatProvider(abc.ABC):
             "reasoning": "".join(reasoning_parts),
             "usage": usage or {},
             "finish_reason": finish_reason,
+            # 成本（USD）：tryingopen 免费为 0；付费渠道可覆写/在 chat_stream 事件携带 cost_usd
+            "cost_usd": 0.0,
         }
         if tool_calls:
             out["tool_calls"] = tool_calls

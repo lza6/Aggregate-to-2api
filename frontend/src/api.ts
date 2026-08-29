@@ -217,6 +217,26 @@ export interface LiveRegistration {
 
 export interface AccountPoolResponse {
   accounts: Record<string, AccountPoolProviderStats>;
+  // v6.6.0: 号池补满速率画像（每日新增 + 距目标天数）；后端字段名为 growth_stats
+  growth_stats?: {
+    total: number;
+    new_in_24h: number;
+    new_in_7d: number;
+    avg_daily_7d: number;
+    ok: number;
+    target: number;
+    gap: number;
+    eta_days: number | null;
+  };
+  // v6.6.0: 成本口径聚合（配合 Dashboard 主卡）
+  cost_summary?: {
+    total_credits_used: number;
+    total_images_used: number;
+    total_credits_earned: number;
+    accounts_with_usage: number;
+    total_accounts: number;
+    avg_cost_per_image: number | null;
+  };
   email_pool: {
     total_registered: number;
     by_provider: Record<string, number>;
@@ -351,6 +371,8 @@ export interface ChatUsageStats {
   avg_duration_ms: number | null;
   today_calls: number;
   today_tokens: number;
+  cost_usd?: number;
+  today_cost_usd?: number;
   by_model: { model: string; calls: number; prompt_tokens: number; completion_tokens: number }[];
 }
 
@@ -383,14 +405,17 @@ export async function fetchChatRemaining(): Promise<ChatRemaining> {
 
 export interface ChatAuthStatus {
   enabled: boolean;
+  admin_enabled?: boolean;
   key_mask?: string;
   key?: string;
   header: string;
   alt_headers: string[];
 }
 
-export async function fetchChatAuthStatus(): Promise<ChatAuthStatus> {
-  const res = await fetch(`${API_BASE}/v1/chat/auth/status`);
+export async function fetchChatAuthStatus(options?: { adminKey?: string }): Promise<ChatAuthStatus> {
+  const headers: Record<string, string> = {};
+  if (options?.adminKey) headers['Authorization'] = `Bearer ${options.adminKey}`;
+  const res = await fetch(`${API_BASE}/v1/chat/auth/status`, { headers });
   return res.json();
 }
 

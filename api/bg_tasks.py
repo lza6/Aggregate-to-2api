@@ -8,6 +8,9 @@ from . import config
 from .base64_store import enforce_quota as enforce_base64_quota
 from .alerting import alert_engine
 from .audit import audit_log
+from .errors import ErrorCodes
+from .error_tracker import count_of as _error_tracker_count_of
+from .db.ip_blocklist_store import ip_blocklist_store
 
 log = logging.getLogger("bg_tasks")
 
@@ -63,7 +66,18 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                     "token_pool_empty": engine.token_pool.qsize() == 0,
                     "window_requests": stats.get("total_requests", 0),
                     "window_errors": stats.get("total_errors", 0),
+                    # Section 16 可观测性：告警上下文扩充
+                    "max_consecutive_failures": max(
+                        (registry._consecutive_failures.get(p, 0) for p in registry.providers),
+                        default=0,
+                    ),
+                    "auth_error_count": _error_tracker_count_of(ErrorCodes.UNAUTHORIZED),
                 }
+                # IP 批量封禁/限流计数（异步读 DB，失败静默保持 0）
+                try:
+                    ctx["blocked_ip_count"] = len(await ip_blocklist_store.list_all(limit=2000))
+                except Exception:
+                    ctx["blocked_ip_count"] = 0
                 alert_engine.evaluate(ctx)
             except asyncio.CancelledError:
                 raise

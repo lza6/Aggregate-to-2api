@@ -44,14 +44,13 @@ class ChatUsageTracker:
         proxy_used: str | None = None,
         error: str | None = None,
     ) -> None:
-        """记录一次调用；cost_usd 当前仅作为接口兼容参数，不入库。"""
-        del cost_usd  # 当前 schema 未保存成本，成本仅供上游展示使用。
+        """记录一次调用；cost_usd 为成本（USD），免费渠道为 0，付费渠道由 provider 填充。"""
         db = await self._get_db()
         await db._enqueue_write(
             "INSERT INTO chat_usage "
             "(provider, model, prompt_tokens, completion_tokens, reasoning_tokens, "
-            "tool_calls, duration_ms, success, proxy_used, error, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "tool_calls, duration_ms, success, proxy_used, error, cost_usd, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(provider),
                 str(model),
@@ -63,6 +62,7 @@ class ChatUsageTracker:
                 int(bool(success)),
                 proxy_used,
                 error,
+                max(0.0, float(cost_usd or 0.0)),
                 time.time(),
             ),
         )
@@ -118,6 +118,15 @@ class ChatUsageTracker:
             "FROM chat_usage WHERE created_at >= ?",
             (today_start,),
         )
+        # v6.6.0: 成本聚合（cost_usd 列）
+        cost_row = await self._query_one(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM chat_usage WHERE " + where,
+            (cutoff,),
+        )
+        cost_sql = await self._query_one(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM chat_usage WHERE created_at >= ?",
+            (today_start,),
+        )
         by_model = [
             {
                 "model": row[0],
@@ -139,6 +148,8 @@ class ChatUsageTracker:
             "avg_duration_ms": round(float(avg_duration), 1) if avg_duration is not None else None,
             "today_calls": int(today_row[0] or 0),
             "today_tokens": int(today_row[1] or 0),
+            "cost_usd": round(float(cost_row[0] or 0), 6),
+            "today_cost_usd": round(float(cost_sql[0] or 0), 6),
             "by_model": by_model,
         }
 
@@ -150,7 +161,6 @@ class ChatUsageTracker:
         per_proxy = max(
             0, int(os.getenv("IF_TRYINGOPEN_HOURLY_PER_IP", "20") or 20)
         )
-        db = await self._get_db()
         used_row = await self._query_one(
             "SELECT COUNT(*) FROM chat_usage "
             "WHERE created_at > ? AND success = 1",

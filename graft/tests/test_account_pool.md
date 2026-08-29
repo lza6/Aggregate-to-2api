@@ -19,12 +19,19 @@
 - test_autoregister_loop_fills_to_target · function · L171-L195 — async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch)
 - test_daily_checkin_updates_credits · function · L200-L217 — async def test_daily_checkin_updates_credits(tmp_path)
 - _checkin · function · L207-L208 — async def _checkin(acc)
-- TestEmailPool · class · L221-L255 — class TestEmailPool
-- test_allocate_unique_and_record · method · L223-L240 — async def test_allocate_unique_and_record(self, tmp_path, monkeypatch)
-- test_stats · method · L243-L255 — async def test_stats(self, tmp_path, monkeypatch)
-- TestAccountPoolDashboard · class · L260-L279 — class TestAccountPoolDashboard
-- test_dashboard_structure · method · L261-L269 — def test_dashboard_structure(self, pool)
-- test_dashboard_counts_reflect_state · method · L271-L279 — def test_dashboard_counts_reflect_state(self, pool)
-- test_autoregister_pauses_without_proxy · function · L283-L318 — async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch)
-- _Reg · class · L300-L303 — class _Reg
-- register_one · method · L301-L303 — async def register_one(self)
+- test_consume_credits_updates_usage_profile · function · L221-L241 — def test_consume_credits_updates_usage_profile(tmp_path)
+- test_cost_summary_aggregation · function · L244-L266 — def test_cost_summary_aggregation(tmp_path)
+- test_image_credit_cost_mapping · function · L269-L287 — def test_image_credit_cost_mapping()
+- TestEmailPool · class · L291-L325 — class TestEmailPool
+- test_allocate_unique_and_record · method · L293-L310 — async def test_allocate_unique_and_record(self, tmp_path, monkeypatch)
+- test_stats · method · L313-L325 — async def test_stats(self, tmp_path, monkeypatch)
+- TestAccountPoolDashboard · class · L330-L349 — class TestAccountPoolDashboard
+- test_dashboard_structure · method · L331-L339 — def test_dashboard_structure(self, pool)
+- test_dashboard_counts_reflect_state · method · L341-L349 — def test_dashboard_counts_reflect_state(self, pool)
+- TestAccountPoolGrowth · class · L353-L390 — class TestAccountPoolGrowth
+- test_growth_structure_and_gap · method · L354-L363 — def test_growth_structure_and_gap(self, pool)
+- test_growth_counts_new_accounts · method · L365-L375 — def test_growth_counts_new_accounts(self, pool)
+- test_growth_eta_none_when_zero_rate · method · L377-L390 — def test_growth_eta_none_when_zero_rate(self, pool)
+- test_autoregister_pauses_without_proxy · function · L394-L429 — async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch)
+- _Reg · class · L411-L414 — class _Reg
+- register_one · method · L412-L414 — async def register_one(self)

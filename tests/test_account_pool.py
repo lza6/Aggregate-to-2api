@@ -241,6 +241,31 @@ def test_consume_credits_updates_usage_profile(tmp_path):
     p._conn.close()
 
 
+def test_cost_summary_aggregation(tmp_path):
+    """成本口径聚合：累计消耗/出图次数/每张平均成本/有消耗账号数。"""
+    from api.account_pool import AccountPool
+    p = AccountPool(str(tmp_path / "cost.db"))
+    p.add("nanobanana", "a@x.com", "c", credits=10, status="active")
+    p.add("nanobanana", "b@x.com", "c", credits=10, status="active")
+    p.add("nanobanana", "c@x.com", "c", credits=10, status="active")  # 从未出图
+    p.consume_credits("nanobanana", "a@x.com", 4)
+    p.consume_credits("nanobanana", "b@x.com", 8)
+    cs = p.cost_summary("nanobanana")
+    assert cs["total_credits_used"] == 12
+    assert cs["total_images_used"] == 2
+    assert cs["avg_cost_per_image"] == 6.0
+    assert cs["accounts_with_usage"] == 2
+    assert cs["total_accounts"] == 3
+    assert cs["total_credits_earned"] == 0
+    # 无出图时 avg 为 None（避免除零）
+    p2 = AccountPool(str(tmp_path / "cost2.db"))
+    p2.add("nanobanana", "d@x.com", "c", credits=10, status="active")
+    cs2 = p2.cost_summary("nanobanana")
+    assert cs2["avg_cost_per_image"] is None
+    p._conn.close()
+    p2._conn.close()
+
+
 def test_image_credit_cost_mapping():
     """image_credit_cost 镜像上游 encodeImageCost（按模型+分辨率返回单图积分）。"""
     from api.providers.nanobanana import image_credit_cost
@@ -248,8 +273,13 @@ def test_image_credit_cost_mapping():
     assert image_credit_cost("nano-banana-pro", "4K") == 14
     assert image_credit_cost("nano-banana-2", "2K") == 8
     assert image_credit_cost("nano-banana-2", "4K") == 12
+    assert image_credit_cost("gpt-image-2", "1K") == 6      # P1-5 漏档回归
     assert image_credit_cost("gpt-image-2", "4K") == 14
+    assert image_credit_cost("seedream-5.0-pro", "1K") == 7  # P1-5 漏档回归
     assert image_credit_cost("seedream-5.0-pro", "2K") == 14
+    assert image_credit_cost("seedream-5.0-lite", "2K") == 6  # P1-5 漏档回归
+    assert image_credit_cost("seedream-5.0-lite", "3K") == 6
+    assert image_credit_cost("seedream-5.0-lite", "1K") == 6  # P1-5 漏档回归：1K 不得回退默认 4
     assert image_credit_cost("grok-imagine", "1K", quality_mode="quality") == 6
     assert image_credit_cost("grok-imagine", "1K", task_type="edit") == 5
     assert image_credit_cost("z-image", "1K") == 2
@@ -317,6 +347,47 @@ class TestAccountPoolDashboard:
         assert d["nanobanana"]["ok"] == 1
         assert d["nanobanana"]["exhausted"] == 1
         assert d["nanobanana"]["credits"] == 4
+
+
+# ── v6.6.0 P3-4 号池补满速率画像 ───────────────────────
+class TestAccountPoolGrowth:
+    def test_growth_structure_and_gap(self, pool):
+        """growth 画像结构完整；新增为 0 时 eta_days 为 None（无法估算）。"""
+        d = pool.growth_stats("nanobanana")
+        for key in ("total", "new_in_24h", "new_in_7d", "avg_daily_7d",
+                    "ok", "target", "gap", "eta_days"):
+            assert key in d, f"growth 缺字段 {key}"
+        assert d["total"] == 0
+        assert d["new_in_24h"] == 0
+        assert d["gap"] == 10000          # 无可用账号 → 距目标差整个目标
+        assert d["eta_days"] is None        # 速率为 0 → None（前端显示 —）
+
+    def test_growth_counts_new_accounts(self, pool):
+        """新增账号计入 new_in_24h；gap = target - ok 反映真实缺口。"""
+        pool.add("nanobanana", "a@x.com", "c1", credits=4)
+        pool.add("nanobanana", "b@x.com", "c2", credits=4)
+        d = pool.growth_stats("nanobanana")
+        assert d["total"] == 2
+        assert d["new_in_24h"] == 2
+        assert d["ok"] == 2
+        assert d["target"] == 10000
+        assert d["gap"] == 9998
+        assert d["eta_days"] == round(9998 / 2, 1)  # 2/天 → 约 4999 天
+
+    def test_growth_eta_none_when_zero_rate(self, pool):
+        """账号老化 >24h 无新增 → new_in_24h=0 → eta None。"""
+        pool.add("nanobanana", "old@x.com", "c", credits=4)
+        # 把 created_at 篡改为 3 天前
+        pool._conn.execute(
+            "UPDATE accounts SET created_at=? WHERE email='old@x.com'",
+            (time.time() - 3 * 86400,),
+        )
+        pool._conn.commit()
+        d = pool.growth_stats("nanobanana")
+        assert d["new_in_24h"] == 0
+        assert d["new_in_7d"] == 1
+        assert d["avg_daily_7d"] == round(1 / 7, 1)
+        assert d["eta_days"] is None
 
 
 @pytest.mark.asyncio

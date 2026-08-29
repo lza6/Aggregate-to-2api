@@ -23,7 +23,7 @@ class _DBStub:
         self.tasks: dict[str, dict] = {}
 
     async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model,
-                             client_ip=None):
+                             client_ip=None, user_agent=None):
         self.created.append(task_id)
         self.tasks[task_id] = {
             "id": task_id, "prompt": prompt, "aspect_ratio": aspect_ratio,

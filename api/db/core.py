@@ -404,11 +404,21 @@ class DB:
                     success INTEGER DEFAULT 1,
                     proxy_used TEXT,
                     error TEXT,
+                    cost_usd REAL DEFAULT 0,
                     created_at REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_chat_usage_created ON chat_usage(created_at);
                 CREATE INDEX IF NOT EXISTS idx_chat_usage_model ON chat_usage(model, created_at);
             """)
+            # 兼容迁移：旧表缺 cost_usd 列则补（避免 create table 不重建旧库）
+            try:
+                _cu = await conn.execute("PRAGMA table_info(chat_usage)")
+                _ccols = {r[1] for r in await _cu.fetchall()}
+                if "cost_usd" not in _ccols:
+                    await conn.execute("ALTER TABLE chat_usage ADD COLUMN cost_usd REAL DEFAULT 0")
+            except Exception:
+                pass
+            await conn.commit()
             cursor = await conn.execute("PRAGMA table_info(requests)")
             rows = await cursor.fetchall()
             cols = {r[1] for r in rows}

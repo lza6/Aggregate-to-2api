@@ -1,7 +1,35 @@
 # imagefree_api 项目配置
+[project]
+name = "imagefree-2ai"
+version = "6.6.0"
+description = "High concurrency image generation API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "httpx>=0.24",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "aiosqlite>=0.20.0",
+    "prometheus-client>=0.21",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
 [tool.pytest.ini_options]
 # 测试发现：tests/ 目录（pytest 风格）+ scripts/ 下的 unittest 文件
 testpaths = ["tests"]
 # 收集规则：默认 python_classes=Test*（pytest 8 默认）即可，无需显式覆盖
 addopts = "-p no:cacheprovider --no-header -q"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+# pytest-asyncio 1.4: 测试函数默认 function-scope loop，与 session fixture loop 分离，
+# app 的 engine/semaphore 绑定 session loop → 跨 loop 死锁（txt2img flow 卡死根因）。
+# 统一 test loop 到 session scope，与 conftest event_loop fixture 共享。
+asyncio_default_test_loop_scope = "session"
+markers = [
+    "benchmark: performance benchmark tests (pytest-benchmark).",
+    "chaos: fault injection / chaos engineering tests.",
+    "integration: end-to-end / cross-component integration tests.",
+    "slow: slow / real-network tests.",
+]

@@ -100,6 +100,18 @@ class TaskEventHub:
     def buffer_size(self, task_id: str) -> int:
         return len(self._buffers.get(task_id, []))
 
+    def get_task_events(self, task_id: str) -> list[dict]:
+        """返回该任务已发布的历史事件（纯内存读取，供任务日志串联/诊断用）。
+
+        与 replay_after 的异步/Last-Event-ID 语义不同，本方法同步返回已缓冲事件的
+        扁平 dict 列表，供 /v1/tasks/{id}/logs 等只读端点直接消费。
+        """
+        buf = self._buffers.get(task_id) or []
+        return [
+            {"id": e.id, "event": e.event, "data": e.data, "ts": e.ts}
+            for e in buf
+        ]
+
     def subscriber_count(self, task_id: str) -> int:
         return len(self._subscribers.get(task_id, []))
 

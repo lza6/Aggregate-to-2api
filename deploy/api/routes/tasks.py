@@ -1,7 +1,6 @@
 """任务查询 / 全局 SSE 广播 / 黑匣子打开（v4.2 拆分：main.py 迁移）。"""
 from __future__ import annotations
 
-import asyncio
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
@@ -9,9 +8,9 @@ from fastapi.responses import StreamingResponse
 from ..meta import db
 from ..db import task_to_public
 from ..errors import AppError, ErrorCodes
-from ..dispatch import sse_task_events, broadcast_task_event
+from ..dispatch import sse_task_events
 from ..models import TaskInfo
-from ..sse_events import hub, task_events_generator, publish_task_event
+from ..sse_events import task_events_generator
 
 router = APIRouter()
 
@@ -44,6 +43,59 @@ async def get_task(task_id: str):
     if not task:
         raise AppError(ErrorCodes.NOT_FOUND, "task 不存在", 404)
     return TaskInfo(**task_to_public(task))
+
+
+@router.get("/v1/tasks/{task_id}/logs", include_in_schema=False)
+async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
+    """任务 ID → 全链路日志串联（Section 16 可观测性 / P3）。
+
+    把与某任务关联的日志（log_buffer 内存缓冲，按 task_id 过滤）+ 慢日志画像 +
+    SSE 已发布事件 聚合到一处，供排障时「一个任务 ID 看全链路」。
+
+    - logs：log_buffer 中 message 含该 task_id 的条目（由 engine/dispatch 记录）；
+    - slow：slow_log 中该 task 的画像样本（若有）；
+    - events：该任务已发布的 SSE 事件（hub 回放）；
+    - task：DB 中的任务终态（若有）。
+    """
+    from ..log_buffer import log_buffer as _lb
+    from ..slow_log import slow_log as _slow
+    from ..sse_events import hub as _hub
+
+    # 1. 日志过滤（内存缓冲，按 task_id 子串匹配，O(n) n≤1000）
+    log_entries = [
+        e for e in _lb.snapshot()
+        if task_id and task_id in (e.get("message") or "")
+    ]
+
+    # 2. 慢日志画像
+    slow_entries = [s for s in _slow.snapshot() if s.task_id == task_id]
+
+    # 3. SSE 事件回放
+    try:
+        events = list(_hub.get_task_events(task_id))
+    except Exception:
+        events = []
+
+    # 4. DB 任务终态（完整字段）
+    task_row = await db.get(task_id)
+
+    return {
+        "task_id": task_id,
+        "task": task_row,
+        "logs": log_entries,
+        "slow": [
+            {
+                "model": s.model, "provider": s.provider,
+                "queue_ms": round(s.queue_ms, 1), "wait_token_ms": round(s.wait_token_ms, 1),
+                "solve_ms": round(s.solve_ms, 1), "upstream_ms": round(s.upstream_ms, 1),
+                "retry_ms": round(s.retry_ms, 1), "total_ms": round(s.total_ms, 1),
+                "slowest_stage": s.slowest_stage(), "status": s.status,
+            }
+            for s in slow_entries
+        ],
+        "events": events,
+        "count": {"logs": len(log_entries), "slow": len(slow_entries), "events": len(events)},
+    }
 
 
 # ── 全局 SSE 任务广播（向后兼容 /v1/events/tasks）──

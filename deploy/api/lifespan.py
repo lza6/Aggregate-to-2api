@@ -3,16 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import time
+from contextlib import asynccontextmanager
 
 from . import config
 from . import imagefree_client
 from . import turnstile_client
-from .base64_store import enforce_quota as enforce_base64_quota
 from .base64_store import ensure_dir as ensure_base64_dir
 from .meta import (
-    _uptime_human, shutdown_phase, db, engine, gallery_cache,
+    shutdown_phase, db, engine, gallery_cache,
     registry, providers_bootstrap, _prev_engine,
 )
 from .bg_tasks import run_background_tasks
@@ -24,9 +22,6 @@ from .solver_guard import solver_guard
 from .worker_health import worker_health
 
 log = logging.getLogger("imagefree_api")
-
-
-from contextlib import asynccontextmanager
 
 
 @asynccontextmanager

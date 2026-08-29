@@ -1,17 +1,17 @@
 {
-  "nodeCount": 3685,
-  "edgeCount": 6648,
+  "nodeCount": 4154,
+  "edgeCount": 7518,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 3685,
+  "totalCount": 4154,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-27T14:19:38.925Z",
-  "lastFile": "dispatch_edit.py"
+  "syncedAt": "2026-08-29T09:14:30.977Z",
+  "lastFile": "email_pool.py"
 }

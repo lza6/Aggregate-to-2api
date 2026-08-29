@@ -17,7 +17,7 @@
 - mark_up · method · L134-L141 — def mark_up(self) -> None
 - needs_proxy_per_request · method · L144-L146 — def needs_proxy_per_request(self) -> bool
 - needs_account · method · L148-L150 — def needs_account(self) -> bool
-- ChatProvider · class · L159-L264 — class ChatProvider(abc.ABC)
+- ChatProvider · class · L159-L266 — class ChatProvider(abc.ABC)
 - __init__ · method · L179-L181 — def __init__(self) -> None
 - startup · method · L184-L185 — async def startup(self) -> None
 - shutdown · method · L187-L188 — async def shutdown(self) -> None
@@ -25,9 +25,9 @@
 - all_models · method · L194-L195 — def all_models(self) -> list[ModelSpec]
 - refresh_models · method · L198-L199 — async def refresh_models(self) -> int
 - chat_stream · method · L203-L207 — def chat_stream(self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw) -> AsyncIterator[dict]
-- chat_collect · method · L209-L246 — async def chat_collect(self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw) -> dict
-- credits · method · L249-L251 — async def credits(self) -> int | None
-- health · method · L253-L254 — async def health(self) -> dict
-- health_check · method · L256-L257 — async def health_check(self) -> str
-- mark_down · method · L259-L261 — def mark_down(self, reason: str) -> None
-- mark_up · method · L263-L264 — def mark_up(self) -> None
+- chat_collect · method · L209-L248 — async def chat_collect(self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw) -> dict
+- credits · method · L251-L253 — async def credits(self) -> int | None
+- health · method · L255-L256 — async def health(self) -> dict
+- health_check · method · L258-L259 — async def health_check(self) -> str
+- mark_down · method · L261-L263 — def mark_down(self, reason: str) -> None
+- mark_up · method · L265-L266 — def mark_up(self) -> None

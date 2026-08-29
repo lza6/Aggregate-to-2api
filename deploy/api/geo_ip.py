@@ -305,7 +305,7 @@ def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
             links.append(p.get("socks5_link"))
         if p.get("vmess_link"):
             links.append(p.get("vmess_link"))
-    links = [l for l in links if l]
+    links = [link for link in links if link]
 
     raw_text = "\n".join(links)
     if fmt == "base64":

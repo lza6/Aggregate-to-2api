@@ -31,7 +31,7 @@ from ..telemetry import get_tracer
 # S-4: 慢日志画像打点 + S-7: worker 心跳
 from ..slow_log import SlowSample, slow_log
 from ..worker_health import worker_health
-from .token_pool import _TokenPool, TokenPoolManager
+from .token_pool import TokenPoolManager
 
 log = logging.getLogger("engine")
 

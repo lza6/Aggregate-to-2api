@@ -40,12 +40,75 @@ def test_auth_status_open(client_no_auth):
     assert resp.status_code == 200
     body = resp.json()
     assert body["enabled"] is False
+    # P0: 开放模式无完整 key 可给
+    assert body["key"] == ""
 
 
 def test_auth_status_enabled(client_with_auth):
     resp = client_with_auth.get("/v1/chat/auth/status")
     assert resp.status_code == 200
-    assert resp.json()["enabled"] is True
+    body = resp.json()
+    assert body["enabled"] is True
+
+
+# ── P0: /v1/chat/auth/status 与 /v1/meta 不得匿名泄漏完整 key ──
+def test_auth_status_does_not_leak_key_anonymous(client_with_auth):
+    """管理面板一键复制是唯一入口；匿名/无管理 Key 回调不得带回完整 key。"""
+    resp = client_with_auth.get("/v1/chat/auth/status")
+    body = resp.json()
+    assert body["key"] == "", "匿名（未带管理 Key）回调不得泄漏完整 key"
+    assert body["key_mask"]  # 仅脱敏前缀可公开
+    assert body["key"] != body["key_mask"]  # 前缀绝不能等于完整 key
+
+
+def test_auth_status_admin_can_copy_key(client_with_auth, monkeypatch):
+    """携带管理面有效 Key（或继承业务 Key）时，站长可一键复制完整 key。"""
+    from fastapi import Request
+
+    def _fake_admin(request: Request, *, scope: str = "admin-security") -> None:
+        return None
+
+    # chat_auth_status 在函数体内 from ..auth import (...)，故需 patch 源模块 api.auth
+    monkeypatch.setattr("api.auth.check_admin_key", _fake_admin)
+    monkeypatch.setattr("api.auth.first_key", lambda: "sk-full-secret")
+    monkeypatch.setattr("api.auth.admin_enabled", lambda: True)
+    resp = client_with_auth.get("/v1/chat/auth/status")
+    assert resp.status_code == 200
+    assert resp.json()["key"] == "sk-full-secret"
+
+
+# ── P0 安全回归：匿名不得获取完整 Key ──
+
+def test_auth_status_no_full_key_anonymous(client_with_auth):
+    """匿名（无 Key）请求 /v1/chat/auth/status 不得返回完整 key，只回 mask。"""
+    resp = client_with_auth.get("/v1/chat/auth/status")
+    body = resp.json()
+    assert body["enabled"] is True
+    # 完整 key 不应暴露（除非携带管理 Key）
+    assert body.get("key") == "" or body.get("key") is None
+    # 脱敏前缀仍在
+    assert body["key_mask"].endswith("***") or "***" in body["key_mask"]
+
+
+def test_auth_status_admin_key_gets_full(client_with_auth):
+    """携带管理面有效 Key 时，/v1/chat/auth/status 才返回完整 key（站长复制）。"""
+    resp = client_with_auth.get(
+        "/v1/chat/auth/status",
+        headers={"Authorization": "Bearer sk-test-abc"},
+    )
+    body = resp.json()
+    assert body["enabled"] is True
+    assert body["key"] == "sk-test-abc"
+
+
+def test_auth_status_wrong_admin_key_no_full(client_with_auth):
+    """携带错误管理 Key 时，/v1/chat/auth/status 不返回完整 key。"""
+    resp = client_with_auth.get(
+        "/v1/chat/auth/status",
+        headers={"Authorization": "Bearer sk-wrong"},
+    )
+    body = resp.json()
+    assert body.get("key") == "" or body.get("key") is None
 
 
 # ── /v1/chat/models ──

@@ -68,6 +68,31 @@ def test_keymask_hides_tail(monkeypatch):
     assert "***" in mask and "abcdef1234567890" not in mask
 
 
+def test_meta_anonymous_no_full_key(monkeypatch):
+    """P0 安全回归：匿名 GET /v1/meta 不得返回完整 api_key（只回 mask）。
+
+    /v1/meta 在 health router（test_auth_ip 的 make_app 未挂），故此处直接测 health.
+    """
+    import api.config as config_module
+    monkeypatch.setenv("IF_API_KEYS", "sk-test-abc")
+    config_module.settings = Settings()
+
+    from api.routes.health import router as health_router
+    from api.routes import api_router
+    from fastapi import FastAPI
+    app = FastAPI()
+    from api.handlers import register_exception_handlers
+    register_exception_handlers(app)
+    app.include_router(health_router)
+    c = TestClient(app)
+    resp = c.get("/v1/meta")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "api_key" not in body, "/v1/meta 不应泄露完整 api_key"
+    assert "***" in body["api_key_mask"]
+    assert body["auth_enabled"] is True
+
+
 def test_generate_without_key_401(client):
     r = client.post("/v1/generate/async", json={"prompt": "t", "aspect_ratio": "1:1"})
     assert r.status_code == 401

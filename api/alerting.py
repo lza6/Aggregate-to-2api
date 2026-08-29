@@ -83,6 +83,21 @@ class AlertEngine:
             message="提供商持续不可用 >5min",
             check=lambda ctx: ctx.get("provider_down", False), cooldown=300.0,
         ))
+        self.add_rule(AlertRule(
+            name="provider_consecutive_failures", severity="warning",
+            message="单个提供商连续失败次数超阈值（≥10）",
+            check=lambda ctx: ctx.get("max_consecutive_failures", 0) >= 10, cooldown=300.0,
+        ))
+        self.add_rule(AlertRule(
+            name="ip_batch_block", severity="critical",
+            message="IP 批量封禁/限流数量超阈值（≥20）",
+            check=lambda ctx: ctx.get("blocked_ip_count", 0) >= 20, cooldown=300.0,
+        ))
+        self.add_rule(AlertRule(
+            name="auth_error_surge", severity="warning",
+            message="AUTH.001 错误在近窗口内超阈值（≥30）",
+            check=lambda ctx: ctx.get("auth_error_count", 0) >= 30, cooldown=300.0,
+        ))
 
     def add_rule(self, rule: AlertRule) -> None:
         """添加一条告警规则。"""

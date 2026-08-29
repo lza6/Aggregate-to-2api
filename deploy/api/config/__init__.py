@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     if_upstream_max_inflight: int = Field(
         30, validation_alias="IF_UPSTREAM_MAX_INFLIGHT"
     )
+    # P0-安全：请求体总量上限（防恶意大 base64 正文在 4MB/张校验前占满内存）
+    if_max_request_body: int = Field(
+        8 * 1024 * 1024, validation_alias="IF_MAX_REQUEST_BODY"
+    )
 
     # ── Turnstile / Solver ──
     turnstile_timeout: int = Field(
@@ -784,6 +788,7 @@ USER_AGENT = settings.user_agent
 IF_HTTP_MAX_CONNECTIONS = settings.if_http_max_connections
 IF_HTTP_KEEPALIVE = settings.if_http_keepalive
 IF_UPSTREAM_MAX_INFLIGHT = settings.if_upstream_max_inflight
+IF_MAX_REQUEST_BODY = settings.if_max_request_body
 
 # Turnstile / Solver
 TURNSTILE_TIMEOUT = settings.turnstile_timeout
@@ -1023,6 +1028,7 @@ __all__ = [
     "IF_HTTP_MAX_CONNECTIONS",
     "IF_HTTP_KEEPALIVE",
     "IF_UPSTREAM_MAX_INFLIGHT",
+    "IF_MAX_REQUEST_BODY",
     "TURNSTILE_TIMEOUT",
     "TURNSTILE_POLL_INTERVAL",
     "HEALTHZ_CACHE_TTL",

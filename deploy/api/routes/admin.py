@@ -117,6 +117,9 @@ async def account_pool_dashboard(
                 "error_category": snap.get("error_category"),
                 "stage_durations": snap.get("stage_durations"),
             }
+    # v6.5.2: 补号速率画像（每天新增账号数 + 预计达标天数）与成本口径聚合
+    growth = account_pool.growth_stats("nanobanana")
+    cost = account_pool.cost_summary("nanobanana")
     desensitized = []
     now_ts = time.time()
     for item in page_data["items"]:
@@ -144,6 +147,8 @@ async def account_pool_dashboard(
         })
     return {
         "accounts": account_pool.dashboard(),
+        "growth_stats": growth,
+        "cost_summary": cost,
         "email_pool": email_pool.stats(),
         "live_registration": live_stage,
         "items": desensitized,
@@ -246,6 +251,22 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
         })
     total = len(out)
     return {"items": out, "count": total, "total": total}
+
+
+@router.get("/v1/errors/aggregates", include_in_schema=False)
+async def error_aggregates():
+    """P0-P1 分层错误码聚合计数（Section 16 可观测性 / P2）。
+
+    供看板与告警展示 AUTH.001 / RATE.001 / PROV.001 / SYS.001 等高发错误分布。
+    进程内计数（重启清零），配合 /metrics 的 imagefree_errors_by_code 使用。
+    """
+    from ..error_tracker import snapshot, watched_codes
+    counts = snapshot()
+    return {
+        "watched": list(watched_codes()),
+        "counts": counts,
+        "total": sum(counts.values()),
+    }
 
 
 @router.get("/metrics", include_in_schema=False)

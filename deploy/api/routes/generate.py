@@ -1,25 +1,19 @@
 """生成相关路由（v4.2 拆分：main.py 迁移）。"""
 from __future__ import annotations
 
-import time
-import uuid
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .. import config
-from ..models import GenerateRequest, EditRequest, TaskInfo, TaskInfo  # noqa: F401
-from ..meta import db, engine, registry
-from ..solver_guard import solver_guard
-from ..sse_events import publish_task_event
+from ..models import GenerateRequest, EditRequest, TaskInfo  # noqa: F401
+from ..meta import db, engine
 from ..dispatch import _dispatch_generate
-from ..dispatch_edit import _dispatch_edit, _dispatch_edit_multi, edit_image
+from ..dispatch_edit import edit_image
 from ..dispatch import _validate_ratio, _validate_model
-from ..dispatch import _parse_input_image, _parse_input_images
 from ..dispatch import QueueFull
 from ..db import task_to_public
 from ..errors import AppError, ErrorCodes
-from .. import imagefree_client
 from ..request_guard import check_generate_request
 
 router = APIRouter()
@@ -76,7 +70,6 @@ async def generate_sync(request: Request, req: GenerateRequest):
 async def generate_async(request: Request, req: GenerateRequest):
     _prepare(request, req)
     task_id = await _submit(req)
-    headers = {"Location": f"/v1/tasks/{task_id}"}
     return TaskInfo(**task_to_public(await db.get_public(task_id)))
 
 

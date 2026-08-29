@@ -1,32 +1,37 @@
 # deploy/api/registerer.py
 
 - RegistrationStage · class · L41-L50 — class RegistrationStage(str, enum.Enum)
-- RegistrationErrorCategory · class · L53-L58 — class RegistrationErrorCategory(str, enum.Enum)
-- RegistrationError · class · L61-L83 — class RegistrationError(Exception)
-- __init__ · method · L64-L77 — def __init__( self, message: str, category: RegistrationErrorCategory = RegistrationErrorCategory.TRANSIENT, stage: RegistrationStage = RegistrationStage.INIT, provider: str = "", details: dict[str, Any] | None = None, ) -> None
-- __repr__ · method · L79-L83 — def __repr__(self) -> str
-- RegistrationSession · class · L87-L140 — class RegistrationSession
-- advance_to · method · L108-L115 — def advance_to(self, stage: RegistrationStage, **kwargs: Any) -> None
-- mark_failed · method · L117-L122 — def mark_failed(self, error: str, category: RegistrationErrorCategory) -> None
-- snapshot · method · L124-L140 — def snapshot(self) -> dict[str, Any]
-- AdaptiveRegistrationBackoff · class · L143-L201 — class AdaptiveRegistrationBackoff
-- __init__ · method · L146-L163 — def __init__( self, cf_backoff: float | None = None, email_backoff: float | None = None, ip_backoff: float | None = None, transient_base: float | None = None, transient_max: float | None = None, ) -> None
-- compute_backoff · method · L165-L188 — def compute_backoff(self, provider: str, category: RegistrationErrorCategory) -> float
-- record_success · method · L190-L192 — def record_success(self, provider: str) -> None
-- snapshot · method · L194-L201 — def snapshot(self) -> dict[str, Any]
-- _browser_headers · function · L208-L215 — def _browser_headers(origin: str, referer: str | None = None) -> dict[str, str]
-- _th · function · L218-L220 — async def _th(fn, *a, **k)
-- _extract_code · function · L223-L229 — def _extract_code(mail: dict | None) -> str | None
-- _extract_verify_link · function · L232-L238 — def _extract_verify_link(mail: dict | None) -> str | None
-- _proxy_host · function · L241-L249 — def _proxy_host(proxy: str | None) -> str
-- _ip_to_proxy · function · L252-L273 — def _ip_to_proxy(ip_or_proxy: str) -> str | None
-- _mail_ai_extract_enabled · function · L276-L282 — def _mail_ai_extract_enabled() -> bool
-- _gen_password · function · L285-L299 — def _gen_password() -> str
-- _session_data_from_cookies · function · L302-L307 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
-- NanobananaRegisterer · class · L311-L660 — class NanobananaRegisterer
-- __init__ · method · L319-L327 — def __init__(self) -> None
-- _ensure_client · method · L329-L345 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
-- register_one · method · L347-L522 — async def register_one(self) -> dict | None
-- checkin · method · L524-L609 — async def checkin(self, acc: dict) -> int | None
-- re_login · method · L611-L660 — async def re_login(self, email: str, password: str) -> dict | None
-- build_registerers · function · L664-L667 — def build_registerers() -> dict[str, object]
+- RegistrationErrorCategory · class · L66-L71 — class RegistrationErrorCategory(str, enum.Enum)
+- RegistrationError · class · L74-L96 — class RegistrationError(Exception)
+- __init__ · method · L77-L90 — def __init__( self, message: str, category: RegistrationErrorCategory = RegistrationErrorCategory.TRANSIENT, stage: RegistrationStage = RegistrationStage.INIT, provider: str = "", details: dict[str, Any] | None = None, ) -> None
+- __repr__ · method · L92-L96 — def __repr__(self) -> str
+- RegistrationSession · class · L100-L170 — class RegistrationSession
+- __post_init__ · method · L123-L124 — def __post_init__(self) -> None
+- advance_to · method · L126-L134 — def advance_to(self, stage: RegistrationStage, **kwargs: Any) -> None
+- stage_durations · method · L136-L144 — def stage_durations(self) -> dict[str, float]
+- mark_failed · method · L146-L151 — def mark_failed(self, error: str, category: RegistrationErrorCategory) -> None
+- snapshot · method · L153-L170 — def snapshot(self) -> dict[str, Any]
+- AdaptiveRegistrationBackoff · class · L173-L231 — class AdaptiveRegistrationBackoff
+- __init__ · method · L176-L193 — def __init__( self, cf_backoff: float | None = None, email_backoff: float | None = None, ip_backoff: float | None = None, transient_base: float | None = None, transient_max: float | None = None, ) -> None
+- compute_backoff · method · L195-L218 — def compute_backoff(self, provider: str, category: RegistrationErrorCategory) -> float
+- record_success · method · L220-L222 — def record_success(self, provider: str) -> None
+- snapshot · method · L224-L231 — def snapshot(self) -> dict[str, Any]
+- _parse_iso_ts · function · L238-L250 — def _parse_iso_ts(value: Any) -> float | None
+- _browser_headers · function · L253-L260 — def _browser_headers(origin: str, referer: str | None = None) -> dict[str, str]
+- _th · function · L263-L265 — async def _th(fn, *a, **k)
+- _extract_code · function · L268-L274 — def _extract_code(mail: dict | None) -> str | None
+- _extract_verify_link · function · L277-L283 — def _extract_verify_link(mail: dict | None) -> str | None
+- _proxy_host · function · L286-L294 — def _proxy_host(proxy: str | None) -> str
+- _ip_to_proxy · function · L297-L318 — def _ip_to_proxy(ip_or_proxy: str) -> str | None
+- _mail_ai_extract_enabled · function · L321-L327 — def _mail_ai_extract_enabled() -> bool
+- _gen_password · function · L330-L344 — def _gen_password() -> str
+- _session_data_from_cookies · function · L347-L352 — def _session_data_from_cookies(cookies: httpx.Cookies) -> str
+- NanobananaRegisterer · class · L356-L793 — class NanobananaRegisterer
+- __init__ · method · L364-L374 — def __init__(self) -> None
+- _claim_response_ok · method · L377-L389 — def _claim_response_ok(r: httpx.Response) -> bool
+- parse_claim_profile · method · L392-L420 — def parse_claim_profile(r: httpx.Response) -> dict
+- _ensure_client · method · L422-L442 — def _ensure_client(self, email: str = "", force_rotate: bool = False) -> None
+- register_one · method · L444-L623 — async def register_one(self) -> dict | None
+- checkin · method · L625-L742 — async def checkin(self, acc: dict) -> int | None
+- re_login · method · L744-L793 — async def re_login(self, email: str, password: str) -> dict | None
+- build_registerers · function · L797-L800 — def build_registerers() -> dict[str, object]

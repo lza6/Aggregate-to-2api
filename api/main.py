@@ -31,7 +31,7 @@ if log_buffer not in _root_logger.handlers:
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="6.5.1",
+    version="6.6.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
                 "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
@@ -48,6 +48,14 @@ register_exception_handlers(app)
 
 # ── A-05: contextvars 请求上下文中间件 ──
 app.add_middleware(RequestContextMiddleware)
+
+# ── P0-安全：请求体总量上限（防恶意大 base64 正文在 4MB/张校验前耗尽内存）──
+# starlette 1.6 起名为 RequestBodyLimitMiddleware；旧版本为 BodySizeLimitMiddleware。
+try:
+    from starlette.middleware.body_limit import RequestBodyLimitMiddleware as _BodyLimit
+except ImportError:
+    from starlette.middleware.body_limit import BodySizeLimitMiddleware as _BodyLimit  # type: ignore
+app.add_middleware(_BodyLimit, max_body_size=config.IF_MAX_REQUEST_BODY)
 
 # ── 挂载全部 API 路由 ──
 app.include_router(api_router)

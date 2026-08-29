@@ -166,6 +166,7 @@ def _record_args(
     tool_calls_count: int,
     error: str | None = None,
     proxy_used: str | None = None,
+    cost_usd: float | None = None,
 ) -> dict[str, Any]:
     return {
         "provider": provider,
@@ -173,7 +174,7 @@ def _record_args(
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "reasoning_tokens": usage.get("reasoning_tokens", 0),
-        "cost_usd": 0.0,
+        "cost_usd": float(cost_usd or 0.0),
         "tool_calls_count": tool_calls_count,
         "duration_ms": duration_ms,
         "success": success,
@@ -226,6 +227,7 @@ async def _chat_collect(
                 True,
                 len(tool_calls),
                 proxy_used=result.get("proxy_used"),
+                cost_usd=result.get("cost_usd"),
             )
         )
         return result, text, reasoning, tool_calls, finish_reason, usage
@@ -598,18 +600,32 @@ async def list_chat_models():
 
 
 @router.get("/v1/chat/auth/status")
-async def chat_auth_status():
+async def chat_auth_status(request: Request):
     """鉴权状态：前端/调用方探测是否需要携带 Key。
 
-    返回脱敏前缀 key_mask 供 UI 展示；key 为当前生效首把完整 Key，
-    供站长管理面板「一键复制」（管理面本身无登录门槛，README 已注明
-    该接口仅用于自助取 Key，生产应配合 IP 白名单/最小暴露）。未启用时 key 为空。
+    安全（P0）：匿名回调**只返回脱敏 key_mask + auth_enabled**，不暴露完整 key。
+    仅当请求携带**管理面有效 Key**（check_admin_key 通过）时，才附带完整 key，
+    供站长管理面板「一键复制」（复制按钮仅站长可见）。
+    未启用鉴权（开放模式）时 key 为空。
     """
-    from ..auth import first_key
+    from ..auth import (first_key, public_keymask, check_admin_key,
+                        admin_enabled)
+    enabled = auth.auth_enabled()
+    full_key = ""
+    # 站长自助取完整 Key：需携带管理面有效 Key（IF_ADMIN_KEYS 或业务 Key 池）
+    # 捕获 AppError（401/403 = 鉴权未通过），full_key 保持空 → 匿名不泄完整 key；
+    # 非 AppError 的真实内部错误不放行到 500，避免把故障静默吞成「无 key」。
+    if enabled:
+        try:
+            check_admin_key(request, scope="admin-auth-status")
+            full_key = first_key()
+        except AppError:
+            full_key = ""
     return {
-        "enabled": auth.auth_enabled(),
-        "key_mask": auth.public_keymask(),
-        "key": first_key(),
+        "enabled": enabled,
+        "admin_enabled": admin_enabled(),
+        "key_mask": public_keymask(),
+        "key": full_key,
         "header": "Authorization: Bearer <key>",
         "alt_headers": ["X-API-Key", "?api_key="],
     }

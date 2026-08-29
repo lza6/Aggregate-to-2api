@@ -289,3 +289,25 @@ async def test_remaining_credits_uses_successful_calls_and_available_proxies(tmp
     assert result["hourly_limit"] == 40
     assert result["used_last_hour"] == 1
     assert result["remaining"] == 39
+
+
+@pytest.mark.asyncio
+async def test_usage_stats_aggregates_cost_usd(tmp_db, monkeypatch):
+    """v6.6.0: cost_usd 成为真实字段并聚合进 usage（免费为 0，付费渠道可填非零）。"""
+    import time as _time
+    tracker = chat_usage.ChatUsageTracker(db=tmp_db)
+    await tracker.record(
+        provider="tryingopen", model=MODEL, prompt_tokens=100, completion_tokens=50,
+        reasoning_tokens=10, cost_usd=0.5, tool_calls_count=0, duration_ms=1,
+        success=True, proxy_used=None, error=None,
+    )
+    await tracker.record(
+        provider="tryingopen", model=MODEL, prompt_tokens=50, completion_tokens=25,
+        reasoning_tokens=5, cost_usd=0.0, tool_calls_count=0, duration_ms=1,
+        success=True, proxy_used=None, error=None,
+    )
+    await tmp_db._ensure_flushed()
+    stats = await tracker.stats("24h")
+    assert stats["cost_usd"] == 0.5
+    assert stats["today_cost_usd"] == 0.5
+    assert stats["total_calls"] == 2

@@ -200,3 +200,26 @@ class TestUptimeHuman:
     def test_days(self):
         assert _uptime_human(86400) == "1天0小时"
         assert _uptime_human(90000) == "1天1小时"
+
+
+class TestRequestBodyLimit:
+    """P0-安全：请求体总量上限（starlette 1.6 RequestBodyLimitMiddleware，8MB 默认）。
+
+    大 base64 正文在到达「4MB/张」判断前即应被 413 拒绝，防止占满内存。
+    未挂中间件的纯解析函数不受影响（_parse_input_images 仍按 3 张与 MAX_IMAGE_BYTES 判）。
+    """
+    def test_oversized_request_body_413(self):
+        import api.main as m
+        from fastapi.testclient import TestClient
+        c = TestClient(m.app, raise_server_exceptions=False)
+        big = b"x" * (9 * 1024 * 1024)
+        r = c.post("/v1/generate", content=big, headers={"Content-Type": "application/json"})
+        assert r.status_code == 413
+
+    def test_small_body_passes_guard(self):
+        import api.main as m
+        from fastapi.testclient import TestClient
+        c = TestClient(m.app, raise_server_exceptions=False)
+        r = c.post("/v1/generate", json={"prompt": "t", "aspect_ratio": "1:1"})
+        # 校验层（isolation）未挂载真实鉴权时，可能 401/422/200，但绝不应 413
+        assert r.status_code != 413

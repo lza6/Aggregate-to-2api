@@ -46,6 +46,26 @@ interface LiveRegistration {
 
 interface AccountPoolData {
   accounts: Record<string, ProviderPoolStats>;
+  // v6.6.0: 号池补满速率画像（后端字段 growth_stats）
+  growth_stats?: {
+    total: number;
+    new_in_24h: number;
+    new_in_7d: number;
+    avg_daily_7d: number;
+    ok: number;
+    target: number;
+    gap: number;
+    eta_days: number | null;
+  };
+  // v6.6.0: 成本口径聚合（配合 Dashboard「成本口径」主卡）
+  cost_summary?: {
+    total_credits_used: number;
+    total_images_used: number;
+    total_credits_earned: number;
+    accounts_with_usage: number;
+    total_accounts: number;
+    avg_cost_per_image: number | null;
+  };
   email_pool: {
     total_registered: number;
     by_provider: Record<string, number>;
@@ -196,6 +216,87 @@ export function AccountsPage() {
           {entries.map(([prefix, stats]) => <PoolCard key={prefix} prefix={prefix} stats={stats} />)}
         </div>
       )}
+
+      {/* v6.6.0: 号池补满速率监控（每日新增账号数 + 预计达标天数） */}
+      {data?.growth_stats ? (
+        <div className="pool-growth-section tf-card">
+          <div className="detail-header">
+            <div className="detail-title-group">
+              <h3 className="detail-title">📈 号池补满速率</h3>
+              <span className="tf-badge tf-badge-info">刷新即估</span>
+            </div>
+            <span className="pool-growth-target">
+              目标 {data.growth_stats.ok} / {data.growth_stats.target} 可用
+            </span>
+          </div>
+          <div className="pool-growth-grid">
+            <div className="pg-card">
+              <span className="pm-label">今日新增</span>
+              <span className="pg-val text-primary">{data.growth_stats.new_in_24h}</span>
+              <span className="pg-sub">24h 入池账号</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">日均新增</span>
+              <span className="pg-val text-primary">{data.growth_stats.avg_daily_7d}</span>
+              <span className="pg-sub">近 7 天平均</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">距目标还差</span>
+              <span className="pg-val text-warning">{data.growth_stats.gap}</span>
+              <span className="pg-sub">还差这么多可用</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">预计达标</span>
+              <span className="pg-val">{data.growth_stats.eta_days != null ? `${data.growth_stats.eta_days} 天` : '—'}</span>
+              <span className="pg-sub">
+                {data.growth_stats.new_in_24h > 0 ? '按今日速率估算' : '新增为 0，暂无法估算'}
+              </span>
+            </div>
+          </div>
+          {data.growth_stats.new_in_24h > 0 && data.growth_stats.eta_days != null && data.growth_stats.eta_days > 30 && (
+            <div className="pool-growth-hint">
+              ⚠ 按当前速率约需 {data.growth_stats.eta_days} 天，久未达标建议调小 IF_REGISTER_COOLDOWN 或补代理池。
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* v6.6.0: 成本口径聚合（累计消耗出图 + 平均每张成本） */}
+      {data?.cost_summary ? (
+        <div className="pool-growth-section tf-card">
+          <div className="detail-header">
+            <div className="detail-title-group">
+              <h3 className="detail-title">💰 成本口径</h3>
+              <span className="tf-badge tf-badge-info">号池聚合</span>
+            </div>
+            <span className="pool-growth-target">
+              {data.cost_summary.accounts_with_usage} / {data.cost_summary.total_accounts} 账号有出图
+            </span>
+          </div>
+          <div className="pool-growth-grid">
+            <div className="pg-card">
+              <span className="pm-label">累计消耗积分</span>
+              <span className="pg-val text-danger">{data.cost_summary.total_credits_used}</span>
+              <span className="pg-sub">全部账号累计扣减</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">累计出图次数</span>
+              <span className="pg-val text-primary">{data.cost_summary.total_images_used}</span>
+              <span className="pg-sub">实际生成结果数</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">平均每张成本</span>
+              <span className="pg-val">{data.cost_summary.avg_cost_per_image != null ? `${data.cost_summary.avg_cost_per_image} 分/张` : '—'}</span>
+              <span className="pg-sub">有出图口径下估算</span>
+            </div>
+            <div className="pg-card">
+              <span className="pm-label">累计获得积分</span>
+              <span className="pg-val text-success">{data.cost_summary.total_credits_earned}</span>
+              <span className="pg-sub">签到累计入账</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* v6.5.0: 最近一次注册会话阶段画像 + 每阶段耗时 */}
       {data?.live_registration ? (
@@ -542,6 +643,50 @@ export function AccountsPage() {
         .text-warning { color: var(--warning); }
         .text-primary { color: var(--primary-600); }
 
+        .pool-growth-section {
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .pool-growth-target {
+          font-size: 12px;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
+        }
+        .pool-growth-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 8px;
+        }
+        .pg-card {
+          background: var(--bg-subtle);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-md);
+          padding: 10px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .pg-val {
+          font-size: 20px;
+          font-weight: 700;
+          font-variant-numeric: tabular-nums;
+          color: var(--text-primary);
+        }
+        .pg-sub {
+          font-size: 10.5px;
+          color: var(--text-muted);
+        }
+        .pool-growth-hint {
+          font-size: 12px;
+          color: var(--warning-text);
+          background: var(--bg-subtle);
+          border: 1px dashed var(--warning);
+          border-radius: var(--radius-sm);
+          padding: 8px 10px;
+        }
+
         .accounts-detail-section {
           padding: 20px;
           display: flex;
@@ -699,6 +844,9 @@ export function AccountsPage() {
 
         @media (max-width: 768px) {
           .pool-metrics-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .pool-growth-grid {
             grid-template-columns: repeat(2, 1fr);
           }
         }

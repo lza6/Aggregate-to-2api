@@ -19,8 +19,7 @@ from __future__ import annotations
 import math
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 _MAX_RECORDS = 1000
 _OPEN_COOLDOWN = 30.0       # 熔断时长（秒）

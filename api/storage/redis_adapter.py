@@ -5,7 +5,6 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any
 
 from .base import DistributedLock, RateLimiter, StorageAdapter
 

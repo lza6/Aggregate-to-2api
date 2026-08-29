@@ -479,12 +479,6 @@ class AccountPool:
             )
             self._conn.commit()
 
-    def get_credits(self, provider: str, email: str) -> int:
-        row = self._conn.execute(
-            "SELECT credits FROM accounts WHERE provider=? AND email=?", (provider, email)
-        ).fetchone()
-        return int(row["credits"]) if row else 0
-
     def mark(self, provider: str, email: str, status: str, note: str = "") -> None:
         now = time.time()
         cooling_since = now if status in ("cooling", "exhausted") else None
@@ -559,6 +553,72 @@ class AccountPool:
             (provider,)
         ).fetchone()
         return int(r["s"]) if r else 0
+
+    def cost_summary(self, provider: str) -> dict:
+        """成本口径聚合（配合 P1-3「成本口径」主卡）。
+
+        - total_credits_used：全部账号累计消耗积分（v6.5.1 起扣减累计）
+        - total_images_used：累计出图次数
+        - total_credits_earned：累计获得积分（签到）
+        - avg_cost_per_image：平均每张成本 = 累计消耗 / 出图次数（无出图时 None）
+        - accounts_with_usage / total_accounts：有消耗账号数与总数（口径覆盖率）
+        """
+        row = self._conn.execute(
+            "SELECT COALESCE(SUM(credits_used_total),0) c_used,"
+            " COALESCE(SUM(images_used),0) imgs,"
+            " COALESCE(SUM(credits_earned_total),0) c_earned,"
+            " COUNT(CASE WHEN COALESCE(images_used,0) > 0 THEN 1 END) used_accs,"
+            " COUNT(*) total_accs"
+            " FROM accounts WHERE provider=?",
+            (provider,),
+        ).fetchone()
+        c_used = int(row["c_used"] or 0)
+        imgs = int(row["imgs"] or 0)
+        return {
+            "total_credits_used": c_used,
+            "total_images_used": imgs,
+            "total_credits_earned": int(row["c_earned"] or 0),
+            "accounts_with_usage": int(row["used_accs"] or 0),
+            "total_accounts": int(row["total_accs"] or 0),
+            "avg_cost_per_image": round(c_used / imgs, 1) if imgs > 0 else None,
+        }
+
+    # ── 补号速率画像 (P3-4) ──────────────────────────────
+    def growth_stats(self, provider: str) -> dict:
+        """号池补满速率画像：「每天新增账号数」+「距目标还需几天」。
+
+        - new_in_24h: 最近 24h 新注册账号数（≈ 每日新增速率缓存）
+        - new_in_7d / avg_daily_7d: 7 天新增 / 日均（平滑短窗抖动）
+        - gap: 距目标还差的可用(ok/active)账号数
+        - eta_days: 预计达标天数 = gap / 每日速率；速率为 0 时 None（无法估算）
+        """
+        now = time.time()
+        total = self._conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE provider=?", (provider,)
+        ).fetchone()[0]
+        new_in_24h = self._conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE provider=? AND created_at >= ?",
+            (provider, now - 86400),
+        ).fetchone()[0]
+        new_in_7d = self._conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE provider=? AND created_at >= ?",
+            (provider, now - 7 * 86400),
+        ).fetchone()[0]
+        ok = len(self.get(provider))
+        target = TARGET_NANOBANANA
+        daily_rate = float(new_in_24h)
+        gap = max(0, target - ok)
+        eta_days = round(gap / daily_rate, 1) if daily_rate > 0 else None
+        return {
+            "total": int(total),
+            "new_in_24h": int(new_in_24h),
+            "new_in_7d": int(new_in_7d),
+            "avg_daily_7d": round(new_in_7d / 7.0, 1),
+            "ok": ok,
+            "target": int(target),
+            "gap": int(gap),
+            "eta_days": eta_days,
+        }
 
     # ── 自动补号 / 签到 / 延寿唤醒循环 ────────────────────────
     async def start(self) -> None:

@@ -19,7 +19,7 @@
 - test_cleanup_deletes_expired_pending · method · L218-L237 — async def test_cleanup_deletes_expired_pending(self)
 - _DBStub · class · L240-L269 — class _DBStub
 - __init__ · method · L243-L246 — def __init__(self) -> None
-- create_request · method · L248-L254 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None)
+- create_request · method · L248-L254 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None)
 - mark_finished · method · L256-L259 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
 - mark_started · method · L261-L263 — async def mark_started(self, task_id)
 - get · method · L265-L266 — async def get(self, task_id)

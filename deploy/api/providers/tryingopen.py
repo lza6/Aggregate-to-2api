@@ -460,7 +460,7 @@ class TryingopenChatProvider(ChatProvider):
                     await asyncio.sleep(2**min(attempt, 3))
                     continue
                 raise ProviderError(f"tryingopen 网络请求失败: {str(exc)[:160]}") from exc
-            except ProviderError as exc:
+            except ProviderError:
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=False)
                 # v4.4.1: 免费代理下的偶发上游错误同样换出口重试；

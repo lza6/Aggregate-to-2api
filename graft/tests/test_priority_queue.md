@@ -2,7 +2,7 @@
 
 - _DBStub · class · L17-L46 — class _DBStub
 - __init__ · method · L20-L23 — def __init__(self) -> None
-- create_request · method · L25-L31 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None)
+- create_request · method · L25-L31 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None)
 - mark_finished · method · L33-L36 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
 - mark_started · method · L38-L40 — async def mark_started(self, task_id)
 - get · method · L42-L43 — async def get(self, task_id)

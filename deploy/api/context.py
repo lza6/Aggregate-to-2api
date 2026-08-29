@@ -10,6 +10,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Optional
 
 # ── ContextVar ─────────────────────────────────────────────
 request_context_var: contextvars.ContextVar[Optional["RequestContext"]] = (

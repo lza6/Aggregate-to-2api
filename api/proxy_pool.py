@@ -115,7 +115,7 @@ class ProxyPool:
     def load_file(self, path: str) -> int:
         try:
             with open(path, encoding="utf-8") as f:
-                urls = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         except OSError as e:
             log.warning("代理文件不可读 %s: %s", path, e)
             return 0

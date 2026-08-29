@@ -2051,7 +2051,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
         tag.style.display = 'inline-flex';
         if (noTag) noTag.style.display = 'none';
         tag.onclick = function () {
-          var keyToCopy = d.api_key || d.api_key_mask;
+          var keyToCopy = d.api_key_mask;
           navigator.clipboard.writeText(keyToCopy).then(function() {
             showToast('✅ 已复制完整 API Key：' + (keyToCopy.length > 20 ? keyToCopy.slice(0, 16) + '…' : keyToCopy));
           });
@@ -2121,7 +2121,7 @@ GET /v1/edit/tasks/{id}   → completed 时含 image_url（+ base64 当 download
     if (chatSendBtn) { chatSendBtn.disabled = true; chatSendBtn.textContent = '⏳'; }
 
     try {
-      var apiKey = localStorage.getItem('api_key') || 'sk-tfai-1248809261a2b51ca8ce15d596f3145f5571a72772d9dd5e';
+      var apiKey = localStorage.getItem('api_key') || '';
       var res = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: {

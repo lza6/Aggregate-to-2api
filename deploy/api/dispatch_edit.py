@@ -15,7 +15,7 @@ import uuid
 from . import config
 from . import imagefree_client
 from .models import EditRequest, TaskInfo
-from .meta import db, engine, registry, gallery_cache
+from .meta import db, engine, registry
 from .errors import AppError, ErrorCodes
 from .db import task_to_public
 from .dispatch import _normalize_model, _provider_prefix, _parse_input_image, _parse_input_images, _validate_model, _PROVIDER_TASKS, _provider_sem
@@ -157,7 +157,7 @@ class _EditProxyPool:
         if config.EDIT_PROXY_FILE:
             try:
                 with open(config.EDIT_PROXY_FILE, encoding="utf-8") as f:
-                    self.proxies = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                    self.proxies = [line.strip() for line in f if line.strip() and not line.startswith("#")]
                 log.info("图生图代理池加载 %d 个代理（并发上限 %d）",
                          len(self.proxies), config.EDIT_PROXY_PARALLEL)
             except OSError as e:
@@ -312,13 +312,10 @@ async def edit_image(req: EditRequest):
         if data is None:
             # URL 图片：下载字节后必须回填 image_bytes/image_bytes_list，否则后续全部用 None 提交
             data = await imagefree_client.download_image(req.image, 60.0, config.MAX_IMAGE_BYTES)
-            ctype = imagefree_client.detect_mime(data)
             image_bytes = data
             image_bytes_list = [data]
+            image_bytes_list = [data]
         else:
-            detected = imagefree_client.detect_mime(data)
-            if detected != "application/octet-stream":
-                ctype = detected
             image_bytes = data
             image_bytes_list = [data]
     else:

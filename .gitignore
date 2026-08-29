@@ -81,3 +81,7 @@ data/action_ids.json
 docs/artifacts/
 docs/计划书/
 任务1.txt
+
+# CodeGraph index — local-only (db/wal/shm already ignored by .codegraph/.gitignore)
+.codegraph/
+codegraph.lock

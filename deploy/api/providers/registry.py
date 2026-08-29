@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from .base import ModelSpec, Provider
+from .base import ModelSpec, Provider, ChatProvider
 from . import imagefree
 from . import aifreeforever
 from . import nanobanana

@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 from .. import config
-from .base import DistributedLock, RateLimiter, StorageAdapter
+from .base import StorageAdapter
 from .local import LocalStorageAdapter
 
 log = logging.getLogger("storage")

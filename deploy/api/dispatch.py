@@ -7,30 +7,24 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import ipaddress
 import json
 import logging
-import os
 import re
 import socket
 import time
 import uuid
-from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import Request, WebSocket
 from fastapi.responses import StreamingResponse
 
 from . import config
-from . import imagefree_client
-from .models import GenerateRequest, EditRequest, TaskInfo
-from .meta import db, engine, registry, gallery_cache
+from .models import GenerateRequest
+from .meta import db, engine, registry
 from .errors import AppError, ErrorCodes
-from .db import task_to_public
 from .semaphore_manager import upstream_semaphore
-from .sse_events import hub, task_events_generator, publish_task_event
-from .worker import QueueFull
+from .sse_events import publish_task_event
+from .worker import QueueFull  # noqa: F401  (generate.py 依赖 dispatch 再导出)
 
 log = logging.getLogger("dispatch")
 

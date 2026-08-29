@@ -104,7 +104,7 @@ def check_api_key(request: Request, *, scope: str = "chat") -> None:
     if not provided:
         raise AppError(
             ErrorCodes.UNAUTHORIZED,
-            f"缺少 API Key：请在 Authorization: Bearer <key> / X-API-Key 头或 ?api_key= 参数中提供",
+            "缺少 API Key：请在 Authorization: Bearer <key> / X-API-Key 头或 ?api_key= 参数中提供",
             401,
             details={"scope": scope},
         )
@@ -137,7 +137,7 @@ def check_admin_key(request: Request, *, scope: str = "admin-security") -> None:
     if not provided:
         raise AppError(
             ErrorCodes.UNAUTHORIZED,
-            f"缺少管理面 API Key：请使用 IF_ADMIN_KEYS 中的管理 Key（Authorization: Bearer <key> / X-API-Key 头）",
+            "缺少管理面 API Key：请使用 IF_ADMIN_KEYS 中的管理 Key（Authorization: Bearer <key> / X-API-Key 头）",
             401,
             details={"scope": scope},
         )

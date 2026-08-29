@@ -1,6 +1,6 @@
 # deploy/api/log_buffer.py
 
-- LogBufferHandler · class · L9-L34 — class LogBufferHandler(logging.Handler)
-- __init__ · method · L12-L18 — def __init__(self, maxlen: int = 1000) -> None
-- emit · method · L20-L30 — def emit(self, record: logging.LogRecord) -> None
-- snapshot · method · L32-L34 — def snapshot(self, lines: int = 50) -> list[dict]
+- LogBufferHandler · class · L8-L33 — class LogBufferHandler(logging.Handler)
+- __init__ · method · L11-L17 — def __init__(self, maxlen: int = 1000) -> None
+- emit · method · L19-L29 — def emit(self, record: logging.LogRecord) -> None
+- snapshot · method · L31-L33 — def snapshot(self, lines: int = 50) -> list[dict]

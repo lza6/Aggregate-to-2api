@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, notify } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, getStoredApiKey, fetchAccountPool, notify } from '../api';
 import { StatCard } from '../components/StatCard';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus } from '../api';
+import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus, AccountPoolResponse } from '../api';
 
 const PWD_KEY = 'galleryPwd';
 
@@ -34,7 +34,9 @@ export function Dashboard() {
   const { data: sys } = useApi<SystemSpec>(() => fetchSystemSpec(), { intervalMs: 60000 });
   const { data: chatUsage } = useApi<ChatUsageStats>(() => fetchChatUsage('24h'), { intervalMs: 15000 });
   const { data: chatRemaining } = useApi<ChatRemaining>(() => fetchChatRemaining(), { intervalMs: 15000 });
-  const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(), { intervalMs: 30000 });
+  const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(getStoredApiKey() ? { adminKey: getStoredApiKey() } : undefined), { intervalMs: 30000 });
+  // v6.6.0: 号池成本口径（累计消耗获取每张平均成本）——供「成本口径」主卡
+  const { data: accountPool } = useApi<AccountPoolResponse>(() => fetchAccountPool({ page: 1, pageSize: 1 }), { intervalMs: 30000 });
   const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -78,21 +80,24 @@ export function Dashboard() {
           {authStatus?.enabled && (
             <span className="tf-badge tf-badge-warning api-key-badge" title="全站写操作需携带此 Key">
               🔑 API Key: <code>{authStatus.key_mask ?? '…'}</code>
-              <button
-                type="button"
-                className="api-key-copy"
-                aria-label="复制完整 API Key"
-                onClick={async () => {
-                  const full = authStatus.key ?? '';
-                  if (!full) { notify('未获取到 Key', 'error'); return; }
-                  try {
-                    await navigator.clipboard.writeText(full);
-                    notify('API Key 已复制到剪贴板', 'success');
-                  } catch {
-                    notify('复制失败，请手动复制', 'error');
-                  }
-                }}
-              >📋 复制</button>
+              {/* 完整 Key 仅当请求携带管理面 Key（auth/status 被鉴权通过）才返回；匿名只拿 mask */}
+              {authStatus.key ? (
+                <button
+                  type="button"
+                  className="api-key-copy"
+                  aria-label="复制完整 API Key"
+                  onClick={async () => {
+                    const full = authStatus.key ?? '';
+                    if (!full) { notify('未获取到 Key', 'error'); return; }
+                    try {
+                      await navigator.clipboard.writeText(full);
+                      notify('API Key 已复制到剪贴板', 'success');
+                    } catch {
+                      notify('复制失败，请手动复制', 'error');
+                    }
+                  }}
+                >📋 复制</button>
+              ) : null}
             </span>
           )}
           <button onClick={reload} className="tf-btn tf-btn-secondary">
@@ -167,6 +172,15 @@ export function Dashboard() {
           sub={diag && diag.workers.stale_count > 0 ? `⚠ ${diag.workers.stale_count} 个节点失联` : '所有 Worker 存活'}
           icon="🩺"
         />
+        <StatCard
+          label="出图成本口径"
+          value={accountPool?.cost_summary ? `${accountPool.cost_summary.total_credits_used} 分` : '-'}
+          sub={accountPool?.cost_summary
+            ? `累计 ${accountPool.cost_summary.total_images_used} 张 · 均 ${accountPool.cost_summary.avg_cost_per_image != null ? accountPool.cost_summary.avg_cost_per_image + ' 分/张' : '—'} · ${accountPool.cost_summary.accounts_with_usage}/${accountPool.cost_summary.total_accounts} 账号出图`
+            : '号池无出图数据'}
+          color="var(--primary-600)"
+          icon="💰"
+        />
       </div>
 
       {/* AI 聊天服务 */}
@@ -193,6 +207,12 @@ export function Dashboard() {
             icon="🔋"
           />
           <StatCard label="工具调用（24h）" value={chatUsage?.tool_calls ?? '-'} icon="🔧" />
+          <StatCard
+            label="成本（24h）"
+            value={chatUsage ? `$${(chatUsage.cost_usd ?? 0).toFixed(4)}` : '-'}
+            sub={chatUsage ? `今日 $${(chatUsage.today_cost_usd ?? 0).toFixed(4)}` : undefined}
+            icon="💰"
+          />
         </div>
       </div>
       {diagError && (

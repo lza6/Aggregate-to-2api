@@ -5,8 +5,10 @@ model = 服务端风格预设（prompt 前缀注入），无真实多模型。
 """
 from __future__ import annotations
 
+import asyncio
+
 from .. import config
-from .base import CAP_IMG2IMG, CAP_TXT2IMG, GenerationResult, ModelSpec, Provider, ProviderError
+from .base import GenerationResult, ModelSpec, Provider
 
 _PRESETS = {
     "default": ("默认", "不注入任何风格，原样提交", ("txt2img", "img2img"), ""),

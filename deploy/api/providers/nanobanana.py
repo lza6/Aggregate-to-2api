@@ -57,7 +57,7 @@ _UPSTREAM_MODELS = {
 
 
 # v6.5.1: 每张图消耗积分（逆向自上游 encodeImageCost，minified js 21561 模块）。
-# 未命中回退 CREDITS_PER_IMAGE=4；MULTIPLIER=2（低清/特殊倍数）。
+# 未命中回退 _DEFAULT_CREDITS_PER_IMAGE=4；档位值表内硬编码，无全局倍数。
 _CREDITS_PER_IMAGE = {
     "nano-banana-pro": 4,
     "nano-banana-pro:4K": 14,
@@ -78,15 +78,18 @@ _CREDITS_PER_IMAGE = {
     "z-image": 2,
 }
 _DEFAULT_CREDITS_PER_IMAGE = 4
-_MULTIPLIER = 2
 
 
 def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None) -> int:
-    """按上游模型 + 分辨率返回单张图消耗的积分（镜像上游 encodeImageCost）。"""
+    """按上游模型 + 分辨率返回单张图消耗的积分（镜像上游 encodeImageCost）。
+
+    _CREDITS_PER_IMAGE 是唯一事实源：表内每个档位（含 `:1K/:2K/:4K`）都必须被本函数
+    路由到，否则漏档回退默认 4 会少扣积分（P1-5）。分支的 res 集合须覆盖表内全部档位。
+    """
     res = resolution or "1K"
     if upstream == "grok-imagine":
         key = "grok-imagine:edit" if task_type == "edit" else "grok-imagine:quality" if quality_mode == "quality" else "grok-imagine:fast"
-        return _CREDITS_PER_IMAGE.get(key, _DEFAULT_CREDITS_PER_IMAGE * _MULTIPLIER)
+        return _CREDITS_PER_IMAGE.get(key, _DEFAULT_CREDITS_PER_IMAGE)
     lookup = upstream
     if upstream == "nano-banana-pro" and res == "4K":
         lookup = "nano-banana-pro:4K"
@@ -94,12 +97,14 @@ def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | No
         lookup = f"nano-banana-2:{res}"
     elif upstream == "nano-banana-2-lite":
         lookup = "nano-banana-2-lite:1K"
-    elif upstream == "gpt-image-2" and res in ("2K", "4K"):
+    elif upstream == "gpt-image-2" and res in ("1K", "2K", "4K"):
         lookup = f"gpt-image-2:{res}"
-    elif upstream == "seedream-5.0-pro" and res in ("2K", "3K", "4K"):
-        lookup = "seedream-5.0-pro:2K"
-    elif upstream == "seedream-5.0-lite" and res in ("3K", "4K"):
-        lookup = "seedream-5.0-lite:3K"
+    elif upstream == "seedream-5.0-pro" and res in ("1K", "2K", "3K", "4K"):
+        # 表仅细粒度定价 1K/2K；3K/4K 归并到 2K 档（2K=14）。
+        lookup = "seedream-5.0-pro:1K" if res == "1K" else "seedream-5.0-pro:2K"
+    elif upstream == "seedream-5.0-lite" and res in ("1K", "2K", "3K", "4K"):
+        # 表仅含 2K/3K 档（均 6）；1K/4K 归并到 2K 档（lite 1K≈2K 成本，避免 1K 落默认 4 低估）。
+        lookup = "seedream-5.0-lite:2K" if res in ("1K", "2K") else "seedream-5.0-lite:3K"
     elif upstream == "z-image":
         lookup = "z-image"
     return _CREDITS_PER_IMAGE.get(lookup, _DEFAULT_CREDITS_PER_IMAGE)
