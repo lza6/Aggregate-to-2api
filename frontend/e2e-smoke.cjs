@@ -43,10 +43,10 @@ async function step(name, fn) {
 
     // ① 首屏：后端不可达 → ErrorRetry（P-UI-2 错误态验收）
     console.log('① 首屏 Dashboard 降级态');
-    await step('侧栏渲染(8 导航)', async () => {
+    await step('侧栏渲染(9 导航)', async () => {
       await page.goto(BASE + '/admin/', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2500);
-      ok('侧栏渲染(8 导航)', (await page.locator('.nav-item').count()) === 8);
+      ok('侧栏渲染(9 导航)', (await page.locator('.nav-item').count()) === 9);
       ok('后端不可达时显示错误+重试', (await page.locator('.fb-error-btn').count()) === 1);
       const errText = await page.locator('.fb-error-msg').textContent().catch(() => '');
       ok('错误文案含原因', errText.includes('数据获取异常') || errText.includes('加载失败') || errText.length > 0);

@@ -408,6 +408,79 @@ function authHeaders(): Record<string, string> {
   return key ? { 'Authorization': `Bearer ${key}` } : {};
 }
 
+// ── v6.5.0 在线生成（文生图/图生图）PLAYGROUND ──
+export interface ImageModelInfo {
+  id: string;
+  name: string;
+  upstream_model: string;
+  capabilities: string[];
+  aspect_ratios: string[];
+  resolutions: string[];
+  account_required?: boolean;
+  description?: string;
+}
+
+/** 全量模型目录（/v1/models），按 provider 分组；含生图模型 capability */
+export async function fetchImageModels(): Promise<{ items: Record<string, ImageModelInfo[]>; count: number }> {
+  const res = await fetch(`${API_BASE}/v1/models`);
+  return res.json();
+}
+
+/** 文生图/图生图同步生成（自动携带本地保存 API Key）；需 Key，无 Key 后端返回 401 */
+export async function generateImage(body: {
+  prompt: string;
+  aspect_ratio?: string;
+  model?: string;
+  resolution?: string;
+  download?: boolean;
+}, signal?: AbortSignal): Promise<Task> {
+  const res = await fetch(`${API_BASE}/v1/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`生成失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+/** 图生图（AI 照片编辑，异步提交） */
+export async function editImage(body: {
+  image?: string;
+  images?: string[];
+  prompt: string;
+  model?: string;
+  download?: boolean;
+}, signal?: AbortSignal): Promise<Task> {
+  const res = await fetch(`${API_BASE}/v1/edit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`图生图提交失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+/** 轮询异步任务结果（/v1/tasks/{id} 或 /v1/edit/tasks/{id}） */
+export async function fetchTask(id: string): Promise<Task> {
+  const res = await fetch(`${API_BASE}/v1/tasks/${id}`);
+  if (!res.ok) throw new Error(`任务查询失败 HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function fetchEditTask(id: string): Promise<Task> {
+  const res = await fetch(`${API_BASE}/v1/edit/tasks/${id}`);
+  if (!res.ok) throw new Error(`图生图任务查询失败 HTTP ${res.status}`);
+  return res.json();
+}
+
 export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }> {
   const res = await fetch(`${API_BASE}/v1/chat/models`);
   return res.json();
