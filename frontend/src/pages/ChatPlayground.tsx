@@ -403,6 +403,17 @@ export function ChatPlayground() {
       }
       if (!parsed || typeof parsed !== 'object') return;
       const payload = parsed as Record<string, unknown>;
+      // v6.6.0: 区分流式 server_error 与客户端断连。
+      // 后端异常时在流终帧前发 {"error":{"type":"server_error","message":...}} 再 [DONE]。
+      // 若不识别，该帧无 choices 会被丢弃 → 前端停留「正在思考…」/ 显示旧文而非错误。
+      // 抛 ChatRequestError 使外层 catch 落地为错误气泡。
+      if (payload.error && typeof payload.error === 'object') {
+        const errObj = payload.error as Record<string, unknown>;
+        const msg = typeof errObj.message === 'string' ? errObj.message
+          : typeof payload.message === 'string' ? payload.message
+          : '聊天流式调用失败';
+        throw new ChatRequestError(msg, 500);
+      }
       if (payload.usage && typeof payload.usage === 'object') {
         usage = payload.usage as ChatMessage['usage'];
       }
