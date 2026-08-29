@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow  # 需 session event-loop + worker 生命周期 + 常驻协程；默认门禁剔除（P1-1）
+
 # 确保项目根目录可导入 api 包
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:

@@ -40,7 +40,24 @@ async def generic_exception_handler(request, exc: Exception):
     )
 
 
+async def validation_exception_handler(request, exc):
+    """参数/请求体校验错误（422）：纳入错误码聚合，但响应保持 FastAPI 默认 422 结构。
+
+    v6.6.1（Reviewer S1 修复）：此前 RequestValidationError 非 StarletteHTTPException 子类，
+    三个已注册 handler 均不接它 → 422 从不进 error_tracker。此处记录 VAL.004 后委托 FastAPI
+    默认处理器，不改变对调用方的 422 响应契约（{detail: [...]}）。
+    """
+    error_tracker_record(ErrorCodes.BAD_REQUEST)
+    from fastapi.exception_handlers import request_validation_exception_handler
+    return await request_validation_exception_handler(request, exc)
+
+
 def register_exception_handlers(app) -> None:
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(StarletteHTTPException, starlette_http_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
+    try:
+        from fastapi.exceptions import RequestValidationError
+        app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    except Exception:
+        pass

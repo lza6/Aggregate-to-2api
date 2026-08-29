@@ -75,6 +75,20 @@ class TestHandlerTracks:
         asyncio.run(generic_exception_handler(None, ValueError("boom")))
         assert count_of("SYS.001") >= 1
 
+    def test_validation_422_recorded(self):
+        """S1 修复：参数/请求体校验 422 应纳入错误码聚合（VAL.004）。"""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.routes.generate import router
+        from api.handlers import register_exception_handlers
+        app = FastAPI()
+        register_exception_handlers(app)
+        app.include_router(router)
+        c = TestClient(app)
+        r = c.post("/v1/generate/async", json={"prompt": "x", "aspect_ratio": "bad"})
+        assert r.status_code == 422
+        assert count_of("VAL.004") == 1
+
 
 # ── 任务全链路日志端点点位 ──────────────────────────
 def make_logs_app() -> FastAPI:
