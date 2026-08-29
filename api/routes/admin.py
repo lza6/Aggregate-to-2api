@@ -137,6 +137,10 @@ async def account_pool_dashboard(
             "credits_earned_total": int(item.get("credits_earned_total") or 0),
             "next_claim_at": item.get("next_claim_at"),
             "age_days": round((now_ts - created) / 86400.0, 1) if created else None,
+            # v6.5.1: 每账号出图消耗画像（累计消耗积分 / 出图次数 / 最近出图）
+            "credits_used_total": int(item.get("credits_used_total") or 0),
+            "images_used": int(item.get("images_used") or 0),
+            "last_used_at": item.get("last_used_at"),
         })
     return {
         "accounts": account_pool.dashboard(),

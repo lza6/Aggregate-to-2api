@@ -1,4 +1,4 @@
-# 主控台账 · 听风AI 闭环任务（v6.5.0 公共服务 + Vue3 公开首页）
+# 主控台账 · 听风AI 闭环任务（v6.5.1 每账号消耗积分 + Vue3 公开首页 + 在线生成）
 
 > 分支约束：**仅 main，禁止新建分支**。生产部署/推送/发版均已获用户授权。
 > 更新策略：只在节点状态发生实质变化时更新。
@@ -21,7 +21,7 @@
 | V6 | Token M/B/K、总用量主卡、401/403 零 CF、私网归类回归 | 单测 + 线上探针 | ✅ 已验证 |
 | V7 | Vue3 前端 tsc/build/真实浏览器 E2E 通过 | landing build exit0 + playwright 6/0；frontend tsc 0 + smoke 12/0 | ✅ 已验证 |
 | V8 | 部署更新到线上 | docker 健康 + / 换新 | ⏳ 待执行 |
-| V9 | 推送 main + 创建 release/tag | git tag v6.5.0 + GitHub Release | ⏳ 待执行 |
+| V9 | 推送 main + 创建 release/tag | git tag v6.5.1 + GitHub Release | ⏳ 待执行 |
 
 ## 任务图
 ```
@@ -34,5 +34,5 @@
 - 号池「全部账号签到」：dead 号（cookie 失效无密码/续期失败）客观不可签，真实监督范围 = ok/active；剩余为补号能力上限，非缺陷。
 
 ## 最近更新
-- 2026-08-29 **V1-V7 已落地**：Vue3 公开首页（landing/）+ 后端私网 IP 打码（task_to_public）+ 注册阶段/耗时接口（live_registration）+ React 号池画像列 + 版本 6.5.0 统一。真实浏览器 E2E 6/0 + 单测 83p + smoke 12/0。剩余 V8 部署、V9 推送+发版。
+- 2026-08-29 **v6.5.1 每账号消耗积分闭环**：nanobanana 生成成功按上游 encodeImageCost 扣减账号积分并累计 credits_used_total/images_used/last_used_at；号池明细新增「累计消耗积分/出图次数」列；后端单测 19p + 前端 E2E 6/0；线上 imagefree-api:6.5.1 healthy。
 - 2026-08-29 **盘账**：docs.html 零散视觉已修；4 个真缺口（注册阶段/耗时接口、私网裸 IP、React 号池画像列、公开页无鉴权生成器）已完整落地。

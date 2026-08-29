@@ -182,6 +182,13 @@ class AccountPool:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN credits_earned_total INTEGER DEFAULT 0")
                 if "next_claim_at" not in cols:
                     self._conn.execute("ALTER TABLE accounts ADD COLUMN next_claim_at REAL")
+                # v6.5.1: 每账号出图消耗画像（生成成功扣减 + 累计消耗积分/出图次数/最近出图时间）
+                if "credits_used_total" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN credits_used_total INTEGER DEFAULT 0")
+                if "images_used" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN images_used INTEGER DEFAULT 0")
+                if "last_used_at" not in cols:
+                    self._conn.execute("ALTER TABLE accounts ADD COLUMN last_used_at REAL")
             except Exception as e:
                 log.debug("Schema migration check: %s", e)
             self._conn.commit()
@@ -321,7 +328,7 @@ class AccountPool:
                 conds.append("provider=?")
                 args.append(provider)
             # 条件：cooling_since 超时 或 cooling_since 为 NULL
-            conds.append(f"(cooling_since IS NULL OR (? - cooling_since) >= ?)")
+            conds.append("(cooling_since IS NULL OR (? - cooling_since) >= ?)")
             args.extend([now, cooling_timeout])
 
             where_clause = " WHERE " + " AND ".join(conds)
@@ -450,6 +457,33 @@ class AccountPool:
             self._conn.execute("UPDATE accounts SET credits=?, updated_at=? WHERE provider=? AND email=?",
                                (credits, time.time(), provider, email))
             self._conn.commit()
+
+    def consume_credits(self, provider: str, email: str, amount: int) -> None:
+        """v6.5.1: 生成成功扣减该账号积分，并累计「消耗积分」画像（images_used / credits_used_total）。
+
+        - credits：剩余可用积分（扣减后，下限 0）
+        - credits_used_total：该账号累计消耗积分（自增 amount）
+        - images_used：该账号累计出图次数（自增 1）
+        - last_used_at：最近一次出图时间
+        """
+        if amount <= 0:
+            return
+        with self._lock:
+            self._conn.execute(
+                "UPDATE accounts SET credits=MAX(0, credits-?),"
+                " credits_used_total=COALESCE(credits_used_total,0)+?,"
+                " images_used=COALESCE(images_used,0)+1,"
+                " last_used_at=?, updated_at=?"
+                " WHERE provider=? AND email=?",
+                (amount, amount, time.time(), time.time(), provider, email),
+            )
+            self._conn.commit()
+
+    def get_credits(self, provider: str, email: str) -> int:
+        row = self._conn.execute(
+            "SELECT credits FROM accounts WHERE provider=? AND email=?", (provider, email)
+        ).fetchone()
+        return int(row["credits"]) if row else 0
 
     def mark(self, provider: str, email: str, status: str, note: str = "") -> None:
         now = time.time()

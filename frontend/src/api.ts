@@ -196,6 +196,11 @@ export interface AccountPoolItem {
   credits_earned_total?: number;
   next_claim_at?: number | null;
   age_days?: number | null;
+  // v6.5.1: 每账号出图消耗画像
+  credits_used_total?: number;
+  images_used?: number;
+  last_used_at?: number | null;
+  credits_earned?: number;
 }
 
 export interface LiveRegistration {

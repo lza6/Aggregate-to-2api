@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v6.5.0
+# 版本: v6.5.1
 # 注意：docker-compose 需从 deploy/ 目录运行（build context: . 指向 deploy/）
 
 services:
@@ -8,7 +8,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cfsolver
-    image: imagefree-cfsolver:6.5.0
+    image: imagefree-cfsolver:6.5.1
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    image: imagefree-api:6.5.0
+    image: imagefree-api:6.5.1
     container_name: imagefree-api
     restart: unless-stopped
     mem_limit: 256m

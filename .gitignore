@@ -75,3 +75,9 @@ htmlcov/
 *.db-shm
 *.db-wal
 data/data/
+
+# v6.5.1: local-only (not committed)
+data/action_ids.json
+docs/artifacts/
+docs/计划书/
+任务1.txt

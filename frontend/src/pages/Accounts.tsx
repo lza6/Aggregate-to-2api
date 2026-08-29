@@ -26,6 +26,10 @@ interface AccountItem {
   credits_earned_total?: number;
   next_claim_at?: number | null;
   age_days?: number | null;
+  // v6.5.1: 每账号出图消耗画像
+  credits_used_total?: number;
+  images_used?: number;
+  last_used_at?: number | null;
 }
 
 interface LiveRegistration {
@@ -261,6 +265,8 @@ export function AccountsPage() {
                 <th>累计签到</th>
                 <th>本轮第几天</th>
                 <th>累计获得积分</th>
+                <th>累计消耗积分</th>
+                <th>出图次数</th>
                 <th>存活天数</th>
                 <th>入池时间</th>
                 <th>上次签到时间</th>
@@ -271,7 +277,7 @@ export function AccountsPage() {
             <tbody>
               {pagedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
+                  <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
                     📭 暂无入库账号明细（后台持续注册激活中…）
                   </td>
                 </tr>
@@ -324,6 +330,12 @@ export function AccountsPage() {
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)', fontWeight: 500 }}>
                         {it.credits_earned_total ?? 0} 分
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--danger)', fontWeight: 500 }}>
+                        {it.credits_used_total ?? 0} 分
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                        {it.images_used ?? 0} 次
                       </td>
                       <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
                         {it.age_days != null ? `${it.age_days} 天` : '—'}

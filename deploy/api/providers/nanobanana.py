@@ -56,6 +56,55 @@ _UPSTREAM_MODELS = {
 }
 
 
+# v6.5.1: 每张图消耗积分（逆向自上游 encodeImageCost，minified js 21561 模块）。
+# 未命中回退 CREDITS_PER_IMAGE=4；MULTIPLIER=2（低清/特殊倍数）。
+_CREDITS_PER_IMAGE = {
+    "nano-banana-pro": 4,
+    "nano-banana-pro:4K": 14,
+    "nano-banana-2:1K": 5,
+    "nano-banana-2:2K": 8,
+    "nano-banana-2:4K": 12,
+    "nano-banana-2-lite:1K": 3,
+    "gpt-image-2:1K": 6,
+    "gpt-image-2:2K": 10,
+    "gpt-image-2:4K": 14,
+    "seedream-5.0-pro:1K": 7,
+    "seedream-5.0-pro:2K": 14,
+    "seedream-5.0-lite:2K": 6,
+    "seedream-5.0-lite:3K": 6,
+    "grok-imagine:fast": 5,
+    "grok-imagine:quality": 6,
+    "grok-imagine:edit": 5,
+    "z-image": 2,
+}
+_DEFAULT_CREDITS_PER_IMAGE = 4
+_MULTIPLIER = 2
+
+
+def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None) -> int:
+    """按上游模型 + 分辨率返回单张图消耗的积分（镜像上游 encodeImageCost）。"""
+    res = resolution or "1K"
+    if upstream == "grok-imagine":
+        key = "grok-imagine:edit" if task_type == "edit" else "grok-imagine:quality" if quality_mode == "quality" else "grok-imagine:fast"
+        return _CREDITS_PER_IMAGE.get(key, _DEFAULT_CREDITS_PER_IMAGE * _MULTIPLIER)
+    lookup = upstream
+    if upstream == "nano-banana-pro" and res == "4K":
+        lookup = "nano-banana-pro:4K"
+    elif upstream == "nano-banana-2" and res in ("1K", "2K", "4K"):
+        lookup = f"nano-banana-2:{res}"
+    elif upstream == "nano-banana-2-lite":
+        lookup = "nano-banana-2-lite:1K"
+    elif upstream == "gpt-image-2" and res in ("2K", "4K"):
+        lookup = f"gpt-image-2:{res}"
+    elif upstream == "seedream-5.0-pro" and res in ("2K", "3K", "4K"):
+        lookup = "seedream-5.0-pro:2K"
+    elif upstream == "seedream-5.0-lite" and res in ("3K", "4K"):
+        lookup = "seedream-5.0-lite:3K"
+    elif upstream == "z-image":
+        lookup = "z-image"
+    return _CREDITS_PER_IMAGE.get(lookup, _DEFAULT_CREDITS_PER_IMAGE)
+
+
 class NanobananaProvider(Provider):
     prefix = "nanobanana"
     display_name = "Nano Banana Pro（每日签到）"
@@ -167,6 +216,16 @@ class NanobananaProvider(Provider):
             return GenerationResult(status="error", error=str(e))
         except Exception as e:
             return GenerationResult(status="error", error=f"nanobanana 生成失败: {str(e)[:120]}")
+        # v6.5.1: 生成成功 → 扣减该账号积分 + 累计消耗/出图次数画像（若该账号可定位）。
+        # 仅当 acc 是真实号池账号（非 mock）才落库，避免测试号污染统计。
+        if acc.get("email") and acc.get("cookie") != "mock-session":
+            try:
+                cost = image_credit_cost(upstream, resolution,
+                                         task_type="edit" if images else None)
+                from ..account_pool import account_pool
+                account_pool.consume_credits("nanobanana", acc["email"], cost)
+            except Exception as e:
+                log.warning("nanobanana 扣减积分失败 %s: %s", acc.get("email"), e)
         return GenerationResult(status="completed", asset_url=asset_url)
 
     def _action_headers(self, cookie: str, action_id: str) -> dict:

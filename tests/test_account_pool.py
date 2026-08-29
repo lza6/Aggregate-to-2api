@@ -217,6 +217,46 @@ async def test_daily_checkin_updates_credits(tmp_path):
     p._conn.close()
 
 
+# ── v6.5.1 每账号出图消耗积分 ──────────────────
+def test_consume_credits_updates_usage_profile(tmp_path):
+    """生成成功扣减该账号积分并累计消耗/出图次数画像（下限 0，非法消耗 no-op）。"""
+    from api.account_pool import AccountPool
+    p = AccountPool(str(tmp_path / "consume.db"))
+    p.add("nanobanana", "a@x.com", "c", credits=20, status="active")
+    p.consume_credits("nanobanana", "a@x.com", 4)
+    row = p.get("nanobanana")[0]
+    assert row["credits"] == 16
+    assert row["credits_used_total"] == 4
+    assert row["images_used"] == 1
+    # 扣到下限 0，不出现负数
+    p.consume_credits("nanobanana", "a@x.com", 100)
+    row = p.get("nanobanana")[0]
+    assert row["credits"] == 0
+    assert row["credits_used_total"] == 104
+    assert row["images_used"] == 2
+    # 非法 amount => no-op，不影响画像
+    before = p.get("nanobanana")[0]["images_used"]
+    p.consume_credits("nanobanana", "a@x.com", 0)
+    assert p.get("nanobanana")[0]["images_used"] == before
+    p._conn.close()
+
+
+def test_image_credit_cost_mapping():
+    """image_credit_cost 镜像上游 encodeImageCost（按模型+分辨率返回单图积分）。"""
+    from api.providers.nanobanana import image_credit_cost
+    assert image_credit_cost("nano-banana-pro", "1K") == 4
+    assert image_credit_cost("nano-banana-pro", "4K") == 14
+    assert image_credit_cost("nano-banana-2", "2K") == 8
+    assert image_credit_cost("nano-banana-2", "4K") == 12
+    assert image_credit_cost("gpt-image-2", "4K") == 14
+    assert image_credit_cost("seedream-5.0-pro", "2K") == 14
+    assert image_credit_cost("grok-imagine", "1K", quality_mode="quality") == 6
+    assert image_credit_cost("grok-imagine", "1K", task_type="edit") == 5
+    assert image_credit_cost("z-image", "1K") == 2
+    # 未命中回退默认 4
+    assert image_credit_cost("unknown-model", "1K") == 4
+
+
 # ── 邮箱池 ──────────────────────────────────────
 class TestEmailPool:
     @pytest.mark.asyncio
