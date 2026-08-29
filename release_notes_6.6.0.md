@@ -1,7 +1,7 @@
 # 听风AI v6.6.0 发布说明
 
 ## 号池补满速率监控（P3-4）
-- `/v1/account-pool` 新增顶层 `growth` 画像：**今日新增 / 日均新增（7 天） / 距目标还差 / 预计达标天数**。
+- `/v1/account-pool` 新增顶层 `growth_stats` 画像：**今日新增 / 日均新增（7 天） / 距目标还差 / 预计达标天数**。
 - `account_pool.growth_stats()`：按 `created_at` 窗口统计 24h/7d 新增与日均，`eta_days = gap / daily_rate`，速率为 0 时返回 `None`（前端显示「—」）。
 - React `Accounts.tsx` 新增「📈 号池补满速率」卡片：今日新增、日均新增、距目标还差、预计达标；`eta_days > 30` 时提示调小 `IF_REGISTER_COOLDOWN` 或补代理池；移动端两列栅格。
 - 说明：`REGISTER_COOLDOWN=90s` → 约 960/天 → 1 万目标约 10 天；按负载动态调 `IF_REGISTER_COOLDOWN` 可提速（运维即可，本轮提供观测）。

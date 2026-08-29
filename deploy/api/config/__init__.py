@@ -467,7 +467,9 @@ class Settings(BaseSettings):
         2C2G → worker=4, upstream=12, token=3, queue=1000
         4C4G → worker=8,  upstream=32, token=8,  queue=2000
         4C8G → worker=16, upstream=64, token=16, queue=5000
-        8C16G+ → worker=48, upstream=192, token=48, queue=12000
+        8C16G+ → worker=16（封顶）, upstream=64, token=8, queue=5000
+        注：worker 自适应仅在未显式设 IF_WORKERS 时生效；IF_WORKER_AUTO 默认关闭，
+        故运行期不在 4~16 间动态伸缩，只决定初始 worker 数。
         """
         explicit = bool(
             _env_int("IF_WORKERS") or _env_int("IF_UPSTREAM_MAX_INFLIGHT")

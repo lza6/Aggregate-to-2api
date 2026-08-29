@@ -103,6 +103,10 @@ class CountedPriorityQueue(asyncio.PriorityQueue):
     def is_full(self, priority):
         return self._counts.get(priority, 0) >= self._limits.get(priority, 9999)
 
+    def capacity(self) -> int:
+        """队列真实总容量 = 各优先级上限之和（观测口径，避免误报 config.MAX_QUEUE）。"""
+        return sum(self._limits.values())
+
 
 class _WorkerHandle:
     """Worker 句柄：唯一 ID、asyncio.Task、可取消的 stop_event、最后活跃时间。"""
@@ -216,7 +220,7 @@ class Engine:
             # v4.2: SSE 事件 - 任务已入队（带精确队列位置和优先级）
             try:
                 pos = self.queue.qsize()
-                from .sse_events import publish_task_event
+                from ..sse_events import publish_task_event
                 publish_task_event(task_id, "status", {
                     "task_id": task_id, "status": "pending", "queue_pos": pos,
                     "priority": priority,
@@ -519,7 +523,7 @@ class Engine:
         await self.db.mark_started(task_id)
         # v4.2: SSE 事件 - 任务进入处理阶段
         try:
-            from .sse_events import publish_task_event
+            from ..sse_events import publish_task_event
             publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
         except Exception:
             pass
@@ -561,7 +565,7 @@ class Engine:
                     break
                 # v4.2: SSE 事件 - token 已获取，进入生成阶段
                 try:
-                    from .sse_events import publish_task_event
+                    from ..sse_events import publish_task_event
                     publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
                 except Exception:
                     pass
@@ -649,7 +653,7 @@ class Engine:
         # IMP-11: 出图成功 → 失效画廊缓存，下次请求重新查询 DB
         # 使用懒导入避免循环依赖（worker → main → worker）
         try:
-            from .dispatch import broadcast_task_event
+            from ..dispatch import broadcast_task_event
             await broadcast_task_event(task_id, status, {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)})
         except Exception:
             pass
@@ -745,7 +749,7 @@ class Engine:
         return {
             "processing": self.processing,
             "queued": self.queue.qsize(),
-            "queue_capacity": config.MAX_QUEUE,
+            "queue_capacity": self.queue.capacity(),
             "workers": len(self._workers),
             "started_at": self._started_at,
             "uptime_seconds": int(time.time() - self._started_at),

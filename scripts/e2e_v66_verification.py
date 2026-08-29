@@ -142,10 +142,9 @@ def main() -> int:
             task_id = r.json()["id"]
             check("任务返回 id", bool(task_id), task_id)
 
-            # C) 消费 per-task SSE 流，验证与轮询能拿到终态。
-            #    ⚠ 服务端终态事件发出后不回 self-close（保留心跳）——SSE 读到终态 event 即 break，
-            #    若读到上限仍未到终态（时序窗口），以「轮询拿到终态 payload」作为终态达成判定，
-            #    SSE 仅作「可消费、有事件推送」的补充验证，不双重计为必须独立先到。
+            # C) 消费 per-task SSE 流，验证 result/error 终态事件确实经 SSE 推送（非仅 ping 保活）。
+            #    ⚠ 服务端终态事件发出后不回 self-close（保留心跳）——SSE 读到终态 event 即 break。
+            #    本断言为「严格」：必须收到 result 或 error，否则视为 SSE 链路未打通（回归 P0）。
             sse_events: list[str] = []
             sse_capped = False
             try:
@@ -164,8 +163,8 @@ def main() -> int:
             except Exception as e:
                 check("SSE 流可消费", False, str(e)[:120])
 
-            # SSE 可消费 + 至少推送过事件；终态 payload 由 D) 轮询为准
-            check("SSE 流可消费且有事件推送", len(sse_events) > 0,
+            saw_terminal = any(ev in ("result", "error") for ev in sse_events)
+            check("SSE 推送终态 event(result/error)", saw_terminal,
                   f"events={sse_events}{' [capped]' if sse_capped else ''}")
 
             # D) 轮询兜底确认终态 payload 含 image_url 等
