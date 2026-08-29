@@ -21,8 +21,12 @@ async def run_background_tasks(db, engine, registry, solver_guard,
 
     任一任务未捕获异常将导致整个组取消（异常传播至调用方）。
     """
+    # auth_error_surge 近窗口增量：记录上一轮 count_of(AUTH.001)，求差值；
+    # 差值<0 视为 error_tracker 被清空（进程重启/测试 reset），重设为 0 并从当前值重新累计。
+    _auth_last = 0
 
     async def _cleanup_loop() -> None:
+        nonlocal _auth_last
         from .worker import engine as _engine  # 复用单例（避免参数错位）
         while True:
             try:
@@ -60,6 +64,11 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                 snap = engine.snapshot()
                 ssnap = solver_guard.snapshot()
                 stats = await db.stats_overview()
+                _auth_now = _error_tracker_count_of(ErrorCodes.UNAUTHORIZED)
+                _auth_delta = _auth_now - _auth_last
+                if _auth_delta < 0:  # error_tracker 被清空（重启/reset）→ 从当前值重新累计
+                    _auth_delta = 0
+                _auth_last = _auth_now
                 ctx = {
                     "queued": snap["queued"],
                     "solver_circuit_open": ssnap.get("circuit_open", False),
@@ -71,7 +80,7 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                         (registry._consecutive_failures.get(p, 0) for p in registry.providers),
                         default=0,
                     ),
-                    "auth_error_count": _error_tracker_count_of(ErrorCodes.UNAUTHORIZED),
+                    "auth_error_count": _auth_delta,  # 近窗口增量（防累计值永真）
                 }
                 # IP 批量封禁/限流计数（异步读 DB，失败静默保持 0）
                 try:

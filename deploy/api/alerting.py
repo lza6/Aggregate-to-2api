@@ -96,6 +96,8 @@ class AlertEngine:
         self.add_rule(AlertRule(
             name="auth_error_surge", severity="warning",
             message="AUTH.001 错误在近窗口内超阈值（≥30）",
+            # ctx['auth_error_count'] 为近窗口增量（breakdown 引擎在窗口期外重置，
+            # 由 bg_tasks 用 count_of - 上轮快照计算），避免进程内累计值造成永久告警。
             check=lambda ctx: ctx.get("auth_error_count", 0) >= 30, cooldown=300.0,
         ))
 

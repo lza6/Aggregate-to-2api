@@ -79,7 +79,9 @@ class TestHandlerTracks:
 # ── 任务全链路日志端点点位 ──────────────────────────
 def make_logs_app() -> FastAPI:
     from api.routes.tasks import router
+    from api.handlers import register_exception_handlers
     app = FastAPI()
+    register_exception_handlers(app)  # AppError → 统一错误结构（422 而非 500）
     app.include_router(router)
     return app
 
@@ -94,17 +96,26 @@ def logs_client(monkeypatch):
 
 
 class TestTaskLogsEndpoint:
+    UUID_STR = "123e4567-e89b-12d3-a456-426614174000"
+
     def test_unknown_task_returns_empty_shape(self, logs_client):
-        r = logs_client.get("/v1/tasks/does-not-exist/logs")
+        r = logs_client.get(f"/v1/tasks/{self.UUID_STR}/logs")
         assert r.status_code == 200
-        assert r.json()["task_id"] == "does-not-exist"
+        assert r.json()["task_id"] == self.UUID_STR
         assert r.json()["task"] is None
 
     def test_logs_param_bounds(self, logs_client):
-        r = logs_client.get("/v1/tasks/x/logs?lines=5")
+        r = logs_client.get(f"/v1/tasks/{self.UUID_STR}/logs?lines=5")
         assert r.status_code == 200
-        r2 = logs_client.get("/v1/tasks/x/logs?lines=20000")
+        r2 = logs_client.get(f"/v1/tasks/{self.UUID_STR}/logs?lines=20000")
         assert r2.status_code == 422  # le=2000 上限拦截
+
+    def test_logs_requires_full_uuid(self, logs_client):
+        """R2 修复：短前缀/非法 uuid 应 422，不再做任意子串匹配。"""
+        r = logs_client.get("/v1/tasks/1234/logs")
+        assert r.status_code == 422
+        r2 = logs_client.get("/v1/tasks/not-a-uuid/logs")
+        assert r2.status_code == 422
 
 
 # ── alerting 新增规则 ───────────────────────────────

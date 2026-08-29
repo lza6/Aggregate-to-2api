@@ -57,15 +57,22 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
     - events：该任务已发布的 SSE 事件（hub 回放）；
     - task：DB 中的任务终态（若有）。
     """
+    import uuid as _uuid
     from ..log_buffer import log_buffer as _lb
     from ..slow_log import slow_log as _slow
     from ..sse_events import hub as _hub
 
-    # 1. 日志过滤（内存缓冲，按 task_id 子串匹配，O(n) n≤1000）
+    # 0. task_id 必须为完整 uuid4（防任意子串误伤其他任务日志）
+    try:
+        _uuid.UUID(task_id)
+    except (ValueError, AttributeError, TypeError):
+        raise AppError(ErrorCodes.BAD_REQUEST, "task_id 需为完整 UUID", 422)
+
+    # 1. 日志过滤（内存缓冲，按 task_id 精确出现匹配，O(n) n≤1000）
     log_entries = [
-        e for e in _lb.snapshot()
-        if task_id and task_id in (e.get("message") or "")
-    ]
+        e for e in _lb.snapshot(lines)
+        if task_id in (e.get("message") or "")
+    ][-lines:]
 
     # 2. 慢日志画像
     slow_entries = [s for s in _slow.snapshot() if s.task_id == task_id]

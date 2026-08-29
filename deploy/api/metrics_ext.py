@@ -15,6 +15,26 @@ def _metric(factory, name, doc, labelnames=(), **kw):
     return factory(name, doc, labelnames, **kw) if labelnames else factory(name, doc, **kw)
 
 
+# ── 跨 scrape 单调增量（counter 语义）─────────────────────
+# 传入的是「进程内/DB 累计绝对值」；每次 scrape 用绝对值直接 inc() 会造成
+# counter 随 scrape 次数重复叠加（v6.6.0 C1 缺陷根因）。本 helper 记录
+# 上次已曝光的绝对值，只 inc() 增量；累计值回落（DB 清理）时跳过负增量。
+_last_absolute: dict[tuple, float] = {}
+
+
+def _counter_inc_absolute(metric, absolute: float, *labels: str) -> None:
+    """对累计绝对值做增量 inc：第一次全量，之后只加差值（≥0）。"""
+    key = (getattr(metric, "_name", str(id(metric))),) + tuple(labels)
+    prev = _last_absolute.get(key, 0.0)
+    _last_absolute[key] = float(absolute)
+    delta = float(absolute) - prev
+    if delta > 0:
+        try:
+            metric.labels(*labels).inc(delta)
+        except Exception:
+            pass
+
+
 requests_total = _metric(Counter, "imagefree_requests_total", "累计请求数", ("provider", "status"))
 images_total = _metric(Counter, "imagefree_images_total", "累计成功出图数", ("provider",))
 errors_total = _metric(Counter, "imagefree_errors_total", "累计失败数", ("provider", "reason"))
@@ -57,21 +77,18 @@ def imagefree_metrics(engine_snapshot: dict, stats_overview: dict, solver_snapsh
         solve_window_success_rate.set(rate)
     solve_consecutive_failures.set(solver_snapshot.get("consecutive_failures", 0))
     solver_circuit_open.set(1 if solver_snapshot.get("circuit_open") else 0)
-    # counter 增量
-    requests_total.labels(provider="all", status="completed").inc(stats_overview.get("total_images", 0))
-    requests_total.labels(provider="all", status="error").inc(stats_overview.get("total_errors", 0))
-    images_total.labels(provider="all").inc(stats_overview.get("total_images", 0))
-    errors_total.labels(provider="all", reason="error").inc(stats_overview.get("total_errors", 0))
-    solve_total.labels(result="success").inc(solver_snapshot.get("solve_success_total", 0))
-    solve_total.labels(result="failure").inc(solver_snapshot.get("solve_failure_total", 0))
+    # counters：绝对值 → 增量 inc（防跨 scrape 重复叠加，v6.6.0 C1 修复）
+    _counter_inc_absolute(requests_total, stats_overview.get("total_images", 0), "all", "completed")
+    _counter_inc_absolute(requests_total, stats_overview.get("total_errors", 0), "all", "error")
+    _counter_inc_absolute(images_total, stats_overview.get("total_images", 0), "all")
+    _counter_inc_absolute(errors_total, stats_overview.get("total_errors", 0), "all", "error")
+    _counter_inc_absolute(solve_total, solver_snapshot.get("solve_success_total", 0), "success")
+    _counter_inc_absolute(solve_total, solver_snapshot.get("solve_failure_total", 0), "failure")
     # 分层错误码分布增量（P0-P1 高频；进程内计数，非 DB 累计）
     try:
         from .error_tracker import snapshot as _err_snapshot
         for _code, _n in _err_snapshot().items():
-            try:
-                errors_by_code.labels(code=_code).inc(int(_n))
-            except Exception:
-                pass
+            _counter_inc_absolute(errors_by_code, int(_n), _code)
     except Exception:
         pass
     # token 池水位（每个 pool 独立 label）
