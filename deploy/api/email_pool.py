@@ -218,7 +218,7 @@ class MailTmSource(BaseMailSource):
     async def new_address(self) -> tuple[str, dict]:
         # 仅使用实时拉取的域名；过期默认域名（sharklasers 等）已被 mail.tm 拒绝（422），
         # 故不再回退到硬编码旧域名。
-        domains = await self._get_domains()
+        await self._get_domains()
         now = time.time()
         if not self._cached_domains or (now - self._domains_fetched_at >= 3600):
             raise RuntimeError("mail.tm 无法获取有效域名列表")
