@@ -20,3 +20,10 @@
 - frontend tsc 0 + e2e-smoke 12/0
 - 后端定向单测通过；`scripts/sync_deploy.py check` 一致
 - 线上 `imagefree-api:6.5.0` / `imagefree-cfsolver:6.5.0` healthy
+
+## v6.5.0 增补（2026-08-29）
+- **admin 新增「在线生成」页**：文生图（/v1/generate）与图生图（/v1/edit）playground，
+  带 API Key（localStorage），/v1/models 按 capability 过滤模型，画幅/分辨率选择，
+  图生图最多 3 张参考图，异步任务轮询 + 结果预览。
+- **部署要点**：改 `frontend/dist` 后须 `docker compose up -d --force-recreate api` 重新绑定挂载，
+  否则容器仍挂旧目录（实测 /admin 404 SYS.003 的根因）。
