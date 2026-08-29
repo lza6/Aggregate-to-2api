@@ -206,7 +206,6 @@ class Engine:
         task_id = str(uuid.uuid4())
         await self.db.create_request(task_id, prompt, aspect_ratio, download, "txt", model,
                                      client_ip=client_ip, user_agent=user_agent)
-        limits = {0: config.ADMIN_QUEUE_MAX, 1: config.HIGH_QUEUE_MAX, 2: config.NORMAL_QUEUE_MAX}
         try:
             if config.IF_WORKER_BATCH_ENABLED and self.queue.is_full(priority):
                 raise asyncio.QueueFull

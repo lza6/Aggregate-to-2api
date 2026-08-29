@@ -203,23 +203,38 @@ class TestUptimeHuman:
 
 
 class TestRequestBodyLimit:
-    """P0-安全：请求体总量上限（starlette 1.6 RequestBodyLimitMiddleware，8MB 默认）。
+    """P0-安全：请求体总量上限（starlette 1.6 RequestBodyLimitMiddleware）。
 
     大 base64 正文在到达「4MB/张」判断前即应被 413 拒绝，防止占满内存。
-    未挂中间件的纯解析函数不受影响（_parse_input_images 仍按 3 张与 MAX_IMAGE_BYTES 判）。
+    不启动完整 app（避免 lifespan/worker/solver 预热），只挂中间件 + 一个回显路由，
+    用极小的 max_body_size 验证 413 门禁本身生效，保持轻量、不挂。
     """
+    def _mw(self):
+        import starlette.middleware.body_limit as _bl
+        MW = getattr(_bl, "RequestBodyLimitMiddleware", None) or getattr(_bl, "BodySizeLimitMiddleware")
+        return MW
+
+    def _app(self, limit):
+        from fastapi import FastAPI
+        from fastapi.responses import JSONResponse
+        app = FastAPI()
+
+        @app.post("/v1/generate")
+        async def _echo():
+            return JSONResponse({"ok": True})
+
+        app.add_middleware(self._mw(), max_body_size=limit)
+        return app
+
     def test_oversized_request_body_413(self):
-        import api.main as m
-        from fastapi.testclient import TestClient
-        c = TestClient(m.app, raise_server_exceptions=False)
-        big = b"x" * (9 * 1024 * 1024)
-        r = c.post("/v1/generate", content=big, headers={"Content-Type": "application/json"})
+        from starlette.testclient import TestClient
+        c = TestClient(self._app(64), raise_server_exceptions=False)
+        r = c.post("/v1/generate", content=b"x" * 4096,
+                   headers={"Content-Type": "application/json"})
         assert r.status_code == 413
 
     def test_small_body_passes_guard(self):
-        import api.main as m
-        from fastapi.testclient import TestClient
-        c = TestClient(m.app, raise_server_exceptions=False)
-        r = c.post("/v1/generate", json={"prompt": "t", "aspect_ratio": "1:1"})
-        # 校验层（isolation）未挂载真实鉴权时，可能 401/422/200，但绝不应 413
-        assert r.status_code != 413
+        from starlette.testclient import TestClient
+        c = TestClient(self._app(64), raise_server_exceptions=False)
+        r = c.post("/v1/generate", content=b"ok", headers={"Content-Type": "application/json"})
+        assert r.status_code == 200

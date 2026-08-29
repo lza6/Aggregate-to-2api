@@ -22,8 +22,8 @@ gallery_cache: LRUCache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.
                                    persist_db=db)
 
 # 路由/提供商（providers.registry 模块级单例 registry 已存在）
-from .providers import registry  # noqa: E402
-from .providers.registry import bootstrap as providers_bootstrap  # noqa: E402
+from .providers import registry  # noqa: E402,F401
+from .providers.registry import bootstrap as providers_bootstrap  # noqa: E402,F401
 
 # 图生图 lifespan 注入 engine 前记录旧值（共享单例跨 lifespan 复用防污染）
 _prev_engine = None
