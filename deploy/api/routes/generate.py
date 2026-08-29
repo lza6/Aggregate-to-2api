@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from .. import config
 from ..models import GenerateRequest, EditRequest, TaskInfo, TaskInfo  # noqa: F401
-from ..meta import db, engine, registry, _DOCS_PAGE
+from ..meta import db, engine, registry
 from ..solver_guard import solver_guard
 from ..sse_events import publish_task_event
 from ..dispatch import _dispatch_generate

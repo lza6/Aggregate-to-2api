@@ -62,5 +62,4 @@ async def shutdown_phase(timeout: float, label: str, *coros):
         log.warning("%s: %d 个任务超时未完成, 已强制取消", label, len(pending))
 
 
-_DOCS_PAGE = Path(__file__).parent / "docs.html"
 _SLOW_PAGE = Path(__file__).parent / "static" / "slow.html"

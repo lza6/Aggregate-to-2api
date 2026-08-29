@@ -36,7 +36,7 @@ async def models():
     """全提供商模型列表。
 
     返回同时兼容两套契约：
-    - `items` / `count`：本服务前端 docs.html 使用的自有分组格式；
+    - `items` / `count`：本服务前端 admin 面板使用的自有分组格式；
     - `data` / `object`：OpenAI 标准 `/v1/models` 契约（Cherry Studio、OpenAI SDK、
       Cursor、NextChat 等客户端按此解析模型列表，缺 `data` 字段会提示"检测不到模型"）。
     """
