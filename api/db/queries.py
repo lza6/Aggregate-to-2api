@@ -113,6 +113,9 @@ def task_to_public(t: dict) -> dict:
     ip = t.get("client_ip") or ""
     loc_info = guess_country(ip) if ip else None
     loc_str = f"{loc_info['emoji']} {loc_info['desc']}" if loc_info else "—"
+    # 私网/回环/链路本地（LAN）：不回传原始 IP，防内网拓扑泄露被恶意者利用
+    is_internal = bool(loc_info and loc_info.get("code") in ("LAN",))
+    public_ip = "" if is_internal else (t.get("client_ip") or "")
 
     # 阶段耗时拆解（从 error / slow / duration 提炼）
     dur = t.get("duration_sec")
@@ -133,7 +136,7 @@ def task_to_public(t: dict) -> dict:
         "model": t.get("model", "default"),
         "prompt": t.get("prompt"),
         "aspect_ratio": t.get("aspect_ratio"),
-        "client_ip": t.get("client_ip"),
+        "client_ip": public_ip or None,
         "client_location": loc_str,
         "user_agent": t.get("user_agent"),
         "timings": timings,

@@ -27,9 +27,12 @@ class TestHonor:
         assert body.get("title") == "支持听风"
 
     async def test_index_linked_to_zanshang(self, app_with_mocks):
-        """GET / 返回 200 且 footer 已挂捐赠入口。"""
+        """GET / 返回 200 且为 Vue3 公开落地页（SPA shell 由 JS 挂载）。"""
         client = app_with_mocks
         r = await client.get("/")
         assert r.status_code == 200
         assert r.headers.get("content-type", "").startswith("text/html")
-        assert "zanshang" in r.text or "咖啡" in r.text
+        # v6.5.0：公开首页改为 Vue3 落地页（引导至 /admin、/docs、/v1/honor 捐赠页）。
+        # / 现在返回 SPA 壳（<div id="app"> + /assets/* 脚本），内容由 JS 渲染，不再内联单文件 docs.html。
+        assert 'id="app"' in r.text
+        assert "/assets/" in r.text

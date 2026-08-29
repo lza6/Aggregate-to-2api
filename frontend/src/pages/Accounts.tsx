@@ -20,6 +20,24 @@ interface AccountItem {
   created_at: number | null;
   checkin_at: number | null;
   register_ip?: string | null;
+  // v6.3.4/v6.5.0: 签到画像与存活天数
+  checkin_total?: number;
+  checkin_cycle_day?: number;
+  credits_earned_total?: number;
+  next_claim_at?: number | null;
+  age_days?: number | null;
+}
+
+interface LiveRegistration {
+  stage: string;
+  stage_label: string;
+  email: string;
+  email_source: string;
+  created_at: number;
+  updated_at: number;
+  last_error: string | null;
+  error_category: string | null;
+  stage_durations: Record<string, number>;
 }
 
 interface AccountPoolData {
@@ -30,6 +48,7 @@ interface AccountPoolData {
     successful_registrations?: number;
     failed_registrations?: number;
   };
+  live_registration?: LiveRegistration | null;
   items?: AccountItem[];
   items_total?: number;
   total_pages?: number;
@@ -42,6 +61,18 @@ const PROVIDER_META: Record<string, { name: string; note: string }> = {
 };
 // minimaxh3 提供商已下线：前端只展示当前活跃提供商卡片
 const ACTIVE_PROVIDERS = new Set(['nanobanana']);
+
+// v6.5.0: 注册阶段中文名（与后端 STAGE_LABELS 对齐）
+const STAGE_LABELS_ZH: Record<string, string> = {
+  init: '初始化',
+  email_allocated: '分配邮箱',
+  captcha_solved: '求解验证码',
+  verification_sent: '发送验证',
+  code_or_link_received: '收取验证链接',
+  logged_in: '登录换会话',
+  completed: '注册完成',
+  failed: '注册失败',
+};
 
 function PoolCard({ prefix, stats }: { prefix: string; stats: ProviderPoolStats }) {
   const meta = PROVIDER_META[prefix] ?? { name: prefix, note: '账号生命周期池' };
@@ -162,6 +193,46 @@ export function AccountsPage() {
         </div>
       )}
 
+      {/* v6.5.0: 最近一次注册会话阶段画像 + 每阶段耗时 */}
+      {data?.live_registration ? (
+        <div className="accounts-detail-section tf-card">
+          <div className="detail-header">
+            <div className="detail-title-group">
+              <h3 className="detail-title">🚀 最近一次注册会话（阶段与耗时）</h3>
+              <span className="tf-badge tf-badge-info">实时</span>
+            </div>
+          </div>
+          <div className="reg-stage-body">
+            <div className="reg-stage-meta">
+              <span className="reg-stage-email">{data.live_registration.email || '—'}</span>
+              <span className="tf-badge tf-badge-neutral">{data.live_registration.email_source || '来源未知'}</span>
+              <span
+                className={`tf-badge ${
+                  data.live_registration.stage === 'completed'
+                    ? 'tf-badge-success'
+                    : data.live_registration.stage === 'failed'
+                      ? 'tf-badge-danger'
+                      : 'tf-badge-warning'
+                }`}
+              >
+                {data.live_registration.stage_label || data.live_registration.stage}
+              </span>
+            </div>
+            {data.live_registration.last_error && (
+              <div className="reg-stage-error">⚠ {data.live_registration.last_error.slice(0, 160)}</div>
+            )}
+            <div className="reg-stage-flow">
+              {Object.entries(data.live_registration.stage_durations ?? {}).map(([stage, dur]) => (
+                <div key={stage} className="reg-stage-node">
+                  <div className="reg-stage-name">{STAGE_LABELS_ZH[stage] ?? stage}</div>
+                  <div className="reg-stage-dur">{Number(dur) >= 1 ? `${Number(dur).toFixed(1)}s` : `${(Number(dur) * 1000).toFixed(0)}ms`}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* 账号活跃明细 */}
       <div className="accounts-detail-section tf-card">
         <div className="detail-header">
@@ -187,6 +258,10 @@ export function AccountsPage() {
                 <th>脱敏账号邮箱</th>
                 <th>剩余可用积分</th>
                 <th>状态</th>
+                <th>累计签到</th>
+                <th>本轮第几天</th>
+                <th>累计获得积分</th>
+                <th>存活天数</th>
                 <th>入池时间</th>
                 <th>上次签到时间</th>
                 <th>注册IP</th>
@@ -196,7 +271,7 @@ export function AccountsPage() {
             <tbody>
               {pagedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
+                  <td colSpan={11} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
                     📭 暂无入库账号明细（后台持续注册激活中…）
                   </td>
                 </tr>
@@ -242,6 +317,16 @@ export function AccountsPage() {
                         <span className={`tf-badge ${it.status === 'ok' ? 'tf-badge-success' : 'tf-badge-danger'}`}>
                           {it.status === 'ok' ? '正常运行' : it.status}
                         </span>
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{it.checkin_total ?? 0} 次</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
+                        {it.checkin_total && it.checkin_total > 0 ? `${it.checkin_cycle_day ?? 0} / 7` : '—'}
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)', fontWeight: 500 }}>
+                        {it.credits_earned_total ?? 0} 分
+                      </td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
+                        {it.age_days != null ? `${it.age_days} 天` : '—'}
                       </td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{cTime}</td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{chkTime}</td>
@@ -452,6 +537,59 @@ export function AccountsPage() {
           gap: 16px;
         }
 
+        .reg-stage-body {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .reg-stage-meta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .reg-stage-email {
+          font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 12.5px;
+          color: var(--primary-600);
+        }
+        .reg-stage-error {
+          font-size: 12px;
+          color: var(--danger);
+          background: var(--bg-subtle);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-sm);
+          padding: 8px 10px;
+          font-family: ui-monospace, monospace;
+        }
+        .reg-stage-flow {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: stretch;
+          gap: 8px;
+        }
+        .reg-stage-node {
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          gap: 4px;
+          background: var(--bg-subtle);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-sm);
+          padding: 8px 12px;
+          min-width: 92px;
+        }
+        .reg-stage-name {
+          font-size: 11.5px;
+          color: var(--text-secondary);
+        }
+        .reg-stage-dur {
+          font-size: 14px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+          color: var(--primary-600);
+        }
+
         .detail-header {
           display: flex;
           align-items: center;
@@ -502,8 +640,7 @@ export function AccountsPage() {
           padding: 0 2px;
         }
 
-        .page-size-select {
-          width: auto;
+        .page-size-select {          width: auto;
           min-width: 100px;
           font-size: 12px;
         }

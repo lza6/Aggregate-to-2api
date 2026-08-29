@@ -5,7 +5,6 @@ slow/routing/metrics/diagnostics。
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
 import logging
 import os
@@ -97,9 +96,27 @@ async def account_pool_dashboard(
     """号池看板与分页账号明细。"""
     from ..account_pool import account_pool
     from ..email_pool import email_pool
+    from ..registerer import STAGE_LABELS
     page_data = account_pool.list_page(
         provider="nanobanana", page=page, page_size=page_size, search=search,
     )
+    # v6.5.0: 最近一次注册会话的阶段画像 + 各阶段耗时（供「注册在哪个阶段/每阶段耗时」渲染）
+    reg = account_pool.registerers.get("nanobanana")
+    live_stage = None
+    if reg is not None:
+        snap = getattr(reg, "live_session_snapshot", None)
+        if snap:
+            live_stage = {
+                "stage": snap.get("stage"),
+                "stage_label": STAGE_LABELS.get(snap.get("stage"), snap.get("stage")),
+                "email": snap.get("email"),
+                "email_source": snap.get("email_source"),
+                "created_at": snap.get("created_at"),
+                "updated_at": snap.get("updated_at"),
+                "last_error": snap.get("last_error"),
+                "error_category": snap.get("error_category"),
+                "stage_durations": snap.get("stage_durations"),
+            }
     desensitized = []
     now_ts = time.time()
     for item in page_data["items"]:
@@ -124,6 +141,7 @@ async def account_pool_dashboard(
     return {
         "accounts": account_pool.dashboard(),
         "email_pool": email_pool.stats(),
+        "live_registration": live_stage,
         "items": desensitized,
         "items_total": page_data["total"],
         "page": page_data["page"],

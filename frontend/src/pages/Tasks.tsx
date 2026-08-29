@@ -98,7 +98,7 @@ export function TasksPage() {
                   </td>
                   <td>
                     <code className="task-ip-pill" title={t.client_ip ?? '未记录'}>
-                      {t.client_ip ?? '—'}
+                      {t.client_ip ? t.client_ip : (t.client_location ?? '—')}
                     </code>
                   </td>
                   <td style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>

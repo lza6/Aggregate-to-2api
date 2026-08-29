@@ -1,0 +1,220 @@
+/* ============================================================
+   Design tokens & base — 暗色高级落地页（无外部 CDN）
+   主题 / 对比层级 / 间距节奏 / Hover-Focus 都在这里定义
+   ============================================================ */
+:root {
+  --bg: #0f172a;
+  --bg-2: #0b1120;
+  --card: #111827;
+  --card-2: #1f2937;
+  --card-hover: #1a2234;
+  --line: #1e293b;
+  --line-2: #334155;
+
+  --brand: #6366f1;
+  --brand-2: #818cf8;
+  --brand-soft: rgba(99, 102, 241, 0.14);
+  --brand-glow: rgba(99, 102, 241, 0.35);
+
+  --ok: #10b981;
+  --ok-soft: rgba(16, 185, 129, 0.12);
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.12);
+  --err: #ef4444;
+  --err-soft: rgba(239, 68, 68, 0.12);
+
+  --text: #f8fafc;
+  --text-2: #cbd5e1;
+  --muted: #94a3b8;
+  --muted-2: #64748b;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 0 1px rgba(99, 102, 241, 0.28), 0 10px 30px rgba(0, 0, 0, 0.4);
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 72px;
+
+  --container: 1160px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+/* 数字统一等宽，避免抖动 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 通用弱化文本 */
+.muted { color: var(--muted); }
+.muted-2 { color: var(--muted-2); }
+
+/* 渐晕背景：顶部一抹品牌光 */
+.aura {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70%;
+  height: 420px;
+  background:
+    radial-gradient(closest-side at 50% 0%, var(--brand-glow), transparent 70%),
+    radial-gradient(closest-side at 12% 20%, rgba(129, 140, 248, 0.12), transparent 60%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 胶囊标签 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.pill.ok { background: var(--ok-soft); color: #34d399; }
+.pill.warn { background: var(--warn-soft); color: #fbbf24; }
+.pill.err { background: var(--err-soft); color: #f87171; }
+.pill.info { background: var(--brand-soft); color: #a5b4fc; }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.dot.err { background: var(--err); box-shadow: 0 0 8px var(--err); }
+.dot.muted { background: var(--muted-2); }
+
+/* 卡片通用 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+/* 代码块 */
+.code-box {
+  background: #0b1120;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.code-box pre {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
+.code-box .tok-kw { color: #c084fc; }
+.code-box .tok-str { color: #86efac; }
+.code-box .tok-comment { color: #64748b; }
+.code-box .tok-cmd { color: #fbbf24; }
+
+/* 焦点态 */
+:focus-visible {
+  outline: 2px solid var(--brand-2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 滚动条（横向模型列表） */
+.ov {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.ov::-webkit-scrollbar { height: 8px; }
+.ov::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 999px; }
+.ov::-webkit-scrollbar-track { background: transparent; }
+
+/* 动效 */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.5s ease both; }
+
+/* 降级占位 */
+.degraded {
+  color: var(--muted-2);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

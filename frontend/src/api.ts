@@ -46,6 +46,7 @@ export interface Task {
   created_at: number;
   model: string;
   client_ip?: string | null;
+  client_location?: string | null;
 }
 
 export interface ProviderSummary {
@@ -188,6 +189,25 @@ export interface AccountPoolItem {
   status: string;
   created_at: number | null;
   checkin_at: number | null;
+  register_ip?: string | null;
+  // v6.3.4/v6.5.0: 签到画像与存活天数
+  checkin_total?: number;
+  checkin_cycle_day?: number;
+  credits_earned_total?: number;
+  next_claim_at?: number | null;
+  age_days?: number | null;
+}
+
+export interface LiveRegistration {
+  stage: string;
+  stage_label: string;
+  email: string;
+  email_source: string;
+  created_at: number;
+  updated_at: number;
+  last_error: string | null;
+  error_category: string | null;
+  stage_durations: Record<string, number>;
 }
 
 export interface AccountPoolResponse {
@@ -199,6 +219,7 @@ export interface AccountPoolResponse {
     successful_registrations?: number;
     failed_registrations?: number;
   };
+  live_registration?: LiveRegistration | null;
   items: AccountPoolItem[];
   items_total: number;
   page: number;

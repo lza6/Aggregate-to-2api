@@ -58,6 +58,13 @@ test-results/
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
 
+# v6.5.0: Vite build output + frontend node_modules — not committed (server mounts dist via volume)
+dist/
+node_modules/
+landing/dist/
+frontend/dist/
+landing/node_modules/
+
 # Claude worktrees
 .claude/worktrees/
 

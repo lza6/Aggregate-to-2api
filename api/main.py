@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import config
 from .context import RequestContextMiddleware
-from .meta import db, engine, gallery_cache
+from .meta import db, engine, gallery_cache  # noqa: F401  (test conftest 依赖 api.main.engine)
 from .lifespan import lifespan
 from .handlers import register_exception_handlers
 from .routes import api_router
@@ -22,7 +22,7 @@ from .routes import api_router
 log = logging.getLogger("imagefree_api")
 
 # ── 顶层挂载日志缓冲区（在 uvicorn 模块导入阶段直接生效）──
-from .log_buffer import log_buffer
+from .log_buffer import log_buffer  # noqa: E402
 _root_logger = logging.getLogger()
 _root_logger.setLevel(logging.INFO)
 if log_buffer not in _root_logger.handlers:
@@ -31,9 +31,9 @@ if log_buffer not in _root_logger.handlers:
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="6.4.1",
+    version="6.5.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
-                "高并发异步队列，文档见首页 GET /，Swagger 见 /docs。",
+                "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -82,6 +82,19 @@ if _FRONTEND_DIR.exists():
         log.info("前端管理面板已挂载到 /admin（含 SPA 深链回退）")
     except Exception as e:
         log.warning("前端管理面板挂载失败: %s", e)
+
+# ── 挂载 Vue3 公开落地页（替换原单文件 docs.html 首页）──
+# base '/'，须在 api_router 之后挂载：/v1/*、/docs、/metrics、/static/* 等路由已先注册，优先匹配。
+# 仅未命中任何 API 路由的路径（/、/assets/*、深链）落到此处。
+_LANDING_DIR = Path(__file__).parent.parent / "landing" / "dist"
+if _LANDING_DIR.exists():
+    try:
+        from fastapi.staticfiles import StaticFiles as _SF
+
+        app.mount("/", _SF(directory=str(_LANDING_DIR), html=True), name="landing")
+        log.info("Vue3 公开落地页已挂载到 /")
+    except Exception as e:
+        log.warning("Vue3 公开落地页挂载失败: %s", e)
 
 
 if __name__ == "__main__":

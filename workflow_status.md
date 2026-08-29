@@ -1,37 +1,38 @@
-# 主控台账 · 听风AI 闭环任务
+# 主控台账 · 听风AI 闭环任务（v6.5.0 公共服务 + Vue3 公开首页）
 
 > 分支约束：**仅 main，禁止新建分支**。生产部署/推送/发版均已获用户授权。
 > 更新策略：只在节点状态发生实质变化时更新。
 
-## 任务契约（用户原始诉求）
-1. 完整落地闭环剩余任务，真实 E2E 测验 / 验收 / 审计
-2. 部署更新到线上
-3. 提交推送到仓库，创建发行版（release/tag）
-4. 仅 main 分支
+## 任务契约（用户原始诉求，本轮聚焦）
+1. 公开首页（/ 现为单文件 docs.html）迁到 **Vue3**，不用单 HTML，去掉「公开页无鉴权出图生成器」；
+2. 号池看板：显示「注册在哪个阶段 + 每阶段耗时」「累计签到/累计获得积分/存活天数」（前端同步 + 后端补注册阶段/耗时接口）；
+3. 内网私有地址**原始 IP 打码/不显示**，防恶意；
+4. Token M/B/K、总量主卡、401/403 不再过 CF、私网归类（已落地，回归保留）；
+5. 真实 E2E/验收/审计 + 部署上线 + 推送 main + 发版 release/tag。
 
 ## 验收标准表
 | ID | 标准 | 证据 | 状态 |
 |----|------|------|------|
-| A1 | 前端 UI「统计用量显示总用量」已落地 | docs.html cu-total 主卡 + Dashboard chat 卡 | ✅ 已实现 |
-| A2 | 前端 footer/版本号去重（不再显示过期 v4.3.3） | Layout.tsx 注入 __APP_VERSION__；dist 无 4.3.3 | ✅ 已验证 |
-| A3 | 聊天用量 Token 以 M/B/K 显示 | fmtTokens/formatTokens 含 B 档、K 大写 | ✅ 已验证 |
-| A4 | 号池「所有可签到账号完成签到」监督生效 | account_pool 单测 17 passed | ⏳ 后台审计中 |
-| A5 | 401/403 不再重试浪费 CF（回归） | retry_policy 单测 49 passed | ✅ 已验证 |
-| A6 | 前端 e2e-smoke 通过 | `npm run smoke` 12/0 | ✅ 已验证 |
-| A7 | 后端 pytest 通过 | 定向单测全 pass（base64_separation 为既有 hang） | ⏳ 后台审计中 |
-| A8 | 前端生产构建通过 | `tsc -b && vite build` exit 0 | ✅ 已验证 |
-| A9 | 部署更新到线上 | 待执行 | ⏳ |
-| A10 | 推送 main + 创建 release/tag | 待执行 | ⏳ |
+| V1 | 公开首页为 Vue3 应用（非单 html），`/` 由 Vite Vue 构建产物提供 | landing/build exit0 + TestClient / 返回 SPA shell + 源码无 docs.html 挂 / | ✅ 已实现 |
+| V2 | 公开首页不暴露无鉴权出图生成器 | landing 仅状态展示+引导 /admin /docs，无生成表单 | ✅ 已实现 |
+| V3 | 号池显示注册阶段 + 每阶段耗时 | /v1/account-pool.live_registration{stage_label,stage_durations} + Accounts.tsx 渲染 | ✅ 已实现 |
+| V4 | 号池明细含累计签到/累计获得积分/存活天数 | /v1/account-pool item{checkin_total,credits_earned_total,age_days} + Accounts.tsx 列 | ✅ 已实现 |
+| V5 | 私网/回环 IP 原始地址打码，仅显示「内网」/「本机」 | task_to_public 内网→client_ip=None；单测验证 | ✅ 已实现 |
+| V6 | Token M/B/K、总用量主卡、401/403 零 CF、私网归类回归 | 单测 + 线上探针 | ✅ 已验证 |
+| V7 | Vue3 前端 tsc/build/真实浏览器 E2E 通过 | landing build exit0 + playwright 6/0；frontend tsc 0 + smoke 12/0 | ✅ 已验证 |
+| V8 | 部署更新到线上 | docker 健康 + / 换新 | ⏳ 待执行 |
+| V9 | 推送 main + 创建 release/tag | git tag v6.5.0 + GitHub Release | ⏳ 待执行 |
 
 ## 任务图
 ```
-[Audit-Frontend] ─┐
-[Audit-Backend ] ─┼─> 修复(串行, main) ─> 验证(构建/单测/冒烟) ─> 审计报告 ─> 部署 ─> 推送+发版
-[Audit-E2E    ] ─┘
+[后端:私网IP打码] ─┐
+[后端:注册阶段/耗时] ─┼─> [React号池画像列] ─> [Vue3公开首页构建] ─> E2E/审查 ─> 部署 ─> 推送+发版
+[Vue3:去公开生成器] ─┘
 ```
 
 ## 阻塞项
-- base64_separation.py 测试在本地 hang（沿用 session event-loop+worker 生命周期，需 mock cf_solver 常驻 + 全量 collect；CI 环境通过），非本次引入缺陷。
+- 号池「全部账号签到」：dead 号（cookie 失效无密码/续期失败）客观不可签，真实监督范围 = ok/active；剩余为补号能力上限，非缺陷。
 
 ## 最近更新
-- 2026-08-28 22:30 **Critic 终审通过（Approve，无 Blocking/High）**。落实其 Required 1 项 + 关键建议：`package-lock.json`→6.4.1、删除 `SolarSystem.tsx`/`three`/`vendor-three` 空 chunk、Token 总消耗口径（含推理）两处对齐。提交 `4959548` + 报告渲染修复 `0a354b6` 已推 main。产物已同步服务器 dist（assets=14、vendor-three=0、含 `6.4.1`）；线上 401 零 CF 复验通过（solver 不增、consec_fail=0）。变更验收报告渲染联调 5/5 通过。
+- 2026-08-29 **V1-V7 已落地**：Vue3 公开首页（landing/）+ 后端私网 IP 打码（task_to_public）+ 注册阶段/耗时接口（live_registration）+ React 号池画像列 + 版本 6.5.0 统一。真实浏览器 E2E 6/0 + 单测 83p + smoke 12/0。剩余 V8 部署、V9 推送+发版。
+- 2026-08-29 **盘账**：docs.html 零散视觉已修；4 个真缺口（注册阶段/耗时接口、私网裸 IP、React 号池画像列、公开页无鉴权生成器）已完整落地。

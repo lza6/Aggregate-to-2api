@@ -2,24 +2,22 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter
+from fastapi.responses import FileResponse
 
 from .. import config
-from ..meta import db, engine, registry, gallery_cache, _DOCS_PAGE, _uptime_human
+from ..meta import db, engine, registry
 from ..errors import AppError, ErrorCodes
 from ..solver_guard import solver_guard
 from ..health import health_registry
-from ..sse_events import hub, task_events_generator
 from ..system_spec import system_spec
 
 # 需要在 main 组装的 edit 状态（图生图看板用）
-from ..dispatch_edit import _EDIT_PENDING, _EDIT_PROXY_POOL
+from ..dispatch_edit import _EDIT_PENDING
 
 router = APIRouter()
 
@@ -38,12 +36,9 @@ _logo_md = _STATIC_DIR / "tingfeng-logo-md.png"
 _zanshang_qr = _STATIC_DIR / "zanshang.jpg"
 
 
-@router.get("/", include_in_schema=False)
-async def index():
-    """对外中文 API 文档首页。"""
-    return FileResponse(_DOCS_PAGE, media_type="text/html")
-
-
+# v6.5.0：公开首页 / 改为 Vue3 落地页（main.py mount "./landing/dist"）。
+# 原单文件 docs.html 交互文档不再挂载到 /，改为由落地页引导至 /admin 与 Swagger /docs。
+# 移除本 GET / 路由，避免在 api_router（先注册）中抢占根路径，挡住 landing 挂载。
 @router.get("/v1/terms", include_in_schema=False)
 async def terms():
     """服务条款页面。"""
@@ -123,7 +118,6 @@ async def healthz():
     snap = engine.snapshot()
     ssnap = solver_guard.snapshot()
     await health_registry.check_all()
-    hr_snap = health_registry.snapshot()
     return {
         "status": "degraded" if (not cf_ok or ssnap["solver_status"] != "ok") else "ok",
         "cf_solver": "up" if cf_ok else "down",

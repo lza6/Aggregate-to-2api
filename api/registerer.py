@@ -30,7 +30,6 @@ import httpx
 from . import config
 from . import turnstile_client
 from .email_pool import email_pool
-from .proxy_pool import proxy_pool
 from .solver_guard import solver_guard
 from .providers.nanobanana import ACTION_CLAIM_DAILY_CHECKIN
 
@@ -49,6 +48,19 @@ class RegistrationStage(str, enum.Enum):
     LOGGED_IN = "logged_in"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+# v6.5.0: 阶段中文显示名（供前端「注册在哪个阶段 + 每阶段耗时」渲染）
+STAGE_LABELS: dict[str, str] = {
+    "init": "初始化",
+    "email_allocated": "分配邮箱",
+    "captcha_solved": "求解验证码",
+    "verification_sent": "发送验证",
+    "code_or_link_received": "收取验证链接",
+    "logged_in": "登录换会话",
+    "completed": "注册完成",
+    "failed": "注册失败",
+}
 
 
 class RegistrationErrorCategory(str, enum.Enum):
@@ -105,6 +117,11 @@ class RegistrationSession:
     updated_at: float = field(default_factory=time.time)
     last_error: str | None = None
     error_category: RegistrationErrorCategory | None = None
+    # v6.5.0: 阶段耗时统计（stage 名 -> 进入时间戳），供「注册在哪个阶段 + 每阶段耗时」观测
+    stage_history: list[tuple[str, float]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.stage_history.append((self.stage.value, self.created_at))
 
     def advance_to(self, stage: RegistrationStage, **kwargs: Any) -> None:
         """推进阶段并更新字段。"""
@@ -113,7 +130,18 @@ class RegistrationSession:
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+        self.stage_history.append((stage.value, self.updated_at))
         log.debug("注册会话 [%s][%s] 阶段推进 -> %s", self.provider, self.session_id, stage.value)
+
+    def stage_durations(self) -> dict[str, float]:
+        """各阶段耗时（秒）。未走过的阶段不出现；当前未完成阶段以 now-进入 估算。"""
+        now = time.time()
+        out: dict[str, float] = {}
+        hist = self.stage_history
+        for i, (stage, ts) in enumerate(hist):
+            end = hist[i + 1][1] if i + 1 < len(hist) else now
+            out[stage] = round(max(0.0, end - ts), 3)
+        return out
 
     def mark_failed(self, error: str, category: RegistrationErrorCategory) -> None:
         """标记当前会话失败并记录分类。"""
@@ -138,6 +166,7 @@ class RegistrationSession:
             "updated_at": self.updated_at,
             "last_error": self.last_error,
             "error_category": self.error_category.value if self.error_category else None,
+            "stage_durations": self.stage_durations(),
         }
 
 
@@ -341,6 +370,8 @@ class NanobananaRegisterer:
             headers={"User-Agent": config.USER_AGENT},
         )
         self.last_session: RegistrationSession | None = None
+        # v6.5.0: 最近注册会话语义快照（stage + 耗时），供前端号池「注册阶段/耗时」渲染
+        self.live_session_snapshot: dict | None = None
 
     @staticmethod
     def _claim_response_ok(r: httpx.Response) -> bool:
@@ -420,6 +451,7 @@ class NanobananaRegisterer:
             email = f"mocknb{int(time.time())}{random.randint(0, 999)}@mock.com"
             session.advance_to(RegistrationStage.COMPLETED, email=email, credits=4)
             adaptive_backoff.record_success(self.provider)
+            self.live_session_snapshot = session.snapshot()
             return {
                 "email": email,
                 "cookie": "mock-session",
@@ -480,9 +512,9 @@ class NanobananaRegisterer:
 
             if r.status_code == 403:
                 self._ensure_client(email, force_rotate=True)
-                raise RegistrationError(f"sign-up 触发 403 风控", category=RegistrationErrorCategory.IP_BLOCKED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                raise RegistrationError("sign-up 触发 403 风控", category=RegistrationErrorCategory.IP_BLOCKED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
             if r.status_code == 429:
-                raise RegistrationError(f"sign-up 触发 429 限流", category=RegistrationErrorCategory.EMAIL_RATE_LIMITED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                raise RegistrationError("sign-up 触发 429 限流", category=RegistrationErrorCategory.EMAIL_RATE_LIMITED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
             if r.status_code != 200:
                 email_pool.record(email, self.provider, "error", "signup_fail")
                 resp_text = str(r.text)[:150]
@@ -559,6 +591,7 @@ class NanobananaRegisterer:
             adaptive_backoff.record_success(self.provider)
             session.advance_to(RegistrationStage.COMPLETED)
             log.info("nanobanana 注册成功 %s credits=4 (session: %s, has_session_data=%s)", email, session.session_id, bool(session_data))
+            self.live_session_snapshot = session.snapshot()
 
             return {
                 "email": email,
@@ -580,11 +613,13 @@ class NanobananaRegisterer:
                 err.message,
                 backoff_sec,
             )
+            self.live_session_snapshot = session.snapshot()
             return None
         except Exception as err:
             session.mark_failed(str(err), RegistrationErrorCategory.TRANSIENT)
             backoff_sec = adaptive_backoff.compute_backoff(self.provider, RegistrationErrorCategory.TRANSIENT)
             log.warning("nanobanana 发生未捕获异常退避 %.1fs: %s", backoff_sec, err)
+            self.live_session_snapshot = session.snapshot()
             return None
 
     async def checkin(self, acc: dict) -> int | None:
