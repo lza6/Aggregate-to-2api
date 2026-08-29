@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v6.6.0 变更验收报告</title>
+<style>
+  :root{--bg:#0f172a;--card:#111827;--card2:#1e293b;--line:#243047;--text:#f8fafc;--muted:#94a3b8;--pri:#6366f1;--ok:#10b981;--warn:#f59e0b;--err:#ef4444}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;padding:32px 20px;max-width:1000px;margin:0 auto}
+  h1{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  h2{font-size:17px;font-weight:600;margin:28px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  h3{font-size:14px;font-weight:600;margin:16px 0 6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:999px}
+  .b-ok{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#34d399}
+  .b-warn{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fbbf24}
+  .b-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .tile{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .tile .l{font-size:12px;color:var(--muted)}
+  .tile .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;letter-spacing:.02em}
+  code{font-family:ui-monospace,"JetBrains Mono",Consolas,monospace;font-size:12px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:5px}
+  pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font-size:12px;margin:8px 0}
+  ul{list-style:none;padding-left:0}
+  li{padding:4px 0 4px 20px;position:relative;font-size:13.5px}
+  li::before{content:"▸";position:absolute;left:4px;color:var(--pri)}
+  .quiz{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px}
+  .q{margin-bottom:20px}
+  .q .qt{font-weight:600;font-size:14px;margin-bottom:8px}
+  .opt{display:block;width:100%;text-align:left;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:9px 12px;border-radius:8px;margin-bottom:6px;font-size:13px;cursor:pointer;transition:all .15s}
+  .opt:hover{border-color:var(--pri)}
+  .opt.correct{border-color:var(--ok);background:rgba(16,185,129,.12)}
+  .opt.wrong{border-color:var(--err);background:rgba(239,68,68,.12)}
+  .opt:disabled{cursor:default;opacity:.9}
+  .btn{background:var(--pri);border:none;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
+  .btn:disabled{opacity:.5;cursor:default}
+  #result{margin-top:16px;font-size:14px;font-weight:600}
+  .score{font-size:32px;font-weight:800;color:var(--pri)}
+  .frag{color:var(--text);font-size:13px;margin-top:6px}
+  .warnbox{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px;font-size:13px;margin:10px 0}
+  .okbox{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:12px 14px;font-size:13px;margin:10px 0}
+</style>
+</head>
+<body>
+<h1>v6.6.0 变更验收报告</h1>
+<p class="sub">听风AI 多提供商 AI 图像生成网关 · 2026-08-29 · commit 99447c2 · tag v6.6.0 · 已部署 imagefree-api:6.6.0</p>
+
+<div class="grid">
+  <div class="tile"><div class="l">单实例 API 消费天花板</div><div class="v">≈81.41 req/s</div></div>
+  <div class="tile"><div class="l">线上峰值负载</div><div class="v">≈0.12 req/s</div></div>
+  <div class="tile"><div class="l">线上出图速率(瓶颈)</div><div class="v">≈0.84 img/s</div></div>
+  <div class="tile"><div class="l">P0/P1 未处理项</div><div class="v">0</div></div>
+  <div class="tile"><div class="l">核心单测</div><div class="v">188+ 通过</div></div>
+  <div class="tile"><div class="l">浏览器 E2E</div><div class="v">11/0 通过</div></div>
+</div>
+
+<h2>1. 任务背景与目标</h2>
+<div class="card">
+<p>本周期承接四类生产级工作，目标是将 v6.6.0 推进到<b>可验证、可部署、可维护、可审计</b>状态：</p>
+<ul>
+<li><b>P3-3 多实例横向扩展评估</b>（只评估不实施）——确认单机 SQLite + 内存队列 + 单 worker token 串行下是否值得集群化；</li>
+<li><b>P3-4 号池补满速率监控</b>——新增号池「今日新增/日均新增/距目标/预计达标」与「消耗/获得积分聚合」画像；</li>
+<li><b>P0 安全加固</b>——消除 <code>/v1/meta</code>、<code>/v1/chat/auth/status</code> 匿名泄露完整 API Key 的漏洞；</li>
+<li><b>可观测性闭环</b>——错误码聚合、告警扩充、任务全链路日志串联、Prometheus counter 语义修复。</li>
+</ul>
+</div>
+
+<h2>2. 原始问题</h2>
+<div class="card">
+<ul>
+<li><b>Key 泄露（P0）</b>：<code>GET /v1/meta</code> 与匿名 <code>GET /v1/chat/auth/status</code> 直接返回完整 <code>api_key</code>，任何匿名访问者都能拿到站长密钥。</li>
+<li><b>号池补满无观测（P3-4）</b>：1 万账号目标下，站长无法知道每天补多少、何时达标、积分消耗画像。</li>
+<li><b>扩展决策无证据（P3-3）</b>：「是否值得多实例横向扩」长期悬而未决，README 声称 270+ RPS 但无稳态基准支撑。</li>
+<li><b>metrics 计数叠加（C1）</b>：Prometheus counter 用 DB 累计绝对值直接 <code>inc()</code>，每次 scrape 都重复叠加计数。</li>
+<li><b>流式错误丢帧</b>：聊天流式 <code>server_error</code> 终帧无 <code>choices</code> 被前端丢弃 → 用户停留「正在思考…」而非看到错误。</li>
+</ul>
+</div>
+
+<h2>3. 需求追踪摘要</h2>
+<div class="card">
+<table>
+<tr><th>ID</th><th>需求</th><th>类型</th><th>对应实现</th><th>状态</th><th>验证证据</th></tr>
+<tr><td>R1</td><td>/v1/meta 不返回完整 api_key</td><td>显式/安全</td><td>health.py:172 meta()</td><td>✅ 已闭环</td><td>线上 curl has api_key=False；test_auth_ip:71</td></tr>
+<tr><td>R2</td><td>auth/status 匿名仅脱敏，管理 Key 才附完整 key</td><td>显式/安全</td><td>chat.py:602 chat_auth_status()</td><td>✅ 已闭环</td><td>线上匿名 key=''；test_chat_auth 13p</td></tr>
+<tr><td>R3</td><td>号池补满速率画像</td><td>显式</td><td>account_pool.growth_stats() + admin.py</td><td>✅ 已闭环</td><td>test_account_pool 23p；线上 growth_stats 返回</td></tr>
+<tr><td>R4</td><td>积分消耗/获得聚合</td><td>显式</td><td>account_pool.cost_summary()</td><td>✅ 已闭环</td><td>线上 cost_summary 返回 8 字段</td></tr>
+<tr><td>R5</td><td>多实例扩展评估</td><td>验收/非功能</td><td>docs/reports/v6.6.0-scale-evaluation.md</td><td>✅ 已闭环(只评估)</td><td>线上探针 + 本机基准 81.41 req/s</td></tr>
+<tr><td>R6</td><td>counter 增量 inc</td><td>隐式/非功能</td><td>metrics_ext._counter_inc_absolute()</td><td>✅ 已闭环</td><td>test_metrics_ext 3p；线上容器内已含</td></tr>
+<tr><td>R7</td><td>任务全链路日志</td><td>隐式/运维</td><td>routes/tasks.py task_logs()</td><td>✅ 已闭环</td><td>test_observability_closed_loop 14p；线上 200</td></tr>
+<tr><td>R8</td><td>流式 server_error 识别</td><td>隐式/UX</td><td>ChatPlayground.tsx consumeSse</td><td>✅ 已闭环</td><td>tsc0+build0+浏览器E2E 11/0</td></tr>
+<tr><td>R9</td><td>测试桩对齐 user_agent</td><td>隐式/质量</td><td>test_priority_queue / test_persistent_queue</td><td>✅ 已闭环</td><td>priority10 + persistent18</td></tr>
+</table>
+</div>
+
+<h2>4. 架构与数据流直觉</h2>
+<div class="card">
+<pre>
+调用方 ──POST /v1/generate ──► [auth.guard_generate_request] ──► [engine.submit_priority]
+                                        │                              │ 校验→SQLite INSERT(pending)→内存队列
+                                        ▼                              ▼
+                              [worker 池 ×4] ← asyncio.PriorityQueue (0/1/2 优先级)
+                                        │
+                                        ▼
+              [turnstile 求解 4.33~4.78s/个] ← cfsolver 单槽串行 ←── 瓶颈点(不可多实例分摊)
+                                        │
+                                        ▼
+                    [上游 imagefree.net 提交+轮询] → 完成落库 → SSE 广播
+</pre>
+<p><b>关键结论</b>：入口/入队/SQLite 写均非瓶颈（消费天花板 ≈81 req/s vs 线上峰值 0.12），真正瓶颈是 cfsolver 单槽串行求解。横向加实例只增加 API 空载，不增加出图吞吐。</p>
+</div>
+
+<h2>5. 修改前后行为</h2>
+<div class="card">
+<table>
+<tr><th>端点/模块</th><th>修改前</th><th>修改后</th></tr>
+<tr><td>/v1/meta</td><td>返回完整 api_key（泄露）</td><td>仅 api_key_mask 脱敏前缀</td></tr>
+<tr><td>/v1/chat/auth/status</td><td>匿名返回完整 key</td><td>匿名 ''；管理 Key 才附完整 key（复制按钮）</td></tr>
+<tr><td>/v1/account-pool</td><td>无 growth/cost 画像；曾 500（方法缺失）</td><td>growth_stats + cost_summary 8 字段</td></tr>
+<tr><td>metrics counter</td><td>绝对值重复 inc() 叠加</td><td>跨 scrape 增量 inc，回落跳过负增量</td></tr>
+<tr><td>chat 流式</td><td>server_error 帧被丢弃→停留思考态</td><td>识别 error 帧→抛 ChatRequestError→错误气泡</td></tr>
+</table>
+</div>
+
+<h2>6. 关键设计决策</h2>
+<div class="card">
+<ul>
+<li><b>增量 counter 而非绝对值</b>：<code>_counter_inc_absolute()</code> 记录上次已曝光绝对值，只 inc 差值——符合 Prometheus counter 单调语义，DB 清理回落不产生负值。</li>
+<li><b>管理 Key 继承设计</b>：<code>IF_ADMIN_KEYS</code> 为空时回退继承 <code>IF_API_KEYS</code>（auth.py:49）——运维零配置可用，但语义上是「业务 Key 即管理 Key」的降级模式。</li>
+<li><b>growth/cost 按 provider 过滤</b>：两个画像都以 <code>nanobanana</code> 为口径，与号池主路径一致。</li>
+<li><b>task_logs 严格 UUID 门禁</b>：<code>uuid.UUID(task_id)</code> 校验防任意子串误伤其他任务日志。</li>
+</ul>
+</div>
+
+<h2>7. 测试与运行证据</h2>
+<div class="card">
+<table>
+<tr><th>验证项</th><th>命令/方式</th><th>结果</th></tr>
+<tr><td>核心单测</td><td>15 个相关文件逐文件独立进程</td><td>✅ 188+ passed（chat_auth13 auth_ip7 priority10 persistent18 account_pool23 metrics3 obs_closed14 obs10 main_validation43 tryingopen7 chat_routes7 db_security10 config15 worker_health8 health_probe17）</td></tr>
+<tr><td>前端类型/构建</td><td>tsc --noEmit + npm run build + landing build</td><td>✅ 0 error / exit0 / exit0</td></tr>
+<tr><td>浏览器 E2E</td><td>e2e_real_fullstack.cjs（mock 单源）</td><td>✅ 11/0（Dashboard 成本主卡、Accounts 补满速率、Generate SSE 终态、chat 流式错误分支、0 JS 错误）</td></tr>
+<tr><td>专项验证</td><td>scripts/e2e_v66_verification.py</td><td>✅ 17/17（SSE 终态 + growth/cost 字段 + SPA 单源挂载）</td></tr>
+<tr><td>E2E 冒烟</td><td>e2e-smoke.cjs</td><td>✅ 12/0</td></tr>
+<tr><td>基准实验</td><td>bench_engine.py（零上游/零求解）</td><td>✅ 可持续入口≈150 RPS，消费天花板≈81.41 RPS</td></tr>
+<tr><td>线上探针</td><td>SSH + curl /v1/healthz + /v1/meta + auth/status + task logs</td><td>✅ status ok；无 api_key 泄露；匿名 key=''；task logs 200</td></tr>
+<tr><td>线上真实浏览器</td><td>Playwright 访问 imagefree.tingfengai.art/admin/accounts</td><td>✅ growth 卡片渲染 + 0 JS 错误 + 版本 v6.6.0</td></tr>
+</table>
+</div>
+
+<h2>8. Reviewer 发现与修复</h2>
+<div class="card">
+<table>
+<tr><th>发现</th><th>级别</th><th>处置</th></tr>
+<tr><td>account-pool 500（growth_stats 方法缺失）</td><td>Blocking</td><td>✅ 补齐方法后 17/17 PASS</td></tr>
+<tr><td>SSE 断言时序窗口误报</td><td>Required</td><td>✅ 改为「可消费且有事件推送」，终态以轮询为准</td></tr>
+<tr><td>测试桩 user_agent 参数漂移</td><td>Blocking</td><td>✅ 补齐 2 处桩签名</td></tr>
+<tr><td>metrics counter 重复叠加</td><td>Required</td><td>✅ 增量 inc 修复</td></tr>
+<tr><td>engine sse_events 相对导入错误(.→..)</td><td>Blocking</td><td>✅ 3 处修正；确认 .sse_events 原本会 ImportError</td></tr>
+</table>
+</div>
+
+<h2>9. 兼容性、迁移与回滚</h2>
+<div class="card">
+<ul>
+<li><b>DB 迁移</b>：<code>account_pool</code> 新增 <code>credits_used_total/images_used/last_used_at</code> 与 <code>chat_usage.cost_usd</code> 均为幂等 ALTER（自动迁移），旧数据兼容（NULL→0）。</li>
+<li><b>API 兼容</b>：<code>auth/status</code> 响应移除完整 <code>key</code>（匿名场景）是破坏性变更——任何依赖匿名取完整 Key 的调用方会拿到空串；站长需携带管理 Key 访问。已在前端同步（复制按钮仅站长可见）。</li>
+<li><b>回滚</b>：<code>imagefree-api:6.5.1</code> 镜像仍在，compose 改回 tag + <code>up -d --force-recreate</code> 即可。</li>
+</ul>
+</div>
+
+<h2>10. 已知限制与剩余风险</h2>
+<div class="card">
+<div class="warnbox"><b>⚠️ 安全边界（需用户决策）</b>：线上<b>未配置 <code>IF_ADMIN_KEYS</code></b>，仅 <code>IF_API_KEYS</code>。按 auth.py 继承设计，此时<b>任何持有业务 Key 者即可通过 /v1/chat/auth/status 取回完整 Key</b>（已线上实测确认）。这不是代码缺陷（继承是有意设计），而是配置级安全边界——生产应配置独立 <code>IF_ADMIN_KEYS</code> 管理池以真正隔离「业务 Key」与「站长管理 Key」。建议后续加固。</div>
+<ul>
+<li><b>号池达标极低</b>：ok=4/10000，日均新增 ≈12（REGISTER_COOLDOWN=90s 上限）——补号能力上限非缺陷，可调 <code>IF_REGISTER_COOLDOWN</code> 提速。</li>
+<li><b>扩展评估仅本机基准</b>：多实例可行性仅给出实验路径，未实际起 2 实例验证（符合「只评估不实施」授权）。</li>
+<li><b>全量测试套件</b>：部分集成/混沌用例依赖 8001 mock solver 与网络，单进程全量运行曾出现挂起，本轮以「逐文件独立进程」验证替代，未覆盖全部混沌用例。</li>
+</ul>
+</div>
+
+<h2>11. 使用者须知</h2>
+<div class="card">
+<ul>
+<li>站长取完整 Key：携带管理 Key 调 <code>GET /v1/chat/auth/status</code>（Authorization: Bearer &lt;key&gt;）。</li>
+<li>生产加固：配置 <code>IF_ADMIN_KEYS</code> 独立管理池；<code>/v1/chat/auth/status</code> 建议配 IP 白名单最小暴露。</li>
+<li>排障：<code>GET /v1/tasks/{task_id}/logs</code> 一个任务 ID 看全链路（内存日志+慢日志+SSE 事件+DB 终态）。</li>
+<li>观测：<code>/metrics</code> 现为 counter 增量语义，可用 Prometheus 正常 rate()。</li>
+</ul>
+</div>
+
+<h2>12. 交互式测验（通过线 80%）</h2>
+<div class="quiz" id="quiz">
+  <div class="q" data-a="2"><div class="qt">1. 单实例 API 通用层的「消费/完成天花板」约为多少？</div>
+    <button class="opt" data-v="0">749.59 req/s（瞬时入队）</button>
+    <button class="opt" data-v="1">150 req/s</button>
+    <button class="opt" data-v="2">81.41 req/s（P95≈0.99ms）</button>
+    <button class="opt" data-v="3">0.84 req/s</button></div>
+  <div class="q" data-a="0"><div class="qt">2. 当前系统真正的吞吐瓶颈是什么？</div>
+    <button class="opt" data-v="0">cfsolver 单槽串行求解（每 token 4.3~4.8s）</button>
+    <button class="opt" data-v="1">SQLite 单写</button>
+    <button class="opt" data-v="2">内存队列跨实例不可见</button>
+    <button class="opt" data-v="3">worker 数量不足</button></div>
+  <div class="q" data-a="1"><div class="qt">3. P3-3 多实例横向扩展的最终结论是？</div>
+    <button class="opt" data-v="0">值得扩，立即切 Redis + 持久化队列</button>
+    <button class="opt" data-v="1">不值得扩——瓶颈在生成通道，多实例只增加 API 空载</button>
+    <button class="opt" data-v="2">值得扩，但只加 API 实例不动 cfsolver</button>
+    <button class="opt" data-v="3">无法判断</button></div>
+  <div class="q" data-a="3"><div class="qt">4. /v1/chat/auth/status 匿名请求返回的 key 字段是？</div>
+    <button class="opt" data-v="0">完整 Key</button>
+    <button class="opt" data-v="1">前 12 位 + ***</button>
+    <button class="opt" data-v="2">null</button>
+    <button class="opt" data-v="3">空字符串 ''（仅 key_mask 脱敏前缀）</button></div>
+  <div class="q" data-a="0"><div class="qt">5. 线上未配置 IF_ADMIN_KEYS 时的安全边界是什么？</div>
+    <button class="opt" data-v="0">业务 Key 即管理 Key，持有业务 Key 者可取回完整 Key（需配置独立管理池加固）</button>
+    <button class="opt" data-v="1">匿名也能取回完整 Key</button>
+    <button class="opt" data-v="2">管理 Key 独立于业务 Key 池</button>
+    <button class="opt" data-v="3">IF_ADMIN_KEYS 为空则彻底禁止取回 Key</button></div>
+  <div class="q" data-a="2"><div class="qt">6. metrics counter 修复（C1）的核心是？</div>
+    <button class="opt" data-v="0">改用 Gauge 替代 Counter</button>
+    <button class="opt" data-v="1">每次 scrape 全量 inc 累计值</button>
+    <button class="opt" data-v="2">记录上次已曝光绝对值，只 inc 差值；回落跳过负增量</button>
+    <button class="opt" data-v="3">改用 Histogram 分桶</button></div>
+  <div class="q" data-a="1"><div class="qt">7. 聊天流式 server_error 修复的效果是？</div>
+    <button class="opt" data-v="0">忽略 error 帧继续渲染</button>
+    <button class="opt" data-v="1">识别 error 帧→抛 ChatRequestError→错误气泡，不再停留「正在思考…」</button>
+    <button class="opt" data-v="2">直接关闭 SSE 连接</button>
+    <button class="opt" data-v="3">回退到 HTTP 轮询</button></div>
+  <div class="q" data-a="0"><div class="qt">8. /v1/account-pool 新增的号池画像字段是？</div>
+    <button class="opt" data-v="0">growth_stats（今日/7日均新增、距目标、eta_days）+ cost_summary（消耗/获得积分聚合）</button>
+    <button class="opt" data-v="1">仅 total/ok/dead 状态计数</button>
+    <button class="opt" data-v="2">仅每个账号的签到次数</button>
+    <button class="opt" data-v="3">仅代理池画像</button></div>
+  <div class="q" data-a="1"><div class="qt">9. task_logs 端点对非法 task_id（短前缀）返回？</div>
+    <button class="opt" data-v="0">200 且按子串匹配日志</button>
+    <button class="opt" data-v="1">422（uuid.UUID 校验门禁）</button>
+    <button class="opt" data-v="2">404</button>
+    <button class="opt" data-v="3">500</button></div>
+  <div class="q" data-a="3"><div class="qt">10. v6.6.0 的部署形态是？</div>
+    <button class="opt" data-v="0">未部署，仅本地</button>
+    <button class="opt" data-v="1">仅源码合并</button>
+    <button class="opt" data-v="2">仅 tag 无 release</button>
+    <button class="opt" data-v="3">imagefree-api:6.6.0 + cfsolver:6.6.0 均已 force-recreate 上线 healthy，HEAD=main=tag 一致</button></div>
+  <button class="btn" id="grade" disabled>提交评分</button>
+  <div id="result"></div>
+</div>
+
+<script>
+(function () {
+  var qs = document.querySelectorAll('#quiz .q');
+  var selected = {};
+  qs.forEach(function (q, i) {
+    q.querySelectorAll('.opt').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        selected[i] = parseInt(btn.dataset.v, 10);
+        q.querySelectorAll('.opt').forEach(function (b) { b.classList.remove('selected'); });
+        btn.classList.add('selected');
+        document.getElementById('grade').disabled = Object.keys(selected).length < qs.length;
+      });
+    });
+  });
+  document.getElementById('grade').addEventListener('click', function () {
+    var correct = 0, wrongs = [];
+    qs.forEach(function (q, i) {
+      var ans = parseInt(q.dataset.a, 10);
+      var picked = selected[i];
+      q.querySelectorAll('.opt').forEach(function (b, j) {
+        b.disabled = true;
+        b.classList.remove('correct', 'wrong');
+        if (j === ans) b.classList.add('correct');
+        if (j === picked && picked !== ans) b.classList.add('wrong');
+      });
+      if (picked === ans) correct++; else wrongs.push(i + 1);
+    });
+    var pct = Math.round(correct / qs.length * 100);
+    var pass = pct >= 80;
+    var html = '<div class="score">' + pct + '%</div><div class="frag">答对 ' + correct + '/' + qs.length + ' 题。' +
+      (pass ? '✅ 通过（≥80%）' : '❌ 未通过，需 <80% 重新阅读报告。') +
+      (wrongs.length ? ' 错题：第 ' + wrongs.join('、') + ' 题。' : ' 全部正确。') + '</div>';
+    document.getElementById('result').innerHTML = html;
+  });
+})();
+</script>
+
+<p class="sub" style="margin-top:26px">— 本报告自包含，无外部 CDN 依赖；含敏感/密钥信息均为脱敏展示 —</p>
+</body>
+</html>
