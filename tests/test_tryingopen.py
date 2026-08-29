@@ -34,6 +34,14 @@ def sse(*events: dict) -> FakeResponse:
     return FakeResponse(lines)
 
 
+# 生产里普通对话默认走真流式增量（_request_stream_events）；以下两个 case 测的是聚合
+# 路径 _parse_response / _request_once，故显式传一个非空 tools 强制 streaming=False 走聚合。
+_TEST_TOOLS = [{
+    "type": "function",
+    "function": {"name": "lookup", "parameters": {"type": "object"}},
+}]
+
+
 @pytest.mark.asyncio
 async def test_chat_stream_parses_sse_and_usage(monkeypatch):
     provider = TryingopenChatProvider()
