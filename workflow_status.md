@@ -34,5 +34,14 @@
 - 号池「全部账号签到」：dead 号（cookie 失效无密码/续期失败）客观不可签，真实监督范围 = ok/active；剩余为补号能力上限，非缺陷。
 
 ## 最近更新
+- 2026-08-29 **v6.6.0 发布闭环（P3-3 评估 + P3-4 号池速率 + 安全加固 + 可观测性）**：
+  - **P3-3 多实例横向扩展评估（只评估不实施）**：结论「不值得扩」。线上探针（CPU 5%/队列恒0/solve_avg=4.78s）+ 本机可复现基准（单实例 API 通用层 **749.59 RPS**，P95=0.54ms）+ 线上峰值 ≈0.12 req/s（6000+ 倍裕量）→ 瓶颈在生成通道（cfsolver 单点串行），多实例扩不出出图吞吐。报告 `docs/reports/v6.6.0-scale-evaluation.md`。
+  - **P3-4 号池补满速率**：`account_pool.growth_stats()/cost_summary()` 落地（admin.py 已引用但方法缺失→本轮补齐），前端「补满速率」卡片。
+  - **安全加固**：`/v1/meta` 去完整 api_key、`/v1/chat/auth/status` 匿名仅脱敏（线上验证：meta 无 api_key、auth/status 匿名 key=''）。
+  - **测试桩修复**：test_priority_queue/test_persistent_queue 的 `_DBStub.create_request` 补 `user_agent`（engine v4.4.3 新增参数导致 HEAD 起即漂移失败）。
+  - **验证**：核心单测组逐文件独立进程全绿（account_pool23/chat_auth13/auth_ip7/priority10/persistent18/queue_store4/storage10/config15/chat_routes7/db_security10/worker_health8/health_probe17/tryingopen7）；前端 tsc0+build0、landing build0；`e2e_v66_verification.py` **17/17 PASS**；smoke 12/0；线上真实浏览器号池 growth 卡片渲染 + v6.6.0 + 0 JS 错误。
+  - **发布**：commit→push main（6 提交）→ tag v6.6.0 → GitHub Release → 线上 `imagefree-api:6.6.0`/`imagefree-cfsolver:6.6.0` healthy（force-recreate）。
+  - **P3-5 死代码清理（并入 v6.6.0）**：移除 `nanobanana.py` `_MULTIPLIER`（grok 默认回退改 `_DEFAULT_CREDITS_PER_IMAGE`，三真实档 fast/quality/edit 均命中表内 key，行为不变）+ 删除 `account_pool.get_credits`（全仓无调用方）。验收：ruff 目标文件 0 error、`test_account_pool` 23 例全绿、`image_credit_cost` 全档位回归通过、deploy/api 同步一致。
+  - **P3-6 版本统一（并入 v6.6.0）**：五处版本串统一到 6.6.0（pyproject/main.py/frontend/landing/docker-compose），消除注释 v6.5.1 与版本串 6.5.0 漂移；构建注入 `__APP_VERSION__` 取到 6.6.0。
 - 2026-08-29 **v6.5.1 每账号消耗积分闭环**：nanobanana 生成成功按上游 encodeImageCost 扣减账号积分并累计 credits_used_total/images_used/last_used_at；号池明细新增「累计消耗积分/出图次数」列；后端单测 19p + 前端 E2E 6/0；线上 imagefree-api:6.5.1 healthy。
 - 2026-08-29 **盘账**：docs.html 零散视觉已修；4 个真缺口（注册阶段/耗时接口、私网裸 IP、React 号池画像列、公开页无鉴权生成器）已完整落地。
