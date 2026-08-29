@@ -71,7 +71,7 @@ async def test_chat_stream_parses_sse_and_usage(monkeypatch):
         lambda payload, proxy: provider._parse_response(response),
     )
 
-    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}])
+    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS)
 
     assert [(event["type"], event.get("text"), event.get("finish_reason")) for event in events] == [
         ("reasoning", "先想", None),
@@ -204,7 +204,7 @@ async def test_429_marks_proxy_retries_and_succeeds(monkeypatch):
     monkeypatch.setattr(provider, "_request_once", request)
     monkeypatch.setenv("IF_TRYINGOPEN_MAX_ATTEMPTS", "2")
 
-    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}])
+    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS)
 
     assert calls == 2
     assert failures == [("http://free-1", True)]
