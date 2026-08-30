@@ -442,12 +442,16 @@ async def audit_search(
     check_admin_key(request, scope="admin-audit")
     items = audit_log.recent(limit=limit)
     def _match(e: dict) -> bool:
-        if action is not None and e.get("action") != action: return False
-        if actor is not None and e.get("actor") != actor: return False
-        if trace_id is not None and (e.get("trace_id") or "") != trace_id: return False
+        if action is not None and e.get("action") != action:
+            return False
+        if actor is not None and e.get("actor") != actor:
+            return False
+        if trace_id is not None and (e.get("trace_id") or "") != trace_id:
+            return False
         if q:
             hay = f"{e.get('detail') or ''} {e.get('target') or ''}"
-            if q not in hay: return False
+            if q not in hay:
+                return False
         return True
     filtered = [e for e in items if _match(e)]
     return {"items": filtered, "count": len(filtered), "total_scanned": len(items),

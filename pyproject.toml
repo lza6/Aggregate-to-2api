@@ -16,6 +16,11 @@ dependencies = [
     "pytest-asyncio>=0.23",
 ]
 
+[tool.ruff]
+# API 代码仅运行于 Python 3.11+，显式声明 target-version 消除 ExceptionGroup 的 F821 误报
+# （ExceptionGroup 是 3.11 内置；ruff 0.6.x 未识别 requires-python 时默认推到旧 target）
+target-version = "py311"
+
 [tool.pytest.ini_options]
 # 测试发现：tests/ 目录（pytest 风格）+ scripts/ 下的 unittest 文件
 testpaths = ["tests"]
