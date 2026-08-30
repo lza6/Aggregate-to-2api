@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖
-COPY cf_solver/requirements.txt ./
+COPY deploy/cf_solver/requirements.txt ./
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # 预下载 camoufox 浏览器引擎（构建期失败会在此报错，见下方启动前检查）
@@ -41,7 +41,7 @@ COPY --from=builder /root/.local /root/.local
 COPY --from=builder /root/.cache /root/.cache
 
 # 复制应用源码
-COPY cf_solver ./
+COPY deploy/cf_solver ./
 
 # 启动前检查 camoufox 浏览器引擎就位；缺失时报错而非静默降级
 RUN test -d /root/.cache/camoufox || (echo "[error] camoufox 引擎缺失（构建期 fetch 未成功）。请检查网络后重建镜像。" && exit 1)
