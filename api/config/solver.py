@@ -15,6 +15,8 @@ class SolverSettings(BaseModel):
     cf_solver_urls: list[str] = ["http://127.0.0.1:8001"]
     solver_node_weights: dict[str, int] = {}
     solver_rate_limit_cooldown_seconds: float = 60.0
+    # P1-6 IdleTimeout：节点空闲超时标记 idle，select_node 优先非 idle；0=关闭。
+    solver_idle_timeout_seconds: float = 0.0
     turnstile_timeout: int = 90
     turnstile_poll_interval: float = 2.0
     solve_circuit_threshold: int = 5

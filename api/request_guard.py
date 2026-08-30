@@ -16,13 +16,12 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Optional
 
 from fastapi import Request
 
 from . import config
-from .errors import AppError, ErrorCodes
 from .db.ip_blocklist_store import ip_blocklist_store
+from .errors import AppError, ErrorCodes
 
 log = logging.getLogger("request_guard")
 
@@ -74,6 +73,8 @@ _LAST_CACHE_SYNC: float = 0.0
 _ip_daily_records: dict[str, list[float]] = {}
 # 频控超限逾期记录（自动入黑名单依据）: ip -> list[float]（墙上时钟）
 _rate_violations: dict[str, list[float]] = {}
+# L1 秒级令牌桶：ip -> [tokens, last_refill_ts]（墙上时钟）。tokens 浮点，回填按墙上时间差。
+_l1_token_buckets: dict[str, list[float]] = {}
 
 
 # ── 配置读取（默认值兼顾安全与部署兼容）──────────────────
@@ -133,6 +134,52 @@ def _limit() -> int:
     return _DEFAULT_REQUESTS_PER_MINUTE
 
 
+def _l1_capacity() -> float:
+    """L1 令牌桶容量。None/未设 → 默认取 IF_REQUESTS_PER_MINUTE（与滑窗口径对齐）。"""
+    val = getattr(config, "IF_RATE_TOKEN_CAPACITY", None)
+    if val is None:
+        return float(_limit())
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return float(_limit())
+
+
+def _l1_refill_per_sec() -> float:
+    val = getattr(config, "IF_RATE_TOKEN_REFILL_PER_SEC", None)
+    try:
+        return max(0.0, float(val or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _l1_check(key: str, now: float) -> bool:
+    """L1 秒级令牌桶检查：通过返回 True，超桶返回 False。
+
+    - 容量<=0 视为关闭 L1（调用方先判 capacity>0 再进入）。
+    - 回填按墙上时间差：tokens = min(capacity, tokens + (now-last)*refill)。
+    - 每次请求扣 1 token；tokens<1 视为超桶（429）。
+    - 回填为 0 时退化为纯突发桶（cap 次放行后即 429）。
+    """
+    capacity = _l1_capacity()
+    if capacity <= 0:
+        return True  # L1 关闭，交由上层滑窗判定
+    refill = _l1_refill_per_sec()
+    with _lock:
+        bucket = _l1_token_buckets.setdefault(key, [capacity, now])
+        tokens, last = bucket[0], bucket[1]
+        if refill > 0 and tokens < capacity:
+            elapsed = max(0.0, now - last)
+            tokens = min(capacity, tokens + elapsed * refill)
+        if tokens < 1.0:
+            bucket[0] = tokens  # 回填后的值仍需落盘（即便被拒，已部分回填）
+            bucket[1] = now
+            return False
+        bucket[0] = tokens - 1.0
+        bucket[1] = now
+        return True
+
+
 # ── 真实客户端 IP 判定（安全版）────────────────────────
 def get_client_ip(request: Request) -> str:
     """返回不可伪造的真实客户端 IP。
@@ -170,7 +217,7 @@ def _client_ip(request: Request) -> str:
 
 
 # ── 缓存 / 规则管理 ─────────────────────────────────
-def invalidate_ip_cache(ip: Optional[str] = None) -> None:
+def invalidate_ip_cache(ip: str | None = None) -> None:
     global _LAST_CACHE_SYNC
     with _lock:
         if ip:
@@ -180,7 +227,7 @@ def invalidate_ip_cache(ip: Optional[str] = None) -> None:
         _LAST_CACHE_SYNC = 0.0
 
 
-def apply_ip_rule(ip: str, rule: Optional[dict]) -> None:
+def apply_ip_rule(ip: str, rule: dict | None) -> None:
     """把一条规则立即写入内存高速缓存（封禁毫秒级生效；rule=None 表示移除）。"""
     with _lock:
         if rule is None:
@@ -195,10 +242,11 @@ def reset_runtime_state() -> None:
         _BLOCKLIST_CACHE.clear()
         _ip_daily_records.clear()
         _rate_violations.clear()
+        _l1_token_buckets.clear()
         _LAST_CACHE_SYNC = 0.0
 
 
-def _get_cached_ip_rule(ip: str) -> Optional[dict]:
+def _get_cached_ip_rule(ip: str) -> dict | None:
     """从内存缓存获取 IP 封禁规则；未命中且缓存未超时 → 回源 DB 单行查询兜底（S3 修复）。"""
     global _LAST_CACHE_SYNC
     now = time.time()
@@ -288,7 +336,7 @@ async def _auto_block_ip(ip: str, reason: str) -> None:
 
 # ── 主限速入口 ─────────────────────────────────────
 def check_rate_limit(request: Request) -> None:
-    """同步限速入口：执行动态风控（封禁/每日限额/白名单）与基础滑窗限速。"""
+    """同步限速入口：执行动态风控（封禁/每日限额/白名单）+ L1 秒级令牌桶 + 基础滑窗限速。"""
     key = get_client_ip(request)
     now = time.time()
 
@@ -317,7 +365,14 @@ def check_rate_limit(request: Request) -> None:
                     )
                 records.append(now)
 
-    # 2. 基础滑动窗口限流检查（0 = 关闭）
+    # 2. L1 秒级令牌桶（突发限流；容量<=0 跳过，退化为仅滑窗）
+    if _l1_capacity() > 0 and not _l1_check(key, now):
+        _record_auto_block_violation(key, "rate-limit-exceeded")
+        from .error_tracker import record as _err_record
+        _err_record("RATE.001")
+        raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{_l1_capacity()} 突发令牌），请稍后重试", 429)
+
+    # 3. 基础滑动窗口限流检查（0 = 关闭）
     limit = _limit()
     if limit <= 0:
         return

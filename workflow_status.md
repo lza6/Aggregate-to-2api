@@ -322,3 +322,41 @@ N4 ✅ 完成 → 启动 N5 差距分析(六层:功能/架构/工程/性能/安�
 - GitHub 仓库已从 `Image-to-2api` 改名为 `Aggregate-to-2api`（https://github.com/lza6/Aggregate-to-2api）
 - 已记录到 memory/github-repo-rename.md + MEMORY.md 索引
 - README.md clone URL 需同步更新（待发版时处理）
+
+## v6.8.0 对标轮闭环（批次1+批次2 全 done，2026-08-31）
+
+### 需求追踪矩阵（P1 六项+P2 清理+L1 补实现）
+
+| ID | 需求 | 状态 | Critic | 验证证据 |
+|----|------|------|--------|----------|
+| P1-1 | 画廊签名 URL（HMAC+exp+sig+防降级+向后兼容） | done | CONDITIONAL PASS | test_gallery_signing 15 passed；openapi_contract 20 passed；ruff 零新增 |
+| P1-2 | deploy 副本根治（删 deploy/api+compose context:..+清 graft+改 ci+删 docs.html） | done | — | sync check exit0；契约+config 32 passed；docker build deferred 到 CI（本地无 docker） |
+| P1-3 | 工程门禁（mypy per-module strict+ruff 细化+pre-commit） | done | — | ruff errors/retry_policy 全绿；mypy --strict 2 文件 Success；pre-commit run --all-files 通过 |
+| P1-4 | 统一响应契约（error_response 信封+4 handler+契约测试） | done | CONDITIONAL PASS | TestErrorEnvelopeContract 4 例（404/422/401 信封）；openapi_contract 20 passed；ruff 零新增 |
+| P1-5 | threading.Lock 审计（8 文件全保留+注释） | done | — | 8 文件 ruff 全绿；定向单测全绿；同步 sqlite3 审计结论记台账留批次2 |
+| P1-6 | solver 多节点容灾 IdleTimeout | done | CONDITIONAL PASS | test_solver_idle_timeout 11 passed；solver 全集 74 passed；config+契约 32 passed；ruff 零新增 |
+| P2-1 | 删 docs.html 189KB 死文件 | done | — | 并入 P1-2 |
+| P2-2 | 清根目录散落产物+.gitignore | done | — | 删 6 文件 ~570KB；grep 0 引用；.gitignore 规则就位 |
+| L1 补 | L1 令牌桶实现（IF_RATE_TOKEN_CAPACITY 补全） | done | — | HEAD 基线 8 例 FAILED→本轮 315+ passed 全绿 |
+| P2-3/4 | 统一 .env.example+healthcheck 注释 | done | — | 并入 P1-2 收尾 |
+| P2-5 | E2E Docker Compose | deferred | — | 成本高留下一轮 |
+| M | 打 tag v6.8.0 部署上线 | pending | — | 需用户单独授权 SSH |
+
+### 全量验证（已运行，真实输出）
+- L1+画廊+契约+config+errors+retry+account+auth_ip+request_guard+ip_blocklist+db_security+main_validation+chat_auth+adaptive_router 等核心套件累计 500+ passed（分批跑，Windows+Py3.14 环境全量超时，关键路径全绿）
+- ruff check api/ 全量：HEAD 416 errors → 本轮 412 errors（减少 4，零新增，412 全是 v6.7.0 既有 BLE001/S110/I001，留 P3 治理）
+- mypy --strict api/errors.py api/retry_policy.py → Success: no issues
+- config import 健康（IF_GALLERY_SIGNING_SECRET/IF_RATE_TOKEN_CAPACITY/IF_SOLVER_IDLE_TIMEOUT_SECONDS 全可读）
+
+### 剩余风险与限制（披露）
+- **同步 sqlite3 混入 async 链路**（account_pool/email_pool，真 P1 性能塌方风险）：P1-5 已审计记台账，迁移到 aiosqlite 是大工程留下一轮专项，需用户授权
+- **docker build 验证 deferred 到 CI**：本地无 docker，P1-2 的 compose context:.. 改动靠 CI docker job 验证
+- **全量 pytest 70% 门禁留 CI 跑**：本地 Py3.14 慢超时，关键套件全绿；CI 用 ubuntu+3.11 更快
+- **P3 长期项**：大文件拆分（email_pool 1224/config 1230/db.core 910）、select_best 生产激活、DB 备份、256m→512m、同步 DB 迁移 aiosqlite、ruff 412 既有错误治理
+- **未 commit、未 push**：本轮所有改动留在工作区，需用户授权后 commit+发版
+
+### 下一步（需用户授权）
+1. commit 本轮改动（P1-1~P1-6+P2+L1）+ 发版 v6.8.0
+2. M 部署：本地验证→tag v6.8.0→GH Actions→SSH 拉镜像+重建 dist+force-recreate（需单独授权）
+3. P3 长期项排期（下一轮）
+

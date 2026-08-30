@@ -1,0 +1,32 @@
+# 预提交检查配置 — P1-3 工程门禁
+# 参考 2Captcha-MCP 的 pre-commit 纪律，本轮落地最小集：ruff(check+format) + 基础 hooks
+# 本地使用：pre-commit install && pre-commit run --all-files
+# CI 不强制跑 pre-commit（CI 已有 ruff check job），此配置供开发者本地拦截
+default_language_version:
+  python: python3.11
+minimum_pre_commit_version: "3.6.0"
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^api/|tests/|scripts/
+        exclude: ^(可参考的项目|graft|deploy|node_modules|.venv)/
+      - id: ruff-format
+        files: ^api/|tests/|scripts/
+        exclude: ^(可参考的项目|graft|deploy|node_modules|.venv)/
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(可参考的项目|graft|deploy|node_modules|.venv)/
+      - id: end-of-file-fixer
+        exclude: ^(可参考的项目|graft|deploy|node_modules|.venv)/
+      - id: check-yaml
+        exclude: ^(可参考的项目|graft|node_modules)/
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+        exclude: ^(可参考的项目|graft|docs/|api/static/|landing/|frontend/|.*\.lock$)

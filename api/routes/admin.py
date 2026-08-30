@@ -6,6 +6,7 @@ slow/routing/metrics/diagnostics。
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import os
@@ -219,11 +220,15 @@ async def get_stats():
 
 @router.get("/v1/gallery")
 async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None)):
-    """最近完成的 N 条作品（画廊）。"""
-    pwd = config.IF_GALLERY_PASSWORD
-    if pwd:
-        if not password or not hmac.compare_digest(password, pwd):
-            raise AppError(ErrorCodes.UNAUTHORIZED, "画廊密码错误", 403)
+    """最近完成的 N 条作品（画廊）。
+
+    鉴权（P1-1 签名 URL 加固）：
+    - 优先校验签名 URL：exp + HMAC-SHA256(sig) token（'<exp>:<sig>' 作 password 传入），密钥 IF_GALLERY_SIGNING_SECRET。
+      exp 过期即拒；sig 不符即拒（常数时间比较）；不绑 IP（CGNAT/代理漂移会误杀）。
+    - 未配签名密钥时回退旧静态密码 IF_GALLERY_PASSWORD（向后兼容，密码泄露即全部历史图可爬）。
+    - 两者皆空：画廊开放（向后兼容）。新部署推荐配 IF_GALLERY_SIGNING_SECRET 弃用静态密码。
+    """
+    _gallery_auth(password)
     cache_key = f"gallery:{limit}"
     cached = await gallery_cache.get(cache_key)
     if cached is not None:
@@ -244,6 +249,60 @@ async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), passwo
     result = {"items": out, "count": len(out)}
     await gallery_cache.set(cache_key, result)
     return result
+
+
+@router.get("/v1/gallery/sign", include_in_schema=False)
+async def gallery_sign(request: Request, limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100)):
+    """签发画廊访问 URL（管理 Key 鉴权）。
+
+    返回带 exp+sig 的 /v1/gallery 完整 URL，供站长分享有限期链接。
+    仅当配置了 IF_GALLERY_SIGNING_SECRET 时可用；否则 400。
+    """
+    check_admin_key(request, scope="gallery-sign")
+    secret = config.IF_GALLERY_SIGNING_SECRET
+    if not secret:
+        raise AppError(ErrorCodes.BAD_REQUEST, "未配置画廊签名密钥（IF_GALLERY_SIGNING_SECRET）", 400)
+    url = _gallery_signed_url(limit, secret, config.IF_GALLERY_SIGNING_TTL)
+    return {"url": url, "expires_in": config.IF_GALLERY_SIGNING_TTL}
+
+
+def _gallery_auth(password: str | None) -> None:
+    """画廊鉴权：签名 URL 优先，回退静态密码，皆空则开放。"""
+    secret = config.IF_GALLERY_SIGNING_SECRET
+    if secret and password:
+        if _gallery_verify_sig(password, secret):
+            return
+        # 有签名密钥但 sig 校验失败 → 不再回退静态密码（防降级攻击）
+        raise AppError(ErrorCodes.UNAUTHORIZED, "画廊链接已过期或签名无效", 403)
+    pwd = config.IF_GALLERY_PASSWORD
+    if pwd:
+        if not password or not hmac.compare_digest(password, pwd):
+            raise AppError(ErrorCodes.UNAUTHORIZED, "画廊密码错误", 403)
+    # 两者皆空：开放（向后兼容）
+
+
+def _gallery_signed_url(limit: int, secret: str, ttl: int) -> str:
+    """签发 /v1/gallery?limit=..&exp=..&sig=.. 签名 URL（token 用 exp:sig 紧凑格式）。"""
+    exp = int(time.time()) + max(1, int(ttl))
+    sig = hmac.new(secret.encode(), str(exp).encode(), hashlib.sha256).hexdigest()
+    token = f"{exp}:{sig}"
+    return f"/v1/gallery?limit={limit}&password={token}"
+
+
+def _gallery_verify_sig(token: str, secret: str) -> bool:
+    """校验签名 token（'<exp>:<sig>'）。exp 过期即拒；sig 与重算一致（常数时间）。
+
+    签名只绑 exp（防无限期重放）；limit 不入签（范围 1-100 非敏感，允许改 limit 重用 token）。
+    """
+    try:
+        exp_str, _, sig = token.partition(":")
+        exp = int(exp_str)
+    except (ValueError, TypeError):
+        return False
+    if exp < int(time.time()):
+        return False
+    expected = hmac.new(secret.encode(), exp_str.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
 
 
 @router.get("/v1/errors")

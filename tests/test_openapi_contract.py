@@ -17,11 +17,11 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi.openapi.utils import get_openapi
+from fastapi.testclient import TestClient
 
-from api.main import app
 from api import config
+from api.main import app
 
 
 @pytest.fixture(scope="module")
@@ -256,6 +256,56 @@ class TestSecurityResponseContract:
         assert set(body.keys()) == {"items", "count"}
         assert isinstance(body["items"], list)
         assert isinstance(body["count"], int)
+
+
+# ── F. 统一错误响应信封契约（P1-4：防 error 信封结构漂移）─────────────
+class TestErrorEnvelopeContract:
+    """所有 4xx/5xx 经 handlers 统一走 error_response → {"error": {code, message, details}}。
+
+    P1-4 统一响应契约：断言错误信封结构稳定（参考 captcha-solver SolveResponse 统一谓词）。
+    后端删/改 error 字段 → 本测试 fail，强制前端错误处理同步。
+    """
+
+    def test_404_error_envelope(self, client):
+        """不存在的任务 → 404 + {error: {code, message, details}}。"""
+        r = client.get("/v1/tasks/nonexistent-task-id")
+        assert r.status_code == 404
+        body = r.json()
+        assert "error" in body, "错误响应缺 error 信封"
+        err = body["error"]
+        assert set(err.keys()) == {"code", "message", "details"}, f"error 信封字段漂移: {set(err.keys())}"
+        assert err["code"].startswith("SYS.")  # NOT_FOUND = SYS.003
+        assert isinstance(err["message"], str) and err["message"]
+        assert isinstance(err["details"], dict)
+
+    def test_422_validation_error_envelope(self, client):
+        """参数校验失败 → 422（FastAPI 默认结构，但经 validation_exception_handler 记录 VAL.004）。
+
+        注：422 响应体保持 FastAPI 默认 {detail: [...]} 契约（v6.6.1 Reviewer S1 有意设计），
+        不强制套 error 信封以免破坏调用方对 422 的既有解析。本例只断言状态码。
+        """
+        r = client.post("/v1/generate", json={})  # 缺必填 → 422
+        assert r.status_code == 422
+
+    def test_401_unauthorized_envelope(self, client, monkeypatch):
+        """未鉴权访问受保护端点 → 401/403 + error 信封（AUTH.001）。"""
+        # 关闭开放模式 + 配置业务 Key → 匿名访问应被拒
+        monkeypatch.setattr(config.settings, "if_admin_key_open", False)
+        monkeypatch.setattr(config.settings, "if_admin_keys", "admin-key-xxx")
+        monkeypatch.setattr(config.settings, "if_api_keys", "biz-key-xxx")
+        r = client.post("/v1/admin/security/block-ip", json={"ip": "1.2.3.4"})
+        assert r.status_code in (401, 403)
+        body = r.json()
+        assert "error" in body
+        err = body["error"]
+        assert set(err.keys()) == {"code", "message", "details"}
+        assert err["code"].startswith("AUTH.")  # UNAUTHORIZED = AUTH.001 / FORBIDDEN = AUTH.003
+
+    # 注：403 IP 封禁信封（FORBIDDEN=AUTH.003）走与 404/401 完全相同的 handler 路径
+    # （app_error_handler → error_response），信封结构 {error:{code,message,details}} 已由
+    # test_404/test_401 传递性证明。403 的封禁命中逻辑由 test_request_guard/test_ip_blocklist 覆盖，
+    # 此处不重复集成（避免 request_guard 内存缓存与 TestClient 事件循环的时序耦合导致 flaky）。
+
 
 
 # ── E. 前端版本一致性契约（V7-4：防 landing/admin 版本漂移）──────────────

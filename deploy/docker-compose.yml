@@ -7,6 +7,9 @@
 
 services:
   cfsolver:
+    # P1-6 多节点容灾：默认单实例；横向扩展时复制此 service（cfsolver2/cfsolver3...），
+    # 并在 api 的 IF_CF_SOLVER_URLS 逗号列出全部节点 URL，solver_guard 自动加权最少在途调度+failover。
+    # IdleTimeout（IF_SOLVER_IDLE_TIMEOUT_SECONDS）可让空闲节点降级为备选，按需停池。
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cfsolver
@@ -56,6 +59,10 @@ services:
       - ../landing/dist:/app/landing/dist:ro
     environment:
       - IF_CF_SOLVER_URL=http://cfsolver:8001
+      # P1-6 多节点：横向扩展时改为逗号分隔多 URL，如 http://cfsolver:8001,http://cfsolver2:8001
+      # solver_guard 自动加权最少在途调度+熔断 failover；配 IF_SOLVER_NODE_WEIGHTS 调权重
+      - IF_CF_SOLVER_URLS=http://cfsolver:8001
+      - IF_SOLVER_IDLE_TIMEOUT_SECONDS=0
       - IF_HOST=0.0.0.0
       - IF_PORT=8100
       - IF_BASE_URL=https://imagefree.net

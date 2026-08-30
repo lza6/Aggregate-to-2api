@@ -40,6 +40,7 @@ class SolverNodeState:
         rate_limit_cooldown: float = 60.0,
         window_seconds: float = 300.0,
         window_maxlen: int = 5000,
+        idle_timeout: float = 0.0,
     ) -> None:
         self.url = url.rstrip("/")
         self.weight = max(1, weight)
@@ -48,6 +49,8 @@ class SolverNodeState:
         self.rate_limit_cooldown = rate_limit_cooldown
         self.window_seconds = window_seconds
         self.window_maxlen = window_maxlen
+        # P1-6 IdleTimeout：0=关闭；>0 时节点空闲超该秒数标记 idle，select_node 优先非 idle 节点。
+        self.idle_timeout = max(0.0, idle_timeout)
         self._reset()
 
     def _reset(self) -> None:
@@ -64,6 +67,8 @@ class SolverNodeState:
         self._inflight = 0
         self._rate_limited_until = 0.0
         self._rate_limit_count = 0
+        # P1-6 IdleTimeout：上次活动时间戳（成功/失败/在途变更均更新），空闲超时则 idle=True。
+        self._last_activity_at: float = time.time()
 
     @property
     def inflight(self) -> int:
@@ -83,12 +88,24 @@ class SolverNodeState:
 
     def acquire_inflight(self) -> None:
         self._inflight += 1
+        self._last_activity_at = time.time()
 
     def release_inflight(self) -> None:
         self._inflight = max(0, self._inflight - 1)
+        self._last_activity_at = time.time()
 
     def is_rate_limited(self) -> bool:
         return time.time() < self._rate_limited_until
+
+    def is_idle(self) -> bool:
+        """P1-6 IdleTimeout：节点空闲超时返回 True（idle_timeout=0 永不 idle）。
+
+        idle 不阻止 allow_solve（熔断/429 才阻止），仅作 select_node 排序偏好：
+        多节点时优先选非 idle 节点，空闲超时的节点降级为备选。
+        """
+        if self.idle_timeout <= 0:
+            return False
+        return (time.time() - self._last_activity_at) >= self.idle_timeout
 
     def allow_solve(self) -> bool:
         """检查节点是否允许发起请求。支持 429 冷却与 half-open 探测。"""
@@ -107,7 +124,9 @@ class SolverNodeState:
         self._success += 1
         self._total_duration += duration_sec
         self._consecutive_failures = 0
-        self._window.append((time.time(), True, duration_sec))
+        now = time.time()
+        self._last_activity_at = now
+        self._window.append((now, True, duration_sec))
         if self._circuit_open:
             self._circuit_open = False
             self._circuit_opened_at = None
@@ -122,6 +141,7 @@ class SolverNodeState:
         self._consecutive_failures += 1
         now = time.time()
         self._last_failure_at = now
+        self._last_activity_at = now
         if duration_sec is not None:
             self._window.append((now, False, duration_sec))
         self._trim_window()
@@ -169,6 +189,7 @@ class SolverNodeState:
             "circuit_opened_at": self._circuit_opened_at,
             "rate_limited": is_rl,
             "rate_limited_remaining_sec": max(0.0, round(self._rate_limited_until - now, 1)) if is_rl else 0.0,
+            "idle": self.is_idle(),
             "solve_total": solve_total,
             "solve_success_total": success_total,
             "solve_failure_total": failure_total,
@@ -194,12 +215,15 @@ class SolverGuard:
         urls: Sequence[str] | None = None,
         weights: dict[str, int] | None = None,
         rate_limit_cooldown: float = 60.0,
+        idle_timeout: float = 0.0,
     ) -> None:
         self.circuit_threshold = circuit_threshold
         self.probe_interval = probe_interval
         self.window_seconds = window_seconds
         self.window_maxlen = window_maxlen
         self.rate_limit_cooldown = rate_limit_cooldown
+        # P1-6 IdleTimeout：从 config 读（0=关闭），透传给每个 SolverNodeState
+        self.idle_timeout = float(getattr(config, "SOLVER_IDLE_TIMEOUT_SECONDS", 0.0) or idle_timeout or 0.0)
 
         self._nodes: dict[str, SolverNodeState] = {}
         self._global_rejected_total = 0
@@ -249,6 +273,7 @@ class SolverGuard:
                     rate_limit_cooldown=self.rate_limit_cooldown,
                     window_seconds=self.window_seconds,
                     window_maxlen=self.window_maxlen,
+                    idle_timeout=self.idle_timeout,
                 )
         self._nodes = new_nodes
 
@@ -274,21 +299,25 @@ class SolverGuard:
         """选择最优健康节点：加权与最少在途 (Weighted Least-Inflight Selection)。
 
         若所有节点均 OPEN/熔断，则尝试放行处于 half-open 探测周期的节点。
-        若均不可用返回 None。
+        若均不可用返回 None。P1-6：多节点时优先选非 idle 节点（IdleTimeout 按需停池）。
         """
         available = [n for n in self._nodes.values() if n.allow_solve()]
         if not available:
             return None
+
+        # P1-6：优先非 idle 节点；若全部 idle 则仍用 idle 节点（不阻塞，仅降级排序）
+        non_idle = [n for n in available if not n.is_idle()]
+        pool = non_idle if non_idle else available
 
         # 评分计算：inflight / weight 越小越好；同分下 round-robin
         # 增加轻微的 round-robin 扰动打破并列
         def _score(n: SolverNodeState) -> float:
             return n.inflight / float(n.weight)
 
-        available.sort(key=_score)
-        min_score = _score(available[0])
+        pool.sort(key=_score)
+        min_score = _score(pool[0])
         # 找出所有与最小分数相近的候选集
-        candidates = [n for n in available if _score(n) == min_score]
+        candidates = [n for n in pool if _score(n) == min_score]
 
         self._rr_index = (self._rr_index + 1) % len(candidates)
         return candidates[self._rr_index]
@@ -301,9 +330,9 @@ class SolverGuard:
             # 如果没有正常节点，尝试包含处于熔断但可探测的节点
             available = [n for n in self._nodes.values() if n.url not in exclude and not n.is_rate_limited()]
 
-        def _score(n: SolverNodeState) -> tuple[int, float]:
-            # (是否熔断, inflight/weight)
-            return (1 if n.circuit_open else 0, n.inflight / float(n.weight))
+        def _score(n: SolverNodeState) -> tuple[int, int, float]:
+            # (是否熔断, 是否idle, inflight/weight) — P1-6 idle 优先级介于熔断与负载之间
+            return (1 if n.circuit_open else 0, 1 if n.is_idle() else 0, n.inflight / float(n.weight))
 
         available.sort(key=_score)
         return available

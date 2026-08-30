@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     )
     solver_node_weights: str | dict[str, int] = Field(default_factory=dict, validation_alias="IF_SOLVER_NODE_WEIGHTS")
     solver_rate_limit_cooldown_seconds: float = Field(60.0, validation_alias="IF_SOLVER_RATE_LIMIT_COOLDOWN_SECONDS")
+    # P1-6 IdleTimeout：节点空闲超过该秒数标记 idle，select_node 优先非 idle 节点；
+    # 0=关闭（向后兼容）。参考 nvidia-playgroud-go Pool.IdleTimeout 按需停池。
+    solver_idle_timeout_seconds: float = Field(0.0, validation_alias="IF_SOLVER_IDLE_TIMEOUT_SECONDS")
 
     # ── HTTP ──
     host: str = Field("127.0.0.1", validation_alias="IF_HOST")
@@ -157,6 +160,11 @@ class Settings(BaseSettings):
     # ── 画廊 ──
     gallery_limit: int = Field(50, validation_alias="IF_GALLERY_LIMIT")
     if_gallery_password: str = Field("", validation_alias="IF_GALLERY_PASSWORD")
+    # P1-1 画廊签名 URL：HMAC 签名 + TTL 过期，替代单一静态密码（防盗链/防爬取）。
+    # 签名密钥；为空且未配 IF_GALLERY_PASSWORD 时画廊开放（向后兼容）。
+    if_gallery_signing_secret: str = Field("", validation_alias="IF_GALLERY_SIGNING_SECRET")
+    # 签名有效时长（秒）；默认 600s。仅校验 exp，不绑 IP（CGNAT/代理下 IP 漂移会误杀）。
+    if_gallery_signing_ttl: int = Field(600, validation_alias="IF_GALLERY_SIGNING_TTL")
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
@@ -434,6 +442,7 @@ class Settings(BaseSettings):
             cf_solver_urls=resolved_solver_urls,
             solver_node_weights=resolved_weights,
             solver_rate_limit_cooldown_seconds=self.solver_rate_limit_cooldown_seconds,
+            solver_idle_timeout_seconds=self.solver_idle_timeout_seconds,
             turnstile_timeout=self.turnstile_timeout,
             turnstile_poll_interval=self.turnstile_poll_interval,
             solve_circuit_threshold=self.solve_circuit_threshold,
@@ -644,6 +653,7 @@ CF_SOLVER_URL = settings.solver.cf_solver_url
 CF_SOLVER_URLS = settings.solver.cf_solver_urls
 SOLVER_NODE_WEIGHTS = settings.solver.solver_node_weights
 SOLVER_RATE_LIMIT_COOLDOWN_SECONDS = settings.solver.solver_rate_limit_cooldown_seconds
+SOLVER_IDLE_TIMEOUT_SECONDS = settings.solver.solver_idle_timeout_seconds
 
 # HTTP
 HOST = settings.host
@@ -713,6 +723,8 @@ TOKEN_TTL = settings.token_ttl
 # 画廊
 GALLERY_LIMIT = settings.gallery_limit
 IF_GALLERY_PASSWORD = settings.if_gallery_password
+IF_GALLERY_SIGNING_SECRET = settings.if_gallery_signing_secret
+IF_GALLERY_SIGNING_TTL = settings.if_gallery_signing_ttl
 
 # 缓存
 IF_LRU_CACHE_SIZE = settings.if_lru_cache_size
@@ -907,6 +919,7 @@ __all__ = [
     "CF_SOLVER_URLS",
     "SOLVER_NODE_WEIGHTS",
     "SOLVER_RATE_LIMIT_COOLDOWN_SECONDS",
+    "SOLVER_IDLE_TIMEOUT_SECONDS",
     "HOST",
     "PORT",
     "PROXY",
@@ -964,6 +977,8 @@ __all__ = [
     "TOKEN_TTL",
     "GALLERY_LIMIT",
     "IF_GALLERY_PASSWORD",
+    "IF_GALLERY_SIGNING_SECRET",
+    "IF_GALLERY_SIGNING_TTL",
     "IF_LRU_CACHE_SIZE",
     "IF_LRU_CACHE_TTL",
     "IF_TENSORFEED_CACHE_TTL",
