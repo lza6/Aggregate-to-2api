@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-6.6.1-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-6.6.2-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -185,13 +185,27 @@ export ANTHROPIC_API_KEY=$TFAI_KEY
 
 ## 🧪 测试
 
-```bash
-# 单元测试
-pytest tests/ -q
+> **门禁口径**：`pyproject.toml` 的 `addopts` 内置 `-m "not slow"`，所以不带 `-m` 的 `pytest` 只排除 `slow` 标记，但**仍会收集并运行 `integration`/`chaos` 标记的测试**——这两类需要先启动 mock cf_solver，否则失败。因此新开发者首跑推荐用下方第 1 条的完整 `-m` 过滤口径（等价于 CI 单测口径，无需 mock cfsolver）。注意：命令行 `-m` 会**覆盖**（而非合并）`addopts` 的 `-m "not slow"`，所以需要把 `not slow` 一并写进 CLI `-m`，不能省略。
 
-# 集成测试（需 mock cfsolver）
+```bash
+# 1. 默认门禁（CI 单测口径，无需 mock cfsolver，推荐新开发者先跑这个）
+pytest -m "not integration and not chaos and not slow"
+
+# 2. 显式指定目录（与第 1 条等价，亦可 -q）
+pytest tests/ -q -m "not integration and not chaos and not slow"
+
+# 3. CI 全量口径（单测 + 集成 + 混沌，不含 slow）——包含 integration/chaos，需先启动 mock cf_solver（见第 4 条）
+pytest tests/ -q -m "not slow"
+
+# 4. 集成测试（需先启动 mock cf_solver，见 CI 流程）
+python scripts/mock_cfsolver.py --port 8001 &
 pytest tests/integration/ -q
+
+# 5. 慢速/真实网络用例（默认跳过，按需显式放行）
+pytest -m slow -q
 ```
+
+> **CI 参考**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 单测 `-m "not integration and not chaos and not slow"`（覆盖门禁 70%）、集成 `-m "integration or chaos"`、`ruff check api/`、`sync_deploy.py check` 防 deploy/api 漂移。
 
 ---
 

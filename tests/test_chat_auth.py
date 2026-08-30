@@ -61,6 +61,25 @@ def test_auth_status_does_not_leak_key_anonymous(client_with_auth):
     assert body["key"] != body["key_mask"]  # 前缀绝不能等于完整 key
 
 
+def test_meta_does_not_leak_full_key(client_with_auth):
+    """P3-9 线上复核回归：/v1/meta 是公开只读探测端点，匿名响应不得包含完整 API Key，
+    只允许返回脱敏前缀 api_key_mask 与鉴权开关 auth_enabled。"""
+    from api.routes.health import router as health_router
+    app = FastAPI()
+    app.include_router(health_router)
+    client = TestClient(app)
+    resp = client.get("/v1/meta")
+    assert resp.status_code == 200
+    body = resp.json()
+    # 公开探测只暴露脱敏前缀 + 开关，绝不暴露完整 key
+    assert "api_key_mask" in body
+    assert body.get("api_key_mask", "").endswith("***") or "***" in body.get("api_key_mask", "")
+    # 不存在任何完整 key 字段
+    assert "key" not in body or body.get("key") in (None, "")
+    # mask 不等于任一真实 key
+    assert body["api_key_mask"] not in {"sk-test-abc", "sk-test-xyz"}
+
+
 def test_auth_status_admin_can_copy_key(client_with_auth, monkeypatch):
     """携带管理面有效 Key（或继承业务 Key）时，站长可一键复制完整 key。"""
     from fastapi import Request
