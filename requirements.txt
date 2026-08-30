@@ -4,6 +4,10 @@ httpx>=0.24
 pydantic>=2.0
 pydantic-settings>=2.0
 aiosqlite>=0.20.0
+# cryptography: fal.ai Kasada x-is-human 纯算签名（AES-256-GCM + PBKDF2-HMAC-SHA256）
+cryptography>=41.0
+# patchright: fal.ai 会话引导（反检测 Playwright fork，可选，IF_FALAI_ENABLED=1 时需安装）
+# patchright>=1.50
 # OpenTelemetry（可选：IF_OTEL_ENABLED=1 时需安装）
 opentelemetry-api>=1.20,<2.0
 opentelemetry-sdk>=1.20,<2.0
