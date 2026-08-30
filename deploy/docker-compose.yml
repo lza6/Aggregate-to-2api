@@ -8,7 +8,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cfsolver
-    image: imagefree-cfsolver:6.6.2
+    image: imagefree-cfsolver:6.7.0
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -35,7 +35,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    image: imagefree-api:6.6.2
+    image: imagefree-api:6.7.0
     container_name: imagefree-api
     restart: unless-stopped
     mem_limit: 256m

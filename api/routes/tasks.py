@@ -68,11 +68,18 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
     except (ValueError, AttributeError, TypeError):
         raise AppError(ErrorCodes.BAD_REQUEST, "task_id 需为完整 UUID", 422)
 
-    # 1. 日志过滤（内存缓冲，按 task_id 精确出现匹配，O(n) n≤1000）
-    log_entries = [
-        e for e in _lb.snapshot(lines)
-        if task_id in (e.get("message") or "")
-    ][-lines:]
+    # 1. 日志过滤（B2: 优先 trace_id 精确串联，无则回退 task_id 子串匹配）
+    _task_row_preview = await db.get(task_id)
+    trace_id_hint = ""
+    if _task_row_preview:
+        trace_id_hint = _task_row_preview.get("trace_id") or ""
+    if trace_id_hint:
+        log_entries = [e for e in _lb.snapshot(lines) if e.get("trace_id") == trace_id_hint][-lines:]
+    else:
+        log_entries = [
+            e for e in _lb.snapshot(lines)
+            if task_id in (e.get("message") or "")
+        ][-lines:]
 
     # 2. 慢日志画像
     slow_entries = [s for s in _slow.snapshot() if s.task_id == task_id]
@@ -83,11 +90,13 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
     except Exception:
         events = []
 
-    # 4. DB 任务终态（完整字段）
-    task_row = await db.get(task_id)
+    # 4. DB 任务终态（已在上方预取为 _task_row_preview）
+    task_row = _task_row_preview
+    trace_id = trace_id_hint or task_id
 
     return {
         "task_id": task_id,
+        "trace_id": trace_id,
         "task": task_row,
         "logs": log_entries,
         "slow": [
@@ -97,6 +106,9 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
                 "solve_ms": round(s.solve_ms, 1), "upstream_ms": round(s.upstream_ms, 1),
                 "retry_ms": round(s.retry_ms, 1), "total_ms": round(s.total_ms, 1),
                 "slowest_stage": s.slowest_stage(), "status": s.status,
+                "trace_id": getattr(s, "trace_id", "") or trace_id,
+                "submit_ms": round(getattr(s, "submit_ms", 0.0), 1),
+                "poll_ms": round(getattr(s, "poll_ms", 0.0), 1),
             }
             for s in slow_entries
         ],

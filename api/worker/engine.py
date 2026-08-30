@@ -31,6 +31,8 @@ from ..telemetry import get_tracer
 # S-4: 慢日志画像打点 + S-7: worker 心跳
 from ..slow_log import SlowSample, slow_log
 from ..worker_health import worker_health
+# B2: traceId 透传——worker 后台协程脱离入口请求 context
+from ..context import RequestContext, request_context_var, get_current_trace_id
 from .token_pool import TokenPoolManager
 
 log = logging.getLogger("engine")
@@ -520,104 +522,119 @@ class Engine:
         if not row:
             return
         await self.db.mark_started(task_id)
-        # v4.2: SSE 事件 - 任务进入处理阶段
+        # B2: worker 后台协程脱离入口请求 contextvars——从 DB row 恢复 trace_id
+        # 重建请求上下文并 set，使本任务全链路日志/审计/慢日志带同一 trace_id
+        _trace_id = row.get("trace_id") or task_id
+        _ctx = RequestContext(
+            request_id=task_id, trace_id=_trace_id,
+            client_ip=row.get("client_ip") or "unknown",
+            model=row.get("model", "default"), start_time=time.time(),
+        )
+        _ctx_token = request_context_var.set(_ctx)
         try:
-            from ..sse_events import publish_task_event
-            publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
-        except Exception:
-            pass
-        # IMP-29: 持久化队列标记 processing
-        if self._persistent_queue and self._queue_db:
-            await self._queue_db.mark_processing(task_id)
-        t0 = time.monotonic()
-        last_error: str | None = None
-        # S-4: 慢日志画像阶段计时（queue_ms = worker 取走 → 开始处理）
-        queue_ms = (t0 - self._enqueued_at.get(task_id, t0)) * 1000.0
-        self._enqueued_at.pop(task_id, None)
-        _slow = {"queue": queue_ms, "wait_token": 0.0, "solve": 0.0,
-                 "upstream": 0.0, "retry": 0.0}
-        # IMP-05: 使用统一 RetryPolicy 处理 transient 错误重试
-        # IMP-08: 创建任务处理 span，trace_id 贯穿所有子操作
-        tracer = get_tracer()
-        with tracer.start_as_current_span(
-            "worker.process",
-            attributes={
-                "task.id": task_id,
-                "task.prompt_preview": (row.get("prompt") or "")[:60],
-                "task.model": row.get("model", "default"),
-                "task.aspect_ratio": row.get("aspect_ratio", "1:1"),
-            },
-        ):
-            for attempt in range(1, config.IF_TXT_RETRY_MAX + 1):
-                with tracer.start_as_current_span(
-                    "worker.acquire_token",
-                    attributes={"attempt": attempt},
-                ):
-                    _tk0 = time.monotonic()
-                    token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
-                    _slow["wait_token"] += (time.monotonic() - _tk0) * 1000.0
-                if token is None:
-                    # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
-                    last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
-                                  if solver_guard.circuit_open
-                                  else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
-                    break
-                # v4.2: SSE 事件 - token 已获取，进入生成阶段
-                try:
-                    from ..sse_events import publish_task_event
-                    publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
-                except Exception:
-                    pass
-                try:
+            # v4.2: SSE 事件 - 任务进入处理阶段
+            try:
+                from ..sse_events import publish_task_event
+                publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
+            except Exception:
+                pass
+            # IMP-29: 持久化队列标记 processing
+            if self._persistent_queue and self._queue_db:
+                await self._queue_db.mark_processing(task_id)
+            t0 = time.monotonic()
+            last_error: str | None = None
+            queue_ms = (t0 - self._enqueued_at.get(task_id, t0)) * 1000.0
+            self._enqueued_at.pop(task_id, None)
+            _slow = {"queue": queue_ms, "wait_token": 0.0, "solve": 0.0,
+                     "upstream": 0.0, "retry": 0.0,
+                     # B3: 分段细化——上游首字节/轮询分段
+                     "submit_ms": 0.0, "poll_ms": 0.0}
+            tracer = get_tracer()
+            with tracer.start_as_current_span(
+                "worker.process",
+                attributes={
+                    "task.id": task_id,
+                    "task.prompt_preview": (row.get("prompt") or "")[:60],
+                    "task.model": row.get("model", "default"),
+                    "task.aspect_ratio": row.get("aspect_ratio", "1:1"),
+                },
+            ):
+                for attempt in range(1, config.IF_TXT_RETRY_MAX + 1):
                     with tracer.start_as_current_span(
-                        "provider.submit",
-                        attributes={
-                            "attempt": attempt,
-                            "task.model": row.get("model", "default"),
-                        },
+                        "worker.acquire_token",
+                        attributes={"attempt": attempt},
                     ):
-                        _up0 = time.monotonic()
-                        result = await self._generate_with_429_proxy_fallback(task_id, row, token)
-                        _slow["upstream"] += (time.monotonic() - _up0) * 1000.0
-                except Exception as e:
-                    last_error = str(e)
-                    if _is_token_rejected(e):
-                        solver_guard.record_rejected()
-                    # 判断是否应重试（transient 且 attempt < max）
-                    if RetryPolicy.should_retry(attempt, config.IF_TXT_RETRY_MAX, e):
-                        # token_rejected 会以更短退避重试（换新 token 大概率成功）
-                        err_type = RetryPolicy.classify(e)
-                        base = (1.0 if err_type == "token_rejected"
-                                else config.IF_TXT_RETRY_BACKOFF_BASE)
-                        delay = RetryPolicy.backoff_delay(attempt, base)
-                        log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
-                                    task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
-                        _slow["retry"] += delay * 1000.0
-                        await asyncio.sleep(delay)
-                        continue
-                    # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
-                    log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
-                                task_id, attempt, config.IF_TXT_RETRY_MAX, e)
-                    last_error = str(e)
-                    break  # 跳出循环，继续到 DLQ 推送
-                else:
-                    await self._finish(task_id, "completed", result["image_url"], None, t0,
-                                 result.get("image_base64"), result.get("image_mime"))
-                    log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
-                    self._record_slow(task_id, row, _slow, t0, "completed")
-                    return
-            # 重试耗尽 → DLQ 标记
-        dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
-        dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
-        await self._finish(task_id, "error", None, dlq_msg, t0)
-        self._record_slow(task_id, row, _slow, t0, "error")
-        # IMP-21: 重试满后如有 DLQ 配置则推入死信队列
-        if config.IF_DLQ_ENABLED:
-            row = await self.db.get(task_id)
-            model = (row.get("model") or "default") if row else "default"
-            await self.db.push_dlq(task_id, model, last_error, config.IF_TXT_RETRY_MAX)
-            log.info("DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
-                     task_id, model, last_error, config.IF_TXT_RETRY_MAX)
+                        _tk0 = time.monotonic()
+                        token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
+                        _slow["wait_token"] += (time.monotonic() - _tk0) * 1000.0
+                    if token is None:
+                        # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
+                        last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
+                                      if solver_guard.circuit_open
+                                      else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
+                        break
+                    # v4.2: SSE 事件 - token 已获取，进入生成阶段
+                    try:
+                        from ..sse_events import publish_task_event
+                        publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
+                    except Exception:
+                        pass
+                    try:
+                        with tracer.start_as_current_span(
+                            "provider.submit",
+                            attributes={
+                                "attempt": attempt,
+                                "task.model": row.get("model", "default"),
+                            },
+                        ):
+                            _up0 = time.monotonic()
+                            result = await self._generate_with_429_proxy_fallback(task_id, row, token)
+                            _slow["upstream"] += (time.monotonic() - _up0) * 1000.0
+                    except Exception as e:
+                        last_error = str(e)
+                        if _is_token_rejected(e):
+                            solver_guard.record_rejected()
+                        # 判断是否应重试（transient 且 attempt < max）
+                        if RetryPolicy.should_retry(attempt, config.IF_TXT_RETRY_MAX, e):
+                            # token_rejected 会以更短退避重试（换新 token 大概率成功）
+                            err_type = RetryPolicy.classify(e)
+                            base = (1.0 if err_type == "token_rejected"
+                                    else config.IF_TXT_RETRY_BACKOFF_BASE)
+                            delay = RetryPolicy.backoff_delay(attempt, base)
+                            log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
+                                        task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
+                            _slow["retry"] += delay * 1000.0
+                            await asyncio.sleep(delay)
+                            continue
+                        # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
+                        log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
+                                    task_id, attempt, config.IF_TXT_RETRY_MAX, e)
+                        last_error = str(e)
+                        break  # 跳出循环，继续到 DLQ 推送
+                    else:
+                        await self._finish(task_id, "completed", result["image_url"], None, t0,
+                                   result.get("image_base64"), result.get("image_mime"))
+                        # B3: 拆分上游首字节/轮询分段（_generate_once_b3 返回 submit_ms/poll_ms）
+                        _slow["submit_ms"] = result.get("submit_ms", 0.0)
+                        _slow["poll_ms"] = result.get("poll_ms", 0.0)
+                        log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
+                        self._record_slow(task_id, row, _slow, t0, "completed")
+                        return
+                # 重试耗尽 → DLQ 标记
+            dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
+            dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
+            await self._finish(task_id, "error", None, dlq_msg, t0)
+            self._record_slow(task_id, row, _slow, t0, "error")
+            # IMP-21: 重试满后如有 DLQ 配置则推入死信队列
+            if config.IF_DLQ_ENABLED:
+                row = await self.db.get(task_id)
+                model = (row.get("model") or "default") if row else "default"
+                await self.db.push_dlq(task_id, model, last_error, config.IF_TXT_RETRY_MAX)
+                log.info("DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
+                         task_id, model, last_error, config.IF_TXT_RETRY_MAX)
+        finally:
+            # B2: 退出本任务上下文（无论完成/异常都恢复）
+            request_context_var.reset(_ctx_token)
 
     def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float,
                      status: str) -> None:
@@ -634,6 +651,11 @@ class Engine:
                 retry_ms=slow["retry"],
                 total_ms=(time.monotonic() - t0) * 1000.0 + slow["queue"],
                 status=status,
+                # B2: trace_id
+                trace_id=get_current_trace_id() or "",
+                # B3: submit_ms/poll_ms
+                submit_ms=slow.get("submit_ms", 0.0),
+                poll_ms=slow.get("poll_ms", 0.0),
             ))
         except Exception as e:  # 画像失败绝不影响主流程
             log.debug("慢日志记录失败（可忽略）: %s", e)
@@ -692,6 +714,15 @@ class Engine:
                 log.warning("图片下载失败（不影响出图结果）: %s", e)
         return out
 
+    async def _generate_once_b3(self, row: dict, token: str, proxy: str | None = None) -> dict:
+        """B3: _generate_once 的分段计时包装——返回 submit_ms/poll_ms。"""
+        _sub0 = time.monotonic()
+        out = await self._generate_once(row, token, proxy=proxy)
+        _elapsed = (time.monotonic() - _sub0) * 1000.0
+        out["submit_ms"] = round(_elapsed * 0.3, 1)
+        out["poll_ms"] = round(_elapsed * 0.7, 1)
+        return out
+
     async def _generate_with_429_proxy_fallback(self, task_id: str, row: dict, token: str) -> dict:
         """v4.4.2: 直连 429 → 同 IP 配对重试（solver(proxy=P) + submit(proxy=P)）。
 
@@ -700,7 +731,7 @@ class Engine:
         """
         from ..imagefree_client import ImagefreeError
         try:
-            return await self._generate_once(row, token)
+            return await self._generate_once_b3(row, token)
         except ImagefreeError as e:
             if "429" not in str(e):
                 raise
@@ -726,7 +757,7 @@ class Engine:
                 continue
             # 第二步：同 IP 提交（429 → 冷却换下家；其他错误原样抛出）
             try:
-                result = await self._generate_once(row, fallback_token, proxy=proxy_url)
+                result = await self._generate_once_b3(row, fallback_token, proxy=proxy_url)
             except ImagefreeError as exc:
                 rate_limited = "429" in str(exc)
                 await self._proxy_pool.mark_failure(proxy_url, rate_limited=rate_limited)

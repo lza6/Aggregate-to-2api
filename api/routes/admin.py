@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, Request, WebSocket
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from .. import config
+from ..auth import check_admin_key
 from ..meta import db, engine, registry, gallery_cache, _SLOW_PAGE, _uptime_human
 from ..errors import AppError, ErrorCodes
 from ..solver_guard import solver_guard
@@ -269,6 +270,38 @@ async def error_aggregates():
     }
 
 
+@router.post("/v1/errors/frontend", include_in_schema=False)
+async def report_frontend_error(request: Request):
+    """前端错误遥测上报（D5）：window.onerror / unhandledrejection 浅层低噪声上报。
+
+    公开端点（不要求鉴权）：前端任何访客的运行时错误都应可上报。仅做长度/格式校验防滥用；
+    落账于 error_tracker.frontend_*，与后端 P0-P1 聚合隔离。
+    """
+    try:
+        body = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        raise AppError(ErrorCodes.BAD_REQUEST, f"请求体需为合法 JSON: {exc}", 422) from exc
+    if not isinstance(body, dict):
+        raise AppError(ErrorCodes.BAD_REQUEST, "请求体需为对象", 422)
+    code = str(body.get("code") or "").strip()[:32] or "FE.UNKNOWN"
+    if not code.startswith("FE."):
+        code = f"FE.{code}"
+    message = str(body.get("message") or "")[:500]
+    stack = str(body.get("stack") or "")[:2000] or None
+    url = str(body.get("url") or "")[:500] or None
+    ua = request.headers.get("user-agent", "")[:300] or None
+    from ..error_tracker import record_frontend_error  # noqa: PLC0415
+    record_frontend_error(code=code, message=message, stack=stack, url=url, ua=ua)
+    return {"ok": True, "code": code}
+
+
+@router.get("/v1/errors/frontend", include_in_schema=False)
+async def frontend_errors_snapshot():
+    """前端错误聚合查看（D5 验收用）：返回 FE.* 计数 + 最近明细 + 总数。"""
+    from ..error_tracker import frontend_snapshot  # noqa: PLC0415
+    return frontend_snapshot()
+
+
 @router.get("/metrics", include_in_schema=False)
 async def metrics():
     snap = engine.snapshot()
@@ -308,7 +341,8 @@ async def dead_letter_queue(limit: int = Query(20, ge=1, le=100)):
 
 @router.post("/v1/dead-letter-queue/{task_id}/retry")
 async def retry_dlq_task(task_id: str, request: Request):
-    """死信队列重试。"""
+    """死信队列重试（v6.7.0：补管理 Key 鉴权，写操作须携带 IF_ADMIN_KEYS 管理 Key）。"""
+    check_admin_key(request, scope="admin-dlq")
     client_ip = request.client.host if request.client else "unknown"
     audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
     if config.IF_DLQ_REQUEUE:
@@ -326,7 +360,8 @@ async def retry_dlq_task(task_id: str, request: Request):
 
 @router.delete("/v1/dead-letter-queue")
 async def clear_dlq(request: Request):
-    """清空死信队列所有记录。"""
+    """清空死信队列所有记录（v6.7.0：补管理 Key 鉴权，写操作须携带 IF_ADMIN_KEYS 管理 Key）。"""
+    check_admin_key(request, scope="admin-dlq")
     client_ip = request.client.host if request.client else "unknown"
     audit_log.record("dlq.clear", client_ip, "dlq", "清空死信队列")
     await db.clear_dlq()
@@ -383,12 +418,40 @@ async def get_slow_requests(limit: int = Query(50, ge=1, le=500)):
                 "total_ms": round(s.total_ms, 1),
                 "slowest_stage": s.slowest_stage(),
                 "status": s.status,
+                "trace_id": getattr(s, "trace_id", ""),
+                "submit_ms": round(getattr(s, "submit_ms", 0.0), 1),
+                "poll_ms": round(getattr(s, "poll_ms", 0.0), 1),
                 "created_at": s.created_at,
             }
             for s in reversed(items)
         ],
         "count": len(items),
     }
+
+
+@router.get("/v1/audit", include_in_schema=False)
+async def audit_search(
+    request: Request,
+    limit: int = Query(50, ge=1, le=500),
+    action: str | None = Query(None, description="按 action 过滤"),
+    actor: str | None = Query(None, description="按 actor 过滤"),
+    trace_id: str | None = Query(None, description="按 traceId 过滤（B2 串联）"),
+    q: str | None = Query(None, description="detail/target 模糊搜索"),
+):
+    """B4: 审计日志搜索（管理 Key 保护）。"""
+    check_admin_key(request, scope="admin-audit")
+    items = audit_log.recent(limit=limit)
+    def _match(e: dict) -> bool:
+        if action is not None and e.get("action") != action: return False
+        if actor is not None and e.get("actor") != actor: return False
+        if trace_id is not None and (e.get("trace_id") or "") != trace_id: return False
+        if q:
+            hay = f"{e.get('detail') or ''} {e.get('target') or ''}"
+            if q not in hay: return False
+        return True
+    filtered = [e for e in items if _match(e)]
+    return {"items": filtered, "count": len(filtered), "total_scanned": len(items),
+            "filters": {"action": action, "actor": actor, "trace_id": trace_id, "q": q}}
 
 
 @router.get("/v1/slow/view", include_in_schema=False)

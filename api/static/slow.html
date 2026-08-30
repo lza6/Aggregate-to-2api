@@ -125,6 +125,8 @@
         .seg.queue { background: var(--queue); }
         .seg.wait_token { background: var(--wait-token); }
         .seg.solve { background: var(--solve); }
+        .seg.submit { background: #38bdf8; }
+        .seg.poll { background: #34d399; }
         .seg.upstream { background: var(--upstream); }
         .seg.retry { background: var(--retry); }
         .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 4px 4px; }
@@ -180,6 +182,8 @@
         <span><i class="seg queue"></i>排队 queue</span>
         <span><i class="seg wait_token"></i>取 token</span>
         <span><i class="seg solve"></i>求解 solve</span>
+        <span><i class="seg submit"></i>上游首字节 submit</span>
+        <span><i class="seg poll"></i>上游轮询 poll</span>
         <span><i class="seg upstream"></i>上游 upstream</span>
         <span><i class="seg retry"></i>重试 retry</span>
     </div>

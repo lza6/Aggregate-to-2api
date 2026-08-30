@@ -60,13 +60,17 @@ async def block_ip(request: Request, body: dict):
     _require_admin_key(request)
     ip = _validate_ip(body.get("ip", ""))
     block_type = _validate_block_type(body.get("block_type", "block"))
-    try:
-        daily_limit_raw = body.get("daily_limit", 1)
-        daily_limit = int(daily_limit_raw) if daily_limit_raw not in (None, "") else 1
-    except (TypeError, ValueError):
-        raise AppError(ErrorCodes.BAD_REQUEST, "daily_limit 需为整数", 400)
-    if daily_limit < 1:
-        raise AppError(ErrorCodes.BAD_REQUEST, "daily_limit 需 >= 1", 400)
+    # daily_limit 仅对 block_type='daily_limit' 有意义；'block' 全量拦截时忽略该字段（不校验 >=1）
+    if block_type == "daily_limit":
+        try:
+            daily_limit_raw = body.get("daily_limit", 1)
+            daily_limit = int(daily_limit_raw) if daily_limit_raw not in (None, "") else 1
+        except (TypeError, ValueError):
+            raise AppError(ErrorCodes.BAD_REQUEST, "daily_limit 需为整数", 400)
+        if daily_limit < 1:
+            raise AppError(ErrorCodes.BAD_REQUEST, "daily_limit 需 >= 1", 400)
+    else:
+        daily_limit = 0
     reason = str(body.get("reason", "") or "")[:500]
     try:
         ttl_seconds = float(body.get("ttl_seconds", 0) or 0)

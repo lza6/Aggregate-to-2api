@@ -1,17 +1,17 @@
 {
-  "nodeCount": 4154,
-  "edgeCount": 7518,
+  "nodeCount": 4423,
+  "edgeCount": 7944,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 4154,
+  "totalCount": 4423,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-29T09:14:30.977Z",
-  "lastFile": "email_pool.py"
+  "syncedAt": "2026-08-30T03:12:13.517Z",
+  "lastFile": "_patch_b234.py"
 }

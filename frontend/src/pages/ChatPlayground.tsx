@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { chatCompletions, fetchChatModels, fetchChatRemaining, getStoredApiKey, setStoredApiKey, notify } from '../api';
-import type { ChatModelInfo, ChatRemaining } from '../api';
+import { chatCompletions, fetchChatModels, fetchChatRemaining, fetchChatUsage, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
+import type { ChatModelInfo, ChatRemaining, ChatUsageStats } from '../api';
 import { useApi } from '../hooks/useApi';
+import { classifyError, type ProviderOption } from '../components/Feedback';
 
 const HISTORY_KEY = 'chatPlaygroundHistory';
 const MAX_CONTEXT_MESSAGES = 30;
@@ -19,6 +20,8 @@ interface ChatMessage {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   durationMs?: number;
   error?: boolean;
+  /** D2: 错误类别（用于错误气泡内联切备用 provider 行动） */
+  errorKind?: ReturnType<typeof classifyError>;
 }
 
 interface SseResult {
@@ -212,9 +215,12 @@ function ReasoningBlock({ content }: ReasoningBlockProps) {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  backupProviders?: ProviderOption[];
+  activeProvider?: string;
+  onSwitchProvider?: (id: string) => void;
 }
 
-function MessageBubble({ message }: MessageBubbleProps) {
+function MessageBubble({ message, backupProviders, activeProvider, onSwitchProvider }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   return (
     <div className={`chat-message-row ${isUser ? 'is-user' : 'is-assistant'}`}>
@@ -222,7 +228,20 @@ function MessageBubble({ message }: MessageBubbleProps) {
       <div className={`chat-bubble ${message.error ? 'chat-bubble-error' : ''}`}>
         <div className="chat-role-label">{isUser ? '你' : '助手'}</div>
         {message.error ? (
-          <div className="chat-inline-error" role="alert">{message.content}</div>
+          <div className="chat-inline-error" role="alert">
+            {message.content}
+            {(message.errorKind === 'rate_limit' || message.errorKind === 'provider_down') && onSwitchProvider && (backupProviders ?? []).length > 0 && (
+              <div className="chat-error-action">
+                <span className="chat-error-hint">{message.errorKind === 'provider_down' ? '上游宕机，切健康备用：' : '繁忙降级，切备用：'}</span>
+                {(backupProviders ?? []).slice(0, 5).map(p => (
+                  <button key={p.id} type="button" className="chat-provider-chip" onClick={() => onSwitchProvider(p.id)} disabled={p.id === activeProvider}>
+                    {p.label}
+                    {p.health === 'healthy' && <span className="chat-chip-dot ok" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             {!isUser && <ReasoningBlock content={message.reasoning} />}
@@ -275,6 +294,10 @@ function ModelPicker({ groups, value, loading, hint, onChange }: ModelPickerProp
 export function ChatPlayground() {
   const { data: modelsData, loading: modelsLoading } = useApi<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>(fetchChatModels);
   const { data: remaining } = useApi<ChatRemaining>(fetchChatRemaining, { intervalMs: 30000 });
+  // D1: providers 供 429/502 错误态一键切备用 chat 引擎
+  const { data: providersData } = useApi(() => fetchProviders());
+  // D2: 会话成本/耗时（后端已有 usage，前端读 /v1/chat/usage?period=1h）
+  const { data: usage } = useApi<ChatUsageStats>(() => fetchChatUsage('1h'), { intervalMs: 60000 });
   const [model, setModel] = useState('');
   const [effort, setEffort] = useState<Effort>('balanced');
   const [messages, setMessages] = useState<ChatMessage[]>(loadHistory);
@@ -518,7 +541,7 @@ export function ChatPlayground() {
         const retryAfterMinutes = error instanceof ChatRequestError ? error.retryAfterMinutes : undefined;
         const retryHint = retryAfterMinutes !== undefined ? `，请约 ${retryAfterMinutes} 分钟后重试` : '';
         notify(`${message}${retryHint}`, 'error');
-        appendAssistantMessage(setMessages, () => ({ role: 'assistant', content: `${message}${retryHint}`, error: true, durationMs: Math.round(performance.now() - startedAt) }));
+        appendAssistantMessage(setMessages, () => ({ role: 'assistant', content: `${message}${retryHint}`, error: true, errorKind: classifyError(`${message}${retryHint}`) as ChatMessage['errorKind'], durationMs: Math.round(performance.now() - startedAt) }));
       }
     } finally {
       setSending(false);
@@ -532,6 +555,23 @@ export function ChatPlayground() {
 
   const effortHint = useMemo(() => ({ quick: 'Thinks little', balanced: 'Default', deep: 'Deep thinking' }[effort]), [effort]);
   const remainingClass = remaining && remaining.remaining < 5 ? 'is-low' : '';
+
+  // D1: providers → ProviderOption[]（错误气泡一键切备用 chat 引擎）
+  const providerOptions: ProviderOption[] = useMemo(() => {
+    const items = providersData?.items;
+    if (!items) return [];
+    return Object.entries(items).map(([id, p]) => ({ id, label: p.display_name || id, health: p.health_status }));
+  }, [providersData]);
+  const activeProvider = useMemo(() => model?.split('/')[0] ?? '', [model]);
+  const switchChatProvider = useCallback((providerId: string) => {
+    const candidates = models.filter(m => m.id.startsWith(`${providerId}/`));
+    if (candidates.length > 0) {
+      setModel(candidates[0].id);
+      notify(`已切换到备用引擎：${candidates[0].display_name || candidates[0].id}`, 'success');
+    } else {
+      notify(`provider ${providerId} 暂无对话模型`, 'info');
+    }
+  }, [models]);
 
   return (
     <div className="chat-page">
@@ -629,8 +669,27 @@ curl -X POST ${window.location.origin}/v1/messages \\
               <strong>开始一段新对话</strong>
               <span>输入问题后按 Enter 发送，Shift + Enter 换行</span>
             </div>
-          ) : messages.map((message, index) => <MessageBubble key={`${message.role}-${index}`} message={message} />)}
+          ) : messages.map((message, index) => (
+            <MessageBubble
+              key={`${message.role}-${index}`}
+              message={message}
+              backupProviders={providerOptions}
+              activeProvider={activeProvider}
+              onSwitchProvider={switchChatProvider}
+            />
+          ))}
         </div>
+        {usage && (
+          <div className="chat-usage-line">
+            <span>近 1h 用量</span>
+            <span>
+              {formatNumber(usage.total_calls)} 调用 · 成功 {formatNumber(usage.ok_calls)}
+              {usage.avg_duration_ms != null ? ` · 均 ${usage.avg_duration_ms}ms` : ''}
+              {usage.cost_usd != null ? ` · $${usage.cost_usd}` : ''}
+              {' · '}今日 {formatNumber(usage.today_tokens)} tokens
+            </span>
+          </div>
+        )}
         <div className="chat-input-area">
           <textarea
             ref={textareaRef}
@@ -706,6 +765,14 @@ curl -X POST ${window.location.origin}/v1/messages \\
         .chat-message-meta, .chat-tool-calls { margin-top: 7px; color: var(--text-muted); font-size: 10.5px; }
         .is-user .chat-message-meta { color: rgba(255,255,255,.68); }
         .chat-inline-error { color: var(--danger-text); background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: 7px; padding: 8px 10px; font-size: 12px; }
+        .chat-error-action { margin-top: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .chat-error-hint { font-size: 11px; color: var(--danger-text); opacity: 0.85; }
+        .chat-provider-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-default); padding: 4px 10px; border-radius: var(--radius-full); font-size: 11.5px; cursor: pointer; }
+        .chat-provider-chip:hover:not(:disabled) { border-color: var(--primary-500); }
+        .chat-provider-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chat-chip-dot { width: 5px; height: 5px; border-radius: 50%; }
+        .chat-chip-dot.ok { background: var(--success); box-shadow: 0 0 5px var(--success); }
+        .chat-usage-line { display: flex; justify-content: space-between; padding: 8px 18px; border-top: 1px solid var(--border-default); background: var(--bg-subtle); color: var(--text-muted); font-size: 11.5px; }
         .chat-input-area { display: flex; align-items: flex-end; gap: 10px; padding: 14px 18px 16px; border-top: 1px solid var(--border-default); background: var(--bg-subtle); }
         .chat-input-area textarea { flex: 1; min-height: 38px; max-height: 152px; resize: none; border: 1px solid var(--border-default); border-radius: 10px; background: var(--bg-card); color: var(--text-primary); padding: 9px 12px; font: inherit; font-size: 13px; line-height: 22px; outline: none; }
         .chat-input-area textarea:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(99,102,241,.14); }

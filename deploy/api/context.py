@@ -36,11 +36,25 @@ class RequestContext:
     model: str
     start_time: float
 
+    def effective_trace_id(self) -> str:
+        """全链路统一 traceId：上游传入优先，否则回退 request_id（保证永不为空）。"""
+        return self.trace_id or self.request_id
+
 
 # ── Public API ────────────────────────────────────────────
 def get_current_context() -> Optional[RequestContext]:
     """获取当前请求的上下文。无活跃请求时返回 None。"""
     return request_context_var.get()
+
+
+def get_current_trace_id() -> str | None:
+    """获取当前请求的全链路 traceId（无活跃请求时返回 None）。
+
+    供 worker/dispatch/audit/slow_log 在已进入请求上下文的协程内取统一 id，
+    无需 OTel 启用——B2 要求入口请求日志/审计/慢日志全程 grep 同一 id。
+    """
+    ctx = request_context_var.get()
+    return ctx.effective_trace_id() if ctx is not None else None
 
 
 def extract_trace_id(request_headers: dict) -> str | None:
@@ -130,14 +144,19 @@ class RequestContextMiddleware:
 
 # ── LogRecord Filter ──────────────────────────────────────
 class RequestIdLogFilter(logging.Filter):
-    """向日志消息追加 request_id 片段。
+    """向日志消息追加全链路 traceId 片段。
 
-    效果：每条日志末尾追加 [req=<request_id>]，无活跃请求时不追加。
+    B2: 统一为 [trace=<trace_id>]（入口请求的 trace_id 或回退 request_id），
+    使一次生成请求的日志/审计/慢日志 grep 同一 id 串联。无活跃请求时不追加。
     与 OTel 的 TraceIdLogFilter 共存，追加在 OTel trace 后缀之后。
+
+    向后兼容：保留 [req=...] 旧格式的同时加 [trace=...]，旧日志查看器不坏。
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
         ctx = get_current_context()
-        if ctx is not None and ctx.request_id:
-            record.msg = f"{record.msg} [req={ctx.request_id}]"
+        if ctx is not None:
+            tid = ctx.effective_trace_id()
+            if tid:
+                record.msg = f"{record.msg} [req={ctx.request_id}] [trace={tid}]"
         return True

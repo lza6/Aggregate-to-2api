@@ -31,7 +31,7 @@ if log_buffer not in _root_logger.handlers:
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="6.6.2",
+    version="6.7.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
                 "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,

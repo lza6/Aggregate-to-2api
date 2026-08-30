@@ -26,7 +26,14 @@ _STAGES: tuple[tuple[str, str], ...] = (
 
 @dataclass(slots=True)
 class SlowSample:
-    """单条慢请求画像样本（各阶段耗时毫秒）。"""
+    """单条慢请求画像样本（各阶段耗时毫秒）。
+
+    trace_id：全链路统一追踪 id（B2），入口请求的 request_id/trace_id 透传而来，
+    可 grep 串联该任务的日志/审计/慢日志。缺省空串（向后兼容旧调用方）。
+
+    B3: submit_ms（上游提交首字节）、poll_ms（轮询到完成）为慢请求完整链路采样的
+    分段细化，供 /v1/slow/view 分位段树展示。
+    """
 
     task_id: str
     model: str
@@ -38,6 +45,9 @@ class SlowSample:
     retry_ms: float = 0.0          # 重试退避累计
     total_ms: float = 0.0          # 全程
     status: str = "completed"      # completed / error
+    trace_id: str = ""             # B2: 全链路 traceId（日志/审计/慢日志 grep 串联）
+    submit_ms: float = 0.0         # B3: 上游提交首字节耗时
+    poll_ms: float = 0.0           # B3: 上游轮询到完成耗时
     created_at: float = field(default_factory=time.time)
 
     def slowest_stage(self) -> str:

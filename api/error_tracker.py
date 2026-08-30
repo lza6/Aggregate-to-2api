@@ -51,3 +51,37 @@ def reset() -> None:
     """清空（测试/诊断用）。"""
     with _lock:
         _counts.clear()
+
+
+# ── 前端错误遥测（D5）：独立计数 + ring buffer，不污染后端 P0-P1 聚合 ──
+_frontend_lock = threading.Lock()
+_frontend_counts: dict[str, int] = {}
+_frontend_recent: list[dict] = []
+_FRONTEND_MAX_RECENT = 50
+
+
+def record_frontend_error(*, code: str, message: str, stack: str | None = None, url: str | None = None, ua: str | None = None) -> None:
+    """记录一次前端错误（幂等，线程安全）。与后端 AppError 计数隔离。"""
+    if not code:
+        code = "FE.UNKNOWN"
+    code = code[:32]
+    entry = {
+        "code": code,
+        "message": (message or "")[:500],
+        "stack": (stack or "")[:2000] if stack else None,
+        "url": (url or "")[:500] if url else None,
+        "ua": (ua or "")[:300] if ua else None,
+        "ts": int(__import__("time").time()),
+    }
+    with _frontend_lock:
+        _frontend_counts[code] = _frontend_counts.get(code, 0) + 1
+        _frontend_recent.append(entry)
+        if len(_frontend_recent) > _FRONTEND_MAX_RECENT:
+            del _frontend_recent[: len(_frontend_recent) - _FRONTEND_MAX_RECENT]
+
+
+def frontend_snapshot() -> dict:
+    """前端错误聚合快照：计数 + 最近明细 + 总数。"""
+    with _frontend_lock:
+        total = sum(_frontend_counts.values())
+        return {"counts": dict(_frontend_counts), "recent": list(_frontend_recent), "total": total}

@@ -1,4 +1,7 @@
-"""不可变审计日志（仅追加），记录管理操作、鉴权失败、provider 状态变更等。"""
+"""不可变审计日志（仅追加），记录管理操作、鉴权失败、provider 状态变更等。
+
+B2: record 支持 trace_id 透传，写入 JSON 行的 trace_id 字段，可 grep 串联。
+"""
 import json
 import logging
 from datetime import datetime, timezone
@@ -15,13 +18,21 @@ class AuditLog:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
 
     def record(self, action: str, actor: str, target: str,
-               detail: str | None = None) -> None:
+               detail: str | None = None, trace_id: str | None = None) -> None:
+        # B2: trace_id 缺省时取当前请求上下文（无活跃请求则空串）
+        if trace_id is None:
+            try:
+                from .context import get_current_trace_id
+                trace_id = get_current_trace_id() or ""
+            except Exception:
+                trace_id = ""
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": action,
             "actor": actor,
             "target": target,
             "detail": detail,
+            "trace_id": trace_id,
         }
         try:
             with open(self._path, "a", encoding="utf-8") as f:

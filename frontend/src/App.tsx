@@ -13,6 +13,7 @@ const DLQPage = lazy(() => import('./pages/DLQ').then(m => ({ default: m.DLQPage
 const ChatPlayground = lazy(() => import('./pages/ChatPlayground').then(m => ({ default: m.ChatPlayground })));
 const GeneratePage = lazy(() => import('./pages/Generate').then(m => ({ default: m.GeneratePage })));
 const HealthPage = lazy(() => import('./pages/Health').then(m => ({ default: m.HealthPage })));
+const SecurityPage = lazy(() => import('./pages/Security').then(m => ({ default: m.SecurityPage })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/chat" element={<ChatPlayground />} />
             <Route path="/generate" element={<GeneratePage />} />
             <Route path="/health" element={<HealthPage />} />
+            <Route path="/security" element={<SecurityPage />} />
           </Routes>
         </Suspense>
       </Layout>

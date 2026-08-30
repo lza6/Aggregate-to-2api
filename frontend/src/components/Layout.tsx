@@ -1,10 +1,25 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ToastHost } from './ToastHost';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  // D3: 移动端侧栏抽屉开关；桌面端常驻，窄屏可折叠 + Esc/遮罩关闭 + 键盘可达
+  const [drawerOpen, setDrawerOpen] = useState(false);
   return (
     <div className="layout-root">
-      <aside className="layout-sidebar">
+      {/* D3: 移动端菜单按钮（窄屏可见），aria-label/焦点态 */}
+      <button
+        type="button"
+        className="layout-menu-btn"
+        aria-label={drawerOpen ? '关闭导航菜单' : '打开导航菜单'}
+        aria-expanded={drawerOpen}
+        aria-controls="layout-sidebar"
+        onClick={() => setDrawerOpen(v => !v)}
+      >
+        <span className="layout-menu-icon" aria-hidden="true">{drawerOpen ? '✕' : '☰'}</span>
+      </button>
+      {drawerOpen && <div className="layout-overlay" onClick={() => setDrawerOpen(false)} role="button" aria-label="关闭导航" tabIndex={-1} />}
+      <aside className={`layout-sidebar ${drawerOpen ? 'is-open' : ''}`} id="layout-sidebar" aria-label="主导航">
         {/* Brand Section */}
         <div className="sidebar-brand">
           <div className="brand-logo-glow">
@@ -20,50 +35,55 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <div className="nav-section-title">核心模块</div>
-        <nav className="sidebar-nav">
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+        <nav className="sidebar-nav" aria-label="核心模块导航">
+          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">📊</span>
             <span className="nav-text">仪表盘</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/providers" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/providers" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">🔌</span>
             <span className="nav-text">提供商</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/tasks" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/tasks" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">📋</span>
             <span className="nav-text">任务管理</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/accounts" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/accounts" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">👤</span>
             <span className="nav-text">长效号池</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/logs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/logs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">📝</span>
             <span className="nav-text">实时日志</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/dlq" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/dlq" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">🗑️</span>
             <span className="nav-text">死信队列</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">💬</span>
             <span className="nav-text">在线聊天</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/generate" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/generate" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">🖼️</span>
             <span className="nav-text">在线生成</span>
             <span className="nav-pip" />
           </NavLink>
-          <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">🩺</span>
             <span className="nav-text">健康体检</span>
+            <span className="nav-pip" />
+          </NavLink>
+          <NavLink to="/security" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
+            <span className="nav-icon">🛡️</span>
+            <span className="nav-text">安全风控</span>
             <span className="nav-pip" />
           </NavLink>
         </nav>
@@ -87,6 +107,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="breadcrumb-current">听风智能图像生成架构</span>
           </div>
           <div className="topbar-actions">
+            {/* P3-1: 公开/受保护边界说明（不引入登录体系，写操作需管理 Key） */}
+            <span className="boundary-pill" title="本面板公开只读展示；写操作（封禁/解封、DLQ 重试/清空）需管理 Key（Authorization: Bearer 头，环境变量 IF_ADMIN_KEYS）">
+              <span className="boundary-dot" />
+              公开只读 · 写操作需管理 Key
+            </span>
             <span className="topbar-badge">
               <span className="tf-dot tf-dot-pulse" style={{ background: '#10b981' }} />
               API Gateway
@@ -104,6 +129,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
           min-height: 100vh;
           background: var(--bg-canvas);
         }
+
+        /* D3: 移动端菜单按钮 —— 仅窄屏可见，键盘可达 */
+        .layout-menu-btn {
+          display: none;
+          position: fixed;
+          top: 10px;
+          left: 10px;
+          z-index: 60;
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          border: 1px solid var(--border-default);
+          background: var(--bg-card);
+          color: var(--text-primary);
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+        }
+        .layout-menu-btn:hover { border-color: var(--primary-500); }
+        .layout-menu-btn:focus-visible { outline: 2px solid var(--primary-500); outline-offset: 2px; }
+        .layout-menu-icon { font-size: 16px; line-height: 1; }
+        .layout-overlay { display: none; }
 
         .layout-sidebar {
           width: 250px;
@@ -208,6 +255,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         .nav-item:hover {
           color: #f1f5f9;
           background: var(--sidebar-item-hover);
+        }
+
+        .nav-item:focus-visible {
+          outline: 2px solid var(--primary-500);
+          outline-offset: -2px;
         }
 
         .nav-item.active {
@@ -340,6 +392,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
           border-radius: var(--radius-full);
         }
 
+        .boundary-pill {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11.5px;
+          font-weight: 500;
+          color: var(--warning-text);
+          background: var(--warning-bg);
+          border: 1px solid var(--warning-border);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          cursor: help;
+        }
+
+        .boundary-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--warning);
+          box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+        }
+
+        @media (max-width: 860px) {
+          .boundary-pill {
+            display: none;
+          }
+        }
+
         .main-content {
           flex: 1;
           padding: 28px 32px;
@@ -350,11 +430,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
           .layout-root {
             flex-direction: column;
           }
+          /* D3: 窄屏抽屉式侧栏，默认收起，is-open 时滑入 */
+          .layout-menu-btn {
+            display: flex;
+          }
           .layout-sidebar {
-            width: 100%;
-            height: auto;
-            position: relative;
-            padding: 14px 16px;
+            width: 240px;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            transform: translateX(-100%);
+            transition: transform 0.22s ease;
+            box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.3));
+            z-index: 55;
+            padding: 60px 16px 16px;
+          }
+          .layout-sidebar.is-open {
+            transform: translateX(0);
+          }
+          .layout-overlay {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 50;
           }
           .sidebar-brand {
             margin-bottom: 10px;
@@ -364,21 +464,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
             display: none;
           }
           .sidebar-nav {
-            flex-direction: row;
-            overflow-x: auto;
+            flex-direction: column;
+            overflow-y: auto;
             padding-bottom: 4px;
           }
           .nav-item {
-            padding: 8px 12px;
-            white-space: nowrap;
+            padding: 10px 14px;
             font-size: 13px;
           }
           .layout-topbar {
-            padding: 0 16px;
+            padding: 0 16px 0 56px;
           }
           .main-content {
             padding: 16px;
           }
+        }
+
+        /* D3: 375px 单列网格收紧 */
+        @media (max-width: 480px) {
+          .main-content { padding: 12px; }
+          .layout-topbar { height: 50px; }
+          .topbar-breadcrumb { font-size: 12px; }
         }
       `}</style>
     </div>

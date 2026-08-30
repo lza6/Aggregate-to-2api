@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchImageModels, generateImage, editImage, fetchTask, fetchEditTask, getStoredApiKey, setStoredApiKey, notify } from '../api';
-import { ErrorRetry } from '../components/Feedback';
+import { fetchImageModels, generateImage, editImage, fetchTask, fetchEditTask, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
+import { ErrorRetry, type ProviderOption } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 import type { ImageModelInfo, Task } from '../api';
 
@@ -50,6 +50,8 @@ function fileToDataUri(file: File): Promise<string> {
 
 export function GeneratePage() {
   const { data: modelsData, loading, error, reload } = useApi<{ items: Record<string, ImageModelInfo[]>; count: number }>(fetchImageModels);
+  // D1: 拉取 providers 列表，429/502 错误时渲染「一键切备用 provider」行动。
+  const { data: providersData } = useApi(() => fetchProviders());
   const [mode, setMode] = useState<GenMode>('txt');
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState('');
@@ -212,7 +214,26 @@ export function GeneratePage() {
   const task = genState.task;
   const resultUrl = task?.image_url;
 
-  if (error && !modelsData) return <ErrorRetry message={error.message} onRetry={reload} />;
+  // D1: providers → ProviderOption[]（用于错误态一键切备用引擎）
+  const providerOptions: ProviderOption[] = useMemo(() => {
+    const items = providersData?.items;
+    if (!items) return [];
+    return Object.entries(items).map(([id, p]) => ({ id, label: p.display_name || id, health: p.health_status }));
+  }, [providersData]);
+  const activeProvider = useMemo(() => model?.split("/")[0] ?? "", [model]);
+  const switchProvider = useCallback((providerId: string) => {
+    const groups = modelsData?.items;
+    if (!groups || !groups[providerId]) return;
+    const candidates = groups[providerId].filter(m => Array.isArray(m.capabilities) && m.capabilities.includes(mode === "txt" ? "txt2img" : "img2img"));
+    if (candidates.length > 0) {
+      setModel(candidates[0].id);
+      notify(`已切换到备用引擎：${candidates[0].name || candidates[0].id}`, "success");
+    } else {
+      notify(`该 provider 暂无${mode === "txt" ? "文生图" : "图生图"}可用模型`, "info");
+    }
+  }, [modelsData, mode]);
+
+  if (error && !modelsData) return <ErrorRetry message={error.message} onRetry={reload} availableProviders={providerOptions} activeProvider={activeProvider} onSwitchProvider={switchProvider} />;
 
   return (
     <div className="gen-page">
@@ -421,7 +442,8 @@ export function GeneratePage() {
         .gen-loading { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 13.5px; }
         .gen-spinner { width: 16px; height: 16px; border: 2px solid var(--border-default); border-top-color: var(--primary-500); border-radius: 50%; animation: gen-spin .8s linear infinite; }
         @keyframes gen-spin { to { transform: rotate(360deg); } }
-        .gen-error { color: var(--danger); font-size: 13px; padding: 10px 12px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-sm); }
+        .gen-error { color: var(--danger); font-size: 13px; padding: 10px 12px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 8px; }
+        .gen-error-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .gen-done { display: flex; flex-direction: column; gap: 10px; }
         .gen-done img { max-width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border-default); }
         .gen-done-meta { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-muted); flex-wrap: wrap; }

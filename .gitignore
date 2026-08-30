@@ -85,3 +85,8 @@ docs/计划书/
 # CodeGraph index — local-only (db/wal/shm already ignored by .codegraph/.gitignore)
 .codegraph/
 codegraph.lock
+
+# v6.7.0 M4 验收: 测试覆盖率/截图临时产物不入库
+.coverage
+.coverage.*
+frontend/e2e_shots*/

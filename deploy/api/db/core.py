@@ -428,7 +428,8 @@ class DB:
                              ("day", "TEXT"), ("month", "TEXT"),
                              ("proxy_used", "TEXT"),
                              ("client_ip", "TEXT"),
-                             ("user_agent", "TEXT")):
+                             ("user_agent", "TEXT"),
+                             ("trace_id", "TEXT DEFAULT ''")):
                 if col not in cols:
                     await conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {ddl}")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_created_status ON requests(created_at, status)")
@@ -449,11 +450,18 @@ class DB:
             dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
             day = dt.strftime("%Y-%m-%d")
             month = dt.strftime("%Y-%m")
+            trace_id = ""
+            try:
+                from ..context import get_current_trace_id
+                trace_id = get_current_trace_id() or ""
+            except Exception:
+                pass
             await self._enqueue_write(
                 "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at,"
-                " type, model, day, month, client_ip, user_agent)"
-                " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)",
-                (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month, client_ip, user_agent),
+                " type, model, day, month, client_ip, user_agent, trace_id)"
+                " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)",
+                (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month,
+                 client_ip, user_agent, trace_id),
             )
 
     async def mark_started(self, task_id: str) -> None:
@@ -737,6 +745,7 @@ class DB:
         d.setdefault("type", "txt")
         d.setdefault("model", "default")
         d.setdefault("upstream_task_id", None)
+        d.setdefault("trace_id", "")
         # IMP-26: file:// 路径 → 读取文件内容还原 base64
         if "image_base64" in d and d.get("image_base64") is not None:
             val = d["image_base64"]

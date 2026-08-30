@@ -138,6 +138,88 @@ export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {
   return res.json();
 }
 
+// ── v6.7.0: 管理 Key（仅浏览器 localStorage，仅用于管理面写操作；永不注入匿名只读请求）──
+// 与 IF_ADMIN_KEYS / IF_API_KEYS 的鉴权边界对应：封禁/解封/DLQ 重试/清空等
+// 「写操作」要求携带管理 Key；只读展示（stats/tasks/account-pool 等）保持公开。
+const ADMIN_KEY_STORAGE = 'imagefreeAdminApiKey';
+
+export function getStoredAdminKey(): string {
+  try { return localStorage.getItem(ADMIN_KEY_STORAGE) ?? ''; } catch { return ''; }
+}
+
+export function setStoredAdminKey(key: string): void {
+  try {
+    if (key.trim()) localStorage.setItem(ADMIN_KEY_STORAGE, key.trim());
+    else localStorage.removeItem(ADMIN_KEY_STORAGE);
+  } catch { /* ignore */ }
+}
+
+/** 管理面写操作头：仅当本地保存了管理 Key 才附带 Authorization；无 Key 时由后端决定（401/403/开放模式）。 */
+function adminHeaders(): Record<string, string> {
+  const key = getStoredAdminKey();
+  return key ? { 'Authorization': `Bearer ${key}` } : {};
+}
+
+// ── v6.7.0: 安全风控（封禁/解封/列表/状态/统计，均需管理 Key）──
+export interface BlockRule {
+  ip: string;
+  block_type: 'block' | 'daily_limit';
+  daily_limit?: number | null;
+  reason?: string | null;
+  ttl_seconds?: number | null;
+  created_at?: number | null;
+  expire_at?: number | null;
+}
+
+export async function blockIp(body: {
+  ip: string;
+  block_type?: 'block' | 'daily_limit';
+  daily_limit?: number;
+  reason?: string;
+  ttl_seconds?: number;
+}): Promise<{ ok: boolean; record: BlockRule }> {
+  const res = await fetch(`${API_BASE}/v1/admin/security/block-ip`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`封禁失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function unblockIp(ip: string): Promise<{ ok: boolean; removed: boolean; note?: string }> {
+  const res = await fetch(`${API_BASE}/v1/admin/security/unblock-ip?ip=${encodeURIComponent(ip)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`解封失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function fetchBlocklist(limit = 200): Promise<{ items: BlockRule[]; count: number }> {
+  const res = await fetch(`${API_BASE}/v1/admin/security/blocklist?limit=${limit}`, { headers: adminHeaders() });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`封禁列表获取失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function fetchBlockStatus(ip: string): Promise<{ ip: string; rule: BlockRule | null; blocked: boolean }> {
+  const res = await fetch(`${API_BASE}/v1/admin/security/status?ip=${encodeURIComponent(ip)}`, { headers: adminHeaders() });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`封禁状态查询失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
 // ── v3.1.0 S-6/S-7: 只读诊断 + worker 健康 ──
 export interface DiagnosticsWorker {
   id: number;
@@ -263,12 +345,26 @@ export async function fetchAccountPool(params: { page?: number; pageSize?: numbe
 }
 
 export async function retryDLQTask(taskId: string): Promise<{ detail?: string; message?: string }> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue/${taskId}/retry`, { method: 'POST' });
+  const res = await fetch(`${API_BASE}/v1/dead-letter-queue/${taskId}/retry`, {
+    method: 'POST',
+    headers: adminHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`重试失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
   return res.json();
 }
 
 export async function clearDLQ(): Promise<{ detail?: string; message?: string; success?: boolean }> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, {
+    method: 'DELETE',
+    headers: adminHeaders(),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`清空失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
   return res.json();
 }
 

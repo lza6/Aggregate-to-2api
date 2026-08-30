@@ -6,13 +6,15 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from fastapi.responses import FileResponse
 
 from .. import config
 from ..meta import db, engine, registry
 from ..errors import AppError, ErrorCodes
 from ..solver_guard import solver_guard
+from ..slow_log import slow_log
+from ..slo_budget import slo_budget as _slo_engine
 from ..health import health_registry
 from ..system_spec import system_spec
 
@@ -118,6 +120,8 @@ async def healthz():
     snap = engine.snapshot()
     ssnap = solver_guard.snapshot()
     await health_registry.check_all()
+    _stats = await db.stats_overview()
+    _slo = _slo_engine.snapshot(_stats, ssnap, slow_log.stats(), snap)
     return {
         "status": "degraded" if (not cf_ok or ssnap["solver_status"] != "ok") else "ok",
         "cf_solver": "up" if cf_ok else "down",
@@ -141,6 +145,7 @@ async def healthz():
         "solver_circuit_open": ssnap["circuit_open"],
         "solve_rejected_total": ssnap["rejected_total"],
         "token_pools": engine.token_pool_manager.pools_snapshot(),
+        "slo_budget": _slo,
         "providers": {
             prefix: {
                 "status": p.health_status,
@@ -161,6 +166,56 @@ async def healthz():
         "system": system_spec(),
         "log_dir": {"path": config.IF_LOG_DIR, "writable": os.access(config.IF_LOG_DIR, os.W_OK)
                     if os.path.isdir(config.IF_LOG_DIR) else False},
+    }
+
+
+@router.get("/v1/livez", include_in_schema=True)
+async def livez() -> dict:
+    """存活探针（liveness）：进程活即 ok，不探任何外部依赖。
+
+    Docker healthcheck 用此端点——停 solver 时 readiness 降级而 liveness 不误杀，
+    避免容器被错误重启。
+    """
+    return {"status": "ok", "timestamp": int(time.time())}
+
+
+@router.get("/v1/readyz", include_in_schema=True)
+async def readyz(response: Response) -> dict:
+    """就绪探针（readiness）：聚合依赖探活，任一关键依赖不 ok → 503。
+
+    探活项：cf_solver 可达、solver_guard 熔断状态、DB 可读、队列未堵。
+    供上游路由/负载均衡探活，不在 docker healthcheck 使用。
+    """
+    reasons: list[str] = []
+
+    # (a) cf_solver 可达（复用 TTL 缓存，避免每次 TCP 探活）
+    cf_ok = await _probe_cf_solver()
+    if not cf_ok:
+        reasons.append("cf_solver unreachable")
+
+    # (b) solver_guard 熔断状态
+    ssnap = solver_guard.snapshot()
+    if ssnap["circuit_open"] or ssnap["solver_status"] != "ok":
+        reasons.append(f"solver {ssnap['solver_status']}")
+
+    # (c) DB 可读
+    try:
+        await db.count()
+    except OSError as e:
+        reasons.append(f"db unreadable: {type(e).__name__}")
+    except Exception as e:  # noqa: BLE001 - 探活端点需兜底所有异常转为 not_ready
+        reasons.append(f"db unreadable: {type(e).__name__}")
+
+    # (d) 队列未堵
+    snap = engine.snapshot()
+    if snap["queued"] >= snap["queue_capacity"]:
+        reasons.append("queue saturated")
+
+    response.status_code = 200 if not reasons else 503
+    return {
+        "status": "ready" if not reasons else "not_ready",
+        "reasons": reasons,
+        "timestamp": int(time.time()),
     }
 
 

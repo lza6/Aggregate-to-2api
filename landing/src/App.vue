@@ -6,6 +6,8 @@ import SectionStatus from './components/SectionStatus.vue'
 import SectionProviders from './components/SectionProviders.vue'
 import SectionUsage from './components/SectionUsage.vue'
 import SectionCode from './components/SectionCode.vue'
+import SectionFaq from './components/SectionFaq.vue'
+import SectionChangelog from './components/SectionChangelog.vue'
 import SectionCta from './components/SectionCta.vue'
 
 const status = useStats()
@@ -99,6 +101,12 @@ const modelList = computed(() => {
 
       <!-- API 快速开始 -->
       <SectionCode />
+
+      <!-- D4: FAQ 区 + 手到即用 curl -->
+      <SectionFaq />
+
+      <!-- D4: 更新日志区 + 实时状态 -->
+      <SectionChangelog />
 
       <!-- CTA 区 + 页脚 -->
       <SectionCta />

@@ -189,7 +189,11 @@ async def close_client() -> None:
 
 
 def _browser_headers(base_url: str, referer: str | None = None) -> dict:
-    """模拟前端 fetch 的浏览器头（抓包中前端只显式设了 Content-Type，其余为标准头）。"""
+    """模拟前端 fetch 的浏览器头（抓包中前端只显式设了 Content-Type，其余为标准头）。
+
+    B2: 注入 X-Trace-ID（取当前请求上下文 trace_id）发到上游，使入口请求的 traceId
+    在上游/日志中可 grep 串联。无活跃请求时省略（向后兼容）。
+    """
     h = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                       "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
@@ -203,6 +207,13 @@ def _browser_headers(base_url: str, referer: str | None = None) -> dict:
         "Sec-Fetch-Site": "same-origin",
         "Priority": "u=1, i",
     }
+    try:
+        from .context import get_current_trace_id
+        _tid = get_current_trace_id()
+        if _tid:
+            h["X-Trace-ID"] = _tid
+    except Exception:
+        pass
     return h
 
 
