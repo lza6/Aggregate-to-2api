@@ -165,7 +165,7 @@ class NanobananaProvider(Provider):
         self._client = httpx.AsyncClient(
             proxy=config.PROXY, timeout=httpx.Timeout(60.0), headers={"User-Agent": config.USER_AGENT}
         )
-        self.accounts = self._load_accounts()
+        self.accounts = await self._async_load_accounts()
         # ISSUE-03: 启动后台 keepalive 嗅探（默认 6h 一次，提前发现上游改版自愈），幂等
         (self._action_sniffer or action_sniffer).start_keepalive()
         log.info("nanobanana 号池加载 %d 账号", len(self.accounts))
@@ -179,6 +179,14 @@ class NanobananaProvider(Provider):
         if self._action_sniffer is None:
             await sniffer.aclose()
 
+    async def _async_load_accounts(self) -> list[dict]:
+        """_load_accounts 的 async 包装：to_thread 把同步 account_pool.get 丢入线程池。
+
+        委托给 self._load_accounts（测试通过 monkeypatch 该方法注入 mock 号池，
+        to_thread 包装不影响 monkeypatch 语义）。
+        """
+        return await asyncio.to_thread(self._load_accounts)
+
     def _load_accounts(self) -> list[dict]:
         from ..account_pool import account_pool
 
@@ -187,6 +195,14 @@ class NanobananaProvider(Provider):
         if not MOCK_REGISTER:
             accs = [a for a in accs if a.get("cookie") != "mock-session" and "mock" not in (a.get("note") or "")]
         return accs
+
+    async def _async_next_account(self) -> dict:
+        """_next_account 的 async 包装：号池加载走 to_thread 不阻塞 loop。
+
+        委托给 self._next_account（内部 self.accounts / self._acc_idx 突变在
+        线程池单调用内完成，generate 串行调用无并发竞争）。
+        """
+        return await asyncio.to_thread(self._next_account)
 
     def _next_account(self) -> dict:
         self.accounts = self._load_accounts()
@@ -202,7 +218,8 @@ class NanobananaProvider(Provider):
     async def credits(self) -> int | None:
         from ..account_pool import account_pool
 
-        return account_pool.total_credits("nanobanana")
+        # total_credits 是同步 sqlite3 读 → to_thread 不阻塞 loop（async 路径）
+        return await asyncio.to_thread(account_pool.total_credits, "nanobanana")
 
     async def health(self) -> dict:
         """健康摘要：额外暴露 Action Sniffer 缓存/嗅探状态（ISSUE-03）。"""
@@ -229,7 +246,7 @@ class NanobananaProvider(Provider):
     ) -> GenerationResult:
         if not self._client:
             return GenerationResult(status="error", error="nanobanana 未启动")
-        acc = self._next_account()
+        acc = await self._async_next_account()
         if not acc.get("cookie"):
             return GenerationResult(status="error", error="nanobanana 号池无可用账号（请先注册/补充账号）")
         if int(acc.get("credits", 0) or 0) <= 0:
@@ -261,7 +278,8 @@ class NanobananaProvider(Provider):
                 cost = image_credit_cost(upstream, resolution, task_type="edit" if images else None)
                 from ..account_pool import account_pool
 
-                account_pool.consume_credits("nanobanana", acc["email"], cost)
+                # consume_credits 同步 sqlite3+Lock → async 包装走 to_thread 不阻塞 loop
+                await account_pool.async_consume_credits("nanobanana", acc["email"], cost)
             except Exception as e:
                 log.warning("nanobanana 扣减积分失败 %s: %s", acc.get("email"), e)
         return GenerationResult(status="completed", asset_url=asset_url)

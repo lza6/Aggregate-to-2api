@@ -153,6 +153,50 @@ class AccountPool:
         sc = self._get_or_create_score(email)
         sc.update_result(duration_ms, is_success)
 
+    # ── async 包装（asyncio.to_thread，不阻塞事件循环）──────────
+    # 保留上方同步方法（向后兼容：测试/CLI/同步路径仍可用）。
+    # async 路径（nanobanana.generate / registerer.register_one / lease）改调这些包装，
+    # 把同步 sqlite3 + threading.Lock I/O 丢入线程池执行，避免阻塞事件循环。
+    # 线程安全由 sqlite3(check_same_thread=False) + WAL + self._lock 临界区共同保证。
+    async def async_get(self, provider: str) -> list[dict]:
+        """get 的 async 包装：to_thread 把同步 sqlite3 读丢入线程池。"""
+        return await asyncio.to_thread(self.get, provider)
+
+    async def async_borrow_account(
+        self, provider: str, prefer_email: str | None = None
+    ) -> dict | None:
+        """borrow_account 的 async 包装。"""
+        return await asyncio.to_thread(self.borrow_account, provider, prefer_email)
+
+    async def async_release_account(
+        self,
+        provider: str,
+        email: str,
+        new_credits: int | None = None,
+        status: str | None = None,
+        note: str = "",
+    ) -> None:
+        """release_account 的 async 包装。"""
+        return await asyncio.to_thread(
+            self.release_account, provider, email, new_credits, status, note
+        )
+
+    async def async_mark_dead(
+        self, provider: str, email: str, reason: str = "401/403 banned"
+    ) -> None:
+        """mark_dead 的 async 包装。"""
+        return await asyncio.to_thread(self.mark_dead, provider, email, reason)
+
+    async def async_consume_credits(
+        self, provider: str, email: str, amount: int
+    ) -> None:
+        """consume_credits 的 async 包装：生成成功扣减积分走线程池。"""
+        return await asyncio.to_thread(self.consume_credits, provider, email, amount)
+
+    async def async_get_adaptive(self, provider: str) -> dict | None:
+        """get_adaptive 的 async 包装：MAB 评分选号走线程池。"""
+        return await asyncio.to_thread(self.get_adaptive, provider)
+
     def _init_schema(self) -> None:
         with self._lock:
             # 基础表
@@ -360,8 +404,12 @@ class AccountPool:
 
     @asynccontextmanager
     async def lease(self, provider: str, prefer_email: str | None = None) -> AsyncGenerator[dict | None, None]:
-        """异步上下文管理器：借号并在退出时自动归还/异常处理。"""
-        acc = self.borrow_account(provider, prefer_email)
+        """异步上下文管理器：借号并在退出时自动归还/异常处理。
+
+        借号/归还/封号标记均走 async 包装（asyncio.to_thread），避免同步 sqlite3
+        + threading.Lock 阻塞事件循环（async 路径专用入口）。
+        """
+        acc = await self.async_borrow_account(provider, prefer_email)
         if not acc:
             yield None
             return
@@ -375,14 +423,14 @@ class AccountPool:
                 if any(
                     k in err_str for k in ("401", "403", "unauthorized", "forbidden", "banned", "account suspended")
                 ):
-                    self.mark_dead(provider, email, reason=str(e)[:100])
+                    await self.async_mark_dead(provider, email, reason=str(e)[:100])
                 else:
-                    self.release_account(provider, email)
+                    await self.async_release_account(provider, email)
             except Exception as release_err:
                 log.warning("账号归还失败 (%s/%s), 原始异常: %s", provider, email, release_err)
             raise
         else:
-            self.release_account(provider, email)
+            await self.async_release_account(provider, email)
 
     # ── 读写兼容接口 ──────────────────────────────
 

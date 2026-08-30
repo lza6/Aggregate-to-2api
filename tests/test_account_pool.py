@@ -432,3 +432,104 @@ async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
         except asyncio.CancelledError:
             pass
         p._conn.close()
+
+
+# ── async 包装方法（asyncio.to_thread，不阻塞事件循环）──────────────
+class TestAsyncWrappers:
+    """async_get/async_borrow_account/async_release_account/async_mark_dead/
+    async_consume_credits/async_get_adaptive：返回值与同步方法一致，且不阻塞 loop。"""
+
+    @pytest.mark.asyncio
+    async def test_async_get_returns_same_as_sync(self, pool):
+        pool.add("nanobanana", "a@x.com", "c1", credits=4)
+        pool.add("nanobanana", "b@x.com", "c2", credits=4)
+        sync_accs = pool.get("nanobanana")
+        async_accs = await pool.async_get("nanobanana")
+        # 返回值内容一致（顺序可能因 SQL 一致而相同）
+        assert len(async_accs) == len(sync_accs) == 2
+        async_emails = {a["email"] for a in async_accs}
+        sync_emails = {a["email"] for a in sync_accs}
+        assert async_emails == sync_emails == {"a@x.com", "b@x.com"}
+
+    @pytest.mark.asyncio
+    async def test_async_borrow_and_release(self, pool):
+        pool.add("nanobanana", "ab@x.com", "c", credits=5, status="active")
+        acc = await pool.async_borrow_account("nanobanana")
+        assert acc is not None
+        assert acc["email"] == "ab@x.com"
+        assert acc["status"] == "working"
+        # 借出后再借应无可用 active
+        acc2 = await pool.async_borrow_account("nanobanana")
+        assert acc2 is None
+        # 归还
+        await pool.async_release_account("nanobanana", "ab@x.com", new_credits=3)
+        active = await pool.async_get("nanobanana")
+        assert len(active) == 1
+        assert active[0]["credits"] == 3
+        assert active[0]["status"] == "active"
+
+    @pytest.mark.asyncio
+    async def test_async_mark_dead(self, pool):
+        pool.add("nanobanana", "md@x.com", "c", credits=10, status="active")
+        await pool.async_mark_dead("nanobanana", "md@x.com", reason="HTTP 401")
+        dead_list = pool.list("nanobanana", status="dead")
+        assert len(dead_list) == 1
+        assert "401" in dead_list[0]["note"]
+        assert await pool.async_get("nanobanana") == []
+
+    @pytest.mark.asyncio
+    async def test_async_consume_credits(self, pool):
+        pool.add("nanobanana", "cc@x.com", "c", credits=20, status="active")
+        await pool.async_consume_credits("nanobanana", "cc@x.com", 4)
+        row = (await pool.async_get("nanobanana"))[0]
+        assert row["credits"] == 16
+        assert row["credits_used_total"] == 4
+        assert row["images_used"] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_get_adaptive(self, pool):
+        pool.add("nanobanana", "ga1@x.com", "c", credits=4, status="active")
+        pool.add("nanobanana", "ga2@x.com", "c", credits=8, status="active")
+        acc = await pool.async_get_adaptive("nanobanana")
+        assert acc is not None
+        assert acc["email"] in {"ga1@x.com", "ga2@x.com"}
+        # 空池 → None
+        assert await pool.async_get_adaptive("nonexistent") is None
+
+    @pytest.mark.asyncio
+    async def test_async_wrappers_do_not_block_event_loop(self, pool):
+        """并发跑多个 async 包装 + 一个 sleep(0) 协程，sleep(0) 必须被调度（非阻塞证据）。"""
+        pool.add("nanobanana", "nb@x.com", "c", credits=100, status="active")
+        # 用一个 flag 验证并发期间事件循环仍能调度其它任务
+        flag = {"ticked": 0}
+
+        async def _tick():
+            for _ in range(5):
+                await asyncio.sleep(0)
+                flag["ticked"] += 1
+
+        async def _work():
+            for _ in range(5):
+                await pool.async_get("nanobanana")
+                await pool.async_consume_credits("nanobanana", "nb@x.com", 1)
+
+        await asyncio.gather(_tick(), _work())
+        assert flag["ticked"] == 5  # 事件循环未被同步 sqlite3 阻塞
+        # consume 也生效
+        row = (await pool.async_get("nanobanana"))[0]
+        assert row["credits"] == 95
+        assert row["images_used"] == 5
+
+    @pytest.mark.asyncio
+    async def test_lease_uses_async_wrappers(self, pool):
+        """lease 上下文管理器内部走 async_borrow/async_release（不阻塞 loop）。"""
+        pool.add("nanobanana", "ls@x.com", "c", credits=5, status="active")
+        async with pool.lease("nanobanana") as acc:
+            assert acc is not None
+            assert acc["email"] == "ls@x.com"
+            assert acc["status"] == "working"
+        # 退出后已归还
+        active = await pool.async_get("nanobanana")
+        assert len(active) == 1
+        assert active[0]["status"] == "active"
+

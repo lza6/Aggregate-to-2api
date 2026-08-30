@@ -1098,6 +1098,9 @@ class EmailPool:
         """为指定提供商分配一个有效邮箱。
 
         支持指定源（prefer_source）及按评分+退避状态动态轮换。
+
+        allocate 本身已是 async（内部 await src.new_address），唯一同步 sqlite3
+        I/O 是 risky_domains() 查询——已用 asyncio.to_thread 包装，不阻塞事件循环。
         """
         # 1) 指定特定邮箱源
         if prefer_source:
@@ -1124,7 +1127,7 @@ class EmailPool:
             active_sources = [s for s in candidate_sources if s.priority > 0] or self._sources
 
         errors: list[str] = []
-        risky = self.risky_domains()  # 已被上游拉黑的域名（连续失败 >=3）
+        risky = await asyncio.to_thread(self.risky_domains)  # 已被上游拉黑的域名（连续失败 >=3）
         for _ in range(15):
             src = active_sources[_ % len(active_sources)]
             try:
@@ -1166,7 +1169,12 @@ class EmailPool:
         timeout: float = 90.0,
         contains: str | None = None,
     ) -> dict | None:
-        """轮询直到该邮箱收到含指定关键词的邮件（验证码/验证链接）。"""
+        """轮询直到该邮箱收到含指定关键词的邮件（验证码/验证链接）。
+
+        wait_for_mail 本身已是 async（内部 await src.fetch_mails），不直接触碰
+        self._conn / self._lock——保留为 async 入口。async 调用方直接 await 即可，
+        无需 to_thread 包装（无同步 sqlite3 I/O）。
+        """
         name = (source_state or {}).get("source", "")
         src = self._find_source(name) if name else None
         if src is None:
@@ -1216,6 +1224,16 @@ class EmailPool:
                         (domain, time.time()),
                     )
             self._conn.commit()
+
+    async def async_record(
+        self, email: str, provider: str, status: str = "ok", note: str = ""
+    ) -> None:
+        """record 的 async 包装：to_thread 把同步 sqlite3 写丢入线程池，不阻塞事件循环。
+
+        供 async 路径（registerer.register_one）调用——原 email_pool.record 同步
+        sqlite3 + threading.Lock 直接在 async 链路里阻塞 loop。
+        """
+        return await asyncio.to_thread(self.record, email, provider, status, note)
 
     def registered_providers(self, email: str) -> list[str]:
         rows = self._conn.execute("SELECT provider FROM email_registry WHERE email=?", (email,)).fetchall()

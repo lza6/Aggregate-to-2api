@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -464,3 +465,69 @@ class TestPoolNewSourcesRegistered:
         assert src_io.priority == 95
         assert src_gw.priority == 75
         assert src_io.score() > src_gw.score()
+
+
+# ── 10. async_record / async_allocate（asyncio.to_thread 不阻塞 loop）──
+class TestEmailPoolAsyncWrappers:
+    """async_record / async_allocate：返回值与同步方法一致，且不阻塞 loop。"""
+
+    @pytest.fixture
+    def pool(self, tmp_path):
+        db_file = str(tmp_path / "async_email.db")
+        return EmailPool(db_path=db_file)
+
+    @pytest.mark.asyncio
+    async def test_async_record_persists_and_returns_none(self, pool):
+        # async_record 应与 record 行为一致：写库 + 风控统计
+        ret = await pool.async_record("user1@temp.tf", "nanobanana", "ok")
+        assert ret is None
+        assert pool.registered_providers("user1@temp.tf") == ["nanobanana"]
+        stats = pool.stats()
+        assert stats["total_registered"] == 1
+        assert stats["by_provider"]["nanobanana"] == 1
+        # ok 状态 → domain_risk success_count 累加
+        assert "temp.tf" in {r["domain"] for r in pool._conn.execute("SELECT domain FROM domain_risk").fetchall()}
+
+    @pytest.mark.asyncio
+    async def test_async_record_error_increments_fail_count(self, pool):
+        await pool.async_record("bad@22.do", "nanobanana", "error", "signup_fail")
+        rows = pool._conn.execute(
+            "SELECT domain, fail_count, status FROM domain_risk WHERE domain=?", ("22.do",)
+        ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["fail_count"] == 1
+        assert rows[0]["status"] == "risky"
+
+    @pytest.mark.asyncio
+    async def test_async_allocate_unique_and_records(self, pool, monkeypatch):
+        # 本地 temp.tf 源足够验证分配唯一性 + async_record 配合
+        monkeypatch.setattr(pool, "_sources", [s for s in pool._sources if s.name == "temp.tf"])
+        a1, _s1 = await pool.allocate("nanobanana")
+        a2, _s2 = await pool.allocate("nanobanana")
+        assert a1 != a2
+        await pool.async_record(a1, "nanobanana", "ok")
+        assert pool.registered_providers(a1) == ["nanobanana"]
+        # 已用邮箱不再分配
+        a3, _s3 = await pool.allocate("nanobanana")
+        assert a3 not in (a1, a2)
+
+    @pytest.mark.asyncio
+    async def test_async_wrappers_do_not_block_event_loop(self, pool, monkeypatch):
+        """并发 async_record + sleep(0) 协程，sleep(0) 必须被调度（非阻塞证据）。"""
+        monkeypatch.setattr(pool, "_sources", [s for s in pool._sources if s.name == "temp.tf"])
+        flag = {"ticked": 0}
+
+        async def _tick():
+            for _ in range(5):
+                await asyncio.sleep(0)
+                flag["ticked"] += 1
+
+        async def _work():
+            for i in range(5):
+                addr = f"u{i}@temp.tf"
+                await pool.async_record(addr, "nanobanana", "ok")
+
+        await asyncio.gather(_tick(), _work())
+        assert flag["ticked"] == 5  # 事件循环未被同步 sqlite3 阻塞
+        stats = pool.stats()
+        assert stats["total_registered"] == 5
