@@ -1,9 +1,8 @@
 """IMP-07: DB 索引补全测试。"""
-import datetime
+
 import time
 
 import pytest
-import pytest_asyncio
 
 
 class TestDBIndexes:
@@ -25,9 +24,7 @@ class TestDBIndexes:
         """原有索引仍存在。"""
         _, conn, lock = await tmp_db._get_write_conn()
         async with lock:
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='index'"
-            )
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
             names = {r[0] for r in await cursor.fetchall()}
         for idx in ("idx_requests_created", "idx_requests_status", "idx_requests_finished"):
             assert idx in names, f"缺失索引: {idx}"
@@ -43,9 +40,7 @@ class TestDayMonthColumn:
         await tmp_db.flush()
         _, conn, lock = await tmp_db._get_write_conn()
         async with lock:
-            cursor = await conn.execute(
-                "SELECT day, month FROM requests WHERE id=?", ("test-day-month",)
-            )
+            cursor = await conn.execute("SELECT day, month FROM requests WHERE id=?", ("test-day-month",))
             row = await cursor.fetchone()
         assert row is not None, "day/month 列未填充"
         assert row[0] is not None, "day 列未写入"
@@ -58,9 +53,7 @@ class TestDayMonthColumn:
         await tmp_db.flush()
         _, conn, lock = await tmp_db._get_write_conn()
         async with lock:
-            cursor = await conn.execute(
-                "SELECT day, month FROM requests WHERE id=?", ("test-format",)
-            )
+            cursor = await conn.execute("SELECT day, month FROM requests WHERE id=?", ("test-format",))
             row = await cursor.fetchone()
         assert row is not None
         day, month = row[0], row[1]

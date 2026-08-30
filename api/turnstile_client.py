@@ -7,6 +7,7 @@
 
 H2: 共享单个 httpx.AsyncClient（连接池复用），避免每次求解新建连接。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,11 +32,13 @@ class TurnstileError(RuntimeError):
 
 class TurnstileRateLimited(TurnstileError):
     """cf_solver 返回 429 Too Many Requests 限流。"""
+
     pass
 
 
 class _SolverRejected(TurnstileError):
     """cf_solver 明确判定求解失败（captcha_fail），区别于 HTTP 终态错误。"""
+
     pass
 
 
@@ -48,7 +51,9 @@ def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
         # 空串代理（IF_PROXY="" 等）会被 httpx 拒绝：Unknown scheme for proxy URL
-        proxy = config.PROXY if (isinstance(config.PROXY, str) and config.PROXY.strip()) or config.PROXY is None else None
+        proxy = (
+            config.PROXY if (isinstance(config.PROXY, str) and config.PROXY.strip()) or config.PROXY is None else None
+        )
         if isinstance(proxy, str) and not proxy.strip():
             proxy = None
         _client = httpx.AsyncClient(

@@ -6,6 +6,7 @@
 - _edit_mutex_stale：锁文件损坏/超时/PID 判定
 - _acquire/_release_edit_mutex：文件锁获取与 token 释放
 """
+
 import asyncio
 import os
 import tempfile
@@ -123,8 +124,7 @@ class TestEditProxyPool:
 
     def test_enabled_with_proxies_and_parallel(self, tmp_path, monkeypatch):
         f = tmp_path / "proxies.txt"
-        f.write_text("http://u:p@1.2.3.4:8080\nhttp://u:p@5.6.7.8:8080\n# comment\n\n",
-                     encoding="utf-8")
+        f.write_text("http://u:p@1.2.3.4:8080\nhttp://u:p@5.6.7.8:8080\n# comment\n\n", encoding="utf-8")
         monkeypatch.setattr(config, "EDIT_PROXY_FILE", str(f))
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 2)
         monkeypatch.setattr(config, "IF_EDIT_PROXY_MAX_INFLIGHT", 2)

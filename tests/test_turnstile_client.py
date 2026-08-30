@@ -5,8 +5,6 @@ TransportError 重试、创建任务非 202、缺 task_id、超时、
 solver_guard 熔断协作（成功/失败/拒绝对应上报路径）、proxy 透传参数。
 所有 HTTP 用可编程 fake client monkeypatch，不碰真实网络。
 """
-import asyncio
-import time
 
 import httpx
 import pytest
@@ -16,7 +14,6 @@ from api.solver_guard import SolverGuard
 
 
 def _patch_solve(monkeypatch, fake_client):
-    import api.solver_guard
     g = SolverGuard(circuit_threshold=2)
     monkeypatch.setattr(turnstile_client, "solver_guard", g)
     monkeypatch.setattr(turnstile_client, "_get_client", lambda: fake_client)
@@ -161,6 +158,7 @@ class TestClusterFailover:
     @pytest.mark.asyncio
     async def test_auto_failover_on_429_rate_limit(self, monkeypatch):
         """当首选节点返回 429 时，自动 failover 到备用节点并成功返回。"""
+
         # 模拟不同 URL 的返回
         class MultiNodeClient:
             async def get(self, url, params=None, timeout=None):
@@ -192,6 +190,7 @@ class TestClusterFailover:
     @pytest.mark.asyncio
     async def test_auto_failover_on_network_transport_error(self, monkeypatch):
         """首选节点网络不可达时，自动尝试下一个节点。"""
+
         class MultiNodeClient:
             async def get(self, url, params=None, timeout=None):
                 if "node-1" in url:

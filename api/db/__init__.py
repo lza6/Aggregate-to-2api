@@ -7,6 +7,7 @@
 `from api.db import DB, task_to_public, QueueStore` 可导入新实现；
 `QueueDB` 为兼容已废弃的同步旧实现。
 """
+
 from __future__ import annotations
 
 from .core import DB

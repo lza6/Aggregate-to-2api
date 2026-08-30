@@ -19,6 +19,7 @@ SRE 标准错误预算语义：
 （health.py）传 snapshot dict。engine_snapshot 的 queued/queue_capacity 仅在
 queue_wait_p95 缺乏 slow_log 数据时作为 fallback 估算输入。
 """
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -30,10 +31,10 @@ SLOStatus = Literal["green", "yellow", "red"]
 _DEFAULT_WINDOW_DAYS = 30
 
 # SLO 目标与阈值（ms）
-_TARGET_REQUEST_SUCCESS = 0.99       # 请求成功率 ≥ 99%
-_TARGET_P95_LATENCY_MS = 30_000.0    # P95 端到端 ≤ 30s
+_TARGET_REQUEST_SUCCESS = 0.99  # 请求成功率 ≥ 99%
+_TARGET_P95_LATENCY_MS = 30_000.0  # P95 端到端 ≤ 30s
 _TARGET_QUEUE_WAIT_P95_MS = 5_000.0  # 队列等待 P95 ≤ 5s
-_TARGET_SOLVE_SUCCESS = 0.95         # 求解成功率 ≥ 95%
+_TARGET_SOLVE_SUCCESS = 0.95  # 求解成功率 ≥ 95%
 
 # P95 估算系数：无直方图时用 avg × k 近似 P95
 _P95_FROM_AVG_FACTOR = 2.0
@@ -143,9 +144,7 @@ class SLOBudgetEngine:
         total_req = int(stats.get("total_requests") or 0)
         total_img = int(stats.get("total_images") or 0)
         req_rate = (total_img / total_req) if total_req > 0 else None
-        req_actual, req_remain, req_status = self._compute_budget_higher_better(
-            _TARGET_REQUEST_SUCCESS, req_rate
-        )
+        req_actual, req_remain, req_status = self._compute_budget_higher_better(_TARGET_REQUEST_SUCCESS, req_rate)
 
         # ── 2. P95 端到端时延 ──
         avg_sec = stats.get("avg_duration_sec")
@@ -154,9 +153,7 @@ class SLOBudgetEngine:
             p95_ms = avg_sec_f * 1000.0 * _P95_FROM_AVG_FACTOR
         else:
             p95_ms = None
-        _, p95_remain, p95_status = self._compute_budget_lower_better(
-            _TARGET_P95_LATENCY_MS, p95_ms
-        )
+        _, p95_remain, p95_status = self._compute_budget_lower_better(_TARGET_P95_LATENCY_MS, p95_ms)
 
         # ── 3. 队列等待 P95 ──
         queue_p95_ms: float | None = None
@@ -174,9 +171,7 @@ class SLOBudgetEngine:
             if capacity > 0:
                 ratio = max(0.0, min(1.0, queued / capacity))
                 queue_p95_ms = ratio * _QUEUE_RATIO_TO_MS_SCALE
-        _, queue_remain, queue_status = self._compute_budget_lower_better(
-            _TARGET_QUEUE_WAIT_P95_MS, queue_p95_ms
-        )
+        _, queue_remain, queue_status = self._compute_budget_lower_better(_TARGET_QUEUE_WAIT_P95_MS, queue_p95_ms)
 
         # ── 4. 求解成功率（窗口）──
         win_rate = ssnap.get("window_success_rate")
@@ -188,9 +183,7 @@ class SLOBudgetEngine:
                 win_rate_f = None
         else:
             win_rate_f = None
-        solve_actual, solve_remain, solve_status = self._compute_budget_higher_better(
-            _TARGET_SOLVE_SUCCESS, win_rate_f
-        )
+        solve_actual, solve_remain, solve_status = self._compute_budget_higher_better(_TARGET_SOLVE_SUCCESS, win_rate_f)
 
         slos: dict[str, dict[str, Any]] = {
             "request_success_rate": {
@@ -223,9 +216,7 @@ class SLOBudgetEngine:
             },
         }
 
-        overall = self._aggregate_status(
-            [req_status, p95_status, queue_status, solve_status]
-        )
+        overall = self._aggregate_status([req_status, p95_status, queue_status, solve_status])
 
         return {
             "window_days": self.window_days,

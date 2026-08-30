@@ -3,6 +3,7 @@
 B4: 每条日志同时保留结构化字段（level/logger/message/trace_id/req_id/severity/attrs），
 文本查看器仍消费 message 字段（向后兼容，旧查看器不坏）；新端点可读结构化字段。
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,6 +33,7 @@ class LogBufferHandler(logging.Handler):
             # B2/B4: 注入 trace_id/req_id（从 contextvars，无活跃请求则省略）
             try:
                 from .context import get_current_context
+
                 ctx = get_current_context()
                 if ctx is not None:
                     entry["trace_id"] = ctx.effective_trace_id()

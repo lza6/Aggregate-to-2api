@@ -1,4 +1,5 @@
 """集成测试：死信队列行为验证。"""
+
 import pytest
 
 
@@ -14,6 +15,7 @@ class TestDLQ:
         body = r.json()
         assert "items" in body
         assert "count" in body
+
 
 @pytest.mark.integration
 class TestDLQRetryFlow:
@@ -45,6 +47,7 @@ class TestDLQRequeue:
     async def test_requeue_disabled_removes_record(self, app_with_mocks):
         """默认关闭：retry 只删记录，不入队。"""
         from api import config as cfg
+
         assert cfg.IF_DLQ_REQUEUE is False
         r = await app_with_mocks.post("/v1/dead-letter-queue/some-task/retry")
         assert r.status_code == 200

@@ -2,6 +2,7 @@
 
 B2: record 支持 trace_id 透传，写入 JSON 行的 trace_id 字段，可 grep 串联。
 """
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -17,12 +18,14 @@ class AuditLog:
         self._path = path
         Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-    def record(self, action: str, actor: str, target: str,
-               detail: str | None = None, trace_id: str | None = None) -> None:
+    def record(
+        self, action: str, actor: str, target: str, detail: str | None = None, trace_id: str | None = None
+    ) -> None:
         # B2: trace_id 缺省时取当前请求上下文（无活跃请求则空串）
         if trace_id is None:
             try:
                 from .context import get_current_trace_id
+
                 trace_id = get_current_trace_id() or ""
             except Exception:
                 trace_id = ""

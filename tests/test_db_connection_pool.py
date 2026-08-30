@@ -7,10 +7,10 @@
 - IF_DB_POOL_SIZE=1 兼容旧行为（单连接模式）
 - 读走 _read_conns 池，写走 pool 连接
 """
+
 import asyncio
 import os
 import tempfile
-import time
 
 import pytest
 
@@ -128,6 +128,7 @@ class TestConnectionPool:
     async def test_write_uses_pool_connections(self):
         """写操作使用连接池的连接（非批量模式）。"""
         import api.config as cfg
+
         db, path = await _make_db(pool_size=2)
         try:
             old_batch = cfg.IF_DB_BATCH_ENABLED

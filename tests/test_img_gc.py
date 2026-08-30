@@ -6,6 +6,7 @@
 3. enforce_quota 超限时按最旧优先删除，降至 80% 上限后停止
 4. enforce_quota 支持审计回调、未超限不动作、目录不存在不报错
 """
+
 import os
 import sys
 import time
@@ -20,12 +21,11 @@ if str(_ROOT) not in sys.path:
 
 import api.base64_store as store  # noqa: E402
 
-_GIB = 1024 ** 3
+_GIB = 1024**3
 
 
 # ── 辅助：造大小可控的假文件 ──────────────────────
-def _make_file(dirpath: str, fname: str, size: int,
-               mtime: float | None = None) -> str:
+def _make_file(dirpath: str, fname: str, size: int, mtime: float | None = None) -> str:
     path = os.path.join(dirpath, fname)
     with open(path, "wb") as f:
         f.write(b"\0" * size)
@@ -147,10 +147,10 @@ def test_enforce_quota_audit_error_ignored(img_dir):
 
 
 # ── P3-2: gc_stats 热/冷水位统计 ───────────────────
-def _use_dir(monkeypatch, dirpath: str, ttl: float = 1000.0,
-             quota_gb: float = 5.0) -> None:
+def _use_dir(monkeypatch, dirpath: str, ttl: float = 1000.0, quota_gb: float = 5.0) -> None:
     """把 base64_store 的 config 常量指向给定目录/参数。"""
     import api.config as cfg
+
     monkeypatch.setattr(cfg, "IF_BASE64_DIR", str(dirpath))
     monkeypatch.setattr(cfg, "IF_BASE64_FILE_TTL", ttl)
     monkeypatch.setattr(cfg, "IF_IMG_MAX_GB", quota_gb)
@@ -207,6 +207,7 @@ def test_gc_stats_unreadable_dir_does_not_raise(monkeypatch, tmp_path):
     """目录存在但不可读（os.listdir 抛 OSError）→ 返回全零，不向 /v1/stats 抛 500。"""
     _use_dir(monkeypatch, tmp_path)
     _make_file(tmp_path, "a.png", 1000, time.time())
+
     # 无法在非特权进程可靠触发真实目录权限失败，直接 patch os.listdir 抛
     # PermissionError，验证 gc_stats 内部容错（monkeypatch 自动还原）。
     def _deny(_p):

@@ -1,4 +1,5 @@
 """后台周期任务（v4.2 拆分：main.py _run_background_tasks 迁移）。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -15,8 +16,7 @@ from .db.ip_blocklist_store import ip_blocklist_store
 log = logging.getLogger("bg_tasks")
 
 
-async def run_background_tasks(db, engine, registry, solver_guard,
-                               worker_health, gallery_cache) -> None:
+async def run_background_tasks(db, engine, registry, solver_guard, worker_health, gallery_cache) -> None:
     """TaskGroup 统一管理所有后台循环任务，组退出时自动 cancel 所有子任务。
 
     任一任务未捕获异常将导致整个组取消（异常传播至调用方）。
@@ -28,6 +28,7 @@ async def run_background_tasks(db, engine, registry, solver_guard,
     async def _cleanup_loop() -> None:
         nonlocal _auth_last
         from .worker import engine as _engine  # 复用单例（避免参数错位）
+
         while True:
             try:
                 await asyncio.sleep(config.DB_CLEANUP_INTERVAL)
@@ -40,12 +41,10 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                 nq = enforce_base64_quota(
                     config.IF_BASE64_DIR,
                     config.IF_IMG_MAX_GB,
-                    audit_fn=lambda path, detail: audit_log.record(
-                        "img.gc.quota", "system", path, detail),
+                    audit_fn=lambda path, detail: audit_log.record("img.gc.quota", "system", path, detail),
                 )
                 if nq:
-                    log.info("base64 配额保护: 删除 %d 个超限文件（上限 %.1fGB）",
-                             nq, config.IF_IMG_MAX_GB)
+                    log.info("base64 配额保护: 删除 %d 个超限文件（上限 %.1fGB）", nq, config.IF_IMG_MAX_GB)
                 if config.IF_IDEMPOTENCY_ENABLED:
                     nd = await db.clean_expired_idempotency()
                     if nd:
@@ -122,8 +121,7 @@ async def run_background_tasks(db, engine, registry, solver_guard,
                 await asyncio.sleep(30)
                 newly = worker_health.sweep()
                 if newly:
-                    log.warning("worker 卡死巡检: %d 个 worker 超期未活跃（stale）: %s",
-                                len(newly), newly)
+                    log.warning("worker 卡死巡检: %d 个 worker 超期未活跃（stale）: %s", len(newly), newly)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

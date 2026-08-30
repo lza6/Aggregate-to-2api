@@ -1,4 +1,5 @@
 """号池补满速率监控（P3-4）集成测试：/v1/account-pool 返回 growth 画像。"""
+
 import pytest
 
 
@@ -11,8 +12,7 @@ async def test_account_pool_growth_field(app_with_mocks):
     # v6.6.0: growth 画像必须存在（前端字段名 growth_stats，见 Accounts.tsx/api.ts）
     assert "growth_stats" in body, "account-pool 缺少 growth_stats 字段"
     g = body["growth_stats"]
-    for key in ("total", "new_in_24h", "new_in_7d", "avg_daily_7d",
-                "ok", "target", "gap", "eta_days"):
+    for key in ("total", "new_in_24h", "new_in_7d", "avg_daily_7d", "ok", "target", "gap", "eta_days"):
         assert key in g, f"growth 缺字段 {key}"
     # 结构与数值类型
     assert isinstance(g["total"], int)

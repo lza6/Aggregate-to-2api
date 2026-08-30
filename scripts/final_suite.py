@@ -3,6 +3,7 @@
 执行：python scripts/final_suite.py [--integration]
 环境：Windows；先清残留 python 再跑，避免端口/锁竞争假卡死。
 """
+
 import subprocess
 import sys
 

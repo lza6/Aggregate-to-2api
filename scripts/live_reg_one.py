@@ -1,6 +1,5 @@
 import asyncio
 import re
-import time
 import uuid
 import httpx
 
@@ -43,9 +42,7 @@ async def run_and_save_one():
 
     # 2. 求解 turnstile
     reg = NanobananaRegisterer()
-    captcha, dur = await turnstile_client.solve_turnstile(
-        config.CF_SOLVER_URL, reg.turnstile_page, reg.SITEKEY, 60.0
-    )
+    captcha, dur = await turnstile_client.solve_turnstile(config.CF_SOLVER_URL, reg.turnstile_page, reg.SITEKEY, 60.0)
     print(f"[2] Captcha solved in {dur:.1f}s")
 
     # 3. 注册
@@ -115,9 +112,7 @@ async def run_and_save_one():
         return "FAIL: no verify link"
 
     # 5. 点激活链接
-    r_act = await _th(
-        reg.client.get, link, headers={"User-Agent": config.USER_AGENT}
-    )
+    r_act = await _th(reg.client.get, link, headers={"User-Agent": config.USER_AGENT})
     print(f"[5] Click link status: {r_act.status_code}")
 
     # 6. 登录拿 Cookie
@@ -141,9 +136,7 @@ async def run_and_save_one():
     cookie = "; ".join(f"{k}={v}" for k, v in login.cookies.items())
 
     # 7. 入库
-    account_pool.add(
-        "nanobanana", email, cookie, password=password, credits=4
-    )
+    account_pool.add("nanobanana", email, cookie, password=password, credits=4)
     print(f"[7] SUCCESS! Account added to DB: {email}")
 
     # 8. 签到测试

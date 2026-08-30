@@ -1,4 +1,6 @@
 <script setup>
+// vite define 全局注入（landing/vite.config.js build-time 注入）
+const appVersion = __APP_VERSION__
 import { computed } from 'vue'
 import { useStats, useMeta, useProviders, useModels, useChatUsage } from './composables/useApi'
 import { fmtTokens, fmtInt, fmtFloat, fmtPct, orDash } from './lib/fmt'
@@ -122,7 +124,7 @@ const modelList = computed(() => {
         <span class="sep">·</span>
         <a href="/v1/honor" target="_blank" rel="noopener">请我喝咖啡</a>
         <span class="sep">·</span>
-        <span class="muted-2">v6.5.0</span>
+        <span class="muted-2">v{{ appVersion }}</span>
       </div>
     </footer>
   </div>

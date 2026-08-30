@@ -37,6 +37,9 @@ api.tar
 .env
 !deploy/.env.example
 
+# Root-level PNG screenshot debris (only root; docs/artifacts/ pngs stay tracked)
+/*.png
+
 # Local probe scripts (often contain real credentials; never commit)
 probe_*.py
 
@@ -89,4 +92,7 @@ codegraph.lock
 # v6.7.0 M4 验收: 测试覆盖率/截图临时产物不入库
 .coverage
 .coverage.*
+# v6.8.0: 根目录测试运行日志临时产物
+.coverage_run.log
+.unit_run.log
 frontend/e2e_shots*/

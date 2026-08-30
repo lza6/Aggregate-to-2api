@@ -9,6 +9,7 @@
 
 H2: 共享单个 httpx.AsyncClient（连接池/keep-alive 复用），避免每任务多次 TLS 握手。
 """
+
 import asyncio
 import base64
 import ipaddress
@@ -196,7 +197,7 @@ def _browser_headers(base_url: str, referer: str | None = None) -> dict:
     """
     h = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                      "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+        "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
         "Accept": "*/*",
         "Content-Type": "application/json",
         "Origin": base_url,
@@ -209,6 +210,7 @@ def _browser_headers(base_url: str, referer: str | None = None) -> dict:
     }
     try:
         from .context import get_current_trace_id
+
         _tid = get_current_trace_id()
         if _tid:
             h["X-Trace-ID"] = _tid
@@ -242,11 +244,11 @@ async def submit_generate(
         client = _get_client()
         if proxy:
             # 直连被 429 → 换出口重试路径：一次性 client，绕过共享 H2 连接池
-            own_client = httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(30.0),
-                                           headers={"User-Agent": config.USER_AGENT})
+            own_client = httpx.AsyncClient(
+                proxy=proxy, timeout=httpx.Timeout(30.0), headers={"User-Agent": config.USER_AGENT}
+            )
             client = own_client
-        r = await client.post(url, json=payload, headers=_browser_headers(base_url),
-                              timeout=httpx.Timeout(timeout))
+        r = await client.post(url, json=payload, headers=_browser_headers(base_url), timeout=httpx.Timeout(timeout))
         data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
 
         if r.status_code != 200 or data.get("error"):
@@ -286,8 +288,9 @@ async def poll_generate_status(
             if time.monotonic() > deadline:
                 raise TimeoutError("生成超时")
             try:
-                r = await client.get(url, params={"taskId": task_id}, headers=_browser_headers(base_url),
-                                     timeout=httpx.Timeout(30))
+                r = await client.get(
+                    url, params={"taskId": task_id}, headers=_browser_headers(base_url), timeout=httpx.Timeout(30)
+                )
             except httpx.TransportError as e:
                 log.warning("status 请求异常: %s", e)
                 await asyncio.sleep(poll_interval)
@@ -338,14 +341,14 @@ async def download_image(
             first_ip = i[4][0]
     # 用 IP 替换主机名（保持端口和路径不变）
     from urllib.parse import urlparse, urlunparse
+
     parsed = urlparse(image_url)
     ip_port = f"{first_ip}:{parsed.port}" if parsed.port else first_ip
     safe_url = urlunparse((parsed.scheme, ip_port, parsed.path, parsed.params, parsed.query, parsed.fragment))
     client = _get_client()
     buf = _PoolView(_buffer_pool.acquire())
     try:
-        async with client.stream("GET", safe_url, timeout=httpx.Timeout(timeout),
-                                 headers={"Host": host}) as r:
+        async with client.stream("GET", safe_url, timeout=httpx.Timeout(timeout), headers={"Host": host}) as r:
             r.raise_for_status()
             async for chunk in r.aiter_bytes():
                 buf.extend(chunk)
@@ -386,33 +389,37 @@ def detect_mime(data: bytes) -> str:
 # proxy 参数：住宅代理池会话（图生图并发绕过）。token 与提交必须同一代理 IP，
 # 故 upload/submit/poll 全走该代理；cf_solver 解 token 时也传同一 proxy。
 
+
 async def _edit_client(proxy: str | None) -> httpx.AsyncClient:
     """图生图专用 client：指定代理时新建（session 绑定），否则用共享连接池。"""
     if proxy:
-        return httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(30.0),
-                                 headers={"User-Agent": config.USER_AGENT})
+        return httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(30.0), headers={"User-Agent": config.USER_AGENT})
     return _get_client()
 
 
-async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str = "image/png",
-                            timeout: float = 60.0, proxy: str | None = None) -> str:
+async def upload_edit_image(
+    base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None
+) -> str:
     """上传图片到上游对象存储，返回 publicUrl。"""
     if MOCK_UPSTREAM:
         return "https://mock.example/uploads/edit.png"
     client = await _edit_client(proxy)
     headers = _browser_headers(base_url, referer=base_url + "/ai-photo-editor")
-    r = await client.post(f"{base_url}/api/ai-photo-editor/upload-url",
-                          json={"filename": "edit.png", "content_type": content_type},
-                          headers=headers, timeout=httpx.Timeout(timeout))
+    r = await client.post(
+        f"{base_url}/api/ai-photo-editor/upload-url",
+        json={"filename": "edit.png", "content_type": content_type},
+        headers=headers,
+        timeout=httpx.Timeout(timeout),
+    )
     if r.status_code != 200:
         raise ImagefreeError(f"获取上传地址失败: HTTP {r.status_code} {r.text[:120]}")
     data = r.json()
     upload_url, public_url = data.get("uploadUrl"), data.get("publicUrl")
     if not upload_url or not public_url:
         raise ImagefreeError(f"上传响应缺 uploadUrl/publicUrl: {data}")
-    up = await client.put(upload_url, content=image_bytes,
-                          headers={"Content-Type": content_type},
-                          timeout=httpx.Timeout(timeout))
+    up = await client.put(
+        upload_url, content=image_bytes, headers={"Content-Type": content_type}, timeout=httpx.Timeout(timeout)
+    )
     if up.status_code not in (200, 201, 204):
         raise ImagefreeError(f"上传图片失败: HTTP {up.status_code} {up.text[:120]}")
     log.info("图生图图片已上传 publicUrl=%s%s", public_url, " (proxy)" if proxy else "")
@@ -421,17 +428,20 @@ async def upload_edit_image(base_url: str, image_bytes: bytes, content_type: str
     return public_url
 
 
-async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_token: str,
-                      timeout: float = 30.0, proxy: str | None = None) -> str:
+async def submit_edit(
+    base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None
+) -> str:
     """提交图生图任务，返回 taskId。"""
     if MOCK_UPSTREAM:
         return f"mock-edit-task-{int(time.time() * 1000)}"
     client = await _edit_client(proxy)
     headers = _browser_headers(base_url, referer=base_url + "/ai-photo-editor")
-    r = await client.post(f"{base_url}/api/ai-photo-editor",
-                          json={"image_url": image_url, "prompt": prompt,
-                                "turnstile_token": turnstile_token},
-                          headers=headers, timeout=httpx.Timeout(timeout))
+    r = await client.post(
+        f"{base_url}/api/ai-photo-editor",
+        json={"image_url": image_url, "prompt": prompt, "turnstile_token": turnstile_token},
+        headers=headers,
+        timeout=httpx.Timeout(timeout),
+    )
     data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
     if r.status_code != 200 or data.get("error"):
         detail = data.get("error") or f"HTTP {r.status_code}"
@@ -445,9 +455,9 @@ async def submit_edit(base_url: str, image_url: str, prompt: str, turnstile_toke
     return tid
 
 
-async def poll_edit_status(base_url: str, task_id: str,
-                           timeout: float = 180.0, poll_interval: float = 2.0,
-                           proxy: str | None = None) -> dict:
+async def poll_edit_status(
+    base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None
+) -> dict:
     """轮询图生图状态直到 completed/error，返回 {status, image, ...}。"""
     if MOCK_UPSTREAM:
         await asyncio.sleep(0.1)
@@ -460,8 +470,9 @@ async def poll_edit_status(base_url: str, task_id: str,
             if time.monotonic() > deadline:
                 raise TimeoutError("图生图生成超时")
             try:
-                r = await client.get(url, params={"taskId": task_id}, headers=_browser_headers(base_url),
-                                     timeout=httpx.Timeout(30))
+                r = await client.get(
+                    url, params={"taskId": task_id}, headers=_browser_headers(base_url), timeout=httpx.Timeout(30)
+                )
             except httpx.TransportError as e:
                 log.warning("图生图 status 请求异常: %s", e)
                 await asyncio.sleep(poll_interval)

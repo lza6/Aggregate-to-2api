@@ -15,8 +15,8 @@
 用法：
   python scripts/e2e_validate.py [--mode auto|real|mock] [--api-port 8100] [--concurrency 20] [--no-fault]
 """
+
 import argparse
-import json
 import os
 import socket
 import subprocess
@@ -30,7 +30,7 @@ PY = sys.executable
 
 # mock 模式求解延迟；并发压测量级
 MOCK_SOLVE_DELAY = 0.3
-CIRCUIT_THRESHOLD = 5          # 与 api/config.py 默认 IF_SOLVE_CIRCUIT_THRESHOLD 对齐
+CIRCUIT_THRESHOLD = 5  # 与 api/config.py 默认 IF_SOLVE_CIRCUIT_THRESHOLD 对齐
 
 
 def _reconfigure_stdout():
@@ -78,8 +78,9 @@ class E2E:
             self.base_env["IF_CF_SOLVER_URL"] = f"http://127.0.0.1:{self.solver_port}"
         elif self.mode == "real":
             if not port_open(self.solver_port):
-                self.results.append(("real cf_solver 就绪", False,
-                                     f":{self.solver_port} 未监听（需先起真实 cf_solver）"))
+                self.results.append(
+                    ("real cf_solver 就绪", False, f":{self.solver_port} 未监听（需先起真实 cf_solver）")
+                )
                 raise SystemExit(1)
             self.base_env["IF_CF_SOLVER_URL"] = f"http://127.0.0.1:{self.solver_port}"
             # 真实 cf_solver 单浏览器槽串行，单 token 求解 ~5-15s（1 槽物理吞吐上限）。
@@ -88,14 +89,20 @@ class E2E:
             self.concurrency = min(self.concurrency, 3)
         # 服务环境：并发/池/等待参数显式钉住，验收「池机制在池容量<并发下不超时」
         env = dict(self.base_env)
-        env.update({
-            "IF_HOST": "127.0.0.1", "IF_PORT": str(self.api_port),
-            "IF_TOKEN_POOL_SIZE": "6", "IF_TOKEN_TTL": "90",
-            "IF_TOKEN_WAIT_TIMEOUT": "30", "IF_WORKERS": "10",
-            "IF_GENERATE_MAX_ATTEMPTS": "2", "IF_GENERATE_TIMEOUT": "60",
-            "IF_DB_FILE": "data/e2e_validate.db",
-            "IF_PROXY": "http://127.0.0.1:10808",   # 本机 Clash：访问 imagefree
-        })
+        env.update(
+            {
+                "IF_HOST": "127.0.0.1",
+                "IF_PORT": str(self.api_port),
+                "IF_TOKEN_POOL_SIZE": "6",
+                "IF_TOKEN_TTL": "90",
+                "IF_TOKEN_WAIT_TIMEOUT": "30",
+                "IF_WORKERS": "10",
+                "IF_GENERATE_MAX_ATTEMPTS": "2",
+                "IF_GENERATE_TIMEOUT": "60",
+                "IF_DB_FILE": "data/e2e_validate.db",
+                "IF_PROXY": "http://127.0.0.1:10808",  # 本机 Clash：访问 imagefree
+            }
+        )
         if self.mode == "mock":
             # mock 模式全链路 mock（solver + 上游 imagefree），零外部依赖、确定性、可重复
             env["IF_MOCK_UPSTREAM"] = "1"
@@ -107,9 +114,11 @@ class E2E:
         # 子进程 stdout 重定向到文件（而非 pipe）：uvicorn 日志量大，pipe 不消费会阻塞服务
         self._api_log = open(os.path.join(ROOT, "data", "e2e_api.log"), "wb")
         p = subprocess.Popen(
-            [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1",
-             "--port", str(self.api_port)],
-            cwd=ROOT, env=env, stdout=self._api_log, stderr=subprocess.STDOUT,
+            [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", str(self.api_port)],
+            cwd=ROOT,
+            env=env,
+            stdout=self._api_log,
+            stderr=subprocess.STDOUT,
         )
         self.procs.append(p)
         if not wait_port(self.api_port, 60, "api"):
@@ -119,9 +128,10 @@ class E2E:
     def _start_mock_solver(self) -> None:
         self._solver_log = open(os.path.join(ROOT, "data", "e2e_mock.log"), "wb")
         p = subprocess.Popen(
-            [PY, os.path.join(ROOT, "scripts", "mock_cfsolver.py"),
-             "--port", str(self.solver_port)],
-            cwd=ROOT, stdout=self._solver_log, stderr=subprocess.STDOUT,
+            [PY, os.path.join(ROOT, "scripts", "mock_cfsolver.py"), "--port", str(self.solver_port)],
+            cwd=ROOT,
+            stdout=self._solver_log,
+            stderr=subprocess.STDOUT,
         )
         self.procs.append(p)
         if not wait_port(self.solver_port, 15, "mock solver"):
@@ -161,7 +171,11 @@ class E2E:
     def get(self, path: str) -> dict:
         with httpx.Client(timeout=10.0) as c:
             r = c.get(self.api_url + path)
-            return {"status": r.status_code, "json": r.json() if r.headers.get("content-type", "").startswith("application/json") else None, "text": r.text}
+            return {
+                "status": r.status_code,
+                "json": r.json() if r.headers.get("content-type", "").startswith("application/json") else None,
+                "text": r.text,
+            }
 
     def post(self, path: str, body: dict | None = None) -> dict:
         with httpx.Client(timeout=10.0) as c:
@@ -200,18 +214,33 @@ class E2E:
         h = self.get("/v1/healthz")
         ok = h["status"] == 200 and h["json"] is not None
         j = h.get("json") or {}
-        required = ["solver_status", "solve_success_total", "solve_failure_total",
-                    "solve_avg_seconds", "solve_window_success_rate", "solve_window_solve_count",
-                    "solve_consecutive_failures", "solve_last_failure_at", "solver_circuit_open",
-                    "solve_rejected_total", "token_pool", "token_pools"]
+        required = [
+            "solver_status",
+            "solve_success_total",
+            "solve_failure_total",
+            "solve_avg_seconds",
+            "solve_window_success_rate",
+            "solve_window_solve_count",
+            "solve_consecutive_failures",
+            "solve_last_failure_at",
+            "solver_circuit_open",
+            "solve_rejected_total",
+            "token_pool",
+            "token_pools",
+        ]
         missing = [k for k in required if k not in j]
         self.check("healthz: HTTP 200", ok, str(h["status"]))
         self.check("healthz: solver 指标字段齐全", not missing, f"缺失={missing}")
-        self.check("healthz: solver_status 合法",
-                   j.get("solver_status") in ("ok", "degraded", "circuit_open"),
-                   str(j.get("solver_status")))
-        self.check("healthz: token_pools 明细存在", "direct" in (j.get("token_pools") or {}),
-                   str(list((j.get("token_pools") or {}).keys())[:5]))
+        self.check(
+            "healthz: solver_status 合法",
+            j.get("solver_status") in ("ok", "degraded", "circuit_open"),
+            str(j.get("solver_status")),
+        )
+        self.check(
+            "healthz: token_pools 明细存在",
+            "direct" in (j.get("token_pools") or {}),
+            str(list((j.get("token_pools") or {}).keys())[:5]),
+        )
 
     def _verify_metrics(self) -> None:
         m = self.get("/metrics")
@@ -238,8 +267,9 @@ class E2E:
             import concurrent.futures
 
             def _one(i: int):
-                r = c.post(self.api_url + "/v1/generate/async",
-                           json={"prompt": f"e2e burst {i}", "aspect_ratio": "1:1"})
+                r = c.post(
+                    self.api_url + "/v1/generate/async", json={"prompt": f"e2e burst {i}", "aspect_ratio": "1:1"}
+                )
                 return r.json().get("id")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=n) as ex:
@@ -284,13 +314,13 @@ class E2E:
         self.check(f"并发 {n}（池 6）: 全部终态无超时", no_starve, str(statuses))
         m = self.get("/metrics")
         import re
+
         mline = re.search(r"imagefree_token_wait_timeout_total\s+(\d+)", m["text"])
         wt = int(mline.group(1)) if mline else None
         if self.mode == "mock":
             self.check("池空等待超时=0（无 starve）", wt == 0, f"wait_timeout_total={wt}")
         else:
-            self.check("池空等待超时≤1（real 单槽吞吐限制，宽松）", (wt or 0) <= 1,
-                       f"wait_timeout_total={wt}")
+            self.check("池空等待超时≤1（real 单槽吞吐限制，宽松）", (wt or 0) <= 1, f"wait_timeout_total={wt}")
 
     def _verify_generate_path(self) -> None:
         # 注意：_wait_tasks 会原地清空入参列表，故传 list(ids) 副本，保留 len(ids) 供断言
@@ -298,16 +328,21 @@ class E2E:
             ids = self._submit_burst(2)
             done = self._wait_tasks(list(ids), timeout=300)
             comp = sum(1 for t in done.values() if t["status"] == "completed")
-            self.check("real 模式: 真实求解+出图 ≥1 完成",
-                       comp >= 1, f"completed={comp} statuses={[t['status'] for t in done.values()]}")
+            self.check(
+                "real 模式: 真实求解+出图 ≥1 完成",
+                comp >= 1,
+                f"completed={comp} statuses={[t['status'] for t in done.values()]}",
+            )
             return
         # mock 模式：上游也 mock，任务应全部 completed（全链路 mock 确定性验证）
         ids = self._submit_burst(3)
         done = self._wait_tasks(list(ids), timeout=60)
         comp = sum(1 for t in done.values() if t["status"] == "completed")
-        self.check("mock 模式: 生成任务全部 completed",
-                   comp == len(ids) and comp > 0,
-                   f"completed={comp}/{len(ids)} statuses={[t['status'] for t in done.values()]}")
+        self.check(
+            "mock 模式: 生成任务全部 completed",
+            comp == len(ids) and comp > 0,
+            f"completed={comp}/{len(ids)} statuses={[t['status'] for t in done.values()]}",
+        )
 
     def _solver_fault(self, mode: str) -> None:
         """向 mock cf_solver 注入故障状态（独立 client，不经 api 前缀拼接）。"""
@@ -329,14 +364,21 @@ class E2E:
             # 制造池空刺激预取求解
             self._submit_burst(4)
             time.sleep(1.5)
-        self.check("熔断: 连续失败后 OPEN", opened, f"consecutive={ (self.get('/v1/healthz').get('json') or {}).get('solve_consecutive_failures') }")
+        self.check(
+            "熔断: 连续失败后 OPEN",
+            opened,
+            f"consecutive={ (self.get('/v1/healthz').get('json') or {}).get('solve_consecutive_failures') }",
+        )
         h = self.get("/v1/healthz")
         j = h.get("json") or {}
         self.check("熔断: healthz status=degraded", j.get("status") == "degraded", str(j.get("status")))
         m = self.get("/metrics")
         import re
+
         mline = re.search(r"imagefree_solver_circuit_open\s+(\d+)", m["text"])
-        self.check("熔断: metrics circuit_open=1", mline and mline.group(1) == "1", str(mline.group(1) if mline else None))
+        self.check(
+            "熔断: metrics circuit_open=1", mline and mline.group(1) == "1", str(mline.group(1) if mline else None)
+        )
         # 恢复：纯等 prefetch 半开探测自然恢复（探测由 prefetch_loop 独占 allow_solve 节奏，
         # 每 probe_interval 放行一次；不再提交 burst 刺激，避免 acquire 干扰探测节奏）
         self._solver_fault("ok")

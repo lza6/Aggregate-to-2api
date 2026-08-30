@@ -3,6 +3,7 @@
 上游 ai-photo-editor 硬并发=1（同出口 IP 只能 1 个编辑任务在途），本模块承载
 双层互斥：进程内 asyncio.Lock + 跨进程文件锁，保障多进程/多实例不撞上游。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +19,15 @@ from .models import EditRequest, TaskInfo
 from .meta import db, engine, registry
 from .errors import AppError, ErrorCodes
 from .db import task_to_public
-from .dispatch import _normalize_model, _provider_prefix, _parse_input_image, _parse_input_images, _validate_model, _PROVIDER_TASKS, _provider_sem
+from .dispatch import (
+    _normalize_model,
+    _provider_prefix,
+    _parse_input_image,
+    _parse_input_images,
+    _validate_model,
+    _PROVIDER_TASKS,
+    _provider_sem,
+)
 from .db.lease_store import LeaseStore
 
 log = logging.getLogger("dispatch_edit")
@@ -122,6 +131,7 @@ async def _acquire_edit_lock(key: str, holder: str, timeout: float | None = None
 
 async def _renew_edit_lock_loop(key: str, token: str) -> asyncio.Task:
     """持锁期间的心跳续租协程。"""
+
     async def _heartbeat() -> None:
         while True:
             await asyncio.sleep(config.EDIT_LEASE_TTL / 3.0)
@@ -133,6 +143,7 @@ async def _renew_edit_lock_loop(key: str, token: str) -> asyncio.Task:
             if not ok:
                 log.warning("租约锁已易主/过期，停止续租 key=%s", key)
                 return  # 锁已被抢/释放，停止续租
+
     t = asyncio.create_task(_heartbeat())
     t.add_done_callback(lambda _: None)  # 回收 unhandled exception 告警
     return t
@@ -158,8 +169,7 @@ class _EditProxyPool:
             try:
                 with open(config.EDIT_PROXY_FILE, encoding="utf-8") as f:
                     self.proxies = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-                log.info("图生图代理池加载 %d 个代理（并发上限 %d）",
-                         len(self.proxies), config.EDIT_PROXY_PARALLEL)
+                log.info("图生图代理池加载 %d 个代理（并发上限 %d）", len(self.proxies), config.EDIT_PROXY_PARALLEL)
             except OSError as e:
                 log.warning("代理池文件不可读 %s: %s", config.EDIT_PROXY_FILE, e)
 
@@ -198,8 +208,7 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
         ctype = imagefree_client.detect_mime(image_bytes)
         await db.create_request(job_id, prompt, "1:1", download, "img", "imagefree/default")
         # P0-3: imagefree 图生图 task 加入 _PROVIDER_TASKS 托盘，确保 shutdown 可优雅取消
-        t = asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download,
-                                          model.split("/", 1)[-1]))
+        t = asyncio.create_task(_run_edit_job(job_id, image_bytes, ctype, prompt, download, model.split("/", 1)[-1]))
         _PROVIDER_TASKS.add(t)
         t.add_done_callback(_PROVIDER_TASKS.discard)
         return job_id
@@ -213,32 +222,30 @@ async def _dispatch_edit(model: str, prompt: str, image_bytes: bytes, download: 
     async def _run() -> None:
         try:
             async with _provider_sem(provider.prefix):
-                res = await provider.generate(model, prompt, "1:1", images=[image_bytes],
-                                              resolution="1K", download=download)
+                res = await provider.generate(
+                    model, prompt, "1:1", images=[image_bytes], resolution="1K", download=download
+                )
             if res.proxy_used:
                 await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
-                await db.mark_finished(job_id, "completed", res.asset_url, None,
-                                 time.monotonic() - t0, res.asset_bytes, res.asset_mime)
+                await db.mark_finished(
+                    job_id, "completed", res.asset_url, None, time.monotonic() - t0, res.asset_bytes, res.asset_mime
+                )
                 registry.record_success(provider.prefix)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, True)
                 except Exception:
                     pass
             else:
-                await db.mark_finished(job_id, "error", None, res.error or "生成失败",
-                                 time.monotonic() - t0)
+                await db.mark_finished(job_id, "error", None, res.error or "生成失败", time.monotonic() - t0)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
                 except Exception:
                     pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             try:
-                registry.adaptive_router.record_result(
-                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
             except Exception:
                 pass
             log.exception("提供商图生图异常 %s", job_id)
@@ -262,32 +269,30 @@ async def _dispatch_edit_multi(model: str, prompt: str, image_bytes_list: list[b
     async def _run() -> None:
         try:
             async with _provider_sem(provider.prefix):
-                res = await provider.generate(model, prompt, "1:1", images=image_bytes_list,
-                                              resolution="1K", download=download)
+                res = await provider.generate(
+                    model, prompt, "1:1", images=image_bytes_list, resolution="1K", download=download
+                )
             if res.proxy_used:
                 await db.update_proxy_used(job_id, res.proxy_used)
             if res.status == "completed":
-                await db.mark_finished(job_id, "completed", res.asset_url, None,
-                                 time.monotonic() - t0, res.asset_bytes, res.asset_mime)
+                await db.mark_finished(
+                    job_id, "completed", res.asset_url, None, time.monotonic() - t0, res.asset_bytes, res.asset_mime
+                )
                 registry.record_success(provider.prefix)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, True)
                 except Exception:
                     pass
             else:
-                await db.mark_finished(job_id, "error", None, res.error or "生成失败",
-                                 time.monotonic() - t0)
+                await db.mark_finished(job_id, "error", None, res.error or "生成失败", time.monotonic() - t0)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
                 except Exception:
                     pass
         except Exception as e:
             await db.mark_finished(job_id, "error", None, str(e), time.monotonic() - t0)
             try:
-                registry.adaptive_router.record_result(
-                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
             except Exception:
                 pass
             log.exception("提供商多图图生图异常 %s", job_id)
@@ -344,8 +349,9 @@ async def edit_image(req: EditRequest):
 
 
 # ── 图生图后台执行链 ──
-async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
-                        download: bool, model: str = "default") -> None:
+async def _run_edit_job(
+    job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default"
+) -> None:
     """后台执行图生图全链路，双层互斥保证不撞上游并发=1。"""
     _EDIT_PENDING.add(job_id)
     holder = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -356,8 +362,9 @@ async def _run_edit_job(job_id: str, image: bytes, ctype: str, prompt: str,
         async with local_lock:
             token = await _acquire_edit_lock(key, holder, config.EDIT_CONCURRENCY_WAIT)
             if not token:
-                await db.mark_finished(job_id, "error", None,
-                                 "图生图繁忙：其他实例正在生成同一出口通道，请稍后重试", None)
+                await db.mark_finished(
+                    job_id, "error", None, "图生图繁忙：其他实例正在生成同一出口通道，请稍后重试", None
+                )
                 return
             heartbeat = None
             if config.EDIT_LEASE_ENABLED:
@@ -383,50 +390,64 @@ def _is_edit_slot_wedged(err: object) -> bool:
     return "already have an image editing task" in msg or "task in progress" in msg
 
 
-async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str,
-                          download: bool, model: str = "default",
-                          proxy: str | None = None) -> None:
+async def _run_edit_chain(
+    job_id: str, image: bytes, ctype: str, prompt: str, download: bool, model: str = "default", proxy: str | None = None
+) -> None:
     """真正执行图生图提交（持锁后调用）。"""
     t0 = time.monotonic()
     last_err: str | None = None
     for attempt in range(1, config.EDIT_RETRY_MAX + 1):
         token = await engine.acquire_token(key=proxy or "direct")
         if not token:
-            await db.mark_finished(job_id, "error", None,
-                             "人机验证 token 暂不可用（cf_solver 不可用或熔断中），请稍后重试",
-                             time.monotonic() - t0)
+            await db.mark_finished(
+                job_id,
+                "error",
+                None,
+                "人机验证 token 暂不可用（cf_solver 不可用或熔断中），请稍后重试",
+                time.monotonic() - t0,
+            )
             return
         try:
-            public_url = await imagefree_client.upload_edit_image(
-                config.BASE_URL, image, ctype, proxy=proxy)
+            public_url = await imagefree_client.upload_edit_image(config.BASE_URL, image, ctype, proxy=proxy)
             tid = await imagefree_client.submit_edit(
-                config.BASE_URL, public_url, config.apply_model(prompt, model), token,
-                proxy=proxy)
+                config.BASE_URL, public_url, config.apply_model(prompt, model), token, proxy=proxy
+            )
             await db.update_upstream_task(job_id, tid)
             result = await imagefree_client.poll_edit_status(
-                config.BASE_URL, tid, config.EDIT_TIMEOUT, config.GENERATE_POLL_INTERVAL,
-                proxy=proxy)
+                config.BASE_URL, tid, config.EDIT_TIMEOUT, config.GENERATE_POLL_INTERVAL, proxy=proxy
+            )
             break
         except Exception as e:
             last_err = str(e)
             if _is_edit_slot_wedged(e) and attempt < config.EDIT_RETRY_MAX:
-                log.warning("job %s 上游并发槽被占（第 %d/%d 次），等待 %ds 自愈重试",
-                            job_id, attempt, config.EDIT_RETRY_MAX,
-                            config.EDIT_RETRY_INTERVAL)
+                log.warning(
+                    "job %s 上游并发槽被占（第 %d/%d 次），等待 %ds 自愈重试",
+                    job_id,
+                    attempt,
+                    config.EDIT_RETRY_MAX,
+                    config.EDIT_RETRY_INTERVAL,
+                )
                 await asyncio.sleep(config.EDIT_RETRY_INTERVAL)
                 continue
             if _is_edit_slot_wedged(e):
-                await db.mark_finished(job_id, "error", None,
-                                 f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {e}",
-                                 time.monotonic() - t0)
+                await db.mark_finished(
+                    job_id,
+                    "error",
+                    None,
+                    f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {e}",
+                    time.monotonic() - t0,
+                )
             else:
-                await db.mark_finished(job_id, "error", None, f"图生图失败: {e}",
-                                 time.monotonic() - t0)
+                await db.mark_finished(job_id, "error", None, f"图生图失败: {e}", time.monotonic() - t0)
             return
     else:
-        await db.mark_finished(job_id, "error", None,
-                         f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {last_err}",
-                         time.monotonic() - t0)
+        await db.mark_finished(
+            job_id,
+            "error",
+            None,
+            f"图生图失败（重试 {config.EDIT_RETRY_MAX} 次仍被上游占用）: {last_err}",
+            time.monotonic() - t0,
+        )
         return
     if not download:
         await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)
@@ -434,8 +455,15 @@ async def _run_edit_chain(job_id: str, image: bytes, ctype: str, prompt: str,
     try:
         raw = await imagefree_client.download_image(result["image"], 60.0, config.MAX_IMAGE_BYTES)
         mime = imagefree_client.detect_mime(raw)
-        await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0,
-                         imagefree_client.to_base64(raw, mime), mime)
+        await db.mark_finished(
+            job_id,
+            "completed",
+            result["image"],
+            None,
+            time.monotonic() - t0,
+            imagefree_client.to_base64(raw, mime),
+            mime,
+        )
     except Exception as e:
         log.warning("图生图结果下载失败（不影响 URL 交付）: %s", e)
         await db.mark_finished(job_id, "completed", result["image"], None, time.monotonic() - t0)

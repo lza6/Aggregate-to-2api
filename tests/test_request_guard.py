@@ -9,6 +9,7 @@
 - error_tracker 收到 RATE.001 计数（三层聚合）；
 - 重启语义：reset_runtime_state 清零桶（与滑窗/daily 一致）。
 """
+
 from __future__ import annotations
 
 import time
@@ -19,17 +20,22 @@ from starlette.requests import Request
 from api import config
 from api.errors import AppError
 import api.request_guard as rg
-from api.db.ip_blocklist_store import ip_blocklist_store as store
 
 
 def _make_request(ip: str) -> Request:
     scope = {
-        "type": "http", "http_version": "1.1", "method": "POST",
-        "scheme": "http", "path": "/v1/generate", "raw_path": b"/v1/generate",
-        "query_string": b"", "root_path": "",
-        "headers": [(b"x-forwarded-for", ip.encode()),
-                    (b"host", b"testserver"), (b"user-agent", b"pytest")],
-        "client": ("127.0.0.1", 1234), "server": ("127.0.0.1", 8000), "state": {},
+        "type": "http",
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/v1/generate",
+        "raw_path": b"/v1/generate",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"x-forwarded-for", ip.encode()), (b"host", b"testserver"), (b"user-agent", b"pytest")],
+        "client": ("127.0.0.1", 1234),
+        "server": ("127.0.0.1", 8000),
+        "state": {},
     }
     return Request(scope)
 
@@ -103,6 +109,7 @@ class TestL1TokenBucket:
     def test_error_tracker_aggregates_rate_001(self, monkeypatch):
         """L1 超限计入 error_tracker（RATE.001），供 /v1/errors/aggregates 聚合。"""
         from api.error_tracker import count_of, reset
+
         monkeypatch.setattr(config, "IF_RATE_TOKEN_CAPACITY", 1.0)
         monkeypatch.setattr(config, "IF_RATE_TOKEN_REFILL_PER_SEC", 0.0)
         reset()

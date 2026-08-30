@@ -1,4 +1,5 @@
 """并发压测：模拟 50 RPS 瞬时入口，验证全部接受（无 429/5xx），并核对排队/并发状态。"""
+
 import json
 import sys
 import time
@@ -45,6 +46,8 @@ print(f"=== 压测结果: {N} 请求 / {elapsed:.2f}s ≈ {rps:.1f} RPS ===")
 print(f"接受(202/pending): {results['ok']}")
 print(f"限流429: {results['429']}")
 print(f"其他: {results['other']}")
-print(f"单请求耗时: min={min(durations)*1000:.0f}ms max={max(durations)*1000:.0f}ms avg={sum(durations)/len(durations)*1000:.0f}ms")
+print(
+    f"单请求耗时: min={min(durations)*1000:.0f}ms max={max(durations)*1000:.0f}ms avg={sum(durations)/len(durations)*1000:.0f}ms"
+)
 if errors[:3]:
     print("前3个错误:", errors[:3])

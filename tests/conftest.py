@@ -5,6 +5,7 @@ asyncio_default_test_loop_scope/ fixture_loop_scope 之外另起 session loop，
 导致 app 内部 worker/DB 与测试函数跨 loop 死锁（txt2img 集成测试卡 pending 的历史根因）。
 统一交由 pytest-asyncio 的 session scope 管理，测试与 session fixture 共享同一 loop。
 """
+
 import asyncio
 import os
 import socket
@@ -105,7 +106,9 @@ def mock_cfsolver():
     env["PYTHONUNBUFFERED"] = "1"
     p = subprocess.Popen(
         [sys.executable, str(_ROOT / "scripts" / "mock_cfsolver.py"), "--port", "8001"],
-        cwd=str(_ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=str(_ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         env=env,
     )
     if not wait_port(8001, 15, "mock solver"):
@@ -163,6 +166,7 @@ async def _app_instance(mock_cfsolver):
                 del sys.modules[mod_key]
     else:
         import api.config as _cfg  # noqa: PLC0415
+
         _cfg.IF_IDEMPOTENCY_ENABLED = True
         _cfg.IF_DLQ_ENABLED = True
         _cfg.IF_PERSISTENT_QUEUE_ENABLED = False
@@ -172,6 +176,7 @@ async def _app_instance(mock_cfsolver):
         # 把 IF_MOCK_UPSTREAM 同步进模块级快照，避免上游 mock 开关失效
         # 导致集成测试对真实 imagefree.net 发 429（详见《下一步改进指南》P0-4 证据）。
         import api.imagefree_client as _ifc  # noqa: PLC0415
+
         _ifc.MOCK_UPSTREAM = True
         _cfg.MOCK_UPSTREAM = True
 
@@ -181,6 +186,7 @@ async def _app_instance(mock_cfsolver):
     # ── 手动触发 lifespan startup（引擎启动、worker 创建等）──
     from api.lifespan import lifespan
     from api.meta import registry
+
     _lifespan_ctx = lifespan(api.main.app)
     await _lifespan_ctx.__aenter__()
 
@@ -206,6 +212,7 @@ def pytest_sessionfinish(session, exitstatus):
     """会话结束：同步回收所有 aiosqlite 工作线程，避免 pytest 全绿后卡 threading shutdown。"""
     try:
         from api import db as dbmod
+
         dbmod._atexit_stop_db_threads()
     except Exception:
         pass

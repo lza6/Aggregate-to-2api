@@ -3,11 +3,11 @@
 覆盖 api/solver_guard.py 缺失行（_reset、configure_nodes 兼容、select_candidates、
 circuit_open/consecutive_failures 集群聚合、record_success/failure 不指定 node_url 等）。
 """
+
 from __future__ import annotations
 
 import time
 
-import pytest
 
 from api.solver_guard import SolverGuard, SolverNodeState
 
@@ -32,8 +32,7 @@ def test_configure_nodes_dedup_and_weight_update():
     node = g._nodes["http://s1:8001"]
     node.acquire_inflight()
     # 重新配置同 URL 但改权重 → 复用同一对象，inflight 保留
-    g.configure_nodes(["http://s1:8001", "http://s2:8001"],
-                      weights={"http://s1:8001": 5, "http://s2:8001": 1})
+    g.configure_nodes(["http://s1:8001", "http://s2:8001"], weights={"http://s1:8001": 5, "http://s2:8001": 1})
     assert "http://s2:8001" in g._nodes
     assert g._nodes["http://s1:8001"] is node  # 复用
     assert node.weight == 5

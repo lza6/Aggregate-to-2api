@@ -6,7 +6,6 @@
 - 各级独立上限（ADMIN_QUEUE_MAX / HIGH_QUEUE_MAX / NORMAL_QUEUE_MAX）各自返回 429
 - submit_priority 参数传递正确
 """
-import asyncio
 
 import pytest
 
@@ -22,12 +21,16 @@ class _DBStub:
         self.finished: list[str] = []
         self.tasks: dict[str, dict] = {}
 
-    async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model,
-                             client_ip=None, user_agent=None):
+    async def create_request(
+        self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None
+    ):
         self.created.append(task_id)
         self.tasks[task_id] = {
-            "id": task_id, "prompt": prompt, "aspect_ratio": aspect_ratio,
-            "status": "pending", "error": None,
+            "id": task_id,
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "status": "pending",
+            "error": None,
         }
 
     async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
@@ -50,7 +53,7 @@ class _DBStub:
 def engine():
     """Engine 实例（mock DB，不启动 worker，仅测队列行为）。"""
     e = Engine(_DBStub())
-    e._started = False   # 不启动后台预取/worker，避免依赖真实网络
+    e._started = False  # 不启动后台预取/worker，避免依赖真实网络
     return e
 
 
@@ -143,8 +146,7 @@ async def test_qsize_correct(engine):
 @pytest.mark.asyncio
 async def test_submit_priority_passthrough(engine):
     """submit_priority 参数正确传递到 DB 记录。"""
-    tid = await engine.submit_priority("test-prompt", "16:9", True,
-                                        model="anime", priority=1)
+    tid = await engine.submit_priority("test-prompt", "16:9", True, model="anime", priority=1)
     assert tid in engine.db.created
     task = await engine.db.get(tid)
     assert task["prompt"] == "test-prompt"
@@ -198,6 +200,7 @@ async def test_worker_decrements_count(engine):
 async def test_priority_queue_type(engine):
     """Engine.queue 是 PriorityQueue 而不是普通 Queue。"""
     from asyncio import PriorityQueue
+
     assert isinstance(engine.queue, PriorityQueue)
 
 

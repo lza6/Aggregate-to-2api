@@ -1,4 +1,5 @@
 """tryingopen.com 文本对话提供商适配。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -36,10 +37,7 @@ OPEN_PATH = "/api/open"
 DEFAULT_EFFORT = "balanced"
 _HTTP_TIMEOUT = (10, 120)
 _CHUNK_RE = re.compile(r"/_next/static/chunks/[A-Za-z0-9._~-]+\.js")
-_MODEL_RE = re.compile(
-    r'\{id:"([a-z0-9][a-z0-9.\-]*/[a-z0-9][a-z0-9.\-]*)",'
-    r'name:"([^"]+)"'
-)
+_MODEL_RE = re.compile(r'\{id:"([a-z0-9][a-z0-9.\-]*/[a-z0-9][a-z0-9.\-]*)",' r'name:"([^"]+)"')
 
 
 # 站点目录不可访问时仍需提供可用的静态目录。
@@ -135,9 +133,7 @@ def _content_text(content: Any) -> str:
         return ""
     if isinstance(content, list):
         return "".join(
-            str(part.get("text", ""))
-            for part in content
-            if isinstance(part, dict) and part.get("type") == "text"
+            str(part.get("text", "")) for part in content if isinstance(part, dict) and part.get("type") == "text"
         )
     return str(content)
 
@@ -191,9 +187,8 @@ def _tool_candidate(value: Any) -> bool:
         nested = value.get(key)
         if isinstance(nested, dict) and isinstance(nested.get("name"), str):
             return True
-    return (
-        isinstance(value.get("name") or value.get("tool") or value.get("tool_name"), str)
-        and any(key in value for key in ("arguments", "args", "parameters"))
+    return isinstance(value.get("name") or value.get("tool") or value.get("tool_name"), str) and any(
+        key in value for key in ("arguments", "args", "parameters")
     )
 
 
@@ -223,10 +218,7 @@ def _last_json_object(text: str) -> tuple[Any | None, int | None]:
         outer_candidates = [
             candidate
             for candidate in tool_candidates
-            if not any(
-                other[0] < candidate[0] and candidate[1] <= other[1]
-                for other in tool_candidates
-            )
+            if not any(other[0] < candidate[0] and candidate[1] <= other[1] for other in tool_candidates)
         ]
         start, end, value = max(outer_candidates, key=lambda item: item[0])
         return value, start
@@ -325,8 +317,9 @@ class TryingopenChatProvider(ChatProvider):
     def needs_proxy_per_request(self) -> bool:
         return True
 
-    def _convert_messages(self, messages: list[dict[str, Any]], tools: list[Any] | None = None,
-                          tool_choice: Any = None) -> list[dict[str, Any]]:
+    def _convert_messages(
+        self, messages: list[dict[str, Any]], tools: list[Any] | None = None, tool_choice: Any = None
+    ) -> list[dict[str, Any]]:
         effective_tools = tools if tools and tool_choice != "none" else None
         source = [dict(message) for message in messages]
         if effective_tools:
@@ -362,13 +355,15 @@ class TryingopenChatProvider(ChatProvider):
                 tool_text = _content_text(message.get("content")) or "(empty result)"
                 if not parts:
                     parts = [{"type": "text", "text": tool_text}]
-                converted.append({
-                    "id": str(message.get("id") or f"msg-{uuid.uuid4().hex[:12]}"),
-                    "role": role,
-                    "parts": [
-                        {"type": "text", "text": f"[TOOL RESULT for {call_id}]\n{tool_text}\n[/TOOL RESULT]"},
-                    ],
-                })
+                converted.append(
+                    {
+                        "id": str(message.get("id") or f"msg-{uuid.uuid4().hex[:12]}"),
+                        "role": role,
+                        "parts": [
+                            {"type": "text", "text": f"[TOOL RESULT for {call_id}]\n{tool_text}\n[/TOOL RESULT]"},
+                        ],
+                    }
+                )
                 continue
             item_id = message.get("id") or f"msg-{uuid.uuid4().hex[:12]}"
             converted.append({"id": str(item_id), "role": role, "parts": parts})
@@ -396,9 +391,15 @@ class TryingopenChatProvider(ChatProvider):
             "stream": True,  # 显式要求上游开启 SSE 增量流式，否则上游按整段返回、客户端无逐 token 体验
         }
 
-    async def chat_stream(self, model: str, messages: list[dict], tools: list | None = None,
-                          tool_choice: Any = None, effort: str = DEFAULT_EFFORT,
-                          **kw: Any) -> AsyncIterator[dict]:
+    async def chat_stream(
+        self,
+        model: str,
+        messages: list[dict],
+        tools: list | None = None,
+        tool_choice: Any = None,
+        effort: str = DEFAULT_EFFORT,
+        **kw: Any,
+    ) -> AsyncIterator[dict]:
         converted = self._convert_messages(messages, tools, tool_choice)
         payload = self._payload(model, converted, effort)
         attempts = _env_int("IF_TRYINGOPEN_MAX_ATTEMPTS", 3)
@@ -450,14 +451,14 @@ class TryingopenChatProvider(ChatProvider):
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=True)
                 if attempt + 1 < total_rounds:
-                    await asyncio.sleep(2**min(attempt, 3))
+                    await asyncio.sleep(2 ** min(attempt, 3))
                     continue
                 raise ProviderRateLimited("tryingopen 全部出口限流中") from exc
             except httpx.HTTPError as exc:
                 if proxy_url:
                     await proxy_pool.mark_failure(proxy_url, rate_limited=False)
                 if attempt + 1 < total_rounds:
-                    await asyncio.sleep(2**min(attempt, 3))
+                    await asyncio.sleep(2 ** min(attempt, 3))
                     continue
                 raise ProviderError(f"tryingopen 网络请求失败: {str(exc)[:160]}") from exc
             except ProviderError:
@@ -466,7 +467,7 @@ class TryingopenChatProvider(ChatProvider):
                 # v4.4.1: 免费代理下的偶发上游错误同样换出口重试；
                 # 仅直连兜底仍失败才最终抛出（直连时 proxy_url 为 None）
                 if not is_direct_fallback and attempt + 1 < total_rounds:
-                    await asyncio.sleep(2**min(attempt, 3))
+                    await asyncio.sleep(2 ** min(attempt, 3))
                     continue
                 raise
             if proxy_url:
@@ -521,8 +522,7 @@ class TryingopenChatProvider(ChatProvider):
             if close_client:
                 await client.aclose()
 
-    async def _result_events(self, result: _AttemptResult, tools: list | None,
-                             tool_choice: Any) -> AsyncIterator[dict]:
+    async def _result_events(self, result: _AttemptResult, tools: list | None, tool_choice: Any) -> AsyncIterator[dict]:
         effective_tools = tools if tools and tool_choice != "none" else None
         calls: list[dict[str, str]] | None = None
         call_source = result.text
@@ -721,7 +721,7 @@ class TryingopenChatProvider(ChatProvider):
         for match in _MODEL_RE.finditer(chunk):
             raw_id, name = match.groups()
             end = chunk.find("}", match.end())
-            segment = chunk[match.start(): end if end >= 0 else min(len(chunk), match.end() + 1000)]
+            segment = chunk[match.start() : end if end >= 0 else min(len(chunk), match.end() + 1000)]
             record: dict[str, Any] = {"id": raw_id, "name": name}
             context = re.search(r'context:"([^"]+)"', segment)
             if context:

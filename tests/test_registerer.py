@@ -4,8 +4,7 @@
 nanobanana 签到循环（含 Server Action 领取响应解析 L1/L5 修复）、
 邮箱验证码/验证链接提取逻辑。
 """
-import base64
-import json
+
 import os
 
 import pytest
@@ -77,7 +76,9 @@ class TestExtractCode:
 
 class TestExtractVerifyLink:
     def test_extracts_verify_link(self):
-        mail = {"bodyHtml": '<a href="https://nanobanana-pro.com/api/auth/verify-email?token=abc123&amp;callback=1">确认</a>'}
+        mail = {
+            "bodyHtml": '<a href="https://nanobanana-pro.com/api/auth/verify-email?token=abc123&amp;callback=1">确认</a>'
+        }
         link = _extract_verify_link(mail)
         assert link is not None
         assert link.startswith("https://nanobanana-pro.com/api/auth/verify-email")
@@ -111,6 +112,7 @@ class TestEnsureClient:
         r._ensure_client()
         # 无显式注入时走 config.PROXY（kookeey 已移除，不再 fallback 到 kookeey）
         from api import config
+
         assert r._current_proxy == config.PROXY
         r.client.close()
 

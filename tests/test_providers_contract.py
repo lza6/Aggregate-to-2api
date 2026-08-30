@@ -5,6 +5,7 @@
 - 有效样例通过 validate_contract / parse_contract 校验
 - 破坏样例（删 image / status 错枚举 / image 非 URL）立即失败且能 tell 缺字段
 """
+
 import pytest
 
 from api.contracts import (
@@ -28,6 +29,7 @@ STATUS_COMPLETED = "completed"
 #  - NANO_SUBMIT/POLLJSON: nanobanana.py:206 / :221-232
 #  - AIFF:  aifreeforever.py:195-197（_generate 返回 images 数组）
 
+
 @pytest.fixture
 def imagefree_generate_mock() -> dict:
     """imagefree_client.py:253 IF_MOCK_UPSTREAM 分支返回。"""
@@ -46,8 +48,6 @@ def imagefree_edit_mock() -> dict:
     return {"status": "completed", "image": "https://mock.example/images/edit.png"}
 
 
-
-
 @pytest.fixture
 def nanobanana_submit() -> dict:
     """nanobanana.py:206 提交 RSC 0: 行解析后 data。"""
@@ -63,8 +63,7 @@ def nanobanana_poll() -> dict:
 @pytest.fixture
 def nanobanana_poll_assets() -> dict:
     """nanobanana.py:226-232 assets 兜底分支。"""
-    return {"state": "success", "resultUrls": [],
-            "assets": [{"previewUrl": "https://cdn.nb-pro.com/img/3.png"}]}
+    return {"state": "success", "resultUrls": [], "assets": [{"previewUrl": "https://cdn.nb-pro.com/img/3.png"}]}
 
 
 @pytest.fixture
@@ -74,6 +73,7 @@ def aifreeforever_images() -> dict:
 
 
 # ── 有效样例通过校验 ──────────────────────────────
+
 
 class TestValidSamplesPass:
     def test_imagefree_mock(self, imagefree_generate_mock):
@@ -98,8 +98,7 @@ class TestValidSamplesPass:
         d = nanobanana_submit
         assert d.get("success") and d["taskId"]
         # 提交响应（success/taskId）本身不是最终产物 dict；归一化后才走 ImageGenerationResponse
-        norm = {"task_id": d["taskId"], "status": STATUS_COMPLETED,
-                "image": "https://cdn.nb-pro.com/img/2.png"}
+        norm = {"task_id": d["taskId"], "status": STATUS_COMPLETED, "image": "https://cdn.nb-pro.com/img/2.png"}
         assert parse_contract(ImageGenerationResponse, norm) is None
         # task_id 可缺（默认 ""）；但 image 必填，缺了严格 parse 提示缺 image
         no_tid = {"status": STATUS_COMPLETED, "image": "https://cdn.nb-pro.com/img/2.png"}
@@ -123,6 +122,7 @@ class TestValidSamplesPass:
 
 
 # ── 破坏样例立即失败 ─────────────────────────────
+
 
 class TestBrokenSamplesFail:
     def test_missing_image(self):

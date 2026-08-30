@@ -3,6 +3,7 @@
 /v1/logs 仍从内存环形缓冲读取（log_buffer.py），本模块只做持久化补充：
 root logger 追加 TimedRotatingFileHandler，跨重启可查。
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,8 +18,12 @@ def setup_disk_logging(log_dir: str, retention_days: int = 14) -> TimedRotatingF
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir, "imagefree-api.log")
     handler = TimedRotatingFileHandler(
-        path, when="midnight", backupCount=max(1, retention_days),
-        encoding="utf-8", delay=True, utc=True,
+        path,
+        when="midnight",
+        backupCount=max(1, retention_days),
+        encoding="utf-8",
+        delay=True,
+        utc=True,
     )
     handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt="%Y-%m-%d %H:%M:%S"))
     logging.getLogger().addHandler(handler)

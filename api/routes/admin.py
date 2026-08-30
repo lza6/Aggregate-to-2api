@@ -3,6 +3,7 @@
 包含：providers/models/account-pool/proxy-pool/DLQ/logs/stats/gallery/errors/
 slow/routing/metrics/diagnostics。
 """
+
 from __future__ import annotations
 
 import hmac
@@ -42,6 +43,7 @@ async def models():
       Cursor、NextChat 等客户端按此解析模型列表，缺 `data` 字段会提示"检测不到模型"）。
     """
     from ..providers.registry import bootstrap as providers_bootstrap
+
     providers_bootstrap()
     groups = registry.grouped()
     # OpenAI 兼容 data 数组：拍平分组为 [{"id","object","created","owned_by"}, ...]
@@ -68,6 +70,7 @@ async def models():
 async def providers():
     """提供商看板：能力/模型数/账号需求/每请求代理需求/实时余额 + 上游真实探针状态。"""
     from ..providers.registry import bootstrap as providers_bootstrap
+
     providers_bootstrap()
     summary = registry.provider_summary()
     probes = provider_probe.snapshot().get("providers") or {}
@@ -98,8 +101,12 @@ async def account_pool_dashboard(
     from ..account_pool import account_pool
     from ..email_pool import email_pool
     from ..registerer import STAGE_LABELS
+
     page_data = account_pool.list_page(
-        provider="nanobanana", page=page, page_size=page_size, search=search,
+        provider="nanobanana",
+        page=page,
+        page_size=page_size,
+        search=search,
     )
     # v6.5.0: 最近一次注册会话的阶段画像 + 各阶段耗时（供「注册在哪个阶段/每阶段耗时」渲染）
     reg = account_pool.registerers.get("nanobanana")
@@ -128,24 +135,26 @@ async def account_pool_dashboard(
         parts = em.split("@")
         safe_em = (parts[0][:3] + "***@" + parts[1]) if len(parts) == 2 else em
         created = item.get("created_at")
-        desensitized.append({
-            "email": safe_em,
-            "credits": item.get("credits", 0),
-            "status": item.get("status", "ok"),
-            "created_at": created,
-            "checkin_at": item.get("checkin_at"),
-            "register_ip": item.get("register_ip"),
-            # v6.3.4: 签到画像与存活天数（前端直接可渲染）
-            "checkin_total": int(item.get("checkin_total") or 0),
-            "checkin_cycle_day": int(item.get("checkin_cycle_day") or 0),
-            "credits_earned_total": int(item.get("credits_earned_total") or 0),
-            "next_claim_at": item.get("next_claim_at"),
-            "age_days": round((now_ts - created) / 86400.0, 1) if created else None,
-            # v6.5.1: 每账号出图消耗画像（累计消耗积分 / 出图次数 / 最近出图）
-            "credits_used_total": int(item.get("credits_used_total") or 0),
-            "images_used": int(item.get("images_used") or 0),
-            "last_used_at": item.get("last_used_at"),
-        })
+        desensitized.append(
+            {
+                "email": safe_em,
+                "credits": item.get("credits", 0),
+                "status": item.get("status", "ok"),
+                "created_at": created,
+                "checkin_at": item.get("checkin_at"),
+                "register_ip": item.get("register_ip"),
+                # v6.3.4: 签到画像与存活天数（前端直接可渲染）
+                "checkin_total": int(item.get("checkin_total") or 0),
+                "checkin_cycle_day": int(item.get("checkin_cycle_day") or 0),
+                "credits_earned_total": int(item.get("credits_earned_total") or 0),
+                "next_claim_at": item.get("next_claim_at"),
+                "age_days": round((now_ts - created) / 86400.0, 1) if created else None,
+                # v6.5.1: 每账号出图消耗画像（累计消耗积分 / 出图次数 / 最近出图）
+                "credits_used_total": int(item.get("credits_used_total") or 0),
+                "images_used": int(item.get("images_used") or 0),
+                "last_used_at": item.get("last_used_at"),
+            }
+        )
     return {
         "accounts": account_pool.dashboard(),
         "growth_stats": growth,
@@ -178,6 +187,7 @@ async def get_stats():
     live = engine.snapshot()
     ssnap = solver_guard.snapshot()
     from .. import base64_store  # noqa: PLC0415
+
     return {
         **overview,
         "processing": live["processing"],
@@ -208,8 +218,7 @@ async def get_stats():
 
 
 @router.get("/v1/gallery")
-async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
-                  password: str | None = Query(None)):
+async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None)):
     """最近完成的 N 条作品（画廊）。"""
     pwd = config.IF_GALLERY_PASSWORD
     if pwd:
@@ -222,14 +231,16 @@ async def gallery(limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
     items = await db.recent_images(limit)
     out = []
     for t in items:
-        out.append({
-            "image_url": t["image_url"],
-            "image_mime": t.get("image_mime"),
-            "prompt": t["prompt"],
-            "aspect_ratio": t["aspect_ratio"],
-            "duration_sec": t["duration_sec"],
-            "finished_at": t["finished_at"],
-        })
+        out.append(
+            {
+                "image_url": t["image_url"],
+                "image_mime": t.get("image_mime"),
+                "prompt": t["prompt"],
+                "aspect_ratio": t["aspect_ratio"],
+                "duration_sec": t["duration_sec"],
+                "finished_at": t["finished_at"],
+            }
+        )
     result = {"items": out, "count": len(out)}
     await gallery_cache.set(cache_key, result)
     return result
@@ -241,15 +252,17 @@ async def errors(limit: int = Query(20, ge=1, le=100)):
     items = await db.recent_errors(limit)
     out = []
     for t in items:
-        out.append({
-            "id": t["id"],
-            "status": t["status"],
-            "error": t["error"],
-            "prompt_preview": (t["prompt"] or "")[:60],
-            "aspect_ratio": t["aspect_ratio"],
-            "duration_sec": t["duration_sec"],
-            "created_at": t["created_at"],
-        })
+        out.append(
+            {
+                "id": t["id"],
+                "status": t["status"],
+                "error": t["error"],
+                "prompt_preview": (t["prompt"] or "")[:60],
+                "aspect_ratio": t["aspect_ratio"],
+                "duration_sec": t["duration_sec"],
+                "created_at": t["created_at"],
+            }
+        )
     total = len(out)
     return {"items": out, "count": total, "total": total}
 
@@ -262,6 +275,7 @@ async def error_aggregates():
     进程内计数（重启清零），配合 /metrics 的 imagefree_errors_by_code 使用。
     """
     from ..error_tracker import snapshot, watched_codes
+
     counts = snapshot()
     return {
         "watched": list(watched_codes()),
@@ -291,6 +305,7 @@ async def report_frontend_error(request: Request):
     url = str(body.get("url") or "")[:500] or None
     ua = request.headers.get("user-agent", "")[:300] or None
     from ..error_tracker import record_frontend_error  # noqa: PLC0415
+
     record_frontend_error(code=code, message=message, stack=stack, url=url, ua=ua)
     return {"ok": True, "code": code}
 
@@ -299,6 +314,7 @@ async def report_frontend_error(request: Request):
 async def frontend_errors_snapshot():
     """前端错误聚合查看（D5 验收用）：返回 FE.* 计数 + 最近明细 + 总数。"""
     from ..error_tracker import frontend_snapshot  # noqa: PLC0415
+
     return frontend_snapshot()
 
 
@@ -347,13 +363,12 @@ async def retry_dlq_task(task_id: str, request: Request):
     audit_log.record("dlq.retry", client_ip, f"task:{task_id}", "重试死信队列任务")
     if config.IF_DLQ_REQUEUE:
         from ..worker import engine as _engine
+
         requeued = await _engine.requeue_dlq_task(task_id)
         if not requeued:
-            raise AppError(ErrorCodes.BAD_REQUEST,
-                           f"任务 {task_id} 重入队失败（不存在或队列已满）", 409)
+            raise AppError(ErrorCodes.BAD_REQUEST, f"任务 {task_id} 重入队失败（不存在或队列已满）", 409)
         await db.retry_dlq(task_id)
-        return {"status": "ok",
-                "detail": f"任务 {task_id} 已重新入队（pending，等待 worker 处理）"}
+        return {"status": "ok", "detail": f"任务 {task_id} 已重新入队（pending，等待 worker 处理）"}
     await db.retry_dlq(task_id)
     return {"status": "ok", "detail": f"任务 {task_id} 已从死信队列移除"}
 
@@ -369,10 +384,10 @@ async def clear_dlq(request: Request):
 
 
 @router.get("/v1/proxy-pool")
-async def get_proxy_pool(page: int = Query(1, ge=1),
-                         page_size: int = Query(20, ge=1, le=500)):
+async def get_proxy_pool(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=500)):
     """代理池实时状态。"""
     from ..proxy_pool import proxy_pool
+
     return proxy_pool.snapshot(page=page, page_size=page_size)
 
 
@@ -381,9 +396,12 @@ async def get_proxy_subscription(format: str = Query("base64", description="订�
     """代理订阅一键生成。"""
     from ..proxy_pool import proxy_pool
     from ..geo_ip import generate_subscription_text
+
     snap = proxy_pool.snapshot(page=1, page_size=1000)
     items = snap.get("items") or []
-    sub_text = generate_subscription_text([item.get("protocols") for item in items if item.get("protocols")], fmt=format)
+    sub_text = generate_subscription_text(
+        [item.get("protocols") for item in items if item.get("protocols")], fmt=format
+    )
     media_type = "text/plain; charset=utf-8"
     return Response(content=sub_text, media_type=media_type)
 
@@ -441,6 +459,7 @@ async def audit_search(
     """B4: 审计日志搜索（管理 Key 保护）。"""
     check_admin_key(request, scope="admin-audit")
     items = audit_log.recent(limit=limit)
+
     def _match(e: dict) -> bool:
         if action is not None and e.get("action") != action:
             return False
@@ -453,9 +472,14 @@ async def audit_search(
             if q not in hay:
                 return False
         return True
+
     filtered = [e for e in items if _match(e)]
-    return {"items": filtered, "count": len(filtered), "total_scanned": len(items),
-            "filters": {"action": action, "actor": actor, "trace_id": trace_id, "q": q}}
+    return {
+        "items": filtered,
+        "count": len(filtered),
+        "total_scanned": len(items),
+        "filters": {"action": action, "actor": actor, "trace_id": trace_id, "q": q},
+    }
 
 
 @router.get("/v1/slow/view", include_in_schema=False)
@@ -469,14 +493,15 @@ async def diagnostics():
     """一键体检（零副作用只读）：DB/队列/worker/token 池/代理池/磁盘/慢日志。"""
     import shutil as _shutil
     from ..worker_health import worker_health
+
     db_file = Path(config.DB_FILE)
     db_size_mb = round(db_file.stat().st_size / 1024 / 1024, 2) if db_file.exists() else None
     wal_path = Path(str(db_file) + "-wal")
     wal_size_mb = round(wal_path.stat().st_size / 1024 / 1024, 2) if wal_path.exists() else 0.0
     try:
         du = _shutil.disk_usage(str(db_file.parent if db_file.exists() else Path(".")))
-        disk_free_gb = round(du.free / 1024 ** 3, 2)
-        disk_total_gb = round(du.total / 1024 ** 3, 2)
+        disk_free_gb = round(du.free / 1024**3, 2)
+        disk_total_gb = round(du.total / 1024**3, 2)
         disk_used_pct = round((du.used / du.total) * 100, 1) if du.total else None
     except OSError:
         disk_free_gb = disk_total_gb = disk_used_pct = None
@@ -508,14 +533,12 @@ async def diagnostics():
             "window_success_rate": ssnap["window_success_rate"],
             "avg_solve_seconds": ssnap["solve_avg_seconds"],
         },
-        "slow_log": {"config_threshold_ms": config.IF_SLOW_REQUEST_MS,
-                     **_slow_log.stats()},
+        "slow_log": {"config_threshold_ms": config.IF_SLOW_REQUEST_MS, **_slow_log.stats()},
         "disk": {
             "free_gb": disk_free_gb,
             "total_gb": disk_total_gb,
             "used_percent": disk_used_pct,
-            "log_dir_writable": os.access(config.IF_LOG_DIR, os.W_OK)
-                                if os.path.isdir(config.IF_LOG_DIR) else False,
+            "log_dir_writable": os.access(config.IF_LOG_DIR, os.W_OK) if os.path.isdir(config.IF_LOG_DIR) else False,
         },
         "uptime_seconds": snap["uptime_seconds"],
     }

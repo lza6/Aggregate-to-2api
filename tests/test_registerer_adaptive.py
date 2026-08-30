@@ -8,21 +8,16 @@
 5. 提供商风控/IP 污染时强制轮换代理。
 6. 注册成功时连续错误计数重置与完整链路。
 """
-import asyncio
-import time
+
 import pytest
 
-from api import config
 from api.registerer import (
     AdaptiveRegistrationBackoff,
     NanobananaRegisterer,
-    RegistrationError,
     RegistrationErrorCategory,
     RegistrationSession,
     RegistrationStage,
-    adaptive_backoff,
 )
-from api.solver_guard import solver_guard
 from api.email_pool import email_pool
 
 
@@ -167,6 +162,7 @@ async def test_nanobanana_email_timeout_and_source_cooldown(monkeypatch):
         status_code = 429
         text = "429 Too Many Requests rate limited"
         cookies = {}
+
         def json(self):
             return {}
 
@@ -202,6 +198,7 @@ async def test_ip_blocked_force_rotate_client(monkeypatch):
         status_code = 403
         text = "Forbidden - Cloudflare Security Challenge"
         cookies = {}
+
         def json(self):
             return {}
 

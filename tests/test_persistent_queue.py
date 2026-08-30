@@ -8,7 +8,7 @@
 
 注意：Engine 已接入异步 QueueStore（aiosqlite），所有 queue_db 交互为 async。
 """
-import asyncio
+
 import os
 import tempfile
 import threading
@@ -79,7 +79,11 @@ class TestQueueDB:
 
             pending = qdb.list_pending()
             assert [(p, s, tid) for p, s, tid in pending] == [
-                (0, 1, "b"), (0, 2, "d"), (1, 3, "c"), (2, 4, "e"), (2, 5, "a"),
+                (0, 1, "b"),
+                (0, 2, "d"),
+                (1, 3, "c"),
+                (2, 4, "e"),
+                (2, 5, "a"),
             ]
         finally:
             self._cleanup(path)
@@ -222,8 +226,7 @@ class TestQueueStore:
             await store.enqueue("old", 2, 1)
             # 直接篡改 created_at 使其超过 7 天保留期
             cutoff = time.time() - 8 * 86400
-            cur = await store._conn.execute(
-                "UPDATE task_queue SET created_at=? WHERE task_id='old'", (cutoff,))
+            cur = await store._conn.execute("UPDATE task_queue SET created_at=? WHERE task_id='old'", (cutoff,))
             await store._conn.commit()
             assert cur.rowcount == 1
             await store.enqueue("new", 2, 2)
@@ -245,12 +248,16 @@ class _DBStub:
         self.finished: list[str] = []
         self.tasks: dict[str, dict] = {}
 
-    async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model,
-                             client_ip=None, user_agent=None):
+    async def create_request(
+        self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None
+    ):
         self.created.append(task_id)
         self.tasks[task_id] = {
-            "id": task_id, "prompt": prompt, "aspect_ratio": aspect_ratio,
-            "status": "pending", "error": None,
+            "id": task_id,
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "status": "pending",
+            "error": None,
         }
 
     async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None):
@@ -417,7 +424,11 @@ class TestEnginePersistentQueueIntegration:
 
         pending = await e._queue_db.list_pending()
         assert [(p, s, tid) for p, s, tid in pending] == [
-            (0, 2, "d"), (0, 3, "b"), (1, 1, "c"), (2, 4, "e"), (2, 5, "a"),
+            (0, 2, "d"),
+            (0, 3, "b"),
+            (1, 1, "c"),
+            (2, 4, "e"),
+            (2, 5, "a"),
         ]
 
         restored = await e._resume_from_queue()

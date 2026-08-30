@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-6.7.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-6.8.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -40,8 +40,8 @@
 ### 方式一：Docker Compose（推荐）
 
 ```bash
-git clone https://github.com/lza6/Image-to-2api.git
-cd Image-to-2api/deploy
+git clone https://github.com/lza6/Aggregate-to-2api.git
+cd Aggregate-to-2api/deploy
 
 # 编辑 docker-compose.yml 按需配置（含 IF_SITEKEY / IF_FREE_PROXY 等）
 docker compose up -d
@@ -166,6 +166,7 @@ export ANTHROPIC_API_KEY=$TFAI_KEY
 | `aifreeforever` | aifreeforever.com | txt2img / img2img（≤3 参考图） | 匿名 + Turnstile | **每 IP 每日限额 → 每请求轮换代理** |
 | `nanobanana` | nanobanana-pro.com | txt2img / img2img | better-auth cookie + 号池 | 每日签到续额 |
 | `tryingopen` | tryingopen.com | **chat / chat_tools / chat_vision** | **完全匿名（13+ 开源大模型）** | **单 IP 限流 20次/h → 代理池自动故障轮换** |
+| `falai` | fal.ai | **txt2vid / img2vid（minimax-h3-max）** | 匿名 + Kasada x-is-human（纯算） | **每 IP 每天 5 次免费 → 代理池轮换** |
 
 ---
 

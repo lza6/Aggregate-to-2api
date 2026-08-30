@@ -1,4 +1,5 @@
 """任务查询 / 全局 SSE 广播 / 黑匣子打开（v4.2 拆分：main.py 迁移）。"""
+
 from __future__ import annotations
 
 
@@ -25,8 +26,10 @@ async def list_tasks(
 ):
     """任务列表，按创建时间降序，支持分页和筛选。"""
     items, total = await db.list_tasks(
-        limit=limit, offset=offset,
-        status=status, model=model,
+        limit=limit,
+        offset=offset,
+        status=status,
+        model=model,
         sort=sort,
     )
     return {
@@ -76,10 +79,7 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
     if trace_id_hint:
         log_entries = [e for e in _lb.snapshot(lines) if e.get("trace_id") == trace_id_hint][-lines:]
     else:
-        log_entries = [
-            e for e in _lb.snapshot(lines)
-            if task_id in (e.get("message") or "")
-        ][-lines:]
+        log_entries = [e for e in _lb.snapshot(lines) if task_id in (e.get("message") or "")][-lines:]
 
     # 2. 慢日志画像
     slow_entries = [s for s in _slow.snapshot() if s.task_id == task_id]
@@ -101,11 +101,16 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)):
         "logs": log_entries,
         "slow": [
             {
-                "model": s.model, "provider": s.provider,
-                "queue_ms": round(s.queue_ms, 1), "wait_token_ms": round(s.wait_token_ms, 1),
-                "solve_ms": round(s.solve_ms, 1), "upstream_ms": round(s.upstream_ms, 1),
-                "retry_ms": round(s.retry_ms, 1), "total_ms": round(s.total_ms, 1),
-                "slowest_stage": s.slowest_stage(), "status": s.status,
+                "model": s.model,
+                "provider": s.provider,
+                "queue_ms": round(s.queue_ms, 1),
+                "wait_token_ms": round(s.wait_token_ms, 1),
+                "solve_ms": round(s.solve_ms, 1),
+                "upstream_ms": round(s.upstream_ms, 1),
+                "retry_ms": round(s.retry_ms, 1),
+                "total_ms": round(s.total_ms, 1),
+                "slowest_stage": s.slowest_stage(),
+                "status": s.status,
                 "trace_id": getattr(s, "trace_id", "") or trace_id,
                 "submit_ms": round(getattr(s, "submit_ms", 0.0), 1),
                 "poll_ms": round(getattr(s, "poll_ms", 0.0), 1),

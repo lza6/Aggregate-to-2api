@@ -1,4 +1,5 @@
 """缓存预热：启动时异步加载常见查询到缓存，避免启动后空窗期首次请求慢。"""
+
 import logging
 
 log = logging.getLogger("cache_warmup")
@@ -50,14 +51,16 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
             items = await db.recent_images(limit)
             out = []
             for t in items:
-                out.append({
-                    "image_url": t["image_url"],
-                    "image_mime": t.get("image_mime"),
-                    "prompt": t["prompt"],
-                    "aspect_ratio": t["aspect_ratio"],
-                    "duration_sec": t["duration_sec"],
-                    "finished_at": t["finished_at"],
-                })
+                out.append(
+                    {
+                        "image_url": t["image_url"],
+                        "image_mime": t.get("image_mime"),
+                        "prompt": t["prompt"],
+                        "aspect_ratio": t["aspect_ratio"],
+                        "duration_sec": t["duration_sec"],
+                        "finished_at": t["finished_at"],
+                    }
+                )
             await gallery_cache.set(key, {"items": out, "count": len(out)})
             result[key] = 1
         except Exception as e:

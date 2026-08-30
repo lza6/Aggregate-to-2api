@@ -2,6 +2,7 @@
 
 用注入时钟（now_fn）测，不真 sleep。覆盖：心跳更新、stale 判定、恢复解除、快照。
 """
+
 import pytest
 
 from api.worker_health import WorkerHealthMonitor

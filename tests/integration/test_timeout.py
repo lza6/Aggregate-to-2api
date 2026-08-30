@@ -1,4 +1,5 @@
 """集成测试：超时场景验证。"""
+
 import pytest
 
 
@@ -8,8 +9,8 @@ class TestTimeout:
 
     async def test_sync_timeout_returns_202(self, app_with_mocks):
         """同步超时窗口极短时返回 202（先临时关掉 per-IP 限流，避免被 429 抢先拦截）。"""
-        import importlib
         import api.config as cfg
+
         # 直接改模块级同步超时常量；不 reload 整个 config（reload 会重建 Settings
         # 单例并触发分组配置重建，导致 _app_instance 已持有的配置引用分叉，P0-4 顺序污染）。
         saved_timeout = cfg.SYNC_TIMEOUT
@@ -18,9 +19,13 @@ class TestTimeout:
         cfg.IF_REQUESTS_PER_MINUTE = 0
         try:
             client = app_with_mocks
-            r = await client.post("/v1/generate", json={
-                "prompt": "test timeout", "aspect_ratio": "1:1",
-            })
+            r = await client.post(
+                "/v1/generate",
+                json={
+                    "prompt": "test timeout",
+                    "aspect_ratio": "1:1",
+                },
+            )
         finally:
             cfg.SYNC_TIMEOUT = saved_timeout
             cfg.IF_REQUESTS_PER_MINUTE = saved

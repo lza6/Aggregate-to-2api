@@ -6,6 +6,7 @@
 5. 前端静态文件挂载
 6. 核心 API 端点健康
 """
+
 import json
 import os
 import sys
@@ -112,12 +113,12 @@ def test_audit_log_exists() -> list[str]:
 
 def test_websocket_handshake() -> list[str]:
     import asyncio
+
     errors = []
 
     async def _check():
         try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection("127.0.0.1", 8100), timeout=3.0)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 8100), timeout=3.0)
             upgrade = (
                 "GET /v1/logs/ws HTTP/1.1\r\n"
                 "Host: 127.0.0.1:8100\r\n"

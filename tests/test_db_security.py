@@ -5,6 +5,7 @@
 - get_base64_path（file:// 前缀剥离 / raw base64 返回 None / 不存在任务 None）
 - cleanup（删除超期记录 + 返回 size 统计）
 """
+
 import time
 
 import pytest
@@ -71,9 +72,7 @@ class TestGetBase64Path:
     @pytest.mark.asyncio
     async def test_file_prefix_stripped(self, db):
         tid = await _mk_task(db, 1)
-        await db._enqueue_write(
-            "UPDATE requests SET image_base64=? WHERE id=?",
-            ("file:///data/imgs/x.b64", tid))
+        await db._enqueue_write("UPDATE requests SET image_base64=? WHERE id=?", ("file:///data/imgs/x.b64", tid))
         await db.flush()
         path = await db.get_base64_path(tid)
         assert path == "/data/imgs/x.b64"
@@ -81,9 +80,7 @@ class TestGetBase64Path:
     @pytest.mark.asyncio
     async def test_raw_base64_returns_none(self, db):
         tid = await _mk_task(db, 1)
-        await db._enqueue_write(
-            "UPDATE requests SET image_base64=? WHERE id=?",
-            ("iVBORw0KGgo=", tid))
+        await db._enqueue_write("UPDATE requests SET image_base64=? WHERE id=?", ("iVBORw0KGgo=", tid))
         await db.flush()
         assert await db.get_base64_path(tid) is None
 
@@ -102,11 +99,9 @@ class TestCleanup:
     async def test_cleanup_deletes_expired(self, db):
         # 两条超期（40 天前）+ 一条新
         tid1 = await _mk_task(db, 1)
-        await db._enqueue_write(
-            "UPDATE requests SET created_at=? WHERE id=?", (time.time() - 40 * 86400, tid1))
+        await db._enqueue_write("UPDATE requests SET created_at=? WHERE id=?", (time.time() - 40 * 86400, tid1))
         tid2 = await _mk_task(db, 2)
-        await db._enqueue_write(
-            "UPDATE requests SET created_at=? WHERE id=?", (time.time() - 40 * 86400, tid2))
+        await db._enqueue_write("UPDATE requests SET created_at=? WHERE id=?", (time.time() - 40 * 86400, tid2))
         await _mk_task(db, 3)
         await db.flush()
         r = await db.cleanup(retention_days=30)

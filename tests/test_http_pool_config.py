@@ -7,6 +7,7 @@
 - 信号量 acquire/release 工作
 - 信号量上限生效（并发超过上限时阻塞）
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -46,6 +47,7 @@ class TestHttpPoolConfig:
         # 重新加载 config 模块以让 os.getenv 重新执行
         import importlib
         import api.config as cfg
+
         importlib.reload(cfg)
 
         assert cfg.IF_HTTP_MAX_CONNECTIONS == 50
@@ -148,6 +150,7 @@ class TestSemaphoreManager:
         # 临时设小信号量
         monkeypatch.setattr(cfg, "IF_UPSTREAM_MAX_INFLIGHT", 2)
         import importlib
+
         importlib.reload(sm)
         from api.semaphore_manager import upstream_semaphore
 

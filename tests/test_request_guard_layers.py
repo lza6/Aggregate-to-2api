@@ -3,6 +3,7 @@
 覆盖 api/request_guard.py 缺失分支（配置读取、白名单、XFF 伪造防护、
 IP 封禁/每日限额、滑动窗口限流、缓存失效、自动入黑名单等）。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +14,7 @@ import pytest
 from fastapi import Request
 
 from api import request_guard
+
 
 def _set_cfg_attr(monkeypatch, obj, name, value):
     """对可能不存在的 config 属性用 setdefault 风格 setattr（monkeypatch 支持 raising=False）。"""
@@ -288,9 +290,7 @@ def test_reset_runtime_state_clears_all():
 def test_get_cached_ip_rule_expired_cleared(monkeypatch):
     """缓存中已过期的规则被清除（expire_at < now）。"""
     request_guard.reset_runtime_state()
-    request_guard._BLOCKLIST_CACHE["1.2.3.4"] = {
-        "block_type": "block", "reason": "x", "expire_at": time.time() - 1
-    }
+    request_guard._BLOCKLIST_CACHE["1.2.3.4"] = {"block_type": "block", "reason": "x", "expire_at": time.time() - 1}
     result = request_guard._get_cached_ip_rule("1.2.3.4")
     assert result is None
     assert "1.2.3.4" not in request_guard._BLOCKLIST_CACHE
@@ -392,6 +392,7 @@ def test_check_rate_limit_daily_limit_appends_record(monkeypatch):
 @pytest.mark.asyncio
 async def test_sync_blocklist_cache_updates_cache(monkeypatch):
     """_sync_blocklist_cache 从 store 拉取并更新缓存。"""
+
     async def fake_list_all(limit=2000):
         return [{"ip": "1.1.1.1", "block_type": "block", "reason": "x", "expire_at": 0}]
 
@@ -408,6 +409,7 @@ async def test_sync_blocklist_cache_updates_cache(monkeypatch):
 @pytest.mark.asyncio
 async def test_sync_blocklist_cache_handles_store_error(monkeypatch):
     """store 异常时不崩溃。"""
+
     async def boom(limit=2000):
         raise RuntimeError("db down")
 
@@ -420,6 +422,7 @@ async def test_sync_blocklist_cache_handles_store_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_sync_blocklist_cache_cleanup_warns(monkeypatch):
     """cleanup 抛异常时记 warning 不崩溃。"""
+
     async def fake_list_all(limit=2000):
         return []
 
@@ -435,6 +438,7 @@ async def test_sync_blocklist_cache_cleanup_warns(monkeypatch):
 @pytest.mark.asyncio
 async def test_auto_block_ip_writes_rule(monkeypatch):
     """_auto_block_ip 写入 store 并更新缓存。"""
+
     async def fake_add(ip, block_type, reason, ttl_seconds):
         return {"ip": ip, "block_type": block_type, "reason": reason, "expire_at": 0}
 
@@ -447,6 +451,7 @@ async def test_auto_block_ip_writes_rule(monkeypatch):
 @pytest.mark.asyncio
 async def test_auto_block_ip_handles_store_error(monkeypatch):
     """store 异常时不崩溃。"""
+
     async def boom(ip, block_type, reason, ttl_seconds):
         raise RuntimeError("db down")
 
@@ -458,6 +463,7 @@ async def test_auto_block_ip_handles_store_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_sync_blocklist_cache_public_alias(monkeypatch):
     """sync_blocklist_cache 公共别名委托给 _sync_blocklist_cache。"""
+
     async def fake_list_all(limit=2000):
         return [{"ip": "2.2.2.2", "block_type": "block", "reason": "y", "expire_at": 0}]
 
@@ -474,6 +480,7 @@ async def test_sync_blocklist_cache_public_alias(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_cached_ip_rule_triggers_async_sync(monkeypatch):
     """缓存未命中且超 TTL → 调度 _sync_blocklist_cache（有运行 loop 时）。"""
+
     async def fake_list_all(limit=2000):
         return []
 

@@ -7,6 +7,17 @@
         "@nanonets/graft",
         "mcp"
       ]
+    },
+    "jshook": {
+      "command": "npx.cmd",
+      "args": [
+        "-y",
+        "@jshookmcp/jshook@latest"
+      ],
+      "env": {
+        "MCP_TOOL_PROFILE": "workflow",
+        "npm_config_omit": "optional"
+      }
     }
   }
 }

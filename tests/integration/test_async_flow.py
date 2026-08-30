@@ -1,4 +1,5 @@
 """集成测试：异步提交 + 轮询结果。"""
+
 import asyncio
 import httpx
 import pytest
@@ -9,6 +10,7 @@ def _disable_rate_limit():
     """生图主链路集成用例共享同一 per-IP 限速窗口；关闭限速避免前面
     用例的计数把本项目误伤为 429（P0-4 顺序污染，直接改模块级常量、不 reload）。"""
     import api.config as cfg
+
     saved = cfg.IF_REQUESTS_PER_MINUTE
     cfg.IF_REQUESTS_PER_MINUTE = 0
     yield
@@ -27,9 +29,14 @@ class TestAsyncFlow:
         async with httpx.AsyncClient() as c:
             await c.post(f"{mock_cfsolver}/__fault?mode=ok")
         await asyncio.sleep(2)
-        r = await client.post("/v1/generate/async", json={
-            "prompt": "a dog", "aspect_ratio": "1:1", "model": "imagefree/default",
-        })
+        r = await client.post(
+            "/v1/generate/async",
+            json={
+                "prompt": "a dog",
+                "aspect_ratio": "1:1",
+                "model": "imagefree/default",
+            },
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body
@@ -55,9 +62,13 @@ class TestAsyncFlow:
 
     async def test_task_list_endpoint(self, app_with_mocks):
         """任务列表端点返回提交的任务。"""
-        r = await app_with_mocks.post("/v1/generate/async", json={
-            "prompt": "test list", "aspect_ratio": "1:1",
-        })
+        r = await app_with_mocks.post(
+            "/v1/generate/async",
+            json={
+                "prompt": "test list",
+                "aspect_ratio": "1:1",
+            },
+        )
         assert r.status_code == 200
         r = await app_with_mocks.get("/v1/tasks")
         assert r.status_code == 200

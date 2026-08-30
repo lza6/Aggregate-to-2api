@@ -1,4 +1,5 @@
 """测试审计日志模块。"""
+
 import json
 import os
 import tempfile

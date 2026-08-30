@@ -4,13 +4,13 @@
     python scripts/e2e_lease_lock.py            # 使用临时 DB
     IF_EDIT_LEASE_ENABLED=1 python -m pytest tests/test_edit_lease.py -v
 """
+
 import asyncio
 import os
 import tempfile
-import time
-import uuid
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")

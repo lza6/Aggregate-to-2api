@@ -1,11 +1,11 @@
 """号池（account_pool）与邮箱池（email_pool）单测：持久化/分配/自动补号/签到/状态机 (Account FSM)。"""
+
 import asyncio
 import os
 import time
 
 import pytest
 
-from api import config
 
 # 测试隔离：临时 DB 路径（fixture 里动态生成）
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
@@ -13,12 +13,12 @@ os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 
 class _FakeReg:
     """假注册器：register_one 返回固定账号；checkin 返回递增余额。"""
+
     calls = 0
 
     async def register_one(self):
         _FakeReg.calls += 1
-        return {"email": f"mock{_FakeReg.calls}@m.com", "cookie": "mock-session",
-                "password": "p", "credits": 4}
+        return {"email": f"mock{_FakeReg.calls}@m.com", "cookie": "mock-session", "password": "p", "credits": 4}
 
     async def checkin(self, acc):
         return int(acc.get("credits", 0)) + 4
@@ -27,6 +27,7 @@ class _FakeReg:
 @pytest.fixture
 def pool(tmp_path):
     from api.account_pool import AccountPool
+
     p = AccountPool(str(tmp_path / "acc.db"))
     yield p
     # 关闭连接
@@ -171,6 +172,7 @@ class TestAccountFSM:
 async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
     from api.account_pool import AccountPool
     from api.proxy_pool import ProxyEntry, proxy_pool
+
     # 注入一个 residential 代理（无住宅代理时补号循环按安全红线跳过注册）
     monkeypatch.setattr(proxy_pool, "entries", [ProxyEntry("http://r:r@1.1.1.1:8080", source="residential")])
     p = AccountPool(str(tmp_path / "acc.db"))
@@ -199,6 +201,7 @@ async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_daily_checkin_updates_credits(tmp_path):
     from api.account_pool import AccountPool
+
     p = AccountPool(str(tmp_path / "acc.db"))
     p.add("nanobanana", "a@x.com", "c", credits=4)
     reg = _FakeReg()
@@ -221,6 +224,7 @@ async def test_daily_checkin_updates_credits(tmp_path):
 def test_consume_credits_updates_usage_profile(tmp_path):
     """生成成功扣减该账号积分并累计消耗/出图次数画像（下限 0，非法消耗 no-op）。"""
     from api.account_pool import AccountPool
+
     p = AccountPool(str(tmp_path / "consume.db"))
     p.add("nanobanana", "a@x.com", "c", credits=20, status="active")
     p.consume_credits("nanobanana", "a@x.com", 4)
@@ -244,6 +248,7 @@ def test_consume_credits_updates_usage_profile(tmp_path):
 def test_cost_summary_aggregation(tmp_path):
     """成本口径聚合：累计消耗/出图次数/每张平均成本/有消耗账号数。"""
     from api.account_pool import AccountPool
+
     p = AccountPool(str(tmp_path / "cost.db"))
     p.add("nanobanana", "a@x.com", "c", credits=10, status="active")
     p.add("nanobanana", "b@x.com", "c", credits=10, status="active")
@@ -269,11 +274,12 @@ def test_cost_summary_aggregation(tmp_path):
 def test_image_credit_cost_mapping():
     """image_credit_cost 镜像上游 encodeImageCost（按模型+分辨率返回单图积分）。"""
     from api.providers.nanobanana import image_credit_cost
+
     assert image_credit_cost("nano-banana-pro", "1K") == 4
     assert image_credit_cost("nano-banana-pro", "4K") == 14
     assert image_credit_cost("nano-banana-2", "2K") == 8
     assert image_credit_cost("nano-banana-2", "4K") == 12
-    assert image_credit_cost("gpt-image-2", "1K") == 6      # P1-5 漏档回归
+    assert image_credit_cost("gpt-image-2", "1K") == 6  # P1-5 漏档回归
     assert image_credit_cost("gpt-image-2", "4K") == 14
     assert image_credit_cost("seedream-5.0-pro", "1K") == 7  # P1-5 漏档回归
     assert image_credit_cost("seedream-5.0-pro", "2K") == 14
@@ -292,12 +298,11 @@ class TestEmailPool:
     @pytest.mark.asyncio
     async def test_allocate_unique_and_record(self, tmp_path, monkeypatch):
         from api.email_pool import EmailPool
+
         p = EmailPool(str(tmp_path / "email.db"))
         # 网络源打桩：temp-mail/22.do 建箱是真实 HTTP 调用（无 mock 会挂测试），
         # 本用例只验证分配唯一性与记录逻辑——本地 temp.tf 随机源足够
-        monkeypatch.setattr(
-            p, "_sources",
-            [s for s in p._sources if s.name == "temp.tf"])
+        monkeypatch.setattr(p, "_sources", [s for s in p._sources if s.name == "temp.tf"])
         a1, _s1 = await p.allocate("nanobanana")
         a2, _s2 = await p.allocate("nanobanana")
         assert a1 != a2
@@ -312,11 +317,10 @@ class TestEmailPool:
     @pytest.mark.asyncio
     async def test_stats(self, tmp_path, monkeypatch):
         from api.email_pool import EmailPool
+
         p = EmailPool(str(tmp_path / "email.db"))
         # 同上：打桩网络源，只留本地 temp.tf
-        monkeypatch.setattr(
-            p, "_sources",
-            [s for s in p._sources if s.name == "temp.tf"])
+        monkeypatch.setattr(p, "_sources", [s for s in p._sources if s.name == "temp.tf"])
         a, _s = await p.allocate("nanobanana")
         p.record(a, "nanobanana", "ok")
         s = p.stats()
@@ -326,6 +330,7 @@ class TestEmailPool:
 
 
 # ── P-TEST-A7 追加：dashboard 结构与补号暂停分支 ──────────────
+
 
 class TestAccountPoolDashboard:
     def test_dashboard_structure(self, pool):
@@ -354,13 +359,12 @@ class TestAccountPoolGrowth:
     def test_growth_structure_and_gap(self, pool):
         """growth 画像结构完整；新增为 0 时 eta_days 为 None（无法估算）。"""
         d = pool.growth_stats("nanobanana")
-        for key in ("total", "new_in_24h", "new_in_7d", "avg_daily_7d",
-                    "ok", "target", "gap", "eta_days"):
+        for key in ("total", "new_in_24h", "new_in_7d", "avg_daily_7d", "ok", "target", "gap", "eta_days"):
             assert key in d, f"growth 缺字段 {key}"
         assert d["total"] == 0
         assert d["new_in_24h"] == 0
-        assert d["gap"] == 10000          # 无可用账号 → 距目标差整个目标
-        assert d["eta_days"] is None        # 速率为 0 → None（前端显示 —）
+        assert d["gap"] == 10000  # 无可用账号 → 距目标差整个目标
+        assert d["eta_days"] is None  # 速率为 0 → None（前端显示 —）
 
     def test_growth_counts_new_accounts(self, pool):
         """新增账号计入 new_in_24h；gap = target - ok 反映真实缺口。"""
@@ -401,6 +405,7 @@ async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
     # account_pool.py 是 from-import 值拷贝——必须 patch 它那份才生效（patch base 无用）
     monkeypatch.setattr("api.providers.base.MOCK_REGISTER", False)
     import api.account_pool as ap_mod
+
     monkeypatch.setattr(ap_mod, "MOCK_REGISTER", False)
     monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)
     monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 1)

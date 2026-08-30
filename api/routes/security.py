@@ -5,6 +5,7 @@
 - 未配置管理 Key 时继承业务 Key IF_API_KEYS（兼容降级）；
 - 两者均未配置 → 默认拒绝管理操作，仅显式 IF_ADMIN_KEY_OPEN=1（本地运维/内网）时放行。
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +34,7 @@ def _validate_ip(ip: str) -> str:
         raise AppError(ErrorCodes.BAD_REQUEST, "ip 不能为空", 400)
     try:
         import ipaddress
+
         ipaddress.ip_address(ip)
     except ValueError:
         raise AppError(ErrorCodes.BAD_REQUEST, f"ip 格式非法: {ip}", 400)
@@ -80,13 +82,22 @@ async def block_ip(request: Request, body: dict):
         raise AppError(ErrorCodes.BAD_REQUEST, "ttl_seconds 需 >= 0", 400)
 
     rec = await ip_blocklist_store.add_or_update(
-        ip=ip, block_type=block_type, daily_limit=daily_limit,
-        reason=reason, ttl_seconds=ttl_seconds,
+        ip=ip,
+        block_type=block_type,
+        daily_limit=daily_limit,
+        reason=reason,
+        ttl_seconds=ttl_seconds,
     )
     # 立即写入内存缓存，下一次请求即生效（不依赖全量同步空窗）
     apply_ip_rule(ip, rec)
-    log.warning("安全风控: 动态封禁 %s (type=%s, limit=%s, ttl=%ss, reason=%s)",
-                ip, block_type, daily_limit, ttl_seconds, reason)
+    log.warning(
+        "安全风控: 动态封禁 %s (type=%s, limit=%s, ttl=%ss, reason=%s)",
+        ip,
+        block_type,
+        daily_limit,
+        ttl_seconds,
+        reason,
+    )
     return {"ok": True, "record": rec}
 
 

@@ -1,6 +1,7 @@
 import os
 import multiprocessing
 
+
 def _detect_cpu_count() -> int:
     """检测可用 CPU 核心数，容错返回 2。"""
     try:
@@ -8,10 +9,12 @@ def _detect_cpu_count() -> int:
     except (NotImplementedError, OSError):
         return 2
 
+
 def _detect_memory_mb() -> int:
     """检测总内存（MB），失败返回 2048（2GB）。"""
     try:
         import psutil
+
         return int(psutil.virtual_memory().total / (1024 * 1024))
     except ImportError:
         # 回退：通过 /proc/meminfo（Linux）
@@ -24,10 +27,12 @@ def _detect_memory_mb() -> int:
             pass
         return 2048
 
+
 def _detect_disk_gb(path: str = ".") -> tuple[float, float, float]:
     """检测磁盘总容量/已用/可用（GB），失败返回 (0,0,0)。"""
     try:
         import psutil
+
         d = psutil.disk_usage(path)
         return (d.total / 1e9, d.used / 1e9, d.free / 1e9)
     except ImportError:
@@ -76,6 +81,7 @@ elif MEMORY_MB >= 8192:
     ADAPTIVE_UPSTREAM_INFLIGHT = max(ADAPTIVE_UPSTREAM_INFLIGHT, 64)
     ADAPTIVE_TOKEN_POOL_SIZE = max(ADAPTIVE_TOKEN_POOL_SIZE, 8)
     ADAPTIVE_MAX_QUEUE = max(ADAPTIVE_MAX_QUEUE, 5000)
+
 
 def system_spec() -> dict:
     """返回服务器规格摘要（供 /v1/system 端点）。"""

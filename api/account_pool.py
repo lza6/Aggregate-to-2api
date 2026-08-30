@@ -12,6 +12,7 @@
 - 各提供商按需取号（MAB 自适应打分 / 借出互斥）
 - 看板：全状态细分统计 (active, working, cooling, dead, registering, total_credits)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,15 +45,16 @@ BORROW_LEASE_TIMEOUT_SECONDS = float(os.getenv("IF_ACCOUNT_BORROW_TIMEOUT", "300
 
 class AccountStatus(str, enum.Enum):
     """标准账号生命周期状态枚举。"""
+
     UNREGISTERED = "unregistered"  # 未注册
-    REGISTERING = "registering"    # 注册中
-    ACTIVE = "active"              # 就绪可用 (同义词 'ok')
-    OK = "ok"                      # 兼容历史状态
-    WORKING = "working"            # 工作负载中 (被借出)
-    COOLING = "cooling"            # 冷却/额度耗尽中 (同义词 'exhausted')
-    EXHAUSTED = "exhausted"        # 兼容历史状态
-    DEAD = "dead"                  # 封号/失效 (同义词 'banned')
-    BANNED = "banned"              # 兼容历史状态
+    REGISTERING = "registering"  # 注册中
+    ACTIVE = "active"  # 就绪可用 (同义词 'ok')
+    OK = "ok"  # 兼容历史状态
+    WORKING = "working"  # 工作负载中 (被借出)
+    COOLING = "cooling"  # 冷却/额度耗尽中 (同义词 'exhausted')
+    EXHAUSTED = "exhausted"  # 兼容历史状态
+    DEAD = "dead"  # 封号/失效 (同义词 'banned')
+    BANNED = "banned"  # 兼容历史状态
 
     @classmethod
     def canonical(cls, status: str) -> str:
@@ -75,6 +77,7 @@ class AccountStatus(str, enum.Enum):
 
 class AdaptiveAccountScore:
     """MAB (Multi-Armed Bandit) 动态评分账号选择器 (基于 EMA 延迟与成功率)。"""
+
     def __init__(self, email: str):
         self.email = email
         self.ema_latency_ms = 1200.0
@@ -108,9 +111,16 @@ class AccountPool:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=10000")
-        self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
-        self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+        self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
+        self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
         self._conn.execute("PRAGMA temp_store=MEMORY")
+        # 保留 threading.Lock（非 asyncio.Lock）：临界区含同步 sqlite3 I/O（self._conn.execute/
+        # commit），但 account_pool 的方法（borrow_account/release/mark_dead/get/consume_credits
+        # 等）被 async 路径直接同步调用——nanobanana.NanobananaProvider.generate（async）→
+        # _next_account → _load_accounts → account_pool.get（同步 sqlite3+threading.Lock，
+        # 阻塞事件循环）。换 asyncio.Lock 无法解决根因（sqlite3 I/O 仍同步阻塞 loop），且
+        # 会把所有调用处 with→async with 传染。真正的修复是把 sqlite3 迁移到 aiosqlite
+        # （P1 专项，留批次2），本轮仅加注释标记反模式，不换锁。
         self._lock = threading.Lock()
         self._init_schema()
         # 注册器/签到器注入（避免循环 import）
@@ -126,6 +136,7 @@ class AccountPool:
         if not accs:
             return None
         import random
+
         # 10% 概率探索
         if random.random() < 0.1:
             return random.choice(accs)
@@ -202,7 +213,7 @@ class AccountPool:
             cur = self._conn.execute(
                 "UPDATE accounts SET status='active', borrowed_at=NULL, updated_at=? "
                 "WHERE provider=? AND status='working' AND borrowed_at IS NOT NULL AND (?-borrowed_at) > ?",
-                (now, provider, now, BORROW_LEASE_TIMEOUT_SECONDS)
+                (now, provider, now, BORROW_LEASE_TIMEOUT_SECONDS),
             )
             self._conn.commit()
             reclaimed = cur.rowcount
@@ -218,14 +229,14 @@ class AccountPool:
             self._conn.execute(
                 "UPDATE accounts SET status='active', borrowed_at=NULL, updated_at=? "
                 "WHERE provider=? AND status='working' AND borrowed_at IS NOT NULL AND (?-borrowed_at) > ?",
-                (now, provider, now, BORROW_LEASE_TIMEOUT_SECONDS)
+                (now, provider, now, BORROW_LEASE_TIMEOUT_SECONDS),
             )
 
             row = None
             if prefer_email:
                 row = self._conn.execute(
                     "SELECT * FROM accounts WHERE provider=? AND email=? AND status IN ('active', 'ok') AND credits > 0",
-                    (provider, prefer_email)
+                    (provider, prefer_email),
                 ).fetchone()
 
             if not row:
@@ -233,7 +244,7 @@ class AccountPool:
                 row = self._conn.execute(
                     "SELECT * FROM accounts WHERE provider=? AND status IN ('active', 'ok') AND credits > 0 "
                     "ORDER BY credits DESC, updated_at ASC LIMIT 1",
-                    (provider,)
+                    (provider,),
                 ).fetchone()
 
             if not row:
@@ -241,7 +252,7 @@ class AccountPool:
                 row = self._conn.execute(
                     "SELECT * FROM accounts WHERE provider=? AND status IN ('active', 'ok') "
                     "ORDER BY updated_at ASC LIMIT 1",
-                    (provider,)
+                    (provider,),
                 ).fetchone()
 
             if not row:
@@ -250,7 +261,7 @@ class AccountPool:
             email = row["email"]
             self._conn.execute(
                 "UPDATE accounts SET status='working', borrowed_at=?, updated_at=? WHERE provider=? AND email=?",
-                (now, now, provider, email)
+                (now, now, provider, email),
             )
             self._conn.commit()
 
@@ -259,14 +270,14 @@ class AccountPool:
             acc_dict["borrowed_at"] = now
             return acc_dict
 
-    def release_account(self, provider: str, email: str, new_credits: int | None = None,
-                        status: str | None = None, note: str = "") -> None:
+    def release_account(
+        self, provider: str, email: str, new_credits: int | None = None, status: str | None = None, note: str = ""
+    ) -> None:
         """请求完毕归还账号：更新积分并根据规则或指定状态转移。"""
         now = time.time()
         with self._lock:
             cur = self._conn.execute(
-                "SELECT credits, status FROM accounts WHERE provider=? AND email=?",
-                (provider, email)
+                "SELECT credits, status FROM accounts WHERE provider=? AND email=?", (provider, email)
             ).fetchone()
             if not cur:
                 return
@@ -291,7 +302,7 @@ class AccountPool:
                 "UPDATE accounts SET credits=?, status=?, note=CASE WHEN ? != '' THEN ? ELSE note END, "
                 "cooling_since=COALESCE(?, cooling_since), borrowed_at=NULL, updated_at=? "
                 "WHERE provider=? AND email=?",
-                (credits_val, target_status, note, note, cooling_since, now, provider, email)
+                (credits_val, target_status, note, note, cooling_since, now, provider, email),
             )
             self._conn.commit()
 
@@ -301,7 +312,7 @@ class AccountPool:
         with self._lock:
             self._conn.execute(
                 "UPDATE accounts SET status='dead', note=?, borrowed_at=NULL, updated_at=? WHERE provider=? AND email=?",
-                (reason, now, provider, email)
+                (reason, now, provider, email),
             )
             self._conn.commit()
             log.warning("账号标记封禁 [dead] %s (%s): %s", email, provider, reason)
@@ -313,12 +324,14 @@ class AccountPool:
             self._conn.execute(
                 "UPDATE accounts SET status='cooling', note=?, cooling_since=?, borrowed_at=NULL, updated_at=? "
                 "WHERE provider=? AND email=?",
-                (reason, now, now, provider, email)
+                (reason, now, now, provider, email),
             )
             self._conn.commit()
             log.info("账号进入冷却 [cooling] %s (%s): %s", email, provider, reason)
 
-    def wake_cooling_accounts(self, provider: str | None = None, cooling_timeout: float = DEFAULT_COOLING_PERIOD_SECONDS) -> int:
+    def wake_cooling_accounts(
+        self, provider: str | None = None, cooling_timeout: float = DEFAULT_COOLING_PERIOD_SECONDS
+    ) -> int:
         """扫描 cooling / exhausted 账号，超过冷却时间或每日重置时唤醒恢复为 active。"""
         now = time.time()
         with self._lock:
@@ -339,7 +352,7 @@ class AccountPool:
             for r in rows:
                 self._conn.execute(
                     "UPDATE accounts SET status='active', cooling_since=NULL, updated_at=? WHERE provider=? AND email=?",
-                    (now, r["provider"], r["email"])
+                    (now, r["provider"], r["email"]),
                 )
             self._conn.commit()
             log.info("自动唤醒冷却账号: %d 个 (%s)", len(rows), provider or "all")
@@ -359,7 +372,9 @@ class AccountPool:
             # 如果是 401/403/banned 则 mark_dead，否则正常归还
             err_str = str(e).lower()
             try:
-                if any(k in err_str for k in ("401", "403", "unauthorized", "forbidden", "banned", "account suspended")):
+                if any(
+                    k in err_str for k in ("401", "403", "unauthorized", "forbidden", "banned", "account suspended")
+                ):
                     self.mark_dead(provider, email, reason=str(e)[:100])
                 else:
                     self.release_account(provider, email)
@@ -371,8 +386,17 @@ class AccountPool:
 
     # ── 读写兼容接口 ──────────────────────────────
 
-    def add(self, provider: str, email: str, cookie: str, password: str | None = None,
-            credits: int = 0, status: str = "ok", note: str = "", register_ip: str = "") -> None:
+    def add(
+        self,
+        provider: str,
+        email: str,
+        cookie: str,
+        password: str | None = None,
+        credits: int = 0,
+        status: str = "ok",
+        note: str = "",
+        register_ip: str = "",
+    ) -> None:
         now = time.time()
         if cookie == "mock-session":
             note = (note + " mock").strip()
@@ -380,7 +404,8 @@ class AccountPool:
             self._conn.execute(
                 "INSERT OR REPLACE INTO accounts (provider,email,password,cookie,credits,status,created_at,updated_at,note,cooling_since,borrowed_at,register_ip)"
                 " VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL,?)",
-                (provider, email, password, cookie, credits, status, now, now, note, register_ip))
+                (provider, email, password, cookie, credits, status, now, now, note, register_ip),
+            )
             self._conn.commit()
 
     def list(self, provider: str | None = None, status: str | None = None) -> list[dict]:
@@ -404,8 +429,14 @@ class AccountPool:
         rows = self._conn.execute(q + " ORDER BY created_at DESC", args).fetchall()
         return [dict(r) for r in rows]
 
-    def list_page(self, provider: str | None = None, status: str | None = None,
-                  page: int = 1, page_size: int = 20, search: str = "") -> dict:
+    def list_page(
+        self,
+        provider: str | None = None,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        search: str = "",
+    ) -> dict:
         """分页读取账号列表，避免百万级号池一次性加载到内存。"""
         page = max(1, int(page))
         page_size = min(100, max(1, int(page_size)))
@@ -448,14 +479,16 @@ class AccountPool:
         # 返回 active, ok, 以及短效未被锁定的账号
         rows = self._conn.execute(
             "SELECT * FROM accounts WHERE provider=? AND status IN ('ok', 'active') ORDER BY created_at DESC",
-            (provider,)
+            (provider,),
         ).fetchall()
         return [dict(r) for r in rows]
 
     def update_credits(self, provider: str, email: str, credits: int) -> None:
         with self._lock:
-            self._conn.execute("UPDATE accounts SET credits=?, updated_at=? WHERE provider=? AND email=?",
-                               (credits, time.time(), provider, email))
+            self._conn.execute(
+                "UPDATE accounts SET credits=?, updated_at=? WHERE provider=? AND email=?",
+                (credits, time.time(), provider, email),
+            )
             self._conn.commit()
 
     def consume_credits(self, provider: str, email: str, amount: int) -> None:
@@ -485,18 +518,25 @@ class AccountPool:
         with self._lock:
             self._conn.execute(
                 "UPDATE accounts SET status=?, note=?, cooling_since=?, updated_at=? WHERE provider=? AND email=?",
-                (status, note, cooling_since, now, provider, email))
+                (status, note, cooling_since, now, provider, email),
+            )
             self._conn.commit()
 
     def set_checkin(self, provider: str, email: str, checkin_at: float) -> None:
         with self._lock:
-            self._conn.execute("UPDATE accounts SET checkin_at=? WHERE provider=? AND email=?",
-                               (checkin_at, provider, email))
+            self._conn.execute(
+                "UPDATE accounts SET checkin_at=? WHERE provider=? AND email=?", (checkin_at, provider, email)
+            )
             self._conn.commit()
 
     def set_checkin_profile(
-        self, provider: str, email: str, checkin_at: float,
-        cycle_day: int = 0, reward: int = 0, next_claim_at: float | None = None,
+        self,
+        provider: str,
+        email: str,
+        checkin_at: float,
+        cycle_day: int = 0,
+        reward: int = 0,
+        next_claim_at: float | None = None,
     ) -> None:
         """v6.3.4: 签到成功后一次性落库完整画像。
 
@@ -513,27 +553,34 @@ class AccountPool:
                 " credits_earned_total=COALESCE(credits_earned_total,0)+?,"
                 " next_claim_at=?, updated_at=?"
                 " WHERE provider=? AND email=?",
-                (checkin_at, int(cycle_day or 0), int(reward or 0),
-                 next_claim_at, time.time(), provider, email),
+                (checkin_at, int(cycle_day or 0), int(reward or 0), next_claim_at, time.time(), provider, email),
             )
             self._conn.commit()
 
     def counts(self) -> dict:
         """返回全状态细分统计 (映射为标准 key 与历史 key 兼容)。"""
         rows = self._conn.execute(
-            "SELECT provider, status, COUNT(*) c FROM accounts GROUP BY provider, status").fetchall()
+            "SELECT provider, status, COUNT(*) c FROM accounts GROUP BY provider, status"
+        ).fetchall()
         out: dict[str, dict] = {}
         for r in rows:
             p = r["provider"]
             st = r["status"]
             cnt = r["c"]
-            prov_dict = out.setdefault(p, {
-                "active": 0, "ok": 0,
-                "working": 0,
-                "cooling": 0, "exhausted": 0,
-                "dead": 0, "banned": 0,
-                "registering": 0, "unregistered": 0,
-            })
+            prov_dict = out.setdefault(
+                p,
+                {
+                    "active": 0,
+                    "ok": 0,
+                    "working": 0,
+                    "cooling": 0,
+                    "exhausted": 0,
+                    "dead": 0,
+                    "banned": 0,
+                    "registering": 0,
+                    "unregistered": 0,
+                },
+            )
             prov_dict[st] = prov_dict.get(st, 0) + cnt
             # 状态别名同步累加
             if st in ("ok", "active"):
@@ -550,7 +597,7 @@ class AccountPool:
     def total_credits(self, provider: str) -> int:
         r = self._conn.execute(
             "SELECT COALESCE(SUM(credits),0) s FROM accounts WHERE provider=? AND status IN ('ok', 'active', 'working')",
-            (provider,)
+            (provider,),
         ).fetchone()
         return int(r["s"]) if r else 0
 
@@ -593,9 +640,7 @@ class AccountPool:
         - eta_days: 预计达标天数 = gap / 每日速率；速率为 0 时 None（无法估算）
         """
         now = time.time()
-        total = self._conn.execute(
-            "SELECT COUNT(*) FROM accounts WHERE provider=?", (provider,)
-        ).fetchone()[0]
+        total = self._conn.execute("SELECT COUNT(*) FROM accounts WHERE provider=?", (provider,)).fetchone()[0]
         new_in_24h = self._conn.execute(
             "SELECT COUNT(*) FROM accounts WHERE provider=? AND created_at >= ?",
             (provider, now - 86400),
@@ -681,8 +726,14 @@ class AccountPool:
                     reg.proxy = await proxy_pool.acquire()
                     acc = await reg.register_one()
                     if acc:
-                        self.add(provider, acc["email"], acc["cookie"], acc.get("password"),
-                                 credits=acc.get("credits", 0), register_ip=acc.get("register_ip", ""))
+                        self.add(
+                            provider,
+                            acc["email"],
+                            acc["cookie"],
+                            acc.get("password"),
+                            credits=acc.get("credits", 0),
+                            register_ip=acc.get("register_ip", ""),
+                        )
                         self.mark(provider, acc["email"], "ok")
                         log.info("号池补号成功 %s: %s（现有 %d）", provider, acc["email"], len(self.get(provider)))
                         await asyncio.sleep(REGISTER_COOLDOWN)
@@ -715,7 +766,7 @@ class AccountPool:
                 rows = self._conn.execute(
                     "SELECT * FROM accounts WHERE provider=? AND status IN ('ok', 'active') "
                     "AND (checkin_at IS NULL OR checkin_at < ?) ORDER BY checkin_at ASC LIMIT ?",
-                    (provider, cutoff, BATCH_SIZE)
+                    (provider, cutoff, BATCH_SIZE),
                 ).fetchall()
                 if not rows:
                     continue
@@ -729,7 +780,9 @@ class AccountPool:
                             if isinstance(ok, dict):
                                 credits = int(ok.get("credits") or 0)
                                 self.set_checkin_profile(
-                                    provider, acc["email"], time.time(),
+                                    provider,
+                                    acc["email"],
+                                    time.time(),
                                     cycle_day=int(ok.get("cycle_day") or 0),
                                     reward=int(ok.get("reward") or 0),
                                     next_claim_at=ok.get("next_claim_at"),
@@ -748,10 +801,13 @@ class AccountPool:
                             re = await reg.re_login(acc["email"], acc["password"])
                             if re and re.get("cookie"):
                                 self.add(
-                                    provider, acc["email"], re["cookie"],
+                                    provider,
+                                    acc["email"],
+                                    re["cookie"],
                                     password=acc.get("password"),
                                     credits=int(acc.get("credits") or 0),
-                                    status="active", note=acc.get("note") or "",
+                                    status="active",
+                                    note=acc.get("note") or "",
                                     register_ip=acc.get("register_ip") or "",
                                 )
                                 log.info("nanobanana cookie 续期成功 %s", acc["email"])

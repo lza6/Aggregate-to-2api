@@ -1,8 +1,8 @@
 """SQLite 租约锁（Lease Lock）单元测试。"""
+
 import asyncio
 import os
 import tempfile
-import time
 
 import pytest
 
@@ -83,6 +83,7 @@ class TestLeaseStore:
     @pytest.mark.asyncio
     async def test_acquire_concurrent(self, store):
         """并发争夺同一 key，仅一个成功。"""
+
         async def try_acquire(label):
             return await store.acquire("concurrent-key", label, f"tok-{label}", 30)
 
@@ -112,6 +113,7 @@ class TestEditLockOrchestration:
     async def test_edit_lock_orchestration(self, store, monkeypatch):
         """租约锁拿锁→释放→他人可得。"""
         import api.dispatch_edit as de
+
         monkeypatch.setattr("api.config.EDIT_LEASE_ENABLED", True)
         monkeypatch.setattr(de, "_EDIT_LEASE_STORE", store)
         tok = await de._acquire_edit_lock("orch-key", "holder-1", timeout=2.0)
@@ -127,6 +129,7 @@ class TestEditLockOrchestration:
     async def test_lease_disabled_falls_back_to_file_lock(self, store, monkeypatch, tmp_path):
         """关闭租约锁→走文件锁 fallback，且不启动心跳/不碰租约 DB。"""
         import api.dispatch_edit as de
+
         monkeypatch.setattr("api.config.EDIT_LEASE_ENABLED", False)
         monkeypatch.setattr("api.config.EDIT_MUTEX_ENABLED", True)
         monkeypatch.setattr(de, "_EDIT_LEASE_STORE", store)

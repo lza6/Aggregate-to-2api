@@ -4,6 +4,7 @@
   python scripts/batch_register.py --provider nanobanana --target 500 --concurrency 2
   python scripts/batch_register.py --provider nanobanana --target 500 --concurrency 2
 """
+
 import argparse
 import asyncio
 import logging
@@ -14,7 +15,6 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api import config
 from api.account_pool import account_pool
 from api.registerer import build_registerers
 
@@ -41,12 +41,21 @@ async def register_worker(provider: str, target: int, sem: asyncio.Semaphore, pr
             try:
                 acc = await reg.register_one()
                 if acc:
-                    account_pool.add(provider, acc["email"], acc["cookie"],
-                                     password=acc.get("password", ""),
-                                     credits=acc.get("credits", 4))
+                    account_pool.add(
+                        provider,
+                        acc["email"],
+                        acc["cookie"],
+                        password=acc.get("password", ""),
+                        credits=acc.get("credits", 4),
+                    )
                     progress["success"] += 1
-                    log.info("[%s] ✅ 成功入池: %s (积分=%s) 总有效: %d",
-                             provider, acc["email"], acc.get("credits"), len(account_pool.get(provider, status="ok")))
+                    log.info(
+                        "[%s] ✅ 成功入池: %s (积分=%s) 总有效: %d",
+                        provider,
+                        acc["email"],
+                        acc.get("credits"),
+                        len(account_pool.get(provider, status="ok")),
+                    )
                 else:
                     progress["failed"] += 1
                     log.warning("[%s] ⚠️ 注册未生成有效账号，稍后重试", provider)
@@ -66,8 +75,13 @@ async def main():
 
     current = len(account_pool.get(args.provider, status="ok"))
     log.info("=== 听风AI 批量注号引擎启动 ===")
-    log.info("目标提供商: %s | 当前有效号数: %d | 目标数: %d | 并发度: %d",
-             args.provider, current, args.target, args.concurrency)
+    log.info(
+        "目标提供商: %s | 当前有效号数: %d | 目标数: %d | 并发度: %d",
+        args.provider,
+        current,
+        args.target,
+        args.concurrency,
+    )
 
     if current >= args.target:
         log.info("当前账号数已达到或超过目标数，无需额外注册。")
@@ -75,10 +89,16 @@ async def main():
 
     sem = asyncio.Semaphore(args.concurrency)
     progress = {"success": 0, "failed": 0}
-    tasks = [asyncio.create_task(register_worker(args.provider, args.target, sem, progress)) for _ in range(args.concurrency)]
+    tasks = [
+        asyncio.create_task(register_worker(args.provider, args.target, sem, progress)) for _ in range(args.concurrency)
+    ]
     await asyncio.gather(*tasks)
-    log.info("=== 批量注号任务结束 === 成功: %d | 失败: %d | 当前池总数: %d",
-             progress["success"], progress["failed"], len(account_pool.get(args.provider, status="ok")))
+    log.info(
+        "=== 批量注号任务结束 === 成功: %d | 失败: %d | 当前池总数: %d",
+        progress["success"],
+        progress["failed"],
+        len(account_pool.get(args.provider, status="ok")),
+    )
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@
 - 恢复后自动启用
 - 配置项控制阈值
 """
+
 import os
 
 import pytest
@@ -16,7 +17,6 @@ os.environ.setdefault("IF_PROVIDER_DEGRADE_THRESHOLD", "3")
 
 from api.providers import registry
 from api.providers.registry import bootstrap
-from api.providers.base import ProviderRateLimited
 from api import config
 
 
@@ -165,7 +165,6 @@ class TestRecover:
 class TestRouteIntegration:
     def test_provider_for_returns_429_when_down(self):
         """provider_for 返回备用 provider 而非 None（IMP-22 自动故障转移）。"""
-        from fastapi import HTTPException
 
         registry.mark_down("nanobanana", "test: 全量降级")
         provider = registry.provider_for("nanobanana/nano-banana-pro")

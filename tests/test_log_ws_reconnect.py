@@ -6,11 +6,11 @@
 - _broadcast 发送失败自动移除死连接
 - WsLogHandler.emit 异常兜底（handleError 不外泄）
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 
 import pytest
 
@@ -103,6 +103,7 @@ def test_broadcast_log_no_running_loop_skips():
 
 def test_broadcast_log_with_running_loop_schedules_coro():
     """有运行中的事件循环时 broadcast_log 调度 _broadcast 协程。"""
+
     async def _runner():
         ws = _FakeWS()
         _ws_subscribers.add(ws)

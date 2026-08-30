@@ -2,6 +2,7 @@
 
 验证 EMA 计算、延迟 clamp、配置兼容性（IF_PREFETCH_AFTER_SOLVE_DELAY=0 时 EMA 自适应/固定值回退）。
 """
+
 import asyncio
 import time
 
@@ -31,8 +32,8 @@ class TestEmaCalculation:
 
     def test_ema_after_multiple_updates(self):
         pool = _make_pool()
-        pool.update_solve_time(3.0)   # ema = 4.4
-        pool.update_solve_time(2.0)   # ema = 4.4*0.7 + 2.0*0.3 = 3.68
+        pool.update_solve_time(3.0)  # ema = 4.4
+        pool.update_solve_time(2.0)  # ema = 4.4*0.7 + 2.0*0.3 = 3.68
         assert pool._ema == pytest.approx(3.68)
         pool.update_solve_time(10.0)  # ema = 3.68*0.7 + 10.0*0.3 = 5.576
         assert pool._ema == pytest.approx(5.576)
@@ -101,7 +102,7 @@ class TestPrefetchLoopIntegration:
         """验证 prefetch_loop 成功后使用 EMA 自适应延迟。"""
         monkeypatch.setattr(config, "IF_PREFETCH_AFTER_SOLVE_DELAY", 0)
         pool = _make_pool()
-        pool._ema = 2.0     # 预期 delay = 1.0s
+        pool._ema = 2.0  # 预期 delay = 1.0s
         pool.sem = asyncio.Semaphore(1)
         # 让 prefetch_loop 只跑一次：第一次求解成功后，token 入池，pool 满 → 进入 need_event.wait
         # 我们需要在 sleep 之后取消它
@@ -171,11 +172,13 @@ class TestPrefetchLoopIntegration:
         # mock 掉 _solve_turnstile 让它返回一个 mock token
         monkeypatch.setattr(turnstile_client, "_solve_turnstile", _fake_solve)
         # v4.2 回归：solver_guard.record_success 现有签名带 node_url，允许任意 kwargs 不破坏旧测试
-        monkeypatch.setattr(turnstile_client.solver_guard, "record_success",
-                            lambda d, **kw: None)
+        monkeypatch.setattr(turnstile_client.solver_guard, "record_success", lambda d, **kw: None)
 
         result = await turnstile_client.solve_turnstile(
-            "http://mock", "http://test.com", "sitekey", 30,
+            "http://mock",
+            "http://test.com",
+            "sitekey",
+            30,
         )
         assert isinstance(result, tuple), "solve_turnstile 应返回元组"
         assert len(result) == 2, "solve_turnstile 应返回 (token, duration)"

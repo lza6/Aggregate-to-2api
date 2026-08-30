@@ -3,6 +3,7 @@
 包含：model 校验/归一化、图生图输入解析、路由分发（_dispatch_*）、
 图生图跨进程互斥与代理池、全局 SSE 广播 /v1/events/tasks（向后兼容）。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,7 +49,7 @@ def _validate_model(model: str, kind: str = "txt2img") -> None:
     spec = registry.model(model)
     if spec is None:
         raise AppError(ErrorCodes.INVALID_MODEL, f"未知 model: {model}，可选见 GET /v1/models", 422)
-    cap_map = {"txt2img": "txt2img", "img2img": "img2img", "txt2vid": "txt2vid"}
+    cap_map = {"txt2img": "txt2img", "img2img": "img2img", "txt2vid": "txt2vid", "img2vid": "img2vid"}
     cap = cap_map.get(kind)
     if cap is None:
         raise AppError(ErrorCodes.BAD_REQUEST, f"不支持的生成类型: {kind}", 422)
@@ -113,7 +114,9 @@ def _parse_input_images(images: list[str]) -> list[bytes]:
         except Exception:
             raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] base64 解码失败", 422)
         if len(data) > config.MAX_IMAGE_BYTES:
-            raise AppError(ErrorCodes.BAD_REQUEST, f"images[{i}] 图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限", 413)
+            raise AppError(
+                ErrorCodes.BAD_REQUEST, f"images[{i}] 图片超过 {config.MAX_IMAGE_BYTES // 1024 // 1024}MB 上限", 413
+            )
         result.append(data)
     return result
 
@@ -143,8 +146,11 @@ async def broadcast_task_event(task_id: str, status: str, data: dict | None = No
                 pass
     # v4.2: 同时发布到 per-task 事件流（仅发布一次，非双重）
     try:
-        publish_task_event(task_id, "result" if status == "completed" else "error",
-                           {"task_id": task_id, "status": status, ** (data or {})})
+        publish_task_event(
+            task_id,
+            "result" if status == "completed" else "error",
+            {"task_id": task_id, "status": status, **(data or {})},
+        )
     except Exception:
         pass
 
@@ -157,7 +163,7 @@ async def sse_task_events():
 
     async def event_generator():
         try:
-            yield "event: connected\ndata: {\"status\":\"ready\"}\n\n"
+            yield 'event: connected\ndata: {"status":"ready"}\n\n'
             while True:
                 msg = await q.get()
                 yield msg
@@ -200,6 +206,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     但若返回的仍是 imagefree 则进引擎队列（保持既有高性能路径）。
     """
     from .config import IF_IDEMPOTENCY_ENABLED
+
     idempotency_key = getattr(req, "idempotency_key", None)
     if IF_IDEMPOTENCY_ENABLED and idempotency_key:
         existing = await db.get_idempotency(idempotency_key)
@@ -220,11 +227,15 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
 
     if provider is None or provider.prefix == "imagefree":
         # imagefree 主路径：走既有引擎队列（高性能）
-        task_id = await engine.submit_priority(req.prompt, req.aspect_ratio, req.download,
-                                               model.split("/", 1)[-1],
-                                               priority=priority,
-                                               client_ip=getattr(req, "client_ip", None),
-                                               user_agent=getattr(req, "user_agent", None))
+        task_id = await engine.submit_priority(
+            req.prompt,
+            req.aspect_ratio,
+            req.download,
+            model.split("/", 1)[-1],
+            priority=priority,
+            client_ip=getattr(req, "client_ip", None),
+            user_agent=getattr(req, "user_agent", None),
+        )
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)
@@ -238,9 +249,16 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         raise AppError(ErrorCodes.PROVIDER_DOWN, f"provider {_provider_prefix(model)} 暂时不可用，请稍后重试", 429)
 
     task_id = str(uuid.uuid4())
-    await db.create_request(task_id, req.prompt, req.aspect_ratio, req.download, "txt", model,
-                            client_ip=getattr(req, "client_ip", None),
-                            user_agent=getattr(req, "user_agent", None))
+    await db.create_request(
+        task_id,
+        req.prompt,
+        req.aspect_ratio,
+        req.download,
+        "txt",
+        model,
+        client_ip=getattr(req, "client_ip", None),
+        user_agent=getattr(req, "user_agent", None),
+    )
     t0 = time.monotonic()
     spec = registry.model(model)
 
@@ -263,34 +281,35 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                 await sem.acquire()
             async with upstream_semaphore:
                 res = await provider.generate(
-                    model, req.prompt, req.aspect_ratio, images=None,
-                    resolution=req.resolution, download=req.download,
+                    model,
+                    req.prompt,
+                    req.aspect_ratio,
+                    images=_parse_input_images(req.images) if req.images else None,
+                    resolution=req.resolution,
+                    download=req.download,
                     duration=req.duration or (spec.meta.get("video_durations") or [4])[0],
                 )
             if res.proxy_used:
                 await db.update_proxy_used(task_id, res.proxy_used)
             if res.status == "completed":
-                await db.mark_finished(task_id, "completed", res.asset_url, None,
-                                 time.monotonic() - t0, res.asset_bytes, res.asset_mime)
+                await db.mark_finished(
+                    task_id, "completed", res.asset_url, None, time.monotonic() - t0, res.asset_bytes, res.asset_mime
+                )
                 registry.record_success(provider.prefix)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, True)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, True)
                 except Exception:
                     pass
             else:
-                await db.mark_finished(task_id, "error", None, res.error or "生成失败",
-                                 time.monotonic() - t0)
+                await db.mark_finished(task_id, "error", None, res.error or "生成失败", time.monotonic() - t0)
                 try:
-                    registry.adaptive_router.record_result(
-                        provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                    registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
                 except Exception:
                     pass
         except Exception as e:
             await db.mark_finished(task_id, "error", None, str(e), time.monotonic() - t0)
             try:
-                registry.adaptive_router.record_result(
-                    provider.prefix, (time.monotonic() - t0) * 1000.0, False)
+                registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, False)
             except Exception:
                 pass
             log.exception("提供商生成异常 %s", task_id)

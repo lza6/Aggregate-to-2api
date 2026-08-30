@@ -6,11 +6,10 @@
 4. 停止时 flush：flush_to_db() 写回所有内存条目
 5. 重启后空窗期消除：DB 中缓存被正确恢复
 """
+
 import asyncio
-import json
 import os
 import tempfile
-import time
 
 import pytest
 import pytest_asyncio
@@ -22,6 +21,7 @@ from api.cache import LRUCache
 async def tmp_db_path():
     """临时 SQLite 文件路径，用完后自动清理。"""
     from api.db import DB
+
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     db = DB(path)

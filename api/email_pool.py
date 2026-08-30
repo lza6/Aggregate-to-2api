@@ -3,11 +3,13 @@
 支持多源临时与自建邮箱提供商：
 1. LinshiMailSource (linshi-email.com 免费临时邮箱，零 429，极速)
 2. MailTmSource (mail.tm REST API，速度快且稳定，支持动态创建 account 并基于 JWT 拉取 messages)
-3. GuerrillaMailSource (GuerrillaMail 免认证公共/私有临时邮箱与邮件抓取)
-4. CustomImapSource (自建域名邮箱通配符捕捉，支持通过 IMAP4/IMAP4_SSL 异步非阻塞读取)
-5. Do22Source (22.do 免费临时邮箱，REST 全链路)
-6. TempMailSource (temp-mail.org web2 API)
-7. TempTfSource (temp.tf 十几亿级随机邮箱)
+3. MailGwSource (api.mail.gw REST API，自建邮箱，动态域名 + JWT 拉信)
+4. GuerrillaMailSource (GuerrillaMail 免认证公共/私有临时邮箱与邮件抓取)
+5. CustomImapSource (自建域名邮箱通配符捕捉，支持通过 IMAP4/IMAP4_SSL 异步非阻塞读取)
+6. Do22Source (22.do 免费临时邮箱，REST 全链路)
+7. TempMailSource (temp-mail.org web2 API)
+8. TempMailIoSource (temp-mail.io REST API，无 key 免费源)
+9. TempTfSource (temp.tf 十几亿级随机邮箱)
 
 核心职责：
 - 提供规范统一的 BaseMailSource 适配器接口与自动退避/打分/健康度管理。
@@ -16,6 +18,7 @@
 - 轮询收件：验证码/验证链接精准提取。
 - 持久化邮箱与域名注册记录到 SQLite，重启不丢。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -117,8 +120,11 @@ class LinshiMailSource(BaseMailSource):
 
     name = "linshi-email"
     BASE = "https://www.linshi-email.com"
-    DOMAINS = [d.strip() for d in os.getenv("IF_LINSHI_DOMAINS",
-              "iwatermail.com,fextemp.com,boximail.com,chitthi.in").split(",") if d.strip()]
+    DOMAINS = [
+        d.strip()
+        for d in os.getenv("IF_LINSHI_DOMAINS", "iwatermail.com,fextemp.com,boximail.com,chitthi.in").split(",")
+        if d.strip()
+    ]
 
     def __init__(self) -> None:
         # 默认域名被上游拉黑 → 权重降到 10 使其极少被选中；可用域名补齐后靠环境变量覆盖
@@ -155,13 +161,15 @@ class LinshiMailSource(BaseMailSource):
                     out = []
                     for m in msgs:
                         content = m.get("content") or ""
-                        out.append({
-                            "id": m.get("id", ""),
-                            "from": m.get("from", ""),
-                            "subject": m.get("subject", ""),
-                            "bodyHtml": content,
-                            "bodyPreview": content,
-                        })
+                        out.append(
+                            {
+                                "id": m.get("id", ""),
+                                "from": m.get("from", ""),
+                                "subject": m.get("subject", ""),
+                                "bodyHtml": content,
+                                "bodyPreview": content,
+                            }
+                        )
                     return out
                 elif isinstance(data, list):
                     return data
@@ -270,31 +278,35 @@ class MailTmSource(BaseMailSource):
                     mid = item.get("id") or item.get("_id")
                     if mid:
                         try:
-                            det_resp = await self.session.get(
-                                f"{self.BASE}/messages/{mid}", headers=headers
-                            )
+                            det_resp = await self.session.get(f"{self.BASE}/messages/{mid}", headers=headers)
                             if det_resp.status_code == 200:
                                 d = det_resp.json()
                                 html_list = d.get("html") or []
-                                html_content = html_list[0] if isinstance(html_list, list) and html_list else str(html_list)
+                                html_content = (
+                                    html_list[0] if isinstance(html_list, list) and html_list else str(html_list)
+                                )
                                 text_content = d.get("text") or d.get("intro") or ""
-                                out.append({
-                                    "id": mid,
-                                    "from": (d.get("from") or {}).get("address", ""),
-                                    "subject": d.get("subject", ""),
-                                    "bodyHtml": html_content or text_content,
-                                    "bodyPreview": text_content or html_content,
-                                })
+                                out.append(
+                                    {
+                                        "id": mid,
+                                        "from": (d.get("from") or {}).get("address", ""),
+                                        "subject": d.get("subject", ""),
+                                        "bodyHtml": html_content or text_content,
+                                        "bodyPreview": text_content or html_content,
+                                    }
+                                )
                                 continue
                         except Exception:
                             pass
-                    out.append({
-                        "id": mid or "",
-                        "from": (item.get("from") or {}).get("address", ""),
-                        "subject": item.get("subject", ""),
-                        "bodyHtml": item.get("intro", ""),
-                        "bodyPreview": item.get("intro", ""),
-                    })
+                    out.append(
+                        {
+                            "id": mid or "",
+                            "from": (item.get("from") or {}).get("address", ""),
+                            "subject": item.get("subject", ""),
+                            "bodyHtml": item.get("intro", ""),
+                            "bodyPreview": item.get("intro", ""),
+                        }
+                    )
                 return out
         except Exception as e:
             log.warning("mail.tm 收件失败 %s: %s", address, e)
@@ -367,13 +379,15 @@ class GuerrillaMailSource(BaseMailSource):
                                 body = d.get("mail_body") or body
                         except Exception:
                             pass
-                    out.append({
-                        "id": str(mid or ""),
-                        "from": item.get("mail_from", ""),
-                        "subject": item.get("mail_subject", ""),
-                        "bodyHtml": body,
-                        "bodyPreview": item.get("mail_excerpt") or body,
-                    })
+                    out.append(
+                        {
+                            "id": str(mid or ""),
+                            "from": item.get("mail_from", ""),
+                            "subject": item.get("mail_subject", ""),
+                            "bodyHtml": body,
+                            "bodyPreview": item.get("mail_excerpt") or body,
+                        }
+                    )
                 return out
         except Exception as e:
             log.warning("GuerrillaMail 收件失败 %s: %s", address, e)
@@ -405,7 +419,9 @@ class CustomImapSource(BaseMailSource):
         self.username = username or os.getenv("IF_IMAP_USER", "")
         self.password = password or os.getenv("IF_IMAP_PASS", "")
         self.domain = (domain or os.getenv("IF_IMAP_DOMAIN", "")).lstrip("@")
-        self.use_ssl = use_ssl if os.getenv("IF_IMAP_SSL") is None else (os.getenv("IF_IMAP_SSL", "1") in ("1", "true", "True"))
+        self.use_ssl = (
+            use_ssl if os.getenv("IF_IMAP_SSL") is None else (os.getenv("IF_IMAP_SSL", "1") in ("1", "true", "True"))
+        )
 
         # 如果配置了自建 IMAP 则具有最高优先级，否则不默认启用
         configured = bool(self.host and self.username and self.password and self.domain)
@@ -456,7 +472,10 @@ class CustomImapSource(BaseMailSource):
 
                 # 提取 Header
                 to_hdr = str(msg.get("To", ""))
-                if address.lower() not in to_hdr.lower() and address.lower() not in str(msg.get("Delivered-To", "")).lower():
+                if (
+                    address.lower() not in to_hdr.lower()
+                    and address.lower() not in str(msg.get("Delivered-To", "")).lower()
+                ):
                     continue
 
                 # 解码 Subject
@@ -493,14 +512,16 @@ class CustomImapSource(BaseMailSource):
                         else:
                             body_text = text
 
-                mails.append({
-                    "id": mid.decode("utf-8", errors="ignore") if isinstance(mid, bytes) else str(mid),
-                    "from": str(msg.get("From", "")),
-                    "to": to_hdr,
-                    "subject": decoded_subj,
-                    "bodyHtml": body_html or body_text,
-                    "bodyPreview": body_text or body_html,
-                })
+                mails.append(
+                    {
+                        "id": mid.decode("utf-8", errors="ignore") if isinstance(mid, bytes) else str(mid),
+                        "from": str(msg.get("From", "")),
+                        "to": to_hdr,
+                        "subject": decoded_subj,
+                        "bodyHtml": body_html or body_text,
+                        "bodyPreview": body_text or body_html,
+                    }
+                )
         except Exception as e:
             log.warning("IMAP 同步拉取邮件失败 %s: %s", address, e)
         finally:
@@ -598,12 +619,14 @@ class Do22Source(BaseMailSource):
                         if det.status_code == 200:
                             det_data = (det.json() or {}).get("data") or {}
                             content = det_data.get("content") or det_data.get("html") or json.dumps(det_data)
-                            out.append({
-                                "id": str(mid),
-                                "subject": item.get("subject", ""),
-                                "bodyHtml": content,
-                                "bodyPreview": content,
-                            })
+                            out.append(
+                                {
+                                    "id": str(mid),
+                                    "subject": item.get("subject", ""),
+                                    "bodyHtml": content,
+                                    "bodyPreview": content,
+                                }
+                            )
                         else:
                             out.append(item)
                     except Exception:
@@ -693,12 +716,14 @@ class TempMailSource(BaseMailSource):
                             )
                             if det.status_code == 200:
                                 ddata = det.json()
-                                out.append({
-                                    "id": str(mid),
-                                    "subject": ddata.get("subject") or item.get("subject", ""),
-                                    "bodyHtml": ddata.get("bodyHtml") or ddata.get("bodyText") or "",
-                                    "bodyPreview": ddata.get("bodyPreview") or item.get("bodyPreview", ""),
-                                })
+                                out.append(
+                                    {
+                                        "id": str(mid),
+                                        "subject": ddata.get("subject") or item.get("subject", ""),
+                                        "bodyHtml": ddata.get("bodyHtml") or ddata.get("bodyText") or "",
+                                        "bodyPreview": ddata.get("bodyPreview") or item.get("bodyPreview", ""),
+                                    }
+                                )
                                 continue
                         except Exception:
                             pass
@@ -709,7 +734,225 @@ class TempMailSource(BaseMailSource):
         return []
 
 
-# ── 7. TempTfSource (temp.tf 十几亿级随机邮箱) ──────────
+# ── 7.5 TempMailIoSource (temp-mail.io 无 key 免费源) ──────
+class TempMailIoSource(BaseMailSource):
+    """temp-mail.io REST API 邮箱源（无 key 免费源）。
+
+    实测可用（浏览器抓包确认）：建箱无需任何 API key，
+    域名不被 nanobanana-pro.com 拉黑，验证邮件可正常收取。
+    - 建箱 POST /api/v3/email/new → {email, token}
+    - 拉信 GET /api/v3/email/{address}/messages（可选 Bearer token）
+    建箱复用 EMAIL_CREATE_MIN_INTERVAL 限速（与 TempMailSource 相同的
+    _last_create 逻辑），高频建箱自动 sleep 防 429。
+    """
+
+    name = "temp-mail.io"
+    API = "https://api.internal.temp-mail.io"
+
+    def __init__(self) -> None:
+        super().__init__(name=self.name, priority=95)
+        self._last_create = 0.0
+        self.session = httpx.AsyncClient(
+            timeout=20.0,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                "Origin": "https://temp-mail.io",
+                "Referer": "https://temp-mail.io/",
+                "Accept": "application/json, text/plain, */*",
+            },
+        )
+
+    async def new_address(self) -> tuple[str, dict]:
+        now = time.time()
+        gap = now - self._last_create
+        if gap < EMAIL_CREATE_MIN_INTERVAL:
+            await asyncio.sleep(EMAIL_CREATE_MIN_INTERVAL - gap)
+        r = await self.session.post(
+            f"{self.API}/api/v3/email/new",
+            json={"min_name_length": 10, "max_name_length": 10},
+            headers={"Content-Type": "application/json"},
+        )
+        self._last_create = time.time()
+        if r.status_code == 429:
+            self.mark_failure("temp-mail.io 429 Too Many Requests", backoff_seconds=float(EMAIL_CREATE_BACKOFF))
+            raise RuntimeError(f"temp-mail.io 建箱限流(429)，退避 {EMAIL_CREATE_BACKOFF}s")
+        if r.status_code != 200:
+            raise RuntimeError(f"temp-mail.io 建箱失败 HTTP {r.status_code}: {r.text[:120]}")
+        data = r.json()
+        address = str(data.get("email") or "")
+        token = str(data.get("token") or "")
+        if "@" not in address or not token:
+            raise RuntimeError(f"temp-mail.io 返回异常: {str(data)[:150]}")
+        return address, {"source": self.name, "token": token}
+
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
+        token = (state or {}).get("token")
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            r = await self.session.get(
+                f"{self.API}/api/v3/email/{address}/messages",
+                headers=headers,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                items = data if isinstance(data, list) else []
+                out = []
+                for item in items:
+                    frm = item.get("from") or {}
+                    from_addr = frm.get("address") if isinstance(frm, dict) else str(frm)
+                    body_html = item.get("body_html") or item.get("bodyHtml") or ""
+                    body_text = item.get("body_text") or item.get("bodyText") or ""
+                    body_preview = item.get("intro") or body_text or body_html
+                    out.append(
+                        {
+                            "id": str(item.get("id") or ""),
+                            "from": from_addr,
+                            "subject": item.get("subject", ""),
+                            "bodyHtml": body_html or body_text,
+                            "bodyPreview": body_preview,
+                        }
+                    )
+                return out
+        except Exception as e:
+            log.warning("temp-mail.io 收件失败 %s: %s", address, e)
+        return []
+
+
+# ── 7.6 MailGwSource (api.mail.gw 自建邮箱) ─────────────
+class MailGwSource(BaseMailSource):
+    """api.mail.gw REST API 邮箱源。
+
+    实测可用（无 key 免费源）：动态拉取可用域名并缓存 1h，
+    自建 account 后经 /token 拿 JWT 拉取 messages。
+    域名不被 nanobanana-pro.com 拉黑，验证邮件可正常收取。
+    - 域名 GET /domains → list[{"domain","isActive"}]（缓存 1h）
+    - 建箱 POST /accounts → 201 {id, address}
+    - 鉴权 POST /token → {token}
+    - 拉信 GET /messages?page=1&itemsPerPage=20（Bearer token），Hydra 风格响应
+    """
+
+    name = "mail.gw"
+    BASE = "https://api.mail.gw"
+    FALLBACK_DOMAINS = ["westcast-systems.com"]
+
+    def __init__(self) -> None:
+        super().__init__(name=self.name, priority=75)
+        self.session = httpx.AsyncClient(
+            timeout=20.0,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Origin": "https://mail.gw",
+                "Referer": "https://mail.gw/",
+            },
+        )
+        self._cached_domains: list[str] = []
+        self._domains_fetched_at: float = 0.0
+
+    async def _get_domains(self) -> list[str]:
+        now = time.time()
+        if self._cached_domains and (now - self._domains_fetched_at < 3600):
+            return self._cached_domains
+        try:
+            r = await self.session.get(f"{self.BASE}/domains")
+            if r.status_code == 200:
+                data = r.json()
+                items = data if isinstance(data, list) else data.get("hydra:member") or data.get("domains") or []
+                domains = [
+                    d.get("domain")
+                    for d in items
+                    if isinstance(d, dict) and d.get("domain") and d.get("isActive", True)
+                ]
+                if domains:
+                    self._cached_domains = domains
+                    self._domains_fetched_at = now
+                    return self._cached_domains
+        except Exception as e:
+            log.warning("mail.gw 获取可用域名失败: %s", e)
+        return self._cached_domains or list(self.FALLBACK_DOMAINS)
+
+    async def new_address(self) -> tuple[str, dict]:
+        domains = await self._get_domains()
+        domain = random.choice(domains)
+        local = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        address = f"{local}@{domain}"
+        password = "".join(random.choices(string.ascii_letters + string.digits, k=12))
+
+        # 1) 创建 account
+        create_resp = await self.session.post(
+            f"{self.BASE}/accounts",
+            json={"address": address, "password": password},
+        )
+        if create_resp.status_code == 429:
+            self.mark_failure("mail.gw 429 Too Many Requests", backoff_seconds=60.0)
+            raise RuntimeError("mail.gw 建箱限流(429)，退避 60s")
+        if create_resp.status_code != 201:
+            raise RuntimeError(f"mail.gw 创建账号失败 HTTP {create_resp.status_code}: {create_resp.text[:120]}")
+
+        # 2) 获取 Token
+        token_resp = await self.session.post(
+            f"{self.BASE}/token",
+            json={"address": address, "password": password},
+        )
+        if token_resp.status_code != 200:
+            raise RuntimeError(f"mail.gw 获取 Token 失败 HTTP {token_resp.status_code}: {token_resp.text[:120]}")
+        token = (token_resp.json() or {}).get("token") or ""
+        if not token:
+            raise RuntimeError("mail.gw 返回空 Token")
+
+        return address, {
+            "source": self.name,
+            "email": address,
+            "password": password,
+            "token": token,
+        }
+
+    async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
+        token = (state or {}).get("token")
+        if not token:
+            return []
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            r = await self.session.get(
+                f"{self.BASE}/messages",
+                params={"page": 1, "itemsPerPage": 20},
+                headers=headers,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                items = []
+                if isinstance(data, list):
+                    items = data
+                elif isinstance(data, dict):
+                    items = data.get("hydra:member") or data.get("messages") or []
+                out = []
+                for item in items:
+                    frm = item.get("from") or {}
+                    from_addr = frm.get("address") if isinstance(frm, dict) else str(frm)
+                    body_html = item.get("bodyHtml") or item.get("html") or item.get("intro", "")
+                    if isinstance(body_html, list):
+                        body_html = body_html[0] if body_html else ""
+                    body_text = item.get("bodyText") or item.get("text") or item.get("intro", "")
+                    if isinstance(body_text, list):
+                        body_text = body_text[0] if body_text else ""
+                    out.append(
+                        {
+                            "id": str(item.get("id") or ""),
+                            "from": from_addr,
+                            "subject": item.get("subject", ""),
+                            "bodyHtml": str(body_html or body_text),
+                            "bodyPreview": str(body_text or body_html),
+                        }
+                    )
+                return out
+        except Exception as e:
+            log.warning("mail.gw 收件失败 %s: %s", address, e)
+        return []
+
+
+# ── 7.7 TempTfSource (temp.tf 十几亿级随机邮箱) ──────────
 class TempTfSource(BaseMailSource):
     """temp.tf 邮箱源（本地生成，空间大，兜底）。"""
 
@@ -757,6 +1000,11 @@ class EmailPool:
         "22.do": "22.do",
         "tempmail": "temp-mail",
         "temp-mail": "temp-mail",
+        "tempmailio": "temp-mail.io",
+        "tempmail.io": "temp-mail.io",
+        "temp-mail.io": "temp-mail.io",
+        "mailgw": "mail.gw",
+        "mail.gw": "mail.gw",
         "temptf": "temp.tf",
         "temp.tf": "temp.tf",
     }
@@ -769,9 +1017,11 @@ class EmailPool:
                 CustomImapSource(),
                 LinshiMailSource(),
                 MailTmSource(),
+                MailGwSource(),
                 Do22Source(),
                 GuerrillaMailSource(),
                 TempMailSource(),
+                TempMailIoSource(),
                 TempTfSource(),
             ]
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -780,9 +1030,14 @@ class EmailPool:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=10000")
-        self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
-        self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+        self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
+        self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
         self._conn.execute("PRAGMA temp_store=MEMORY")
+        # 保留 threading.Lock（非 asyncio.Lock）：临界区含同步 sqlite3 I/O（self._conn.execute/
+        # commit），但 record/_init_schema 被 registerer.register_one（async）→ email_pool.record
+        # （同步 sqlite3+threading.Lock，阻塞事件循环）直接调用。换 asyncio.Lock 无法解决根因
+        # （sqlite3 I/O 仍同步阻塞 loop），且会把所有调用处 with→async with 传染。真正的修复是
+        # 把 sqlite3 迁移到 aiosqlite（P1 专项，留批次2），本轮仅加注释标记反模式，不换锁。
         self._lock = threading.Lock()
         self._init_schema()
         self._used: set[str] = self._load_used()
@@ -969,15 +1224,9 @@ class EmailPool:
     def stats(self) -> dict:
         total = self._conn.execute("SELECT COUNT(*) FROM email_registry").fetchone()[0]
         by_provider = dict(
-            self._conn.execute(
-                "SELECT provider, COUNT(*) FROM email_registry GROUP BY provider"
-            ).fetchall()
+            self._conn.execute("SELECT provider, COUNT(*) FROM email_registry GROUP BY provider").fetchall()
         )
-        by_status = dict(
-            self._conn.execute(
-                "SELECT status, COUNT(*) FROM email_registry GROUP BY status"
-            ).fetchall()
-        )
+        by_status = dict(self._conn.execute("SELECT status, COUNT(*) FROM email_registry GROUP BY status").fetchall())
         sources_status = [
             {
                 "name": s.name,

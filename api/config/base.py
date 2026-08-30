@@ -1,4 +1,5 @@
 """config 子模块公共辅助：环境变量布尔/字符串/整数解析。"""
+
 from __future__ import annotations
 
 import os

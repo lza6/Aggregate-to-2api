@@ -1,4 +1,5 @@
 """集成测试：图生图完整流程。"""
+
 import base64
 import asyncio
 import pytest
@@ -9,6 +10,7 @@ def _disable_rate_limit():
     """图生图与生图共用 per-IP 限速窗口；关闭限速避免前一用例的计数把
     本项目误伤为 429（P0-4 顺序污染，直接改模块级常量、不 reload）。"""
     import api.config as cfg
+
     saved = cfg.IF_REQUESTS_PER_MINUTE
     cfg.IF_REQUESTS_PER_MINUTE = 0
     yield
@@ -22,6 +24,7 @@ class TestEditFlow:
     async def test_edit_submit_and_poll(self, app_with_mocks, mock_cfsolver):
         """提交有效图片后轮询直到终态（放宽超时、接受更多状态）。"""
         import httpx
+
         client = app_with_mocks
         # 会话级共享 app：前序混沌/熔断用例可能把 solver 电路置于 OPEN，
         # 先恢复 mock 并等待 half-open 探测，避免编辑任务因 token 不可用永久 pending。
@@ -29,10 +32,14 @@ class TestEditFlow:
             await c.post(f"{mock_cfsolver}/__fault?mode=ok")
         await asyncio.sleep(2)
         png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64).decode()
-        r = await client.post("/v1/edit", json={
-            "image": f"data:image/png;base64,{png}",
-            "prompt": "make it red", "model": "imagefree/default",
-        })
+        r = await client.post(
+            "/v1/edit",
+            json={
+                "image": f"data:image/png;base64,{png}",
+                "prompt": "make it red",
+                "model": "imagefree/default",
+            },
+        )
         assert r.status_code == 200
         body = r.json()
         assert "id" in body
@@ -57,9 +64,13 @@ class TestEditFlow:
 
     async def test_edit_invalid_image(self, app_with_mocks):
         """无效图片数据返回 422。"""
-        r = await app_with_mocks.post("/v1/edit", json={
-            "image": "not-a-valid-image", "prompt": "make it red",
-        })
+        r = await app_with_mocks.post(
+            "/v1/edit",
+            json={
+                "image": "not-a-valid-image",
+                "prompt": "make it red",
+            },
+        )
         assert r.status_code == 422
 
     async def test_edit_no_image(self, app_with_mocks):

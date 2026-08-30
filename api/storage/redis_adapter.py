@@ -1,4 +1,5 @@
 """Redis 分布式存储适配器（集群模式，支持高并发分布式锁与滑动窗口 Lua 限流）。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -141,6 +142,7 @@ class RedisStorageAdapter(StorageAdapter):
     async def startup(self) -> None:
         try:
             import redis.asyncio as aioredis
+
             self._client = aioredis.from_url(self._redis_url, decode_responses=True)
             # 测试 ping
             await self._client.ping()

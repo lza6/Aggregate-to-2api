@@ -7,6 +7,7 @@
 注意：不在模块顶部 import api.*，避免 collection 期触发 api 模块树加载、
 破坏 conftest._app_instance 的 purge 机制（导致 account_pool 双版本分叉）。
 """
+
 import pytest
 
 
@@ -37,9 +38,7 @@ class TestReadinessLiveness:
         body = r.json()
         assert body.get("status") in ("ok", "degraded")
 
-    async def test_readyz_503_when_solver_down_and_livez_ok(
-        self, app_with_mocks, monkeypatch
-    ):
+    async def test_readyz_503_when_solver_down_and_livez_ok(self, app_with_mocks, monkeypatch):
         """破坏 cf_solver 可达性 → readyz 503 reasons 含 cf_solver；livez 仍 200。
 
         验证「readiness 降级而 liveness 不误杀」核心契约。
@@ -63,9 +62,7 @@ class TestReadinessLiveness:
         assert r2.status_code == 200
         assert r2.json()["status"] == "ok"
 
-    async def test_readyz_503_when_solver_circuit_open(
-        self, app_with_mocks, monkeypatch
-    ):
+    async def test_readyz_503_when_solver_circuit_open(self, app_with_mocks, monkeypatch):
         """solver_guard 熔断 → readyz 503 reasons 含 solver。"""
         from api.routes import health as health_routes
 
@@ -83,9 +80,7 @@ class TestReadinessLiveness:
                 "rejected_total": 0,
             }
 
-        monkeypatch.setattr(
-            health_routes.solver_guard, "snapshot", _circuit_snapshot
-        )
+        monkeypatch.setattr(health_routes.solver_guard, "snapshot", _circuit_snapshot)
 
         r = await app_with_mocks.get("/v1/readyz")
         assert r.status_code == 503, f"期望 503，实际 {r.status_code}: {r.text}"

@@ -8,7 +8,7 @@
 
 运行：python -m unittest scripts.test_retry -v   （在项目根目录）
 """
-import asyncio
+
 import os
 import tempfile
 import unittest
@@ -20,8 +20,7 @@ from api.worker import Engine
 import api.worker as worker_mod
 
 REJECTED_MSG = (
-    "generate 提交失败: Human verification failed. "
-    "Please complete the setup or refresh the page to try again."
+    "generate 提交失败: Human verification failed. " "Please complete the setup or refresh the page to try again."
 )
 
 
@@ -40,6 +39,7 @@ class RetryTest(unittest.IsolatedAsyncioTestCase):
     async def _seed_tokens(self, n: int) -> None:
         # H1 后 token 池存 (token, 时间戳) 元组；注入新鲜的
         import time as _t
+
         for i in range(n):
             await self.engine.token_pool.put((f"tok{i}", _t.time()))
 
@@ -57,8 +57,10 @@ class RetryTest(unittest.IsolatedAsyncioTestCase):
         async def fake_poll(base, tid, timeout, interval):
             return {"status": "completed", "image": "https://r2.dev/a.png"}
 
-        with patch.object(worker_mod.imagefree_client, "submit_generate", side_effect=fake_submit), \
-             patch.object(worker_mod.imagefree_client, "poll_generate_status", side_effect=fake_poll):
+        with (
+            patch.object(worker_mod.imagefree_client, "submit_generate", side_effect=fake_submit),
+            patch.object(worker_mod.imagefree_client, "poll_generate_status", side_effect=fake_poll),
+        ):
             t = await self._run()
         self.assertEqual(t["status"], "completed")
         self.assertEqual(calls["n"], 2, "应换 token 重试一次")
@@ -87,8 +89,7 @@ class RetryTest(unittest.IsolatedAsyncioTestCase):
 
         async def fake_submit(base, prompt, ratio, token, timeout):
             calls["n"] += 1
-            raise worker_mod.imagefree_client.ImagefreeError(
-                "generate 提交失败: 内容被拦截，请修改提示词")
+            raise worker_mod.imagefree_client.ImagefreeError("generate 提交失败: 内容被拦截，请修改提示词")
 
         with patch.object(worker_mod.imagefree_client, "submit_generate", side_effect=fake_submit):
             t = await self._run()
@@ -99,6 +100,7 @@ class RetryTest(unittest.IsolatedAsyncioTestCase):
     # ── 4) token 池空 + 等待超时 → 报错而非阻塞 ──
     async def test_token_wait_timeout(self):
         import api.config as cfg
+
         cfg.TOKEN_WAIT_TIMEOUT = 1  # 池空且无预取，1s 后应超时报错
         t = await self._run()
         self.assertEqual(t["status"], "error")
@@ -117,8 +119,10 @@ class RetryTest(unittest.IsolatedAsyncioTestCase):
         async def fake_poll(base, tid, timeout, interval):
             return {"status": "completed", "image": "https://r2.dev/b.png"}
 
-        with patch.object(worker_mod.imagefree_client, "submit_generate", side_effect=fake_submit), \
-             patch.object(worker_mod.imagefree_client, "poll_generate_status", side_effect=fake_poll):
+        with (
+            patch.object(worker_mod.imagefree_client, "submit_generate", side_effect=fake_submit),
+            patch.object(worker_mod.imagefree_client, "poll_generate_status", side_effect=fake_poll),
+        ):
             t = await self._run()
         self.assertEqual(t["status"], "completed")
         self.assertEqual(calls["n"], 1)

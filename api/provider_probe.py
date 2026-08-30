@@ -6,6 +6,7 @@
 - nanobanana-pro.com
 - cf_solver (8001 本地求解器)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,8 +42,10 @@ PROBE_TARGETS = [
     },
 ]
 
+
 class ProviderProbeManager:
     """全自动上游状态巡检引擎。"""
+
     def __init__(self) -> None:
         self.results: dict[str, dict] = {}
         self.last_probe_time: float = 0.0
@@ -136,6 +139,7 @@ class ProviderProbeManager:
             "last_probe_time": self.last_probe_time,
             "providers": self.results,
         }
+
 
 # 全局单例
 provider_probe = ProviderProbeManager()

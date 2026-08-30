@@ -7,6 +7,7 @@
 
 用法：python scripts/e2e_v66_verification.py
 """
+
 import argparse
 import os
 import socket
@@ -22,7 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 PY = sys.executable
 SOLVER_PORT = 8001
-API_PORT = 8100       # 匹配 vite proxy 默认，前端 dist 由 API 单源挂载
+API_PORT = 8100  # 匹配 vite proxy 默认，前端 dist 由 API 单源挂载
 
 
 def _reconfigure_stdout():
@@ -53,6 +54,7 @@ def wait_port(port: int, timeout: float, desc: str) -> bool:
 def seed_mock_account() -> None:
     """向 account_pool.db 注入一个 cookie=mock-session 账号（credits=40，status=active）。"""
     from api.account_pool import AccountPool
+
     db = ROOT / "data" / "account_pool.db"
     db.parent.mkdir(parents=True, exist_ok=True)
     p = AccountPool(str(db))
@@ -79,7 +81,8 @@ def main() -> int:
     # 1) 启动 mock cf_solver
     solver = subprocess.Popen(
         [PY, str(ROOT / "scripts" / "mock_cfsolver.py"), "--port", str(SOLVER_PORT)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
     )
     if not wait_port(SOLVER_PORT, 15, "mock cf_solver"):
         solver.kill()
@@ -90,26 +93,32 @@ def main() -> int:
 
     # 3) 启动 mock API 单源（同时挂 /admin + / 静态）
     env = os.environ.copy()
-    env.update({
-        "IF_HOST": "127.0.0.1",
-        "IF_PORT": str(API_PORT),
-        "IF_CF_SOLVER_URL": f"http://127.0.0.1:{SOLVER_PORT}",
-        "IF_MOCK_UPSTREAM": "1",
-        "IF_MOCK_REGISTER": "1",
-        "IF_ACCOUNT_AUTO": "0",
-        "IF_TURNSTILE_POLL_INTERVAL": "0.2",
-        "IF_TOKEN_POOL_SIZE": "4",
-        "IF_DB_FILE": str(ROOT / "data" / "e2e_v66.db"),
-        "IF_ACCOUNT_DB_FILE": str(ROOT / "data" / "account_pool.db"),
-        "IF_PROXY": "", "HTTP_PROXY": "", "HTTPS_PROXY": "",
-        "IF_REQUESTS_PER_MINUTE": "0",
-        "IF_GALLERY_PASSWORD": "",
-        "IF_API_KEYS": "",
-        "IF_ADMIN_KEYS": "",
-    })
+    env.update(
+        {
+            "IF_HOST": "127.0.0.1",
+            "IF_PORT": str(API_PORT),
+            "IF_CF_SOLVER_URL": f"http://127.0.0.1:{SOLVER_PORT}",
+            "IF_MOCK_UPSTREAM": "1",
+            "IF_MOCK_REGISTER": "1",
+            "IF_ACCOUNT_AUTO": "0",
+            "IF_TURNSTILE_POLL_INTERVAL": "0.2",
+            "IF_TOKEN_POOL_SIZE": "4",
+            "IF_DB_FILE": str(ROOT / "data" / "e2e_v66.db"),
+            "IF_ACCOUNT_DB_FILE": str(ROOT / "data" / "account_pool.db"),
+            "IF_PROXY": "",
+            "HTTP_PROXY": "",
+            "HTTPS_PROXY": "",
+            "IF_REQUESTS_PER_MINUTE": "0",
+            "IF_GALLERY_PASSWORD": "",
+            "IF_API_KEYS": "",
+            "IF_ADMIN_KEYS": "",
+        }
+    )
     api = subprocess.Popen(
         [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", str(API_PORT)],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
     )
     base = f"http://127.0.0.1:{API_PORT}"
     try:
@@ -118,6 +127,7 @@ def main() -> int:
         time.sleep(2)  # 让 bootstrap 完成
 
         results: list[tuple[str, bool, str]] = []
+
         def check(name: str, cond: bool, detail: str | int = "") -> None:
             d = str(detail)
             results.append((name, bool(cond), d))
@@ -131,10 +141,14 @@ def main() -> int:
             check("落地页 / 挂载", r.status_code == 200, r.status_code)
 
             # B) 提交异步 txt2img 任务
-            r = c.post(f"{base}/v1/generate/async", json={
-                "prompt": "a cute orange cat with blue eyes",
-                "aspect_ratio": "1:1", "model": "imagefree/default",
-            })
+            r = c.post(
+                f"{base}/v1/generate/async",
+                json={
+                    "prompt": "a cute orange cat with blue eyes",
+                    "aspect_ratio": "1:1",
+                    "model": "imagefree/default",
+                },
+            )
             check("异步提交 HTTP 200", r.status_code == 200, r.status_code)
             if r.status_code != 200:
                 check("提交返回 id", False, r.text[:200])
@@ -164,8 +178,11 @@ def main() -> int:
                 check("SSE 流可消费", False, str(e)[:120])
 
             saw_terminal = any(ev in ("result", "error") for ev in sse_events)
-            check("SSE 推送终态 event(result/error)", saw_terminal,
-                  f"events={sse_events}{' [capped]' if sse_capped else ''}")
+            check(
+                "SSE 推送终态 event(result/error)",
+                saw_terminal,
+                f"events={sse_events}{' [capped]' if sse_capped else ''}",
+            )
 
             # D) 轮询兜底确认终态 payload 含 image_url 等
             task = None
@@ -197,9 +214,11 @@ def main() -> int:
             check("明细含 credits_used_total 字段", "credits_used_total" in item0, str(list(item0.keys())))
 
             # F) 确认此时有出图消耗（mock-imagefree 不走号池扣减，cost=0 也合法；仅验证口径结构）
-            check("cost_summary 结构完整",
-                  all(k in cs for k in ("total_credits_used", "total_images_used", "avg_cost_per_image")),
-                  str(cs))
+            check(
+                "cost_summary 结构完整",
+                all(k in cs for k in ("total_credits_used", "total_images_used", "avg_cost_per_image")),
+                str(cs),
+            )
 
         ok = sum(1 for _, c, _ in results if c)
         print("\n" + "=" * 60)

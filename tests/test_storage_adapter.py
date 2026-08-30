@@ -5,6 +5,7 @@
 - factory 单例与配置切换（sqlite 默认 / redis 不可用回退）。
 - LocalStorageAdapter 接口契约。
 """
+
 from __future__ import annotations
 
 import asyncio

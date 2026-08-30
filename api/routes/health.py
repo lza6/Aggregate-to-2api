@@ -1,4 +1,5 @@
 """健康/静态/元信息路由（v4.2 拆分：main.py 迁移）。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -50,10 +51,7 @@ async def terms():
 @router.get("/v1/terms/index", include_in_schema=False)
 async def terms_index():
     """服务条款子页面结构化列表。"""
-    return [
-        {"slug": slug, "title": meta["title"], "url": meta["url"]}
-        for slug, meta in _TERMS_MAP.items()
-    ]
+    return [{"slug": slug, "title": meta["title"], "url": meta["url"]} for slug, meta in _TERMS_MAP.items()]
 
 
 @router.get("/v1/terms/{sub}", include_in_schema=False)
@@ -76,9 +74,11 @@ async def honor_data():
     return {
         "status": "ok",
         "title": "支持听风",
-        "message": ("听风AI（逆向号池）是公益运行的多提供商 AI 图像生成网关，"
-                    "提供免费、开放的高效出图服务。项目依赖个人时间与服务器成本持续运转，"
-                    "如果你觉得它对你有所帮助，欢迎扫码支持，每一份心意都是坚持下去的动力。"),
+        "message": (
+            "听风AI（逆向号池）是公益运行的多提供商 AI 图像生成网关，"
+            "提供免费、开放的高效出图服务。项目依赖个人时间与服务器成本持续运转，"
+            "如果你觉得它对你有所帮助，欢迎扫码支持，每一份心意都是坚持下去的动力。"
+        ),
         "qr_path": "/static/zanshang.jpg",
         "contact_wx": "Tf00798",
         "github": "https://github.com/lza6/",
@@ -94,6 +94,7 @@ async def _probe_cf_solver(force: bool = False) -> bool:
         return _cf_probe_cache["ok"]
     try:
         from urllib.parse import urlsplit
+
         u = urlsplit(config.CF_SOLVER_URL)
         host, port = u.hostname or "127.0.0.1", u.port or 8001
     except (ValueError, IndexError):
@@ -164,8 +165,10 @@ async def healthz():
             },
         },
         "system": system_spec(),
-        "log_dir": {"path": config.IF_LOG_DIR, "writable": os.access(config.IF_LOG_DIR, os.W_OK)
-                    if os.path.isdir(config.IF_LOG_DIR) else False},
+        "log_dir": {
+            "path": config.IF_LOG_DIR,
+            "writable": os.access(config.IF_LOG_DIR, os.W_OK) if os.path.isdir(config.IF_LOG_DIR) else False,
+        },
     }
 
 
@@ -233,32 +236,33 @@ async def meta():
     需要「站长一键复制完整 Key」走 /v1/chat/auth/status（带管理 Key 鉴权）。
     """
     from ..auth import public_keymask, auth_enabled
-    return {"sitekey": config.SITEKEY, "aspect_ratios": config.ASPECT_RATIOS,
-            "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"],
-            "gallery_requires_password": bool(config.IF_GALLERY_PASSWORD),
-            "auth_enabled": auth_enabled(),
-            "api_key_mask": public_keymask()}
+
+    return {
+        "sitekey": config.SITEKEY,
+        "aspect_ratios": config.ASPECT_RATIOS,
+        "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"],
+        "gallery_requires_password": bool(config.IF_GALLERY_PASSWORD),
+        "auth_enabled": auth_enabled(),
+        "api_key_mask": public_keymask(),
+    }
 
 
 @router.get("/static/zanshang.jpg", include_in_schema=False)
 async def zanshang_qr():
     if _zanshang_qr.exists():
-        return FileResponse(_zanshang_qr, media_type="image/jpeg",
-                            headers={"Cache-Control": "public, max-age=86400"})
+        return FileResponse(_zanshang_qr, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
     raise AppError(ErrorCodes.NOT_FOUND, "赞赏码图片不存在", 404)
 
 
 @router.get("/static/logo.png", include_in_schema=False)
 async def logo_small():
     if _logo_sm.exists():
-        return FileResponse(_logo_sm, media_type="image/png",
-                            headers={"Cache-Control": "public, max-age=3600"})
+        return FileResponse(_logo_sm, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
     raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)
 
 
 @router.get("/static/logo-md.png", include_in_schema=False)
 async def logo_medium():
     if _logo_md.exists():
-        return FileResponse(_logo_md, media_type="image/png",
-                            headers={"Cache-Control": "public, max-age=3600"})
+        return FileResponse(_logo_md, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
     raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)

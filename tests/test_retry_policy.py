@@ -11,9 +11,9 @@
 - Retry-After 解析
 - should_retry 判断
 """
+
 import random
 import time
-from unittest.mock import patch
 
 import pytest
 
@@ -23,27 +23,30 @@ from api.retry_policy import AdaptiveRetryStrategy, RetryPolicy
 class TestClassifyError:
     """RetryPolicy.classify_error 测试。"""
 
-    @pytest.mark.parametrize("err,expected", [
-        # 显式 transient
-        ("timeout", "transient"),
-        ("429 Too Many Requests", "transient"),
-        ("503 Service Unavailable", "transient"),
-        ("502 Bad Gateway", "transient"),
-        ("504 Gateway Timeout", "transient"),
-        ("ConnectionError: connection refused", "transient"),
-        ("token_rejected: human verification failed", "transient"),
-        ("human verification failed", "transient"),
-        ("connection reset by peer", "transient"),
-        # 显式 permanent
-        ("422 Unprocessable Entity", "permanent"),
-        ("400 Bad Request", "permanent"),
-        ("404 Not Found", "permanent"),
-        ("400 rate_limit exceeded", "transient"),
-        ("400 rate limit exceeded", "transient"),
-        # 未知默认 transient
-        ("unknown error occurred", "transient"),
-        ("some random exception", "transient"),
-    ])
+    @pytest.mark.parametrize(
+        "err,expected",
+        [
+            # 显式 transient
+            ("timeout", "transient"),
+            ("429 Too Many Requests", "transient"),
+            ("503 Service Unavailable", "transient"),
+            ("502 Bad Gateway", "transient"),
+            ("504 Gateway Timeout", "transient"),
+            ("ConnectionError: connection refused", "transient"),
+            ("token_rejected: human verification failed", "transient"),
+            ("human verification failed", "transient"),
+            ("connection reset by peer", "transient"),
+            # 显式 permanent
+            ("422 Unprocessable Entity", "permanent"),
+            ("400 Bad Request", "permanent"),
+            ("404 Not Found", "permanent"),
+            ("400 rate_limit exceeded", "transient"),
+            ("400 rate limit exceeded", "transient"),
+            # 未知默认 transient
+            ("unknown error occurred", "transient"),
+            ("some random exception", "transient"),
+        ],
+    )
     def test_classify_error(self, err: str, expected: str) -> None:
         assert RetryPolicy.classify_error(err) == expected
 
@@ -174,6 +177,7 @@ class TestAdaptiveRetryStrategy:
 
     def test_classify_error_types_httpx_response(self) -> None:
         """verify classify works with httpx-like response objects."""
+
         class MockResponse:
             status_code: int
 

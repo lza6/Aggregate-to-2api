@@ -1,9 +1,8 @@
 """端到端现场单号注册+收信+激活+登录+入库+签到验证脚本。"""
+
 import asyncio
 import json
 import logging
-import re
-import sys
 import time
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -34,9 +33,7 @@ async def step_by_step_nanobanana():
         return False
 
     log.info("========== 2. 人机验证求解 ==========")
-    captcha, dur = await turnstile_client.solve_turnstile(
-        config.CF_SOLVER_URL, reg.turnstile_page, reg.SITEKEY, 60.0
-    )
+    captcha, dur = await turnstile_client.solve_turnstile(config.CF_SOLVER_URL, reg.turnstile_page, reg.SITEKEY, 60.0)
     log.info("求解成功 (耗时 %.1fs): %s...", dur, captcha[:30])
 
     log.info("========== 3. 发送注册请求 ==========")

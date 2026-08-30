@@ -2,6 +2,7 @@
 
 用 MockTransport 模拟上游 HTML/JS，不依赖真实网络。
 """
+
 from __future__ import annotations
 
 import os
@@ -22,7 +23,7 @@ from api.providers.action_sniffer import (
 
 # ── 上游 Mock 素材（与 nanobanana-pro.com 2026-08 实测格式一致）──────────────
 CHUNK_CLAIM = (
-    'var a = r(34477);'
+    "var a = r(34477);"
     'let n = (0,a.createServerReference)("7fb1e44a9ba4fc6d7acb30a875856c8f9ff7c595a0",a.callServer,void 0,a.findSourceMapURL,"claimDailyCheckinAction"),'
     'i=(0,a.createServerReference)("7f6220d6529913353e7fefbb3918e37baf2b5c7a77",a.callServer,void 0,a.findSourceMapURL,"getCreditStatsAction");'
 )
@@ -35,7 +36,7 @@ MOCK_HTML = (
     '<script src="/_next/static/chunks/3257-80d4da8a99bc77b1.js"></script>'
     '<script src="/_next/static/chunks/6121-ae9fef44a868c7cf.js"></script>'
     '<link rel="preload" as="script" href="/_next/static/chunks/main-app-3669b313013e9073.js">'
-    "</head><body><div id=\"root\"></div></body></html>"
+    '</head><body><div id="root"></div></body></html>'
 )
 
 
@@ -51,6 +52,7 @@ def _mock_transport(*, fail: bool = False) -> httpx.MockTransport:
         if "6121-" in url:
             return httpx.Response(200, text=CHUNK_GEN)
         return httpx.Response(404, text="not found")
+
     return httpx.MockTransport(handler)
 
 
@@ -283,8 +285,7 @@ async def test_provider_edit_self_heal():
     )
     p._client.responses.insert(0, httpx.Response(200, json={"url": "https://assets.example/x.png"}))
 
-    task_id = await p._submit_edit("cookie", "nano-banana-pro", "make red",
-                                   "1:1", [b"\x89PNG\r\n" + b"\x00" * 32])
+    task_id = await p._submit_edit("cookie", "nano-banana-pro", "make red", "1:1", [b"\x89PNG\r\n" + b"\x00" * 32])
     assert task_id == "E2"
     assert p._action_sniffer.force_calls == 1
     # 调用顺序：0=upload, 1=失配(旧ID), 2=自愈重试(新ID)

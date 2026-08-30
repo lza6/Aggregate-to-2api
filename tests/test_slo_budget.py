@@ -6,6 +6,7 @@
 - 高成功率样本 → budget_remaining_pct 接近 100，status=green
 - /v1/healthz 输出含 slo_budget 块
 """
+
 from __future__ import annotations
 
 import pytest
@@ -189,5 +190,6 @@ class TestHealthzSLOBudget:
         assert "window_days" in slo
         assert "overall_status" in slo
         assert "slos" in slo
-        assert {"request_success_rate", "p95_latency", "queue_wait_p95",
-                "solve_success_rate"} <= set(slo["slos"].keys())
+        assert {"request_success_rate", "p95_latency", "queue_wait_p95", "solve_success_rate"} <= set(
+            slo["slos"].keys()
+        )

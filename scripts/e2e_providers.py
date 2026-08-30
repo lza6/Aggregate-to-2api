@@ -12,6 +12,7 @@ mock 模式全链路 mock（IF_MOCK_UPSTREAM + IF_MOCK_REGISTER）：零外部�
 用法：
   python scripts/e2e_providers.py [--api-port 8100]
 """
+
 import argparse
 import os
 import socket
@@ -65,30 +66,44 @@ class ProvidersE2E:
     def start(self) -> None:
         self._start_mock_solver()
         env = dict(os.environ)
-        env.update({
-            "IF_HOST": "127.0.0.1", "IF_PORT": str(self.api_port),
-            "IF_CF_SOLVER_URL": f"http://127.0.0.1:{self.solver_port}",
-            "IF_MOCK_UPSTREAM": "1", "IF_MOCK_REGISTER": "1", "IF_ACCOUNT_AUTO": "1",
-            "IF_MINIMAXH3_ACCOUNT_TARGET": "3", "IF_NANOBANANA_ACCOUNT_TARGET": "3",
-            "IF_TURNSTILE_POLL_INTERVAL": "0.2", "IF_TOKEN_POOL_SIZE": "4",
-            "IF_DB_FILE": "data/e2e_prov.db",
-            "IF_ACCOUNT_DB_FILE": "data/e2e_prov_acc.db",
-            "IF_EMAIL_DB_FILE": "data/e2e_prov_email.db",
-            "IF_PROXY": "http://127.0.0.1:10808",
-        })
+        env.update(
+            {
+                "IF_HOST": "127.0.0.1",
+                "IF_PORT": str(self.api_port),
+                "IF_CF_SOLVER_URL": f"http://127.0.0.1:{self.solver_port}",
+                "IF_MOCK_UPSTREAM": "1",
+                "IF_MOCK_REGISTER": "1",
+                "IF_ACCOUNT_AUTO": "1",
+                "IF_MINIMAXH3_ACCOUNT_TARGET": "3",
+                "IF_NANOBANANA_ACCOUNT_TARGET": "3",
+                "IF_TURNSTILE_POLL_INTERVAL": "0.2",
+                "IF_TOKEN_POOL_SIZE": "4",
+                "IF_DB_FILE": "data/e2e_prov.db",
+                "IF_ACCOUNT_DB_FILE": "data/e2e_prov_acc.db",
+                "IF_EMAIL_DB_FILE": "data/e2e_prov_email.db",
+                "IF_PROXY": "http://127.0.0.1:10808",
+            }
+        )
         self._api_log = open(os.path.join(ROOT, "data", "e2e_prov_api.log"), "wb")
         p = subprocess.Popen(
             [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", str(self.api_port)],
-            cwd=ROOT, env=env, stdout=self._api_log, stderr=subprocess.STDOUT)
+            cwd=ROOT,
+            env=env,
+            stdout=self._api_log,
+            stderr=subprocess.STDOUT,
+        )
         self.procs.append(p)
         if not wait_port(self.api_port, 60, "api"):
             raise SystemExit(1)
 
     def _start_mock_solver(self) -> None:
         self._solver_log = open(os.path.join(ROOT, "data", "e2e_prov_mock.log"), "wb")
-        p = subprocess.Popen([PY, os.path.join(ROOT, "scripts", "mock_cfsolver.py"),
-                              "--port", str(self.solver_port)],
-                             cwd=ROOT, stdout=self._solver_log, stderr=subprocess.STDOUT)
+        p = subprocess.Popen(
+            [PY, os.path.join(ROOT, "scripts", "mock_cfsolver.py"), "--port", str(self.solver_port)],
+            cwd=ROOT,
+            stdout=self._solver_log,
+            stderr=subprocess.STDOUT,
+        )
         self.procs.append(p)
         if not wait_port(self.solver_port, 15, "mock solver"):
             raise SystemExit(1)
@@ -109,8 +124,7 @@ class ProvidersE2E:
                     f.close()
                 except Exception:
                     pass
-        for name in ("e2e_prov.db", "e2e_prov_acc.db", "e2e_prov_email.db",
-                     "e2e_prov_api.log", "e2e_prov_mock.log"):
+        for name in ("e2e_prov.db", "e2e_prov_acc.db", "e2e_prov_email.db", "e2e_prov_api.log", "e2e_prov_mock.log"):
             for suf in ("", "-wal", "-shm"):
                 path = os.path.join(ROOT, "data", name + suf)
                 try:
@@ -173,8 +187,11 @@ class ProvidersE2E:
         self.check("aifreeforever 组存在", "aifreeforever" in items)
         nb = items.get("nanobanana") or []
         ids = {m["id"] for m in mm}
-        self.check("seedance-1.5-pro 480P 视频模型", "nanobanana/seedance-1.5-pro" in ids,
-                   "480P 模型缺失!" if "nanobanana/seedance-1.5-pro" not in ids else "")
+        self.check(
+            "seedance-1.5-pro 480P 视频模型",
+            "nanobanana/seedance-1.5-pro" in ids,
+            "480P 模型缺失!" if "nanobanana/seedance-1.5-pro" not in ids else "",
+        )
         # 命名契约：id 都是 provider/真实名
         naming_ok = all(m["id"].startswith(p + "/") for p, ms in items.items() for m in ms)
         self.check("模型命名 <提供商>/<真实模型名>", naming_ok)
@@ -201,26 +218,44 @@ class ProvidersE2E:
         t = self.submit_and_wait({"prompt": "a dog", "model": "imagefree/default", "aspect_ratio": "1:1"})
         self.check("imagefree 路由 completed", t.get("status") == "completed", str(t.get("status")))
         # nanobanana 文生图（mock 号池）
-        t = self.submit_and_wait({"prompt": "a cat", "model": "nanobanana/nano-banana-pro",
-                                  "aspect_ratio": "1:1", "resolution": "1K"})
-        self.check("nanobanana 文生图 completed", t.get("status") == "completed",
-                   f"{t.get('status')} {str(t.get('error') or '')[:50]}")
+        t = self.submit_and_wait(
+            {"prompt": "a cat", "model": "nanobanana/nano-banana-pro", "aspect_ratio": "1:1", "resolution": "1K"}
+        )
+        self.check(
+            "nanobanana 文生图 completed",
+            t.get("status") == "completed",
+            f"{t.get('status')} {str(t.get('error') or '')[:50]}",
+        )
         # nanobanana 视频（seedance-1.5-pro 480P）
-        t = self.submit_and_wait({"prompt": "v", "model": "nanobanana/seedance-1.5-pro",
-                                  "aspect_ratio": "16:9", "resolution": "480p", "duration": 4}, timeout=15)
-        self.check("nanobanana 视频 completed", t.get("status") == "completed",
-                   f"{t.get('status')} {str(t.get('error') or '')[:50]}")
+        t = self.submit_and_wait(
+            {
+                "prompt": "v",
+                "model": "nanobanana/seedance-1.5-pro",
+                "aspect_ratio": "16:9",
+                "resolution": "480p",
+                "duration": 4,
+            },
+            timeout=15,
+        )
+        self.check(
+            "nanobanana 视频 completed",
+            t.get("status") == "completed",
+            f"{t.get('status')} {str(t.get('error') or '')[:50]}",
+        )
         # nanobanana 图生图
         import base64
+
         png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64).decode()
-        r = self.post("/v1/edit", {"image": f"data:image/png;base64,{png}",
-                                   "prompt": "make red", "model": "nanobanana/nano-banana-pro"})
+        r = self.post(
+            "/v1/edit",
+            {"image": f"data:image/png;base64,{png}", "prompt": "make red", "model": "nanobanana/nano-banana-pro"},
+        )
         tid = (r.get("json") or {}).get("id")
         if tid:
             deadline = time.monotonic() + 15
             t = {}
             while time.monotonic() < deadline:
-                t = (self.get(f"/v1/edit/tasks/{tid}").get("json") or {})
+                t = self.get(f"/v1/edit/tasks/{tid}").get("json") or {}
                 if t.get("status") in ("completed", "error"):
                     break
                 time.sleep(0.3)
@@ -229,8 +264,11 @@ class ProvidersE2E:
             self.check("nanobanana 图生图 completed", False, "提交失败")
         # aifreeforever 代理池未配置 → 明确降级（非静默崩溃）
         t = self.submit_and_wait({"prompt": "x", "model": "aifreeforever/gpt-image-2", "aspect_ratio": "1:1"})
-        self.check("aifreeforever 无代理池降级（直连或失败）", t.get("status") in ("error", "submission_failed", "timeout"),
-                   str(t.get("error") or t.get("status") or "")[:60])
+        self.check(
+            "aifreeforever 无代理池降级（直连或失败）",
+            t.get("status") in ("error", "submission_failed", "timeout"),
+            str(t.get("error") or t.get("status") or "")[:60],
+        )
 
     def _verify_brand(self) -> None:
         d = self.get("/")

@@ -15,6 +15,7 @@
 
 用法：python scripts/e2e_v67_verification.py
 """
+
 import argparse
 import os
 import socket
@@ -62,6 +63,7 @@ def wait_port(port: int, timeout: float, desc: str) -> bool:
 def seed_mock_account() -> None:
     """向 account_pool.db 注入一个 cookie=mock-session 账号（mock 路径识别用）。"""
     from api.account_pool import AccountPool
+
     db = ROOT / "data" / "account_pool.db"
     db.parent.mkdir(parents=True, exist_ok=True)
     p = AccountPool(str(db))
@@ -87,7 +89,8 @@ def main() -> int:
 
     solver = subprocess.Popen(
         [PY, str(ROOT / "scripts" / "mock_cfsolver.py"), "--port", str(SOLVER_PORT)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
     )
     if not wait_port(SOLVER_PORT, 15, "mock cf_solver"):
         solver.kill()
@@ -96,26 +99,32 @@ def main() -> int:
     seed_mock_account()
 
     env = os.environ.copy()
-    env.update({
-        "IF_HOST": "127.0.0.1",
-        "IF_PORT": str(API_PORT),
-        "IF_CF_SOLVER_URL": f"http://127.0.0.1:{SOLVER_PORT}",
-        "IF_MOCK_UPSTREAM": "1",
-        "IF_MOCK_REGISTER": "1",
-        "IF_ACCOUNT_AUTO": "0",
-        "IF_TURNSTILE_POLL_INTERVAL": "0.2",
-        "IF_TOKEN_POOL_SIZE": "4",
-        "IF_DB_FILE": str(ROOT / "data" / "e2e_v67.db"),
-        "IF_ACCOUNT_DB_FILE": str(ROOT / "data" / "account_pool.db"),
-        "IF_PROXY": "", "HTTP_PROXY": "", "HTTPS_PROXY": "",
-        "IF_REQUESTS_PER_MINUTE": "0",
-        "IF_GALLERY_PASSWORD": "",
-        "IF_API_KEYS": "",
-        "IF_ADMIN_KEYS": ADMIN_KEY,
-    })
+    env.update(
+        {
+            "IF_HOST": "127.0.0.1",
+            "IF_PORT": str(API_PORT),
+            "IF_CF_SOLVER_URL": f"http://127.0.0.1:{SOLVER_PORT}",
+            "IF_MOCK_UPSTREAM": "1",
+            "IF_MOCK_REGISTER": "1",
+            "IF_ACCOUNT_AUTO": "0",
+            "IF_TURNSTILE_POLL_INTERVAL": "0.2",
+            "IF_TOKEN_POOL_SIZE": "4",
+            "IF_DB_FILE": str(ROOT / "data" / "e2e_v67.db"),
+            "IF_ACCOUNT_DB_FILE": str(ROOT / "data" / "account_pool.db"),
+            "IF_PROXY": "",
+            "HTTP_PROXY": "",
+            "HTTPS_PROXY": "",
+            "IF_REQUESTS_PER_MINUTE": "0",
+            "IF_GALLERY_PASSWORD": "",
+            "IF_API_KEYS": "",
+            "IF_ADMIN_KEYS": ADMIN_KEY,
+        }
+    )
     api = subprocess.Popen(
         [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", str(API_PORT)],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
     )
     base = f"http://127.0.0.1:{API_PORT}"
     try:
@@ -124,6 +133,7 @@ def main() -> int:
         time.sleep(2)
 
         results: list[tuple[str, bool, str]] = []
+
         def check(name: str, cond: bool, detail: str | int = "") -> None:
             d = str(detail)
             results.append((name, bool(cond), d))
@@ -200,11 +210,13 @@ def main() -> int:
             paths = r.json().get("paths", {}) if r.status_code == 200 else {}
             check(
                 "OpenAPI 含 /v1/admin/security/block-ip",
-                "/v1/admin/security/block-ip" in paths, str(paths.keys())[:80],
+                "/v1/admin/security/block-ip" in paths,
+                str(paths.keys())[:80],
             )
             check(
                 "OpenAPI 含 /v1/dead-letter-queue",
-                "/v1/dead-letter-queue" in paths, "",
+                "/v1/dead-letter-queue" in paths,
+                "",
             )
 
         ok = sum(1 for _, c, _ in results if c)

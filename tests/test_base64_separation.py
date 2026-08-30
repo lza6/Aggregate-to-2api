@@ -6,6 +6,7 @@
 3. 清理过期文件
 4. IF_BASE64_DIR 不存在时自动创建
 """
+
 import os
 import sys
 import tempfile
@@ -51,6 +52,7 @@ def temp_base64_dir(monkeypatch):
     yield tmpdir
     # 清理临时目录
     import shutil
+
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
@@ -58,14 +60,12 @@ def temp_base64_dir(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_public_no_base64():
     """get_public 返回的 dict 含 image_base64 字段（修复后）。"""
-    from api import config
 
     db, path = make_db()
     try:
         await db.create_request("t1", "test prompt", "1:1", False)
         # 先 mark_finished 写入 base64
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.5, "dGVzdA==", "image/png")
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.5, "dGVzdA==", "image/png")
         pub = await db.get_public("t1")
         assert pub is not None
         assert "image_base64" in pub, "get_public 应含 image_base64 字段"
@@ -80,13 +80,11 @@ async def test_get_public_no_base64():
 @pytest.mark.asyncio
 async def test_gallery_no_base64():
     """recent_images 返回结果不含 image_base64。"""
-    from api import config
 
     db, path = make_db()
     try:
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.0, "ZGF0YQ==", "image/png")
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.0, "ZGF0YQ==", "image/png")
         items = await db.recent_images(10)
         assert len(items) == 1
         # 列名不含 image_base64（_GALLERY_COLS 不含）
@@ -101,13 +99,11 @@ async def test_gallery_no_base64():
 @pytest.mark.asyncio
 async def test_errors_no_base64():
     """recent_errors 返回结果不含 image_base64。"""
-    from api import config
 
     db, path = make_db()
     try:
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "error", None, "some error", 0.5,
-                         "ZGF0YQ==", "image/png")
+        await db.mark_finished("t1", "error", None, "some error", 0.5, "ZGF0YQ==", "image/png")
         items = await db.recent_errors(10)
         assert len(items) == 1
         for item in items:
@@ -121,21 +117,17 @@ async def test_errors_no_base64():
 @pytest.mark.asyncio
 async def test_mark_finished_writes_file():
     """mark_finished 传入非空 base64 时写入文件，DB 存 file:// 路径。"""
-    from api import config
 
     db, path = make_db()
     try:
         b64_data = "dGVzdCBiYXNlNjQgZGF0YQ=="  # "test base64 data"
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.0, b64_data, "image/png")
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.0, b64_data, "image/png")
 
         # 验证 DB 存储的是 file:// 路径（先 flush 确保批量缓冲提交）
         await db.flush()
         _conn = await db._get_read_conn()
-        _cur = await _conn.execute(
-            "SELECT image_base64 FROM requests WHERE id='t1'"
-        )
+        _cur = await _conn.execute("SELECT image_base64 FROM requests WHERE id='t1'")
         row = await _cur.fetchone()
         assert row is not None
         stored = row[0]
@@ -161,13 +153,10 @@ async def test_mark_finished_no_base64():
     db, path = make_db()
     try:
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.0)
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.0)
         await db.flush()  # 确保批量缓冲提交
         _conn = await db._get_read_conn()
-        _cur = await _conn.execute(
-            "SELECT image_base64 FROM requests WHERE id='t1'"
-        )
+        _cur = await _conn.execute("SELECT image_base64 FROM requests WHERE id='t1'")
         row = await _cur.fetchone()
         assert row is not None
         assert row[0] is None, "不传 base64 时 DB 应为 NULL"
@@ -183,8 +172,7 @@ async def test_read_base64():
     try:
         b64_data = "YWJjMTIz"  # "abc123"
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.0, b64_data, "image/png")
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.0, b64_data, "image/png")
 
         read = await db.read_base64("t1")
         assert read == b64_data, f"读取 base64 不匹配: {read}"
@@ -202,8 +190,7 @@ async def test_get_base64_path():
     db, path = make_db()
     try:
         await db.create_request("t1", "test", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://example.com/img.png",
-                         None, 1.0, "ZGF0YQ==", "image/png")
+        await db.mark_finished("t1", "completed", "https://example.com/img.png", None, 1.0, "ZGF0YQ==", "image/png")
 
         p = await db.get_base64_path("t1")
         assert p is not None, "应有文件路径"
@@ -225,10 +212,8 @@ async def test_clean_base64_files():
         b64_data = "dGVzdA=="  # "test"
         await db.create_request("t1", "test", "1:1", False)
         await db.create_request("t2", "test2", "1:1", False)
-        await db.mark_finished("t1", "completed", "https://ex.com/1.png",
-                         None, 1.0, b64_data, "image/png")
-        await db.mark_finished("t2", "completed", "https://ex.com/2.png",
-                         None, 1.0, b64_data, "image/png")
+        await db.mark_finished("t1", "completed", "https://ex.com/1.png", None, 1.0, b64_data, "image/png")
+        await db.mark_finished("t2", "completed", "https://ex.com/2.png", None, 1.0, b64_data, "image/png")
 
         # 将 t1 文件设为过期（mtime 很久以前）
         p1 = await db.get_base64_path("t1")
@@ -272,6 +257,7 @@ def test_auto_create_dir(monkeypatch):
 
     # 清理
     import shutil
+
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
@@ -282,6 +268,7 @@ def test_task_to_public_resolves_file():
 
     # 构造一个含 file:// 路径的 dict
     import tempfile
+
     fd, fpath = tempfile.mkstemp(suffix=".txt")
     os.close(fd)
     with open(fpath, "w", encoding="utf-8") as f:
@@ -289,12 +276,16 @@ def test_task_to_public_resolves_file():
 
     try:
         t = {
-            "id": "t1", "status": "completed",
+            "id": "t1",
+            "status": "completed",
             "image_url": "https://ex.com/img.png",
             "image_base64": f"file://{fpath}",
             "image_mime": "image/png",
-            "error": None, "created_at": 1000.0, "duration_sec": 1.0,
-            "type": "txt", "model": "default",
+            "error": None,
+            "created_at": 1000.0,
+            "duration_sec": 1.0,
+            "type": "txt",
+            "model": "default",
         }
         pub = task_to_public(t)
         assert pub["image_base64"] == "dGVzdC1iYXNlNjQ="
@@ -312,12 +303,16 @@ def test_task_to_public_legacy_base64():
     from api.db import task_to_public
 
     t = {
-        "id": "t1", "status": "completed",
+        "id": "t1",
+        "status": "completed",
         "image_url": "https://ex.com/img.png",
         "image_base64": "b2xkLWJhc2U2NA==",  # 旧 raw base64，非 file://
         "image_mime": "image/png",
-        "error": None, "created_at": 1000.0, "duration_sec": 1.0,
-        "type": "txt", "model": "default",
+        "error": None,
+        "created_at": 1000.0,
+        "duration_sec": 1.0,
+        "type": "txt",
+        "model": "default",
     }
     pub = task_to_public(t)
     assert pub["image_base64"] == "b2xkLWJhc2U2NA==", "旧 raw base64 应保持原样"
@@ -327,7 +322,6 @@ def test_task_to_public_legacy_base64():
 def test_base64_store_api():
     """base64_store 模块独立测试：save/read/delete/clean_expired。"""
     from api.base64_store import (
-        clean_expired,
         delete_base64,
         read_base64,
         save_base64,

@@ -5,6 +5,7 @@ edit_image 多图/无图分支、_is_edit_slot_wedged 重试边界等）。
 
 通过 mock engine/imagefree_client/db 隔离外部依赖，聚焦路由逻辑。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +18,6 @@ os.environ.setdefault("IF_DB_FILE", tempfile.mktemp(suffix=".db"))
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 os.environ.setdefault("IF_MOCK_REGISTER", "1")
 
-from api import config  # noqa: E402
 from api import dispatch_edit  # noqa: E402
 from api.dispatch_edit import (  # noqa: E402
     _dispatch_edit,
@@ -57,9 +57,11 @@ async def test_dispatch_edit_imagefree_path(monkeypatch):
 
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark_finished)
+
     # _run_edit_job 内部会 create_task，mock 掉 _run_edit_chain 避免真实上游
     async def fake_run_edit_chain(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit, "_run_edit_chain", fake_run_edit_chain)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_LEASE_ENABLED", False)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_MUTEX_ENABLED", False)
@@ -104,7 +106,8 @@ async def test_edit_image_imagefree_multi_raises(monkeypatch):
     """imagefree + 多图 → 422（上游仅支持单图）。"""
     # 构造 images 字段（多图）
     req = EditRequest.model_construct(
-        prompt="p", model="imagefree/default",
+        prompt="p",
+        model="imagefree/default",
         images=["data:image/png;base64,iVBORw0KGgo=", "data:image/png;base64,iVBORw0KGgo="],
     )
     with pytest.raises(AppError) as exc:
@@ -119,7 +122,8 @@ async def test_edit_image_unsupported_mime_raises(monkeypatch):
     # octet-stream 检测
     monkeypatch.setattr(dispatch_edit.imagefree_client, "detect_mime", lambda b: "application/octet-stream")
     req = EditRequest.model_construct(
-        prompt="p", model="imagefree/default",
+        prompt="p",
+        model="imagefree/default",
         images=["data:application/octet-stream;base64,AAAA"],
     )
     with pytest.raises(AppError) as exc:
@@ -131,11 +135,15 @@ async def test_edit_image_unsupported_mime_raises(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_no_token_marks_error(monkeypatch):
     """engine.acquire_token 返回 None → mark_finished error。"""
+
     async def fake_acquire(*a, **kw):
         return None
+
     calls = []
+
     async def fake_mark(*a, **kw):
         calls.append(a)
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_RETRY_MAX", 1)
@@ -148,21 +156,28 @@ async def test_run_edit_chain_no_token_marks_error(monkeypatch):
 async def test_run_edit_chain_wedged_retries(monkeypatch):
     """上游并发槽被占 → 重试（_is_edit_slot_wedged 命中）。"""
     attempt = [0]
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         attempt[0] += 1
         if attempt[0] < 2:
             raise RuntimeError("already have an image editing task")
         return "http://up/img"
+
     async def fake_submit(*a, **kw):
         return "tid-1"
+
     async def fake_poll(*a, **kw):
         return {"image": "http://r/img"}
+
     async def fake_update(*a, **kw):
         return None
+
     async def fake_mark(*a, **kw):
         pass
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "submit_edit", fake_submit)
@@ -181,15 +196,21 @@ async def test_run_edit_chain_wedged_retries(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_wedged_exhausted(monkeypatch):
     """重试耗尽仍 wedged → mark_finished error。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         raise RuntimeError("already have an image editing task")
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.db, "update_upstream_task", fake_update)
@@ -206,15 +227,21 @@ async def test_run_edit_chain_wedged_exhausted(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_generic_error_marks_error(monkeypatch):
     """非 wedged 的异常 → mark_finished error（不重试）。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         raise RuntimeError("upload failed")
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.db, "update_upstream_task", fake_update)
@@ -231,21 +258,30 @@ async def test_run_edit_chain_generic_error_marks_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_download_failure_still_completed(monkeypatch):
     """download=True 但下载失败 → 仍标记 completed（URL 交付不受影响）。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         return "http://up/img"
+
     async def fake_submit(*a, **kw):
         return "tid-1"
+
     async def fake_poll(*a, **kw):
         return {"image": "http://r/img"}
+
     async def fake_update(*a, **kw):
         return None
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_download(*a, **kw):
         raise RuntimeError("download failed")
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "submit_edit", fake_submit)
@@ -276,9 +312,15 @@ async def test_dispatch_edit_multi_success(monkeypatch):
 
         async def generate(self, *a, **kw):
             from types import SimpleNamespace
-            return SimpleNamespace(status="completed", asset_url="http://r/img",
-                                   asset_bytes=b"\x89PNG", asset_mime="image/png",
-                                   proxy_used=None, error=None)
+
+            return SimpleNamespace(
+                status="completed",
+                asset_url="http://r/img",
+                asset_bytes=b"\x89PNG",
+                asset_mime="image/png",
+                proxy_used=None,
+                error=None,
+            )
 
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
@@ -298,21 +340,37 @@ async def test_edit_image_url_input_downloads(monkeypatch):
 
     async def fake_download(url, timeout, max_bytes):
         return b"\x89PNG-downloaded"
+
     monkeypatch.setattr(dispatch_edit.imagefree_client, "download_image", fake_download)
 
     dispatched = []
+
     async def fake_dispatch_edit(model, prompt, image_bytes, download):
         dispatched.append(image_bytes)
         return "job-url"
+
     monkeypatch.setattr(dispatch_edit, "_dispatch_edit", fake_dispatch_edit)
     monkeypatch.setattr(dispatch_edit, "_validate_model", lambda *a, **kw: None)
 
     # task_to_public 需要 id 等字段
     async def fake_get_public(job_id):
-        return {"id": job_id, "status": "queued", "image_url": None, "image_base64": None,
-                "image_mime": None, "error": None, "created_at": 0, "duration_sec": None,
-                "type": "img", "model": "imagefree/default", "prompt": "p",
-                "aspect_ratio": "1:1", "client_ip": None, "user_agent": None}
+        return {
+            "id": job_id,
+            "status": "queued",
+            "image_url": None,
+            "image_base64": None,
+            "image_mime": None,
+            "error": None,
+            "created_at": 0,
+            "duration_sec": None,
+            "type": "img",
+            "model": "imagefree/default",
+            "prompt": "p",
+            "aspect_ratio": "1:1",
+            "client_ip": None,
+            "user_agent": None,
+        }
+
     monkeypatch.setattr(dispatch_edit.db, "get_public", fake_get_public)
     monkeypatch.setattr(dispatch_edit, "task_to_public", lambda d: d)
 
@@ -329,17 +387,32 @@ async def test_edit_image_base64_input(monkeypatch):
     monkeypatch.setattr(dispatch_edit.imagefree_client, "detect_mime", lambda b: "image/png")
 
     dispatched = []
+
     async def fake_dispatch_edit(model, prompt, image_bytes, download):
         dispatched.append(image_bytes)
         return "job-b64"
+
     monkeypatch.setattr(dispatch_edit, "_dispatch_edit", fake_dispatch_edit)
     monkeypatch.setattr(dispatch_edit, "_validate_model", lambda *a, **kw: None)
 
     async def fake_get_public(job_id):
-        return {"id": job_id, "status": "queued", "image_url": None, "image_base64": None,
-                "image_mime": None, "error": None, "created_at": 0, "duration_sec": None,
-                "type": "img", "model": "imagefree/default", "prompt": "p",
-                "aspect_ratio": "1:1", "client_ip": None, "user_agent": None}
+        return {
+            "id": job_id,
+            "status": "queued",
+            "image_url": None,
+            "image_base64": None,
+            "image_mime": None,
+            "error": None,
+            "created_at": 0,
+            "duration_sec": None,
+            "type": "img",
+            "model": "imagefree/default",
+            "prompt": "p",
+            "aspect_ratio": "1:1",
+            "client_ip": None,
+            "user_agent": None,
+        }
+
     monkeypatch.setattr(dispatch_edit.db, "get_public", fake_get_public)
     monkeypatch.setattr(dispatch_edit, "task_to_public", lambda d: d)
 
@@ -357,22 +430,38 @@ async def test_edit_image_multi_non_imagefree_dispatches_multi(monkeypatch):
     monkeypatch.setattr(dispatch_edit, "_normalize_model", lambda m: m)
 
     dispatched_multi = []
+
     async def fake_dispatch_multi(model, prompt, images, download):
         dispatched_multi.append(images)
         return "job-multi"
+
     monkeypatch.setattr(dispatch_edit, "_dispatch_edit_multi", fake_dispatch_multi)
     monkeypatch.setattr(dispatch_edit, "_validate_model", lambda *a, **kw: None)
 
     async def fake_get_public(job_id):
-        return {"id": job_id, "status": "queued", "image_url": None, "image_base64": None,
-                "image_mime": None, "error": None, "created_at": 0, "duration_sec": None,
-                "type": "img", "model": "aifreeforever/x", "prompt": "p",
-                "aspect_ratio": "1:1", "client_ip": None, "user_agent": None}
+        return {
+            "id": job_id,
+            "status": "queued",
+            "image_url": None,
+            "image_base64": None,
+            "image_mime": None,
+            "error": None,
+            "created_at": 0,
+            "duration_sec": None,
+            "type": "img",
+            "model": "aifreeforever/x",
+            "prompt": "p",
+            "aspect_ratio": "1:1",
+            "client_ip": None,
+            "user_agent": None,
+        }
+
     monkeypatch.setattr(dispatch_edit.db, "get_public", fake_get_public)
     monkeypatch.setattr(dispatch_edit, "task_to_public", lambda d: d)
 
     req = EditRequest.model_construct(
-        prompt="p", model="aifreeforever/x",
+        prompt="p",
+        model="aifreeforever/x",
         images=["data:image/png;base64,iVBORw0KGgo=", "data:image/png;base64,iVBORw0KGgo="],
     )
     result = await edit_image(req)
@@ -385,9 +474,11 @@ async def test_edit_image_multi_non_imagefree_dispatches_multi(monkeypatch):
 async def test_renew_edit_lock_loop_heartbeat(monkeypatch):
     """_renew_edit_lock_loop 心跳续租：成功续租 + 易主停止。"""
     from api.dispatch_edit import _renew_edit_lock_loop, _EDIT_LEASE_STORE
+
     monkeypatch.setattr(dispatch_edit.config, "EDIT_LEASE_TTL", 0.03)
 
     call_count = [0]
+
     async def fake_renew(key, token, ttl):
         call_count[0] += 1
         return call_count[0] < 2  # 第 2 次返回 False（易主）
@@ -403,10 +494,12 @@ async def test_renew_edit_lock_loop_heartbeat(monkeypatch):
 async def test_renew_edit_lock_loop_exception_continues(monkeypatch):
     """续租异常不中断心跳（continue）。"""
     from api.dispatch_edit import _renew_edit_lock_loop, _EDIT_LEASE_STORE
+
     monkeypatch.setattr(dispatch_edit.config, "EDIT_LEASE_TTL", 0.02)
 
     async def fake_renew(key, token, ttl):
         raise RuntimeError("db jitter")
+
     monkeypatch.setattr(_EDIT_LEASE_STORE, "renew", fake_renew)
     t = await _renew_edit_lock_loop("key", "tok")
     await asyncio.sleep(0.08)
@@ -419,31 +512,45 @@ async def test_renew_edit_lock_loop_exception_continues(monkeypatch):
 async def test_dispatch_edit_provider_completed_marks_finished(monkeypatch):
     """_dispatch_edit provider 成功 → mark_finished completed。"""
     created = []
+
     async def fake_create_request(job_id, *a, **kw):
         created.append(job_id)
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             from types import SimpleNamespace
-            return SimpleNamespace(status="completed", asset_url="http://r/img",
-                                   asset_bytes=b"\x89PNG", asset_mime="image/png",
-                                   proxy_used="http://proxy:8080", error=None)
+
+            return SimpleNamespace(
+                status="completed",
+                asset_url="http://r/img",
+                asset_bytes=b"\x89PNG",
+                asset_mime="image/png",
+                proxy_used="http://proxy:8080",
+                error=None,
+            )
 
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     # _provider_sem context manager
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -456,30 +563,44 @@ async def test_dispatch_edit_provider_completed_marks_finished(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_edit_provider_failed_status_marks_error(monkeypatch):
     """_dispatch_edit provider 返回非 completed → mark_finished error。"""
+
     async def fake_create_request(job_id, *a, **kw):
         pass
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             from types import SimpleNamespace
-            return SimpleNamespace(status="error", asset_url=None,
-                                   asset_bytes=None, asset_mime=None,
-                                   proxy_used=None, error="upstream failed")
+
+            return SimpleNamespace(
+                status="error",
+                asset_url=None,
+                asset_bytes=None,
+                asset_mime=None,
+                proxy_used=None,
+                error="upstream failed",
+            )
 
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -492,27 +613,35 @@ async def test_dispatch_edit_provider_failed_status_marks_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_edit_provider_exception_marks_error(monkeypatch):
     """_dispatch_edit provider 抛异常 → mark_finished error。"""
+
     async def fake_create_request(job_id, *a, **kw):
         pass
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             raise RuntimeError("provider boom")
 
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -525,29 +654,44 @@ async def test_dispatch_edit_provider_exception_marks_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_edit_multi_completed_marks_finished(monkeypatch):
     """_dispatch_edit_multi provider 成功 → mark_finished completed。"""
+
     async def fake_create_request(job_id, *a, **kw):
         pass
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             from types import SimpleNamespace
-            return SimpleNamespace(status="completed", asset_url="http://r/multi",
-                                   asset_bytes=b"\x89PNG", asset_mime="image/png",
-                                   proxy_used=None, error=None)
+
+            return SimpleNamespace(
+                status="completed",
+                asset_url="http://r/multi",
+                asset_bytes=b"\x89PNG",
+                asset_mime="image/png",
+                proxy_used=None,
+                error=None,
+            )
+
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -560,29 +704,39 @@ async def test_dispatch_edit_multi_completed_marks_finished(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_edit_multi_failed_status_marks_error(monkeypatch):
     """_dispatch_edit_multi provider 返回 error → mark_finished error。"""
+
     async def fake_create_request(job_id, *a, **kw):
         pass
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             from types import SimpleNamespace
-            return SimpleNamespace(status="error", asset_url=None,
-                                   asset_bytes=None, asset_mime=None,
-                                   proxy_used=None, error="multi failed")
+
+            return SimpleNamespace(
+                status="error", asset_url=None, asset_bytes=None, asset_mime=None, proxy_used=None, error="multi failed"
+            )
+
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -595,26 +749,35 @@ async def test_dispatch_edit_multi_failed_status_marks_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_edit_multi_exception_marks_error(monkeypatch):
     """_dispatch_edit_multi provider 抛异常 → mark_finished error。"""
+
     async def fake_create_request(job_id, *a, **kw):
         pass
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update_proxy(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.db, "create_request", fake_create_request)
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit.db, "update_proxy_used", fake_update_proxy)
 
     class _FakeProvider:
         prefix = "aifreeforever"
+
         async def generate(self, *a, **kw):
             raise RuntimeError("multi boom")
+
     monkeypatch.setattr(dispatch_edit.registry, "provider_for", lambda m: _FakeProvider())
     from contextlib import asynccontextmanager
+
     @asynccontextmanager
     async def fake_sem(prefix):
         yield
+
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
@@ -628,12 +791,16 @@ async def test_dispatch_edit_multi_exception_marks_error(monkeypatch):
 async def test_run_edit_job_no_token_marks_busy(monkeypatch):
     """_run_edit_job 获取锁失败（token=None）→ mark_finished error「繁忙」。"""
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_acquire_lock(key, holder, timeout):
         return None  # 拿不到锁
+
     async def fake_acquire_proxy():
         return None  # 无代理
+
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit, "_acquire_edit_lock", fake_acquire_lock)
     monkeypatch.setattr(dispatch_edit._EDIT_PROXY_POOL, "acquire_proxy", fake_acquire_proxy)
@@ -651,16 +818,22 @@ async def test_run_edit_job_no_token_marks_busy(monkeypatch):
 async def test_run_edit_job_lease_heartbeat_path(monkeypatch):
     """_run_edit_job 启用 lease → 启动心跳，结束取消。"""
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_acquire_lock(key, holder, timeout):
         return "lease-tok"
+
     async def fake_release_lock(key, token):
         return None
+
     async def fake_acquire_proxy():
         return None
+
     async def fake_run_chain(*a, **kw):
         return None
+
     # _renew_edit_lock_loop 返回一个可取消 task
     async def fake_renew_loop(key, token):
         async def _hb():
@@ -669,7 +842,9 @@ async def test_run_edit_job_lease_heartbeat_path(monkeypatch):
                     await asyncio.sleep(0.01)
             except asyncio.CancelledError:
                 return
+
         return asyncio.create_task(_hb())
+
     monkeypatch.setattr(dispatch_edit.db, "mark_finished", fake_mark)
     monkeypatch.setattr(dispatch_edit, "_acquire_edit_lock", fake_acquire_lock)
     monkeypatch.setattr(dispatch_edit, "_release_edit_lock", fake_release_lock)
@@ -689,19 +864,27 @@ async def test_run_edit_job_lease_heartbeat_path(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_no_download_completed(monkeypatch):
     """download=False → mark_finished completed（URL 交付，不下载）。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         return "http://up/img"
+
     async def fake_submit(*a, **kw):
         return "tid-1"
+
     async def fake_poll(*a, **kw):
         return {"image": "http://r/img"}
+
     async def fake_update(*a, **kw):
         return None
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "submit_edit", fake_submit)
@@ -719,21 +902,30 @@ async def test_run_edit_chain_no_download_completed(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_download_success_completed(monkeypatch):
     """download=True 且下载成功 → mark_finished completed + base64。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         return "http://up/img"
+
     async def fake_submit(*a, **kw):
         return "tid-1"
+
     async def fake_poll(*a, **kw):
         return {"image": "http://r/img"}
+
     async def fake_update(*a, **kw):
         return None
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_download(*a, **kw):
         return b"\x89PNG-data"
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "submit_edit", fake_submit)
@@ -754,15 +946,21 @@ async def test_run_edit_chain_download_success_completed(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_edit_chain_wedged_exhausted_else_branch(monkeypatch):
     """重试耗尽 wedged → for-else 分支标记 error。"""
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         raise RuntimeError("already have an image editing task")
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.db, "update_upstream_task", fake_update)
@@ -782,16 +980,22 @@ async def test_run_edit_chain_wedged_exhausted_else_branch(monkeypatch):
 async def test_run_edit_chain_wedged_no_retry_marks_error(monkeypatch):
     """wedged 但 attempt == MAX（无重试余量）→ 走 if _is_edit_slot_wedged 分支标记。"""
     attempt = [0]
+
     async def fake_acquire(*a, **kw):
         return "token"
+
     async def fake_upload(*a, **kw):
         attempt[0] += 1
         raise RuntimeError("already have an image editing task")
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update(*a, **kw):
         return None
+
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)
     monkeypatch.setattr(dispatch_edit.imagefree_client, "upload_edit_image", fake_upload)
     monkeypatch.setattr(dispatch_edit.db, "update_upstream_task", fake_update)
@@ -815,6 +1019,7 @@ async def test_run_edit_chain_for_else_branch(monkeypatch):
     更简单：让前几次重试成功继续，但循环 range 走完后无 break → for-else。
     实际上代码 break 只在成功时；若每次都 continue 重试到 range 耗尽，会落到 else。
     """
+
     # 构造：每次 upload 都抛 wedged，attempt < MAX 时 continue，最后一次 attempt==MAX 走 if return
     # 要触发 for-else，需让循环不 break 且不 return —— 但 except 里要么 continue 要么 return
     # for-else 实际上只有在「循环跑完未 break」时触发，但 except 一定会 return 或 continue
@@ -823,16 +1028,22 @@ async def test_run_edit_chain_for_else_branch(monkeypatch):
     # 所以 for-else 在当前逻辑下不可达？验证：用 mock 让所有 attempt 都 continue
     async def fake_acquire(*a, **kw):
         return "token"
+
     call_count = [0]
+
     async def fake_upload(*a, **kw):
         call_count[0] += 1
         # 让 attempt < MAX 永远成立（通过让 _is_edit_slot_wedged 返回 True 且 attempt 永远 < MAX）
         raise RuntimeError("already have an image editing task")
+
     marks = []
+
     async def fake_mark(*a, **kw):
         marks.append(a)
+
     async def fake_update(*a, **kw):
         return None
+
     # 让 _is_edit_slot_wedged 在 attempt < MAX 时返回 True（continue），最后一次返回 False → else
     monkeypatch.setattr(dispatch_edit, "_is_edit_slot_wedged", lambda e: False)
     monkeypatch.setattr(dispatch_edit.engine, "acquire_token", fake_acquire)

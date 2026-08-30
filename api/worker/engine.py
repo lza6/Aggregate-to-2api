@@ -12,6 +12,7 @@ Turnstile 求解是最贵的串行资源（cf_solver 单槽 5s/token），所以
 - 空闲回收：per-proxy 池空闲超 TTL 自动回收（释放 cf_solver 浏览器上下文）。
 - 池满即停，不空闲浪费；token 用后即弃（一次性）。
 """
+
 import asyncio
 import hashlib
 import logging
@@ -24,13 +25,16 @@ from .. import imagefree_client
 from .. import turnstile_client
 from ..db.queue_store import QueueStore
 from ..retry_policy import RetryPolicy
+
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
 from ..solver_guard import solver_guard
 from ..telemetry import get_tracer
+
 # S-4: 慢日志画像打点 + S-7: worker 心跳
 from ..slow_log import SlowSample, slow_log
 from ..worker_health import worker_health
+
 # B2: traceId 透传——worker 后台协程脱离入口请求 context
 from ..context import RequestContext, request_context_var, get_current_trace_id
 from .token_pool import TokenPoolManager
@@ -130,18 +134,18 @@ class Engine:
             1: config.HIGH_QUEUE_MAX,
             2: config.NORMAL_QUEUE_MAX,
         }
-        self.queue: CountedPriorityQueue = CountedPriorityQueue(
-            maxsize=sum(limits.values()), limits=limits)
+        self.queue: CountedPriorityQueue = CountedPriorityQueue(maxsize=sum(limits.values()), limits=limits)
         # 旧观测接口同步镜像：deadline 兼容 _queue_counts（CountedPriorityQueue 内部用
         # count() 为准）；put/get 在 submit_priority 与 _worker_loop 中手动同步递减。
         self._queue_counts = {0: 0, 1: 0, 2: 0}
         self._seq = 0  # 同优先级 FIFO 自增计数器
         self.token_pool_manager = TokenPoolManager(self)
-        self.processing = 0          # 当前生成中的任务数（实时并发）
+        self.processing = 0  # 当前生成中的任务数（实时并发）
         # v4.4.2: 429 直连降级 → 代理池出口轮换（懒导入避免循环依赖）
         from ..proxy_pool import proxy_pool as _proxy_pool
+
         self._proxy_pool = _proxy_pool
-        self._started = False        # start() 后置真：池懒创建时才启动后台预取
+        self._started = False  # start() 后置真：池懒创建时才启动后台预取
         self._started_at = time.time()
         self._workers: list[_WorkerHandle] = []
         self._auto_scaler_task: asyncio.Task | None = None
@@ -161,17 +165,21 @@ class Engine:
             log.info("已回收 %d 条孤儿任务（上次进程遗留的 pending/processing）", recovered)
         self._started = True
         await self.token_pool_manager.start()
-        self._workers = [self._create_worker(i)
-                         for i in range(config.WORKERS)]
+        self._workers = [self._create_worker(i) for i in range(config.WORKERS)]
         if config.IF_WORKER_AUTO:
             self._auto_scaler_task = asyncio.create_task(self._auto_scale_loop())
         # ── 持久化队列恢复（IMP-29）─────────────────────
         if self._persistent_queue and self._queue_db:
             restored = await self._resume_from_queue()
             log.info("持久化队列恢复: %d 个待消费任务续跑", restored)
-        log.info("引擎启动: workers=%d token_pool=%d 队列上限=%d auto_scale=%s batch=%s",
-                 config.WORKERS, config.TOKEN_POOL_SIZE, config.MAX_QUEUE,
-                 config.IF_WORKER_AUTO, config.IF_WORKER_BATCH_ENABLED)
+        log.info(
+            "引擎启动: workers=%d token_pool=%d 队列上限=%d auto_scale=%s batch=%s",
+            config.WORKERS,
+            config.TOKEN_POOL_SIZE,
+            config.MAX_QUEUE,
+            config.IF_WORKER_AUTO,
+            config.IF_WORKER_BATCH_ENABLED,
+        )
 
     async def stop(self) -> None:
         if self._auto_scaler_task:
@@ -191,23 +199,29 @@ class Engine:
             await self._queue_db.close()
 
     # ── 入口 ──────────────────────────────────────
-    async def submit(self, prompt: str, aspect_ratio: str, download: bool,
-                     model: str = "default") -> str:
+    async def submit(self, prompt: str, aspect_ratio: str, download: bool, model: str = "default") -> str:
         """登记并入队（默认 normal 优先级）。队列满抛 QueueFull → 调用方回 429。"""
         return await self.submit_priority(prompt, aspect_ratio, download, model, priority=2)
 
-    async def submit_priority(self, prompt: str, aspect_ratio: str, download: bool,
-                              model: str = "default", priority: int = 2,
-                              client_ip: str | None = None,
-                              user_agent: str | None = None) -> str:
+    async def submit_priority(
+        self,
+        prompt: str,
+        aspect_ratio: str,
+        download: bool,
+        model: str = "default",
+        priority: int = 2,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> str:
         """登记并入队（指定优先级）。队列满抛 QueueFull → 调用方回 429。
 
         priority: 0=admin, 1=paid, 2=normal。各级队列超过独立上限时返回 429。
         v4.4.3: client_ip 透传调用方真实 IP（防刷取证），缺省 None。
         """
         task_id = str(uuid.uuid4())
-        await self.db.create_request(task_id, prompt, aspect_ratio, download, "txt", model,
-                                     client_ip=client_ip, user_agent=user_agent)
+        await self.db.create_request(
+            task_id, prompt, aspect_ratio, download, "txt", model, client_ip=client_ip, user_agent=user_agent
+        )
         try:
             if config.IF_WORKER_BATCH_ENABLED and self.queue.is_full(priority):
                 raise asyncio.QueueFull
@@ -222,10 +236,17 @@ class Engine:
             try:
                 pos = self.queue.qsize()
                 from ..sse_events import publish_task_event
-                publish_task_event(task_id, "status", {
-                    "task_id": task_id, "status": "pending", "queue_pos": pos,
-                    "priority": priority,
-                })
+
+                publish_task_event(
+                    task_id,
+                    "status",
+                    {
+                        "task_id": task_id,
+                        "status": "pending",
+                        "queue_pos": pos,
+                        "priority": priority,
+                    },
+                )
             except Exception:
                 pass
         except asyncio.QueueFull:
@@ -270,9 +291,17 @@ class Engine:
             await asyncio.sleep(0.5)
         t = await self.db.get(task_id)
         if t is None:
-            return {"id": task_id, "status": "error", "error": "查询失败",
-                    "image_url": None, "image_base64": None, "image_mime": None,
-                    "duration_sec": None, "type": "txt", "model": "default"}
+            return {
+                "id": task_id,
+                "status": "error",
+                "error": "查询失败",
+                "image_url": None,
+                "image_base64": None,
+                "image_mime": None,
+                "duration_sec": None,
+                "type": "txt",
+                "model": "default",
+            }
         return t
 
     async def _resume_from_queue(self) -> int:
@@ -300,8 +329,7 @@ class Engine:
         """取 direct 池 token（_process 内部调用保持兼容）。"""
         return await self.token_pool_manager.acquire("direct", timeout)
 
-    async def acquire_token(self, key: str = "direct",
-                            timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None:
+    async def acquire_token(self, key: str = "direct", timeout: float = config.TOKEN_WAIT_TIMEOUT) -> str | None:
         """公开入口：文生图直连取 "direct" 池；图生图代理模式传 key=代理 URL 取对应 per-proxy 池。"""
         return await self.token_pool_manager.acquire(key, timeout)
 
@@ -396,8 +424,7 @@ class Engine:
                     if row and row["status"] in ("completed", "error"):
                         continue  # _process 已处理，不覆盖终态
                     log.error("batch task %s 硬超时（%ss），强制回收", tid, config.TASK_HARD_TIMEOUT)
-                    await self.db.mark_finished(tid, "error", None,
-                                          f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
+                    await self.db.mark_finished(tid, "error", None, f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                     if self._persistent_queue and self._queue_db:
                         await self._queue_db.mark_completed(tid)
             except asyncio.CancelledError:
@@ -413,8 +440,7 @@ class Engine:
                 log.info("worker[%d] 收到退出信号", idx)
                 return
             try:
-                priority, seq, task_id = await asyncio.wait_for(
-                    self.queue.get(), timeout=1.0)
+                priority, seq, task_id = await asyncio.wait_for(self.queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
@@ -434,8 +460,7 @@ class Engine:
                 worker_health.add_processed(idx)
             except asyncio.TimeoutError:
                 log.error("task %s 硬超时（%ss），强制回收", task_id, config.TASK_HARD_TIMEOUT)
-                await self.db.mark_finished(task_id, "error", None,
-                                      f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
+                await self.db.mark_finished(task_id, "error", None, f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                 if self._persistent_queue and self._queue_db:
                     await self._queue_db.mark_completed(task_id)
             except asyncio.CancelledError:
@@ -475,8 +500,7 @@ class Engine:
             for _ in range(added):
                 next_idx = max((w.id for w in self._workers), default=-1) + 1
                 self._workers.append(self._create_worker(next_idx))
-            log.info("自动扩容: %d → %d（排队 %d > %d）",
-                     current, target, qsize, config.IF_WORKER_SCALE_UP_THRESHOLD)
+            log.info("自动扩容: %d → %d（排队 %d > %d）", current, target, qsize, config.IF_WORKER_SCALE_UP_THRESHOLD)
 
         # 缩容：排队 < 阈值 或 空闲超阈值 → 缩 1 个（最多缩 1 / 30s）
         elif current > config.IF_WORKERS_MIN:
@@ -495,15 +519,13 @@ class Engine:
             if should_shrink:
                 self._shrink_one_worker()
                 worker_health.register([w.id for w in self._workers])
-                log.info("自动缩容: %d → %d（%s）",
-                         current, len(self._workers), reason)
+                log.info("自动缩容: %d → %d（%s）", current, len(self._workers), reason)
 
     def _idle_workers_count(self) -> int:
         """统计空闲超过 IF_WORKER_IDLE_SECONDS 的 worker 数。"""
         now = time.monotonic()
         idle_threshold = config.IF_WORKER_IDLE_SECONDS
-        return sum(1 for w in self._workers
-                   if now - w.last_active > idle_threshold)
+        return sum(1 for w in self._workers if now - w.last_active > idle_threshold)
 
     def _shrink_one_worker(self) -> None:
         """通知一个 worker 退出并移除。优先缩容最空闲的 worker。"""
@@ -526,15 +548,18 @@ class Engine:
         # 重建请求上下文并 set，使本任务全链路日志/审计/慢日志带同一 trace_id
         _trace_id = row.get("trace_id") or task_id
         _ctx = RequestContext(
-            request_id=task_id, trace_id=_trace_id,
+            request_id=task_id,
+            trace_id=_trace_id,
             client_ip=row.get("client_ip") or "unknown",
-            model=row.get("model", "default"), start_time=time.time(),
+            model=row.get("model", "default"),
+            start_time=time.time(),
         )
         _ctx_token = request_context_var.set(_ctx)
         try:
             # v4.2: SSE 事件 - 任务进入处理阶段
             try:
                 from ..sse_events import publish_task_event
+
                 publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
             except Exception:
                 pass
@@ -545,10 +570,16 @@ class Engine:
             last_error: str | None = None
             queue_ms = (t0 - self._enqueued_at.get(task_id, t0)) * 1000.0
             self._enqueued_at.pop(task_id, None)
-            _slow = {"queue": queue_ms, "wait_token": 0.0, "solve": 0.0,
-                     "upstream": 0.0, "retry": 0.0,
-                     # B3: 分段细化——上游首字节/轮询分段
-                     "submit_ms": 0.0, "poll_ms": 0.0}
+            _slow = {
+                "queue": queue_ms,
+                "wait_token": 0.0,
+                "solve": 0.0,
+                "upstream": 0.0,
+                "retry": 0.0,
+                # B3: 分段细化——上游首字节/轮询分段
+                "submit_ms": 0.0,
+                "poll_ms": 0.0,
+            }
             tracer = get_tracer()
             with tracer.start_as_current_span(
                 "worker.process",
@@ -569,13 +600,16 @@ class Engine:
                         _slow["wait_token"] += (time.monotonic() - _tk0) * 1000.0
                     if token is None:
                         # 熔断 OPEN 时 acquire 快速失败（非超时），文案要区分，避免排查误判成 30s 超时
-                        last_error = ("求解熔断中，cf_solver 暂不可用，请稍后重试"
-                                      if solver_guard.circuit_open
-                                      else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）")
+                        last_error = (
+                            "求解熔断中，cf_solver 暂不可用，请稍后重试"
+                            if solver_guard.circuit_open
+                            else f"等待 turnstile token 超时（>{config.TOKEN_WAIT_TIMEOUT}s）"
+                        )
                         break
                     # v4.2: SSE 事件 - token 已获取，进入生成阶段
                     try:
                         from ..sse_events import publish_task_event
+
                         publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
                     except Exception:
                         pass
@@ -598,22 +632,39 @@ class Engine:
                         if RetryPolicy.should_retry(attempt, config.IF_TXT_RETRY_MAX, e):
                             # token_rejected 会以更短退避重试（换新 token 大概率成功）
                             err_type = RetryPolicy.classify(e)
-                            base = (1.0 if err_type == "token_rejected"
-                                    else config.IF_TXT_RETRY_BACKOFF_BASE)
+                            base = 1.0 if err_type == "token_rejected" else config.IF_TXT_RETRY_BACKOFF_BASE
                             delay = RetryPolicy.backoff_delay(attempt, base)
-                            log.warning("task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
-                                        task_id, attempt, config.IF_TXT_RETRY_MAX, e, delay)
+                            log.warning(
+                                "task %s 第 %d/%d 次 transient 错误（%.80s），退避 %.1fs 后重试",
+                                task_id,
+                                attempt,
+                                config.IF_TXT_RETRY_MAX,
+                                e,
+                                delay,
+                            )
                             _slow["retry"] += delay * 1000.0
                             await asyncio.sleep(delay)
                             continue
                         # permanent 错误或重试满 → 失败（标记 error 后继续到 DLQ 逻辑）
-                        log.warning("task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
-                                    task_id, attempt, config.IF_TXT_RETRY_MAX, e)
+                        log.warning(
+                            "task %s 第 %d/%d 次永久错误（%.80s），标记为失败",
+                            task_id,
+                            attempt,
+                            config.IF_TXT_RETRY_MAX,
+                            e,
+                        )
                         last_error = str(e)
                         break  # 跳出循环，继续到 DLQ 推送
                     else:
-                        await self._finish(task_id, "completed", result["image_url"], None, t0,
-                                   result.get("image_base64"), result.get("image_mime"))
+                        await self._finish(
+                            task_id,
+                            "completed",
+                            result["image_url"],
+                            None,
+                            t0,
+                            result.get("image_base64"),
+                            result.get("image_mime"),
+                        )
                         # B3: 拆分上游首字节/轮询分段（_generate_once_b3 返回 submit_ms/poll_ms）
                         _slow["submit_ms"] = result.get("submit_ms", 0.0)
                         _slow["poll_ms"] = result.get("poll_ms", 0.0)
@@ -630,42 +681,54 @@ class Engine:
                 row = await self.db.get(task_id)
                 model = (row.get("model") or "default") if row else "default"
                 await self.db.push_dlq(task_id, model, last_error, config.IF_TXT_RETRY_MAX)
-                log.info("DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
-                         task_id, model, last_error, config.IF_TXT_RETRY_MAX)
+                log.info(
+                    "DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
+                    task_id,
+                    model,
+                    last_error,
+                    config.IF_TXT_RETRY_MAX,
+                )
         finally:
             # B2: 退出本任务上下文（无论完成/异常都恢复）
             request_context_var.reset(_ctx_token)
 
-    def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float,
-                     status: str) -> None:
+    def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float, status: str) -> None:
         """S-4: 任务终态时提交慢日志画像（阈值内静默忽略）。"""
         try:
-            slow_log.record(SlowSample(
-                task_id=task_id,
-                model=row.get("model", "default"),
-                provider=row.get("model", "default").split("/", 1)[0] if row.get("model") else "imagefree",
-                queue_ms=slow["queue"],
-                wait_token_ms=slow["wait_token"],
-                solve_ms=slow["solve"],
-                upstream_ms=slow["upstream"],
-                retry_ms=slow["retry"],
-                total_ms=(time.monotonic() - t0) * 1000.0 + slow["queue"],
-                status=status,
-                # B2: trace_id
-                trace_id=get_current_trace_id() or "",
-                # B3: submit_ms/poll_ms
-                submit_ms=slow.get("submit_ms", 0.0),
-                poll_ms=slow.get("poll_ms", 0.0),
-            ))
+            slow_log.record(
+                SlowSample(
+                    task_id=task_id,
+                    model=row.get("model", "default"),
+                    provider=row.get("model", "default").split("/", 1)[0] if row.get("model") else "imagefree",
+                    queue_ms=slow["queue"],
+                    wait_token_ms=slow["wait_token"],
+                    solve_ms=slow["solve"],
+                    upstream_ms=slow["upstream"],
+                    retry_ms=slow["retry"],
+                    total_ms=(time.monotonic() - t0) * 1000.0 + slow["queue"],
+                    status=status,
+                    # B2: trace_id
+                    trace_id=get_current_trace_id() or "",
+                    # B3: submit_ms/poll_ms
+                    submit_ms=slow.get("submit_ms", 0.0),
+                    poll_ms=slow.get("poll_ms", 0.0),
+                )
+            )
         except Exception as e:  # 画像失败绝不影响主流程
             log.debug("慢日志记录失败（可忽略）: %s", e)
 
-    async def _finish(self, task_id: str, status: str, image_url: str | None,
-                error: str | None, t0: float,
-                image_base64: str | None = None, image_mime: str | None = None) -> None:
+    async def _finish(
+        self,
+        task_id: str,
+        status: str,
+        image_url: str | None,
+        error: str | None,
+        t0: float,
+        image_base64: str | None = None,
+        image_mime: str | None = None,
+    ) -> None:
         """终态落库（统一累计耗时）。"""
-        await self.db.mark_finished(task_id, status, image_url, error, time.monotonic() - t0,
-                              image_base64, image_mime)
+        await self.db.mark_finished(task_id, status, image_url, error, time.monotonic() - t0, image_base64, image_mime)
         # 注：终态 SSE 事件由 broadcast_task_event 统一发布（含 per-task 流），
         # _finish 不再直接调用 publish_task_event，避免 worker.py:936 与 dispatch.py:140 双重发布。
         # IMP-29: 持久化队列标记终态
@@ -675,13 +738,19 @@ class Engine:
         # 使用懒导入避免循环依赖（worker → main → worker）
         try:
             from ..dispatch import broadcast_task_event
-            await broadcast_task_event(task_id, status, {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)})
+
+            await broadcast_task_event(
+                task_id,
+                status,
+                {"image_url": image_url, "error": error, "duration_sec": round(time.monotonic() - t0, 1)},
+            )
         except Exception:
             pass
         if status == "completed" and image_url:
             try:
                 from .meta import gallery_cache as _gc
                 import asyncio
+
                 asyncio.create_task(_gc.invalidate_prefix("gallery:"))
             except Exception as exc:
                 log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
@@ -694,17 +763,26 @@ class Engine:
         （仍按 completed 返回 image_url，仅记录下载失败，HIGH-2）。
         """
         tid = await imagefree_client.submit_generate(
-            config.BASE_URL, config.apply_model(row["prompt"], row.get("model", "default")),
-            row["aspect_ratio"], token, 30.0, proxy=proxy,
+            config.BASE_URL,
+            config.apply_model(row["prompt"], row.get("model", "default")),
+            row["aspect_ratio"],
+            token,
+            30.0,
+            proxy=proxy,
         )
         result = await imagefree_client.poll_generate_status(
-            config.BASE_URL, tid, config.GENERATE_TIMEOUT, config.GENERATE_POLL_INTERVAL,
+            config.BASE_URL,
+            tid,
+            config.GENERATE_TIMEOUT,
+            config.GENERATE_POLL_INTERVAL,
         )
         out = {"status": "completed", "image_url": result["image"]}
         if row["download"]:
             try:
                 raw = await imagefree_client.download_image(
-                    result["image"], 60.0, config.MAX_IMAGE_BYTES,
+                    result["image"],
+                    60.0,
+                    config.MAX_IMAGE_BYTES,
                 )
                 # H8: 按字节魔数判定 mime，比 URL 后缀匹配可靠（上游可能返回 .webp/.avif）
                 mime = imagefree_client.detect_mime(raw)
@@ -730,6 +808,7 @@ class Engine:
         图生图链路已生产验证的模式。直连成功零额外成本；仅 429 时才消耗代理。
         """
         from ..imagefree_client import ImagefreeError
+
         try:
             return await self._generate_once_b3(row, token)
         except ImagefreeError as e:
@@ -747,8 +826,11 @@ class Engine:
             # 第一步：用同一出口解新 token（solver 失败 → 冷却该代理换下一个）
             try:
                 fallback_token, _solve_ms = await turnstile_client.solve_turnstile(
-                    cf_solver_url=None, url=config.BASE_URL, sitekey=config.SITEKEY,
-                    timeout=min(config.TURNSTILE_TIMEOUT, 45.0), proxy=proxy_url,
+                    cf_solver_url=None,
+                    url=config.BASE_URL,
+                    sitekey=config.SITEKEY,
+                    timeout=min(config.TURNSTILE_TIMEOUT, 45.0),
+                    proxy=proxy_url,
                 )
             except Exception as exc:
                 await self._proxy_pool.mark_failure(proxy_url, rate_limited=False)

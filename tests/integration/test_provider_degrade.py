@@ -1,4 +1,5 @@
 """集成测试：提供商降级/恢复行为。"""
+
 import pytest
 
 
@@ -11,8 +12,13 @@ class TestProviderDegrade:
         client = app_with_mocks
         # 发送请求到带无效模型名的提供商（触发降级）
         for _ in range(5):
-            await client.post("/v1/generate/async", json={
-                "prompt": "test", "model": "nanobanana/nano-banana-pro", "aspect_ratio": "1:1",
-            })
+            await client.post(
+                "/v1/generate/async",
+                json={
+                    "prompt": "test",
+                    "model": "nanobanana/nano-banana-pro",
+                    "aspect_ratio": "1:1",
+                },
+            )
         r = await client.get("/v1/providers")
         assert r.status_code == 200

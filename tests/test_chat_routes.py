@@ -82,9 +82,7 @@ async def _noop_record(**kwargs):
 
 
 async def request(application: FastAPI, method: str, url: str, **kwargs):
-    async with AsyncClient(
-        transport=ASGITransport(app=application), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
         return await client.request(method, url, **kwargs)
 
 
@@ -167,10 +165,7 @@ async def test_openai_stream_response_contains_chunks_and_done(app, fake_provide
     ]
     assert payloads[0]["choices"][0]["delta"] == {"role": "assistant"}
     assert any(item["choices"][0]["delta"].get("content") == "hel" for item in payloads)
-    assert any(
-        item["choices"][0]["delta"].get("reasoning_content") == "think"
-        for item in payloads
-    )
+    assert any(item["choices"][0]["delta"].get("reasoning_content") == "think" for item in payloads)
     assert any(item["choices"][0]["delta"].get("tool_calls") for item in payloads)
     assert any(item.get("usage", {}).get("total_tokens") == 7 for item in payloads)
     assert response.text.rstrip().endswith("data: [DONE]")
@@ -294,17 +289,32 @@ async def test_remaining_credits_uses_successful_calls_and_available_proxies(tmp
 @pytest.mark.asyncio
 async def test_usage_stats_aggregates_cost_usd(tmp_db, monkeypatch):
     """v6.6.0: cost_usd 成为真实字段并聚合进 usage（免费为 0，付费渠道可填非零）。"""
-    import time as _time
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=100, completion_tokens=50,
-        reasoning_tokens=10, cost_usd=0.5, tool_calls_count=0, duration_ms=1,
-        success=True, proxy_used=None, error=None,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=100,
+        completion_tokens=50,
+        reasoning_tokens=10,
+        cost_usd=0.5,
+        tool_calls_count=0,
+        duration_ms=1,
+        success=True,
+        proxy_used=None,
+        error=None,
     )
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=50, completion_tokens=25,
-        reasoning_tokens=5, cost_usd=0.0, tool_calls_count=0, duration_ms=1,
-        success=True, proxy_used=None, error=None,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=50,
+        completion_tokens=25,
+        reasoning_tokens=5,
+        cost_usd=0.0,
+        tool_calls_count=0,
+        duration_ms=1,
+        success=True,
+        proxy_used=None,
+        error=None,
     )
     await tmp_db._ensure_flushed()
     stats = await tracker.stats("24h")

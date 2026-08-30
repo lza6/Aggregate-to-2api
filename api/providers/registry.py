@@ -6,6 +6,7 @@
 路由：自 v3.2 起 provider_for() 结合自适应路由引擎（MAB-EWMA）在候选内实时打分，
 不再"只看健康不看实时质量"。降级/熔断仍旧优先。
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +34,7 @@ class Registry:
         self._exhausted_accounts: dict[str, set[str]] = {}
         # v3.2: MAB-EWMA 自适应路由引擎
         from ..adaptive_router import adaptive_router
+
         self.adaptive_router = adaptive_router
         # v4.4: 文本对话提供商注册表（prefix → ChatProvider）+ 模型索引
         self.chat_providers: dict[str, "ChatProvider"] = {}  # type: ignore[name-defined]
@@ -56,6 +58,7 @@ class Registry:
     def register_chat(self, provider) -> None:
         """注册文本对话 ChatProvider（v4.4）。模型 id 前缀与图像 Provider 同契约。"""
         from .base import ChatProvider  # 延迟导入防循环
+
         if not isinstance(provider, ChatProvider):
             raise TypeError(f"{type(provider).__name__} 不是 ChatProvider")
         self.chat_providers[provider.prefix] = provider
@@ -123,11 +126,27 @@ class Registry:
             alt_provider, alt_model_id = self.find_alternative(model_id)
             if alt_provider:
                 self.adaptive_router.record_inflight(alt_provider.prefix)
-                log.info("提供商 %s down，静态回退到 %s 处理 %s",
-                         spec.provider, alt_provider.prefix, model_id)
+                log.info("提供商 %s down，静态回退到 %s 处理 %s", spec.provider, alt_provider.prefix, model_id)
             return alt_provider or provider
 
-        # healthy/degraded → 直接返回请求指定的提供商（不做自适应交叉路由）
+        # 首选 degraded → 能力匹配的健康备用优先（P0-2 方案 A：跨商降级）
+        # 仅「能力匹配」的备用才接管，避免给用户换错能力；无匹配则直连首选保底。
+        if health == "degraded":
+            alt_provider, alt_model_id = self.find_alternative(model_id)
+            if alt_provider is not None:
+                self.adaptive_router.record_inflight(alt_provider.prefix)
+                self.adaptive_router.record_fallback(alt_provider.prefix, model_id, spec.provider)
+                log.info("提供商 %s degraded，降级到 %s 处理 %s", spec.provider, alt_provider.prefix, model_id)
+                return alt_provider
+            # 无能力匹配的备用 → 直连首选（保底），记一次 direct
+            try:
+                self.adaptive_router.record_inflight(spec.provider)
+                self.adaptive_router.record_direct(spec.provider, model_id)
+            except Exception:
+                pass
+            return provider
+
+        # healthy → 直接返回请求指定的提供商（不做自适应交叉路由）
         # 记录一次路由决策（selected = requested，reason=direct）供前端观测
         try:
             self.adaptive_router.record_inflight(spec.provider)
@@ -206,6 +225,7 @@ class Registry:
     def record_failure(self, provider: str) -> None:
         """记录连续 ProviderRateLimited 失败，达到配置阈值自动降级。"""
         from .. import config
+
         count = self._consecutive_failures.get(provider, 0) + 1
         self._consecutive_failures[provider] = count
         if count >= config.IF_PROVIDER_DEGRADE_THRESHOLD:
@@ -231,6 +251,7 @@ class Registry:
     def try_recover_all(self) -> None:
         """遍历所有降级/不可用 provider，尝试恢复一个。"""
         from .. import config
+
         now = __import__("time").time()
         for provider in self.degraded_providers():
             last = self._last_recover_at.get(provider, 0.0)
@@ -248,32 +269,36 @@ class Registry:
         self._ensure_booted()
         out: dict[str, list[dict]] = {}
         for m in self._models.values():
-            out.setdefault(m.provider, []).append({
-                "id": m.id,
-                "name": m.display_name or m.upstream_model,
-                "upstream_model": m.upstream_model,
-                "capabilities": list(m.capabilities),
-                "aspect_ratios": list(m.aspect_ratios),
-                "resolutions": list(m.resolutions),
-                "credits": m.credits,
-                "account_required": m.account_required,
-                "description": m.description,
-            })
+            out.setdefault(m.provider, []).append(
+                {
+                    "id": m.id,
+                    "name": m.display_name or m.upstream_model,
+                    "upstream_model": m.upstream_model,
+                    "capabilities": list(m.capabilities),
+                    "aspect_ratios": list(m.aspect_ratios),
+                    "resolutions": list(m.resolutions),
+                    "credits": m.credits,
+                    "account_required": m.account_required,
+                    "description": m.description,
+                }
+            )
         # v4.4: 聊天模型并入同一目录（无 aspect_ratios/resolutions，附上下文窗口）
         for spec in self.all_chat_models():
-            out.setdefault(spec.provider, []).append({
-                "id": spec.id,
-                "name": spec.display_name or spec.upstream_model,
-                "upstream_model": spec.upstream_model,
-                "capabilities": list(spec.capabilities),
-                "aspect_ratios": [],
-                "resolutions": [],
-                "credits": None,
-                "account_required": False,
-                "description": spec.description,
-                "kind": "chat",
-                "context_window": (spec.meta or {}).get("context_window", 0),
-            })
+            out.setdefault(spec.provider, []).append(
+                {
+                    "id": spec.id,
+                    "name": spec.display_name or spec.upstream_model,
+                    "upstream_model": spec.upstream_model,
+                    "capabilities": list(spec.capabilities),
+                    "aspect_ratios": [],
+                    "resolutions": [],
+                    "credits": None,
+                    "account_required": False,
+                    "description": spec.description,
+                    "kind": "chat",
+                    "context_window": (spec.meta or {}).get("context_window", 0),
+                }
+            )
         return out
 
     def provider_summary(self) -> dict[str, dict]:
@@ -314,10 +339,7 @@ class Registry:
     # ── 健康探测（IMP-22）──────────────────────────
     def healthy_providers(self) -> list[str]:
         """返回健康状态为 healthy 或 unknown 的 provider 前缀列表。"""
-        return [
-            prefix for prefix, p in self.providers.items()
-            if p.health_status in ("healthy", "unknown")
-        ]
+        return [prefix for prefix, p in self.providers.items() if p.health_status in ("healthy", "unknown")]
 
     async def health_check_all(self) -> None:
         """遍历所有 provider 执行健康检查。"""
@@ -353,11 +375,23 @@ def bootstrap() -> None:
     registry.register(imagefree.ImagefreeProvider())
     registry.register(aifreeforever.AifreeforeverProvider())
     registry.register(nanobanana.NanobananaProvider())
+    # fal.ai minimax-H3-max 视频（纯算 Kasada x-is-human + 会话池化复用 24h）
+    import os
+
+    if os.getenv("IF_FALAI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from .falai import FalaiProvider
+
+            registry.register(FalaiProvider())
+        except Exception as e:
+            log.warning("提供商 falai 注册失败（降级跳过）: %s", e)
     # v4.4: 文本对话提供商（导入失败/开关关闭时静默跳过，不影响图像主链路）
     import os
+
     if os.getenv("IF_TRYINGOPEN_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
         try:
             from .tryingopen import TryingopenChatProvider
+
             registry.register_chat(TryingopenChatProvider())
         except Exception as e:
             log.warning("聊天提供商 tryingopen 注册失败（降级跳过）: %s", e)

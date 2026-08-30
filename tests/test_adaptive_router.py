@@ -3,15 +3,11 @@
 覆盖：评分逻辑、熔断、熔断恢复、探索/利用、全开兜底、路由记录写入与查询、
 registry 集成（provider_for 自适应路由）。
 """
+
 import time
-import pytest
-from unittest.mock import patch
 
 from api.adaptive_router import (
     AdaptiveRouter,
-    ProviderNodeStats,
-    RoutingRecord,
-    _OPEN_COOLDOWN,
 )
 
 
@@ -71,7 +67,7 @@ class TestScoring:
         r = _router()
         r.record_result("p", 1000.0, True)  # 初始 2000 → 0.2*1000 + 0.8*2000 = 1800
         assert r.nodes["p"].ewma_latency_ms == 1800.0
-        r.record_result("p", 0.0, True)     # → 0.2*0 + 0.8*1800 = 1440
+        r.record_result("p", 0.0, True)  # → 0.2*0 + 0.8*1800 = 1440
         assert r.nodes["p"].ewma_latency_ms == 1440.0
 
 

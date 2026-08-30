@@ -5,7 +5,7 @@ poll_generate_status 的错误处理与终态分支、SSRF 防护（拒绝私网
 download_image 大小上限、图生图 upload/submit/poll 的错误分支。
 所有上游交互用 fake httpx client monkeypatch（不碰真实网络）。
 """
-import asyncio
+
 import base64
 import json
 import os
@@ -17,8 +17,6 @@ os.environ.setdefault("IF_MOCK_UPSTREAM", "0")
 
 from api.imagefree_client import (  # noqa: E402
     ImagefreeError,
-    MOCK_UPSTREAM,
-    close_client,
     detect_mime,
     download_image,
     poll_edit_status,
@@ -91,6 +89,7 @@ class TestSubmitGenerate:
     async def test_releases_semaphore_on_error(self, monkeypatch):
         """异常路径也必须 release（防信号量泄漏）。"""
         from api.semaphore_manager import upstream_semaphore
+
         monkeypatch.setattr("api.imagefree_client._get_client", lambda: _FakeClient._err_500)
         with pytest.raises(ImagefreeError):
             await submit_generate("http://host", "cat", "1:1", "tok")
@@ -133,11 +132,16 @@ class TestPollGenerateStillPending:
     @pytest.mark.asyncio
     async def test_transport_error_retries_then_completes(self, monkeypatch):
         """首次 TransportError → 继续轮询 → 完成。"""
-        fake = _FakeClient(sequence=[
-            _raise_transport(),
-            _Resp(200, {"content-type": "application/json"},
-                  {"status": "completed", "image": "https://img.example/2.png"}),
-        ])
+        fake = _FakeClient(
+            sequence=[
+                _raise_transport(),
+                _Resp(
+                    200,
+                    {"content-type": "application/json"},
+                    {"status": "completed", "image": "https://img.example/2.png"},
+                ),
+            ]
+        )
         monkeypatch.setattr("api.imagefree_client._get_client", lambda: fake)
         res = await poll_generate_status("http://host", "t", timeout=5, poll_interval=0.05)
         assert res["status"] == "completed"
@@ -153,23 +157,26 @@ class TestDownload:
     @pytest.mark.asyncio
     async def test_rejects_private_resolved_host(self, monkeypatch):
         """域名解析到 10.x → 拒绝；getaddrinfo 无法照常 resolve（不碰真实网络）。"""
-        monkeypatch.setattr("api.imagefree_client.socket.getaddrinfo",
-                            lambda host, port, **kw: [(2, 1, 6, "", ("10.0.0.5", 80))])
+        monkeypatch.setattr(
+            "api.imagefree_client.socket.getaddrinfo", lambda host, port, **kw: [(2, 1, 6, "", ("10.0.0.5", 80))]
+        )
         with pytest.raises(ImagefreeError, match="内网|不允许"):
             await download_image("http://evil.example/x.png")
 
     @pytest.mark.asyncio
     async def test_oversize_raises(self, monkeypatch):
-        monkeypatch.setattr("api.imagefree_client.socket.getaddrinfo",
-                            lambda host, port, **kw: [(2, 1, 6, "", ("93.184.216.34", 80))])
+        monkeypatch.setattr(
+            "api.imagefree_client.socket.getaddrinfo", lambda host, port, **kw: [(2, 1, 6, "", ("93.184.216.34", 80))]
+        )
         monkeypatch.setattr("api.imagefree_client._get_client", lambda: _FakeClient._stream_oversize)
         with pytest.raises(ImagefreeError, match="字节上限|超过"):
             await download_image("http://example.com/big.png")
 
     @pytest.mark.asyncio
     async def test_download_ok(self, monkeypatch):
-        monkeypatch.setattr("api.imagefree_client.socket.getaddrinfo",
-                            lambda host, port, **kw: [(2, 1, 6, "", ("93.184.216.34", 80))])
+        monkeypatch.setattr(
+            "api.imagefree_client.socket.getaddrinfo", lambda host, port, **kw: [(2, 1, 6, "", ("93.184.216.34", 80))]
+        )
         monkeypatch.setattr("api.imagefree_client._get_client", lambda: _FakeClient._stream_ok)
         data = await download_image("http://example.com/x.png", max_bytes=1024 * 1024)
         assert data == b"chunk1-chunk2-"
@@ -199,17 +206,19 @@ class TestEdit:
 
     @pytest.mark.asyncio
     async def test_submit_edit_error_field_raises(self, monkeypatch):
-        monkeypatch.setattr("api.imagefree_client._edit_client",
-                            _fake_edit_client(_Resp(200, {"content-type": "application/json"},
-                                                    {"error": "bad prompt"})))
+        monkeypatch.setattr(
+            "api.imagefree_client._edit_client",
+            _fake_edit_client(_Resp(200, {"content-type": "application/json"}, {"error": "bad prompt"})),
+        )
         with pytest.raises(ImagefreeError):
             await submit_edit("http://host", "http://i/x.png", "p", "tok")
 
     @pytest.mark.asyncio
     async def test_submit_edit_success(self, monkeypatch):
-        monkeypatch.setattr("api.imagefree_client._edit_client",
-                            _fake_edit_client(_Resp(200, {"content-type": "application/json"},
-                                                    {"taskId": "e-1"})))
+        monkeypatch.setattr(
+            "api.imagefree_client._edit_client",
+            _fake_edit_client(_Resp(200, {"content-type": "application/json"}, {"taskId": "e-1"})),
+        )
         tid = await submit_edit("http://host", "http://i/x.png", "p", "tok")
         assert tid == "e-1"
 
@@ -223,16 +232,22 @@ class TestEdit:
     async def test_poll_edit_completed(self, monkeypatch):
         monkeypatch.setattr(
             "api.imagefree_client._edit_client",
-            _fake_edit_client(_Resp(200, {"content-type": "application/json"},
-                                    {"status": "completed", "image": "http://pub.example/f.png"})),
+            _fake_edit_client(
+                _Resp(
+                    200,
+                    {"content-type": "application/json"},
+                    {"status": "completed", "image": "http://pub.example/f.png"},
+                )
+            ),
         )
         res = await poll_edit_status("http://host", "e", timeout=10, poll_interval=0.05)
         assert res["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_poll_edit_timeout(self, monkeypatch):
-        monkeypatch.setattr("api.imagefree_client._edit_client",
-                            _fake_edit_client(_Resp(202, {}, {"status": "pending"})))
+        monkeypatch.setattr(
+            "api.imagefree_client._edit_client", _fake_edit_client(_Resp(202, {}, {"status": "pending"}))
+        )
         with pytest.raises(TimeoutError):
             await poll_edit_status("http://host", "e", timeout=1.0, poll_interval=0.05)
 
@@ -376,13 +391,15 @@ _FakeClient._err_field = _FakeClient._make(200, {"error": "upstream error"})
 _FakeClient._ok_no_task = _FakeClient._make(200, {"status": "pending"})
 _FakeClient._status_404 = _FakeClient._make(404, {"error": "not found"})
 _FakeClient._completed = _FakeClient._make(
-    200, {"status": "completed", "image": "https://img.example/1.png", "progress": 100})
+    200, {"status": "completed", "image": "https://img.example/1.png", "progress": 100}
+)
 _FakeClient._completed_no_img = _FakeClient._make(200, {"status": "completed"})
 _FakeClient._status_error = _FakeClient._make(200, {"status": "error", "error": "boom"})
 _FakeClient._always_pending = _FakeClient._make(202, {"status": "pending"})
 _FakeClient._stream_ok = _FakeClient(stream=[b"chunk1-", b"chunk2-"])
 _FakeClient._stream_oversize = _FakeClient(
-    stream=[b"x" * (3 * 1024 * 1024)] * 4, _max_iter=4)  # 共 12MB，超过默认 4MB 上限
+    stream=[b"x" * (3 * 1024 * 1024)] * 4, _max_iter=4
+)  # 共 12MB，超过默认 4MB 上限
 
 
 def _fake_edit_client(fake):
@@ -391,6 +408,7 @@ def _fake_edit_client(fake):
         if isinstance(fake, _Resp):
             return _RespClient(fake)
         return _AsClient(fake)
+
     return _make
 
 

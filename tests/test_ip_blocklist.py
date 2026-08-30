@@ -6,6 +6,7 @@
 - 频繁超限自动入黑名单（真实异步落地）
 - 管理面安全端点（block-ip / unblock-ip / blocklist / status）与鉴权
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +25,7 @@ import api.request_guard as rg
 
 
 # ── 工具 / fixtures ────────────────────────────────────────────
+
 
 def _make_request(ip: str) -> Request:
     """构造带 X-Forwarded-For 头的 Starlette Request（模拟反代后的真实客户端 IP）。"""
@@ -76,10 +78,14 @@ async def _add_and_apply(ip: str, **kwargs) -> dict:
 
 # ── IPBlocklistStore：增删查 / TTL / 批量 ─────────────────────────
 
+
 class TestIPBlocklistStore:
     async def test_add_and_get(self, blocklist_store):
         rec = await blocklist_store.add_or_update(
-            ip="203.0.113.9", block_type="block", reason="test", ttl_seconds=600,
+            ip="203.0.113.9",
+            block_type="block",
+            reason="test",
+            ttl_seconds=600,
         )
         assert rec["ip"] == "203.0.113.9"
         assert rec["block_type"] == "block"
@@ -93,7 +99,10 @@ class TestIPBlocklistStore:
     async def test_update_keeps_created_at(self, blocklist_store):
         await blocklist_store.add_or_update(ip="203.0.113.10", block_type="block", reason="first")
         rec = await blocklist_store.add_or_update(
-            ip="203.0.113.10", block_type="daily_limit", daily_limit=5, reason="second",
+            ip="203.0.113.10",
+            block_type="daily_limit",
+            daily_limit=5,
+            reason="second",
         )
         assert rec["block_type"] == "daily_limit"
         assert rec["daily_limit"] == 5
@@ -129,7 +138,10 @@ class TestIPBlocklistStore:
     async def test_get_many_batch(self, blocklist_store):
         await blocklist_store.add_or_update(ip="203.0.113.16", block_type="block", ttl_seconds=0)
         await blocklist_store.add_or_update(
-            ip="203.0.113.17", block_type="daily_limit", daily_limit=3, ttl_seconds=0,
+            ip="203.0.113.17",
+            block_type="daily_limit",
+            daily_limit=3,
+            ttl_seconds=0,
         )
         await blocklist_store.add_or_update(ip="203.0.113.18", block_type="block", ttl_seconds=0.05)
         await asyncio.sleep(0.1)
@@ -142,6 +154,7 @@ class TestIPBlocklistStore:
 
 
 # ── request_guard：风控闭环 ─────────────────────────────────────
+
 
 class TestRequestGuard:
     async def test_blocked_ip_403(self, blocklist_store, monkeypatch):
@@ -162,7 +175,10 @@ class TestRequestGuard:
     async def test_daily_limit_403_after_n(self, blocklist_store, monkeypatch):
         monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 0)
         await _add_and_apply(
-            "203.0.113.22", block_type="daily_limit", daily_limit=2, reason="limited",
+            "203.0.113.22",
+            block_type="daily_limit",
+            daily_limit=2,
+            reason="limited",
         )
         rg.check_generate_request(_make_request("203.0.113.22"))
         rg.check_generate_request(_make_request("203.0.113.22"))
@@ -256,9 +272,14 @@ class TestRequestGuard:
         register_exception_handlers(app)
         app.include_router(security_router)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.post("/v1/admin/security/block-ip", json={
-                "ip": "203.0.113.30", "block_type": "block", "reason": "e2e",
-            })
+            r = await c.post(
+                "/v1/admin/security/block-ip",
+                json={
+                    "ip": "203.0.113.30",
+                    "block_type": "block",
+                    "reason": "e2e",
+                },
+            )
             assert r.status_code == 200
 
         with pytest.raises(AppError) as ei:
@@ -267,6 +288,7 @@ class TestRequestGuard:
 
 
 # ── 管理面安全端点（HTTP）───────────────────────────────────────
+
 
 @pytest_asyncio.fixture
 async def security_client(blocklist_store, monkeypatch):
@@ -289,9 +311,15 @@ async def security_client(blocklist_store, monkeypatch):
 class TestSecurityEndpoints:
     async def test_block_unblock_list_status(self, security_client):
         # 封禁
-        r = await security_client.post("/v1/admin/security/block-ip", json={
-            "ip": "203.0.113.7", "block_type": "block", "reason": "api test", "ttl_seconds": 3600,
-        })
+        r = await security_client.post(
+            "/v1/admin/security/block-ip",
+            json={
+                "ip": "203.0.113.7",
+                "block_type": "block",
+                "reason": "api test",
+                "ttl_seconds": 3600,
+            },
+        )
         assert r.status_code == 200
         data = r.json()
         assert data["ok"] is True and data["record"]["ip"] == "203.0.113.7"
@@ -316,9 +344,15 @@ class TestSecurityEndpoints:
         assert r.json()["blocked"] is False
 
     async def test_block_daily_limit_via_api(self, security_client):
-        r = await security_client.post("/v1/admin/security/block-ip", json={
-            "ip": "203.0.113.8", "block_type": "daily_limit", "daily_limit": 5, "ttl_seconds": 86400,
-        })
+        r = await security_client.post(
+            "/v1/admin/security/block-ip",
+            json={
+                "ip": "203.0.113.8",
+                "block_type": "daily_limit",
+                "daily_limit": 5,
+                "ttl_seconds": 86400,
+            },
+        )
         assert r.status_code == 200
         assert r.json()["record"]["block_type"] == "daily_limit"
         assert r.json()["record"]["daily_limit"] == 5
@@ -328,14 +362,23 @@ class TestSecurityEndpoints:
         r = await security_client.post("/v1/admin/security/block-ip", json={"ip": "999.1.2.3"})
         assert r.status_code == 400
         # 非法 block_type
-        r = await security_client.post("/v1/admin/security/block-ip", json={
-            "ip": "203.0.113.7", "block_type": "ban",
-        })
+        r = await security_client.post(
+            "/v1/admin/security/block-ip",
+            json={
+                "ip": "203.0.113.7",
+                "block_type": "ban",
+            },
+        )
         assert r.status_code == 400
         # daily_limit < 1
-        r = await security_client.post("/v1/admin/security/block-ip", json={
-            "ip": "203.0.113.7", "block_type": "daily_limit", "daily_limit": 0,
-        })
+        r = await security_client.post(
+            "/v1/admin/security/block-ip",
+            json={
+                "ip": "203.0.113.7",
+                "block_type": "daily_limit",
+                "daily_limit": 0,
+            },
+        )
         assert r.status_code == 400
         # 空 IP
         r = await security_client.delete("/v1/admin/security/unblock-ip", params={"ip": ""})

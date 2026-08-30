@@ -13,6 +13,7 @@
   - 每 10 次注册输出 JSON 进度行
   - SIGTERM/SIGINT 时保存 checkpoint 后优雅退出
 """
+
 import argparse
 import asyncio
 import json
@@ -43,7 +44,9 @@ PROGRESS_INTERVAL = 10
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=int, default=10000, help="目标注册数")
-    parser.add_argument("--concurrency", type=int, default=2, choices=range(1, 4), help="并发数（cf_solver 单槽，建议 2）")
+    parser.add_argument(
+        "--concurrency", type=int, default=2, choices=range(1, 4), help="并发数（cf_solver 单槽，建议 2）"
+    )
     parser.add_argument("--resume", action="store_true", help="从 checkpoint 恢复")
     args = parser.parse_args()
 
@@ -61,9 +64,6 @@ async def main():
     # 初始化注册器
     from api.registerer import NanobananaRegisterer
     from api.account_pool import account_pool
-    from api import config as _
-    from api import turnstile_client as _
-    from api.email_pool import email_pool
 
     registerer = NanobananaRegisterer()
     start_time = time.time()
@@ -86,7 +86,9 @@ async def main():
             result = await registerer.register_one()
             if result:
                 email = result["email"]
-                account_pool.add("nanobanana", email, result["cookie"], result.get("password"), result.get("credits", 4))
+                account_pool.add(
+                    "nanobanana", email, result["cookie"], result.get("password"), result.get("credits", 4)
+                )
                 registered.add(email)
                 return True, email
             return False, None
@@ -117,13 +119,17 @@ async def main():
                     if progress % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - start_time
                         rate = progress / (elapsed / 3600) if elapsed > 0 else 0
-                        log.info(json.dumps({
-                            "count": len(registered),
-                            "target": args.target,
-                            "rate": f"{rate:.1f}/hr",
-                            "elapsed_min": f"{elapsed/60:.1f}",
-                            "consecutive_fail": consecutive_fail,
-                        }))
+                        log.info(
+                            json.dumps(
+                                {
+                                    "count": len(registered),
+                                    "target": args.target,
+                                    "rate": f"{rate:.1f}/hr",
+                                    "elapsed_min": f"{elapsed/60:.1f}",
+                                    "consecutive_fail": consecutive_fail,
+                                }
+                            )
+                        )
                 else:
                     consecutive_fail += 1
                     if consecutive_fail >= MAX_CONSECUTIVE_FAIL:
@@ -145,8 +151,12 @@ async def main():
         with open(CHECKPOINT, "w") as f:
             json.dump({"emails": list(registered), "updated_at": time.time()}, f)
         elapsed = time.time() - start_time
-        log.info("注册完成: %d 个, 耗时 %.1f 分钟, 速率 %.1f/hr",
-                 len(registered), elapsed / 60, len(registered) / (elapsed / 3600) if elapsed > 0 else 0)
+        log.info(
+            "注册完成: %d 个, 耗时 %.1f 分钟, 速率 %.1f/hr",
+            len(registered),
+            elapsed / 60,
+            len(registered) / (elapsed / 3600) if elapsed > 0 else 0,
+        )
 
 
 if __name__ == "__main__":

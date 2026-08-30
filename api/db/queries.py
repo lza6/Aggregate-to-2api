@@ -1,4 +1,5 @@
 """QueueDB 类（已废弃，请使用 QueueStore）+ task_to_public 函数。"""
+
 from __future__ import annotations
 
 import logging
@@ -19,13 +20,14 @@ class QueueDB:
 
     def __init__(self, path: str):
         import sqlite3
+
         self._conn = sqlite3.connect(path, check_same_thread=False)
         # 极限性能调优参数（v5.2）：与主库一致的写读无锁并发 + 内存缓存
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=10000")
-        self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
-        self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+        self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
+        self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
         self._conn.execute("PRAGMA temp_store=MEMORY")
         self._lock = threading.Lock()
         self._init_schema()
@@ -71,8 +73,7 @@ class QueueDB:
         """返回所有 pending 任务，按 priority/seq 升序。"""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT priority, seq, id FROM task_queue"
-                " WHERE status='pending' ORDER BY priority, seq"
+                "SELECT priority, seq, id FROM task_queue" " WHERE status='pending' ORDER BY priority, seq"
             ).fetchall()
             return [(r[0], r[1], r[2]) for r in rows]
 
@@ -98,6 +99,7 @@ class QueueDB:
 def task_to_public(t: dict) -> dict:
     """数据库行 → API 响应结构。"""
     from ..geo_ip import guess_country
+
     b64 = t.get("image_base64")
     if b64 and isinstance(b64, str) and b64.startswith("file://"):
         path = b64[7:]

@@ -10,48 +10,50 @@
     msg = get_error_message(ErrorCodes.QUEUE_FULL, lang="zh")
 """
 
-from fastapi.responses import JSONResponse
 from typing import Any
+
+from fastapi.responses import JSONResponse
 
 
 class ErrorCategory:
     """错误分类常量。"""
 
-    AUTH = "AUTH"                 # 认证/授权
-    VALIDATION = "VAL"            # 参数校验
-    PROVIDER = "PROV"             # 提供商/上游
-    SYSTEM = "SYS"                # 系统内部
-    RATE_LIMIT = "RATE"           # 限流/配额
+    AUTH = "AUTH"  # 认证/授权
+    VALIDATION = "VAL"  # 参数校验
+    PROVIDER = "PROV"  # 提供商/上游
+    SYSTEM = "SYS"  # 系统内部
+    RATE_LIMIT = "RATE"  # 限流/配额
 
 
 class ErrorCodes:
     """分层错误码常量（CATEGORY.NNN 格式），附 HTTP 状态码建议。"""
 
     # ── AUTH: 认证/授权 ──
-    UNAUTHORIZED = "AUTH.001"                # 401 未授权
-    API_KEY_EXPIRED = "AUTH.002"             # 401 API Key 过期
-    FORBIDDEN = "AUTH.003"                   # 403 无权（IP 封禁 / 安全风控拦截）
+    UNAUTHORIZED = "AUTH.001"  # 401 未授权
+    API_KEY_EXPIRED = "AUTH.002"  # 401 API Key 过期
+    FORBIDDEN = "AUTH.003"  # 403 无权（IP 封禁 / 安全风控拦截）
 
     # ── VAL: 参数校验 ──
-    INVALID_MODEL = "VAL.001"                # 422 模型不存在
-    INVALID_PROMPT = "VAL.002"               # 422 提示词不符合要求
-    INVALID_RATIO = "VAL.003"                # 422 比例格式错误
-    BAD_REQUEST = "VAL.004"                  # 400 通用错误
+    INVALID_MODEL = "VAL.001"  # 422 模型不存在
+    INVALID_PROMPT = "VAL.002"  # 422 提示词不符合要求
+    INVALID_RATIO = "VAL.003"  # 422 比例格式错误
+    BAD_REQUEST = "VAL.004"  # 400 通用错误
 
     # ── PROV: 提供商/上游 ──
-    PROVIDER_DOWN = "PROV.001"               # 503 提供商不可用
-    PROVIDER_OUT_OF_CREDITS = "PROV.002"     # 429 提供商额度耗尽
-    SOLVER_CIRCUIT_OPEN = "PROV.003"         # 503 求解器熔断
+    PROVIDER_DOWN = "PROV.001"  # 503 提供商不可用
+    PROVIDER_OUT_OF_CREDITS = "PROV.002"  # 429 提供商额度耗尽
+    SOLVER_CIRCUIT_OPEN = "PROV.003"  # 503 求解器熔断
 
     # ── SYS: 系统内部 ──
-    INTERNAL_ERROR = "SYS.001"               # 500 服务器内部错误
-    QUEUE_FULL = "SYS.002"                   # 429 队列满
-    NOT_FOUND = "SYS.003"                    # 404 资源不存在
-    TASK_TIMEOUT = "SYS.004"                 # 408 生成超时
-    IDEMPOTENCY_KEY_EXISTS = "SYS.005"       # 409 幂等 Key 冲突
+    INTERNAL_ERROR = "SYS.001"  # 500 服务器内部错误
+    QUEUE_FULL = "SYS.002"  # 429 队列满
+    NOT_FOUND = "SYS.003"  # 404 资源不存在
+    TASK_TIMEOUT = "SYS.004"  # 408 生成超时
+    IDEMPOTENCY_KEY_EXISTS = "SYS.005"  # 409 幂等 Key 冲突
+    UPSTREAM_ERROR = "SYS.006"  # 502 上游第三方服务暂不可用
 
     # ── RATE: 限流/配额 ──
-    RATE_LIMITED = "RATE.001"                # 429 限流
+    RATE_LIMITED = "RATE.001"  # 429 限流
 
 
 # ── 旧版错误码 → 分层错误码 映射（兼容） ──
@@ -142,6 +144,10 @@ ERROR_MESSAGES: dict[str, dict[str, str]] = {
         "zh": "幂等 Key 已存在：{key}",
         "en": "Idempotency key already exists: {key}",
     },
+    ErrorCodes.UPSTREAM_ERROR: {
+        "zh": "上游第三方服务暂不可用，请稍后重试",
+        "en": "Upstream third-party service is temporarily unavailable, please try again later",
+    },
     ErrorCodes.RATE_LIMITED: {
         "zh": "请求过于频繁，请 {retry_after} 秒后重试",
         "en": "Rate limited, please retry after {retry_after} seconds",
@@ -193,7 +199,7 @@ class AppError(Exception):
         code: str,
         message: str,
         status_code: int = 400,
-        details: dict | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.code = _resolve_code(code)
         self.message = message
@@ -206,7 +212,7 @@ def error_response(
     code: str,
     message: str,
     status_code: int = 400,
-    details: dict | None = None,
+    details: dict[str, Any] | None = None,
 ) -> JSONResponse:
     """统一错误响应格式，自动映射旧版错误码。"""
     return JSONResponse(

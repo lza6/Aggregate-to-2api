@@ -4,6 +4,7 @@
 stale。纯内存 + 注入时钟（now_fn），测试无需真 sleep；与 IF_WORKER_AUTO 自适应
 扩缩容正交（扩缩容管数量，本模块管健康）。
 """
+
 from __future__ import annotations
 
 import threading
@@ -14,7 +15,7 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class _WorkerState:
     wid: int
-    last_active: float          # monotonic 时间戳
+    last_active: float  # monotonic 时间戳
     processed: int = 0
     stale: bool = False
 
@@ -25,12 +26,15 @@ class WorkerHealthMonitor:
     stale_seconds: 超过该秒数无心跳即判 stale（默认 180s，> TASK_HARD_TIMEOUT 兜底）。
     """
 
-    def __init__(self, stale_seconds: float = 180.0,
-                 now_fn=None):
+    def __init__(self, stale_seconds: float = 180.0, now_fn=None):
         self._stale_seconds = stale_seconds
         # 默认真实单调时钟；测试注入 fake clock
         self._now = now_fn if now_fn is not None else time.monotonic
         self._workers: dict[int, _WorkerState] = {}
+        # 保留 threading.Lock（非 asyncio.Lock）：所有方法为同步，操作纯内存 dict（微秒级），
+        # 由 worker loop（async _worker_loop/_worker_batch_loop）经 beat/add_processed 调用。
+        # 换 asyncio.Lock 会把 beat/register/sweep 传染成 async，而调用处是同步代码（_worker_loop
+        # 内 worker_health.beat(idx) 同步调用）。asyncio 单线程事件循环无竞争零阻塞，此锁非阻塞源。
         self._lock = threading.Lock()
 
     def register(self, ids) -> None:

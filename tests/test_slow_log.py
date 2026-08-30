@@ -2,6 +2,7 @@
 
 覆盖：环形缓冲淘汰、阈值过滤、并发写安全、snapshot 排序、开关关闭零记录。
 """
+
 import asyncio
 import time
 
@@ -123,8 +124,7 @@ class TestStats:
 
     def test_slowest_stage_queue(self):
         sl = SlowLog(threshold_ms=5000, maxsize=10)
-        sl.record(_sample(queue_ms=4500, wait_token_ms=800, solve_ms=400,
-                          upstream_ms=600, total_ms=6300))
+        sl.record(_sample(queue_ms=4500, wait_token_ms=800, solve_ms=400, upstream_ms=600, total_ms=6300))
         assert sl.stats()["slowest_stage"] == "queue"
 
 
@@ -133,6 +133,7 @@ class TestConfigWiring:
 
     def test_config_fields(self):
         from api import config
+
         assert hasattr(config, "IF_SLOW_LOG_ENABLED")
         assert config.IF_SLOW_LOG_ENABLED is True
         assert config.IF_SLOW_REQUEST_MS == 5000.0
@@ -140,12 +141,15 @@ class TestConfigWiring:
 
     def test_worker_record_slow_method_exists(self):
         from api.worker import Engine
+
         assert hasattr(Engine, "_record_slow")
 
     def test_engine_tracks_enqueue_time(self):
         from api.worker import Engine
+
         eng = Engine.__new__(Engine)  # 不触发 __init__ 的 db 依赖
         eng._enqueued_at = {}
         import time as _t
+
         eng._enqueued_at["x"] = _t.monotonic()
         assert "x" in eng._enqueued_at

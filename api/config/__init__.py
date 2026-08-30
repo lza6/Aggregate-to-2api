@@ -9,6 +9,7 @@
 
 使用 pydantic-settings 集中管理配置，保持 IF_ 前缀环境变量向后兼容。
 """
+
 from __future__ import annotations
 
 import os
@@ -54,31 +55,19 @@ class Settings(BaseSettings):
         return data
 
     # ── Solver ──
-    base_url: str = Field(
-        "https://imagefree.net", validation_alias="IF_BASE_URL"
-    )
-    sitekey: str = Field(
-        "0x4AAAAAACE-XLGoQUckKKm_", validation_alias="IF_SITEKEY"
-    )
-    cf_solver_url: str = Field(
-        "http://127.0.0.1:8001", validation_alias="IF_CF_SOLVER_URL"
-    )
+    base_url: str = Field("https://imagefree.net", validation_alias="IF_BASE_URL")
+    sitekey: str = Field("0x4AAAAAACE-XLGoQUckKKm_", validation_alias="IF_SITEKEY")
+    cf_solver_url: str = Field("http://127.0.0.1:8001", validation_alias="IF_CF_SOLVER_URL")
     cf_solver_urls: str | list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:8001"], validation_alias="IF_CF_SOLVER_URLS"
     )
-    solver_node_weights: str | dict[str, int] = Field(
-        default_factory=dict, validation_alias="IF_SOLVER_NODE_WEIGHTS"
-    )
-    solver_rate_limit_cooldown_seconds: float = Field(
-        60.0, validation_alias="IF_SOLVER_RATE_LIMIT_COOLDOWN_SECONDS"
-    )
+    solver_node_weights: str | dict[str, int] = Field(default_factory=dict, validation_alias="IF_SOLVER_NODE_WEIGHTS")
+    solver_rate_limit_cooldown_seconds: float = Field(60.0, validation_alias="IF_SOLVER_RATE_LIMIT_COOLDOWN_SECONDS")
 
     # ── HTTP ──
     host: str = Field("127.0.0.1", validation_alias="IF_HOST")
     port: int = Field(8100, validation_alias="IF_PORT")
-    proxy: str | None = Field(
-        default=None, validation_alias="IF_PROXY"
-    )
+    proxy: str | None = Field(default=None, validation_alias="IF_PROXY")
 
     @field_validator("proxy", mode="after")
     @classmethod
@@ -92,113 +81,54 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.strip():
             return None
         return v
+
     user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
     )
-    if_http_max_connections: int = Field(
-        100, validation_alias="IF_HTTP_MAX_CONNECTIONS"
-    )
+    if_http_max_connections: int = Field(100, validation_alias="IF_HTTP_MAX_CONNECTIONS")
     if_http_keepalive: int = Field(20, validation_alias="IF_HTTP_KEEPALIVE")
-    if_upstream_max_inflight: int = Field(
-        30, validation_alias="IF_UPSTREAM_MAX_INFLIGHT"
-    )
+    if_upstream_max_inflight: int = Field(30, validation_alias="IF_UPSTREAM_MAX_INFLIGHT")
     # P0-安全：请求体总量上限（防恶意大 base64 正文在 4MB/张校验前占满内存）
-    if_max_request_body: int = Field(
-        8 * 1024 * 1024, validation_alias="IF_MAX_REQUEST_BODY"
-    )
+    if_max_request_body: int = Field(8 * 1024 * 1024, validation_alias="IF_MAX_REQUEST_BODY")
 
     # ── Turnstile / Solver ──
-    turnstile_timeout: int = Field(
-        90, validation_alias="IF_TURNSTILE_TIMEOUT"
-    )
-    turnstile_poll_interval: float = Field(
-        2.0, validation_alias="IF_TURNSTILE_POLL_INTERVAL"
-    )
-    healthz_cache_ttl: int = Field(
-        5, validation_alias="IF_HEALTHZ_CACHE_TTL"
-    )
-    token_prefetch_concurrency: int = Field(
-        1, validation_alias="IF_TOKEN_PREFETCH_CONCURRENCY"
-    )
-    if_prefetch_after_solve_delay: float = Field(
-        0.0, validation_alias="IF_PREFETCH_AFTER_SOLVE_DELAY"
-    )
-    if_prefetch_ema_alpha: float = Field(
-        0.3, validation_alias="IF_PREFETCH_EMA_ALPHA"
-    )
-    solve_circuit_threshold: int = Field(
-        5, validation_alias="IF_SOLVE_CIRCUIT_THRESHOLD"
-    )
-    solve_circuit_probe_seconds: int = Field(
-        30, validation_alias="IF_SOLVE_CIRCUIT_PROBE_SECONDS"
-    )
-    solve_stats_window_seconds: int = Field(
-        300, validation_alias="IF_SOLVE_STATS_WINDOW_SECONDS"
-    )
+    turnstile_timeout: int = Field(90, validation_alias="IF_TURNSTILE_TIMEOUT")
+    turnstile_poll_interval: float = Field(2.0, validation_alias="IF_TURNSTILE_POLL_INTERVAL")
+    healthz_cache_ttl: int = Field(5, validation_alias="IF_HEALTHZ_CACHE_TTL")
+    token_prefetch_concurrency: int = Field(1, validation_alias="IF_TOKEN_PREFETCH_CONCURRENCY")
+    if_prefetch_after_solve_delay: float = Field(0.0, validation_alias="IF_PREFETCH_AFTER_SOLVE_DELAY")
+    if_prefetch_ema_alpha: float = Field(0.3, validation_alias="IF_PREFETCH_EMA_ALPHA")
+    solve_circuit_threshold: int = Field(5, validation_alias="IF_SOLVE_CIRCUIT_THRESHOLD")
+    solve_circuit_probe_seconds: int = Field(30, validation_alias="IF_SOLVE_CIRCUIT_PROBE_SECONDS")
+    solve_stats_window_seconds: int = Field(300, validation_alias="IF_SOLVE_STATS_WINDOW_SECONDS")
 
     # ── 存储驱动（ISSUE-01 Storage Adapter）──
     # IF_STORAGE_BACKEND: 'sqlite'（默认单机，无需外置依赖）| 'redis'（集群）
     # IF_REDIS_URL 复用「缓存/Redis」分组的 if_redis_url 字段（见下），不另设。
-    if_storage_backend: str = Field(
-        "sqlite", validation_alias="IF_STORAGE_BACKEND"
-    )
+    if_storage_backend: str = Field("sqlite", validation_alias="IF_STORAGE_BACKEND")
 
     # ── 超时 / 轮询 ──
     generate_timeout: int = Field(300, validation_alias="IF_GENERATE_TIMEOUT")
-    generate_poll_interval: float = Field(
-        2.0, validation_alias="IF_GENERATE_POLL_INTERVAL"
-    )
+    generate_poll_interval: float = Field(2.0, validation_alias="IF_GENERATE_POLL_INTERVAL")
     edit_timeout: int = Field(3600, validation_alias="IF_EDIT_TIMEOUT")
-    task_hard_timeout: int = Field(
-        480, validation_alias="IF_TASK_HARD_TIMEOUT"
-    )
-    edit_concurrency_wait: int = Field(
-        60, validation_alias="IF_EDIT_CONCURRENCY_WAIT"
-    )
-    edit_mutex_enabled: bool = Field(
-        True, validation_alias="IF_EDIT_MUTEX_ENABLED"
-    )
-    edit_lease_enabled: bool = Field(
-        False, validation_alias="IF_EDIT_LEASE_ENABLED"
-    )
-    edit_lease_ttl: int = Field(
-        30, validation_alias="IF_EDIT_LEASE_TTL"
-    )
-    edit_lock_max_age: int = Field(
-        1500, validation_alias="IF_EDIT_LOCK_MAX_AGE"
-    )
+    task_hard_timeout: int = Field(480, validation_alias="IF_TASK_HARD_TIMEOUT")
+    edit_concurrency_wait: int = Field(60, validation_alias="IF_EDIT_CONCURRENCY_WAIT")
+    edit_mutex_enabled: bool = Field(True, validation_alias="IF_EDIT_MUTEX_ENABLED")
+    edit_lease_enabled: bool = Field(False, validation_alias="IF_EDIT_LEASE_ENABLED")
+    edit_lease_ttl: int = Field(30, validation_alias="IF_EDIT_LEASE_TTL")
+    edit_lock_max_age: int = Field(1500, validation_alias="IF_EDIT_LOCK_MAX_AGE")
     edit_retry_max: int = Field(30, validation_alias="IF_EDIT_RETRY_MAX")
-    edit_retry_interval: int = Field(
-        20, validation_alias="IF_EDIT_RETRY_INTERVAL"
-    )
-    edit_proxy_file: str = Field(
-        "", validation_alias="IF_EDIT_PROXY_FILE"
-    )
-    edit_proxy_parallel: int = Field(
-        1, validation_alias="IF_EDIT_PROXY_PARALLEL"
-    )
-    if_edit_proxy_max_inflight: int = Field(
-        2, validation_alias="IF_EDIT_PROXY_MAX_INFLIGHT"
-    )
-    edit_proxy_pool_size: int = Field(
-        1, validation_alias="IF_EDIT_PROXY_POOL_SIZE"
-    )
-    edit_proxy_pool_idle_ttl: int = Field(
-        180, validation_alias="IF_EDIT_PROXY_POOL_IDLE_TTL"
-    )
-    generate_max_attempts: int = Field(
-        2, validation_alias="IF_GENERATE_MAX_ATTEMPTS"
-    )
-    if_txt_retry_max: int = Field(
-        3, validation_alias="IF_TXT_RETRY_MAX"
-    )
-    if_txt_retry_backoff_base: int = Field(
-        5, validation_alias="IF_TXT_RETRY_BACKOFF_BASE"
-    )
-    token_wait_timeout: int = Field(
-        30, validation_alias="IF_TOKEN_WAIT_TIMEOUT"
-    )
+    edit_retry_interval: int = Field(20, validation_alias="IF_EDIT_RETRY_INTERVAL")
+    edit_proxy_file: str = Field("", validation_alias="IF_EDIT_PROXY_FILE")
+    edit_proxy_parallel: int = Field(1, validation_alias="IF_EDIT_PROXY_PARALLEL")
+    if_edit_proxy_max_inflight: int = Field(2, validation_alias="IF_EDIT_PROXY_MAX_INFLIGHT")
+    edit_proxy_pool_size: int = Field(1, validation_alias="IF_EDIT_PROXY_POOL_SIZE")
+    edit_proxy_pool_idle_ttl: int = Field(180, validation_alias="IF_EDIT_PROXY_POOL_IDLE_TTL")
+    generate_max_attempts: int = Field(2, validation_alias="IF_GENERATE_MAX_ATTEMPTS")
+    if_txt_retry_max: int = Field(3, validation_alias="IF_TXT_RETRY_MAX")
+    if_txt_retry_backoff_base: int = Field(5, validation_alias="IF_TXT_RETRY_BACKOFF_BASE")
+    token_wait_timeout: int = Field(30, validation_alias="IF_TOKEN_WAIT_TIMEOUT")
     sync_timeout: int = Field(300, validation_alias="IF_SYNC_TIMEOUT")
 
     # ── 队列 / Worker（服务器规格自适应默认值）──
@@ -206,32 +136,18 @@ class Settings(BaseSettings):
     max_queue: int = Field(2000, validation_alias="IF_MAX_QUEUE")
     admin_queue_max: int = Field(200, validation_alias="IF_ADMIN_QUEUE_MAX")
     high_queue_max: int = Field(500, validation_alias="IF_HIGH_QUEUE_MAX")
-    normal_queue_max: int = Field(
-        1500, validation_alias="IF_NORMAL_QUEUE_MAX"
-    )
+    normal_queue_max: int = Field(1500, validation_alias="IF_NORMAL_QUEUE_MAX")
     workers: int = Field(10, validation_alias="IF_WORKERS")
     if_worker_auto: bool = Field(False, validation_alias="IF_WORKER_AUTO")
     if_workers_min: int = Field(4, validation_alias="IF_WORKERS_MIN")
     if_workers_max: int = Field(16, validation_alias="IF_WORKERS_MAX")
-    if_worker_scale_up_threshold: int = Field(
-        200, validation_alias="IF_WORKER_SCALE_UP_THRESHOLD"
-    )
-    if_worker_scale_down_threshold: int = Field(
-        20, validation_alias="IF_WORKER_SCALE_DOWN_THRESHOLD"
-    )
-    if_worker_idle_seconds: int = Field(
-        90, validation_alias="IF_WORKER_IDLE_SECONDS"
-    )
-    if_persistent_queue_enabled: bool = Field(
-        False, validation_alias="IF_PERSISTENT_QUEUE_ENABLED"
-    )
-    if_persistent_queue_db: str = Field(
-        "data/queue.db", validation_alias="IF_PERSISTENT_QUEUE_DB"
-    )
+    if_worker_scale_up_threshold: int = Field(200, validation_alias="IF_WORKER_SCALE_UP_THRESHOLD")
+    if_worker_scale_down_threshold: int = Field(20, validation_alias="IF_WORKER_SCALE_DOWN_THRESHOLD")
+    if_worker_idle_seconds: int = Field(90, validation_alias="IF_WORKER_IDLE_SECONDS")
+    if_persistent_queue_enabled: bool = Field(False, validation_alias="IF_PERSISTENT_QUEUE_ENABLED")
+    if_persistent_queue_db: str = Field("data/queue.db", validation_alias="IF_PERSISTENT_QUEUE_DB")
     # worker 批量调度（可选优化）：启用后 worker 按小批次消费队列减少上下文切换
-    if_worker_batch_enabled: bool = Field(
-        False, validation_alias="IF_WORKER_BATCH_ENABLED"
-    )
+    if_worker_batch_enabled: bool = Field(False, validation_alias="IF_WORKER_BATCH_ENABLED")
     if_worker_batch_size: int = Field(5, validation_alias="IF_WORKER_BATCH_SIZE")
 
     # ── Token 池 ──
@@ -240,9 +156,7 @@ class Settings(BaseSettings):
 
     # ── 画廊 ──
     gallery_limit: int = Field(50, validation_alias="IF_GALLERY_LIMIT")
-    if_gallery_password: str = Field(
-        "", validation_alias="IF_GALLERY_PASSWORD"
-    )
+    if_gallery_password: str = Field("", validation_alias="IF_GALLERY_PASSWORD")
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
@@ -250,175 +164,115 @@ class Settings(BaseSettings):
     if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
 
     # ── 缓存 ──
-    if_lru_cache_size: int = Field(
-        512, validation_alias="IF_LRU_CACHE_SIZE"
-    )
-    if_lru_cache_ttl: int = Field(
-        10, validation_alias="IF_LRU_CACHE_TTL"
-    )
-    if_redis_enabled: bool = Field(
-        False, validation_alias="IF_REDIS_ENABLED"
-    )
-    if_redis_url: str = Field(
-        "redis://localhost:6379/0", validation_alias="IF_REDIS_URL"
-    )
+    if_lru_cache_size: int = Field(512, validation_alias="IF_LRU_CACHE_SIZE")
+    if_lru_cache_ttl: int = Field(10, validation_alias="IF_LRU_CACHE_TTL")
+    if_redis_enabled: bool = Field(False, validation_alias="IF_REDIS_ENABLED")
+    if_redis_url: str = Field("redis://localhost:6379/0", validation_alias="IF_REDIS_URL")
+    # ── TensorFeed AI 生态（v6.7.0）──
+    if_tensorfeed_cache_ttl: int = Field(900, validation_alias="IF_TENSORFEED_CACHE_TTL")
+    if_tensorfeed_base: str = Field("https://tensorfeed.ai", validation_alias="IF_TENSORFEED_BASE")
 
     # ── 可观测性 ──
-    if_health_check_interval: int = Field(
-        60, validation_alias="IF_HEALTH_CHECK_INTERVAL"
-    )
-    if_health_check_enabled: bool = Field(
-        True, validation_alias="IF_HEALTH_CHECK_ENABLED"
-    )
-    if_alert_check_interval: int = Field(
-        60, validation_alias="IF_ALERT_CHECK_INTERVAL"
-    )
+    if_health_check_interval: int = Field(60, validation_alias="IF_HEALTH_CHECK_INTERVAL")
+    if_health_check_enabled: bool = Field(True, validation_alias="IF_HEALTH_CHECK_ENABLED")
+    if_alert_check_interval: int = Field(60, validation_alias="IF_ALERT_CHECK_INTERVAL")
     # P13: 磁盘日志落盘（空 = 关闭；默认 data/logs）
-    if_log_dir: str = Field(
-        "data/logs", validation_alias="IF_LOG_DIR"
-    )
-    if_log_retention_days: int = Field(
-        14, validation_alias="IF_LOG_RETENTION_DAYS"
-    )
+    if_log_dir: str = Field("data/logs", validation_alias="IF_LOG_DIR")
+    if_log_retention_days: int = Field(14, validation_alias="IF_LOG_RETENTION_DAYS")
 
     # ── DB ──
-    stats_file: str = Field(
-        "data/stats.json", validation_alias="IF_STATS_FILE"
-    )
-    db_file: str = Field(
-        "data/imagefree.db", validation_alias="IF_DB_FILE"
-    )
-    if_base64_dir: str = Field(
-        "data/imgs", validation_alias="IF_BASE64_DIR"
-    )
-    if_base64_file_ttl: int = Field(
-        86400, validation_alias="IF_BASE64_FILE_TTL"
-    )
+    stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")
+    db_file: str = Field("data/imagefree.db", validation_alias="IF_DB_FILE")
+    if_base64_dir: str = Field("data/imgs", validation_alias="IF_BASE64_DIR")
+    if_base64_file_ttl: int = Field(86400, validation_alias="IF_BASE64_FILE_TTL")
     # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80%
     if_img_max_gb: float = Field(5.0, validation_alias="IF_IMG_MAX_GB")
-    db_retention_days: int = Field(
-        365, validation_alias="IF_DB_RETENTION_DAYS"
-    )
-    db_cleanup_interval: int = Field(
-        21600, validation_alias="IF_DB_CLEANUP_INTERVAL"
-    )
-    if_db_batch_enabled: bool = Field(
-        True, validation_alias="IF_DB_BATCH_ENABLED"
-    )
-    if_db_batch_window: float = Field(
-        0.5, validation_alias="IF_DB_BATCH_WINDOW"
-    )
+    db_retention_days: int = Field(365, validation_alias="IF_DB_RETENTION_DAYS")
+    db_cleanup_interval: int = Field(21600, validation_alias="IF_DB_CLEANUP_INTERVAL")
+    if_db_batch_enabled: bool = Field(True, validation_alias="IF_DB_BATCH_ENABLED")
+    if_db_batch_window: float = Field(0.5, validation_alias="IF_DB_BATCH_WINDOW")
     if_db_pool_size: int = Field(5, validation_alias="IF_DB_POOL_SIZE")
-    if_db_pool_timeout: int = Field(
-        10, validation_alias="IF_DB_POOL_TIMEOUT"
-    )
+    if_db_pool_timeout: int = Field(10, validation_alias="IF_DB_POOL_TIMEOUT")
 
     # ── Provider / 代理池 / 号池 ──
     proxy_file: str = Field("", validation_alias="IF_PROXY_FILE")
-    free_proxy_enabled: bool = Field(
-        False, validation_alias="IF_FREE_PROXY"
-    )
-    free_proxy_refresh_min: int = Field(
-        30, validation_alias="IF_FREE_PROXY_REFRESH_MIN"
-    )
-    proxy_cooldown_seconds: int = Field(
-        120, validation_alias="IF_PROXY_COOLDOWN_SECONDS"
-    )
-    if_proxy_max_use_per_day: int = Field(
-        1, validation_alias="IF_PROXY_MAX_USE_PER_DAY"
-    )
-    if_proxy_use_cooldown_map: str = Field(
-        "0,30,90,300,900", validation_alias="IF_PROXY_USE_COOLDOWN_MAP"
-    )
-    account_db_file: str = Field(
-        "data/account_pool.db", validation_alias="IF_ACCOUNT_DB_FILE"
-    )
-    email_db_file: str = Field(
-        "data/email_registry.db", validation_alias="IF_EMAIL_DB_FILE"
-    )
-    nanobanana_account_target: int = Field(
-        10000, validation_alias="IF_NANOBANANA_ACCOUNT_TARGET"
-    )
+    free_proxy_enabled: bool = Field(False, validation_alias="IF_FREE_PROXY")
+    free_proxy_refresh_min: int = Field(30, validation_alias="IF_FREE_PROXY_REFRESH_MIN")
+    proxy_cooldown_seconds: int = Field(120, validation_alias="IF_PROXY_COOLDOWN_SECONDS")
+    if_proxy_max_use_per_day: int = Field(1, validation_alias="IF_PROXY_MAX_USE_PER_DAY")
+    if_proxy_use_cooldown_map: str = Field("0,30,90,300,900", validation_alias="IF_PROXY_USE_COOLDOWN_MAP")
+    # ── Cloudflare trace 出口探测器（v6.7.x）──
+    # 通过 cdn-cgi/trace 探测每个免费代理的真实出口 IP/colo，回填进 ProxyEntry，
+    # 让 snapshot 透出真实出口信息（覆盖 md5 假 latency）。默认关闭（零网络开销）。
+    if_proxy_trace_enabled: bool = Field(False, validation_alias="IF_PROXY_TRACE_ENABLED")
+    if_proxy_trace_ttl: int = Field(3600, validation_alias="IF_PROXY_TRACE_TTL")
+    if_proxy_trace_max_per_round: int = Field(50, validation_alias="IF_PROXY_TRACE_MAX_PER_ROUND")
+    if_proxy_trace_concurrency: int = Field(8, validation_alias="IF_PROXY_TRACE_CONCURRENCY")
+    account_db_file: str = Field("data/account_pool.db", validation_alias="IF_ACCOUNT_DB_FILE")
+    email_db_file: str = Field("data/email_registry.db", validation_alias="IF_EMAIL_DB_FILE")
+    nanobanana_account_target: int = Field(10000, validation_alias="IF_NANOBANANA_ACCOUNT_TARGET")
     account_auto: bool = Field(True, validation_alias="IF_ACCOUNT_AUTO")
-    mock_register: bool = Field(
-        False, validation_alias="IF_MOCK_REGISTER"
-    )
+    mock_register: bool = Field(False, validation_alias="IF_MOCK_REGISTER")
     # AI 兜底邮件验证码/验证链接提取（默认关闭；正则未命中时降级 LLM）
-    if_mail_ai_extract: bool = Field(
-        False, validation_alias="IF_MAIL_AI_EXTRACT"
-    )
-    if_provider_degrade_threshold: int = Field(
-        3, validation_alias="IF_PROVIDER_DEGRADE_THRESHOLD"
-    )
-    if_provider_recover_interval: int = Field(
-        300, validation_alias="IF_PROVIDER_RECOVER_INTERVAL"
-    )
-    if_idempotency_enabled: bool = Field(
-        False, validation_alias="IF_IDEMPOTENCY_ENABLED"
-    )
-    if_idempotency_ttl: int = Field(
-        900, validation_alias="IF_IDEMPOTENCY_TTL"
-    )
+    if_mail_ai_extract: bool = Field(False, validation_alias="IF_MAIL_AI_EXTRACT")
+    if_provider_degrade_threshold: int = Field(3, validation_alias="IF_PROVIDER_DEGRADE_THRESHOLD")
+    if_provider_recover_interval: int = Field(300, validation_alias="IF_PROVIDER_RECOVER_INTERVAL")
+    if_idempotency_enabled: bool = Field(False, validation_alias="IF_IDEMPOTENCY_ENABLED")
+    if_idempotency_ttl: int = Field(900, validation_alias="IF_IDEMPOTENCY_TTL")
     if_dlq_enabled: bool = Field(True, validation_alias="IF_DLQ_ENABLED")
-    if_dlq_max_retries: int = Field(
-        3, validation_alias="IF_DLQ_MAX_RETRIES"
-    )
-    if_dlq_retention_days: int = Field(
-        7, validation_alias="IF_DLQ_RETENTION_DAYS"
-    )
+    if_dlq_max_retries: int = Field(3, validation_alias="IF_DLQ_MAX_RETRIES")
+    if_dlq_retention_days: int = Field(7, validation_alias="IF_DLQ_RETENTION_DAYS")
     # S-9: DLQ 真重入队（默认关——重入可能被刷；开启后 retry 端点把任务放回优先级队列）
     if_dlq_requeue: bool = Field(False, validation_alias="IF_DLQ_REQUEUE")
     # S-4: 慢日志画像（C2/C3）——阈值/容量/开关
     if_slow_log_enabled: bool = Field(True, validation_alias="IF_SLOW_LOG_ENABLED")
     if_slow_request_ms: float = Field(5000.0, validation_alias="IF_SLOW_REQUEST_MS")
     if_slow_log_size: int = Field(500, validation_alias="IF_SLOW_LOG_SIZE")
-    default_model: str = Field(
-        "default", validation_alias="IF_DEFAULT_MODEL"
-    )
+    default_model: str = Field("default", validation_alias="IF_DEFAULT_MODEL")
     reg_backoff_cf: float = Field(30.0, validation_alias="IF_REG_BACKOFF_CF")
     reg_backoff_email: float = Field(60.0, validation_alias="IF_REG_BACKOFF_EMAIL")
     reg_backoff_ip: float = Field(120.0, validation_alias="IF_REG_BACKOFF_IP")
     reg_backoff_transient_base: float = Field(2.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_BASE")
     reg_backoff_transient_max: float = Field(30.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_MAX")
 
+    # ── fal.ai minimax-H3 视频提供商（Playwright 浏览器即服务）──
+    if_falai_enabled: bool = Field(True, validation_alias="IF_FALAI_ENABLED")
+    if_falai_hcaptcha_sitekey: str = Field(
+        "79e0463a-f79a-4742-b3da-489afd1cbe68",
+        validation_alias="IF_FALAI_HCAPTCHA_SITEKEY",
+    )
+    if_falai_hcaptcha_mode: str = Field("passive", validation_alias="IF_FALAI_HCAPTCHA_MODE")
+    if_falai_browser_headful: bool = Field(True, validation_alias="IF_FALAI_BROWSER_HEADFUL")
+    if_falai_browser_pool_size: int = Field(2, validation_alias="IF_FALAI_BROWSER_POOL_SIZE")
+    if_falai_verify_timeout: int = Field(90, validation_alias="IF_FALAI_VERIFY_TIMEOUT")
+    if_falai_poll_interval: float = Field(2.0, validation_alias="IF_FALAI_POLL_INTERVAL")
+    if_falai_poll_timeout: int = Field(120, validation_alias="IF_FALAI_POLL_TIMEOUT")
+
     # ── 分组配置（延迟初始化，由 model_validator 填充）───────────────
     # 公开接口限速：每 IP 每分钟允许的生成提交次数（0 = 关闭限速）
-    if_requests_per_minute: int = Field(
-        10, validation_alias="IF_REQUESTS_PER_MINUTE"
-    )
+    if_requests_per_minute: int = Field(10, validation_alias="IF_REQUESTS_PER_MINUTE")
+    # L1 秒级令牌桶容量：突发并发上限（<=0 关闭 L1，退化为仅滑窗+daily_limit）；
+    # None 时默认取 IF_REQUESTS_PER_MINUTE（与滑窗口径对齐）。
+    if_rate_token_capacity: float | None = Field(None, validation_alias="IF_RATE_TOKEN_CAPACITY")
+    # L1 令牌桶回填速率：每秒补充令牌数（0 = 不回填，纯突发桶）；回填走墙上时钟。
+    if_rate_token_refill_per_sec: float = Field(0.0, validation_alias="IF_RATE_TOKEN_REFILL_PER_SEC")
 
     # ── 动态 IP 风控（ISSUE-02）────────────────────────────
     # 白名单：逗号分隔 IP，白名单 IP 直接绕过封禁与限速（如运维/监控探针）
-    if_ip_whitelist: str = Field(
-        "", validation_alias="IF_IP_WHITELIST"
-    )
+    if_ip_whitelist: str = Field("", validation_alias="IF_IP_WHITELIST")
     # 受信代理：逗号分隔 IP。仅当 socket 对端命中时才解析 X-Forwarded-For（取最右非代理段），
     # 否则一律以 socket 对端为准（防 XFF 伪造绕过封禁/限流）。默认仅信任本机反代。
-    if_trusted_proxies: str = Field(
-        "127.0.0.1,::1", validation_alias="IF_TRUSTED_PROXIES"
-    )
+    if_trusted_proxies: str = Field("127.0.0.1,::1", validation_alias="IF_TRUSTED_PROXIES")
     # 频繁超限自动入黑名单：连续在窗口内超限达到阈值的 IP，自动封禁 TTL 秒
-    if_auto_block_enabled: bool = Field(
-        True, validation_alias="IF_AUTO_BLOCK_ENABLED"
-    )
-    if_auto_block_threshold: int = Field(
-        3, validation_alias="IF_AUTO_BLOCK_THRESHOLD"
-    )
-    if_auto_block_window_seconds: int = Field(
-        300, validation_alias="IF_AUTO_BLOCK_WINDOW_SECONDS"
-    )
-    if_auto_block_ttl_seconds: int = Field(
-        3600, validation_alias="IF_AUTO_BLOCK_TTL_SECONDS"
-    )
+    if_auto_block_enabled: bool = Field(True, validation_alias="IF_AUTO_BLOCK_ENABLED")
+    if_auto_block_threshold: int = Field(3, validation_alias="IF_AUTO_BLOCK_THRESHOLD")
+    if_auto_block_window_seconds: int = Field(300, validation_alias="IF_AUTO_BLOCK_WINDOW_SECONDS")
+    if_auto_block_ttl_seconds: int = Field(3600, validation_alias="IF_AUTO_BLOCK_TTL_SECONDS")
     # ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
     # 优先使用独立管理 Key；为空则继承 IF_API_KEYS；两者皆空默认拒绝管理操作
-    if_admin_keys: str = Field(
-        "", validation_alias="IF_ADMIN_KEYS"
-    )
+    if_admin_keys: str = Field("", validation_alias="IF_ADMIN_KEYS")
     # 显式开放模式：仅当配置为空且设置 IF_ADMIN_KEY_OPEN=1（本地运维/内网）时放行管理端
-    if_admin_key_open: bool = Field(
-        False, validation_alias="IF_ADMIN_KEY_OPEN"
-    )
+    if_admin_key_open: bool = Field(False, validation_alias="IF_ADMIN_KEY_OPEN")
     _db: DBSettings | None = None
     _http: HTTPSettings | None = None
     _solver: SolverSettings | None = None
@@ -452,6 +306,9 @@ class Settings(BaseSettings):
         "if_dlq_enabled",
         "if_auto_block_enabled",
         "if_admin_key_open",
+        "if_proxy_trace_enabled",
+        "if_falai_enabled",
+        "if_falai_browser_headful",
         mode="before",
     )
     @classmethod
@@ -472,15 +329,19 @@ class Settings(BaseSettings):
         故运行期不在 4~16 间动态伸缩，只决定初始 worker 数。
         """
         explicit = bool(
-            _env_int("IF_WORKERS") or _env_int("IF_UPSTREAM_MAX_INFLIGHT")
-            or _env_int("IF_TOKEN_POOL_SIZE") or _env_int("IF_MAX_QUEUE")
+            _env_int("IF_WORKERS")
+            or _env_int("IF_UPSTREAM_MAX_INFLIGHT")
+            or _env_int("IF_TOKEN_POOL_SIZE")
+            or _env_int("IF_MAX_QUEUE")
         )
         if explicit:
             return
         try:
             from ..system_spec import (
-                ADAPTIVE_WORKERS, ADAPTIVE_UPSTREAM_INFLIGHT,
-                ADAPTIVE_TOKEN_POOL_SIZE, ADAPTIVE_MAX_QUEUE,
+                ADAPTIVE_WORKERS,
+                ADAPTIVE_UPSTREAM_INFLIGHT,
+                ADAPTIVE_TOKEN_POOL_SIZE,
+                ADAPTIVE_MAX_QUEUE,
             )
         except Exception:
             return
@@ -529,6 +390,7 @@ class Settings(BaseSettings):
         if isinstance(self.solver_node_weights, str) and self.solver_node_weights:
             try:
                 import json
+
                 resolved_weights = json.loads(self.solver_node_weights)
             except Exception:
                 for part in self.solver_node_weights.split(","):
@@ -608,6 +470,18 @@ class Settings(BaseSettings):
             reg_backoff_ip=self.reg_backoff_ip,
             reg_backoff_transient_base=self.reg_backoff_transient_base,
             reg_backoff_transient_max=self.reg_backoff_transient_max,
+            proxy_trace_enabled=self.if_proxy_trace_enabled,
+            proxy_trace_ttl=self.if_proxy_trace_ttl,
+            proxy_trace_max_per_round=self.if_proxy_trace_max_per_round,
+            proxy_trace_concurrency=self.if_proxy_trace_concurrency,
+            falai_enabled=self.if_falai_enabled,
+            falai_hcaptcha_sitekey=self.if_falai_hcaptcha_sitekey,
+            falai_hcaptcha_mode=self.if_falai_hcaptcha_mode,
+            falai_browser_headful=self.if_falai_browser_headful,
+            falai_browser_pool_size=self.if_falai_browser_pool_size,
+            falai_verify_timeout=self.if_falai_verify_timeout,
+            falai_poll_interval=self.if_falai_poll_interval,
+            falai_poll_timeout=self.if_falai_poll_timeout,
         )
         self._pool = PoolSettings(
             token_pool_size=self.token_pool_size,
@@ -746,26 +620,15 @@ class Settings(BaseSettings):
         if not self.cf_solver_url:
             errors.append("CF_SOLVER_URL（IF_CF_SOLVER_URL）不能为空")
         if self.port < 1 or self.port > 65535:
-            errors.append(
-                f"PORT（IF_PORT）={self.port} 超出有效范围 1-65535"
-            )
+            errors.append(f"PORT（IF_PORT）={self.port} 超出有效范围 1-65535")
         if self.max_queue < 1:
-            errors.append(
-                f"MAX_QUEUE（IF_MAX_QUEUE）={self.max_queue} 必须 >= 1"
-            )
+            errors.append(f"MAX_QUEUE（IF_MAX_QUEUE）={self.max_queue} 必须 >= 1")
         if self.workers < 1:
-            errors.append(
-                f"WORKERS（IF_WORKERS）={self.workers} 必须 >= 1"
-            )
+            errors.append(f"WORKERS（IF_WORKERS）={self.workers} 必须 >= 1")
         if self.token_pool_size < 1:
-            errors.append(
-                f"TOKEN_POOL_SIZE（IF_TOKEN_POOL_SIZE）={self.token_pool_size} 必须 >= 1"
-            )
+            errors.append(f"TOKEN_POOL_SIZE（IF_TOKEN_POOL_SIZE）={self.token_pool_size} 必须 >= 1")
         if self.if_workers_max < self.if_workers_min:
-            errors.append(
-                f"IF_WORKERS_MAX（{self.if_workers_max}）"
-                f" < IF_WORKERS_MIN（{self.if_workers_min}）"
-            )
+            errors.append(f"IF_WORKERS_MAX（{self.if_workers_max}）" f" < IF_WORKERS_MIN（{self.if_workers_min}）")
         return errors
 
 
@@ -855,6 +718,10 @@ IF_GALLERY_PASSWORD = settings.if_gallery_password
 IF_LRU_CACHE_SIZE = settings.if_lru_cache_size
 IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
 
+# TensorFeed AI 生态（v6.7.0）
+IF_TENSORFEED_CACHE_TTL = settings.if_tensorfeed_cache_ttl
+IF_TENSORFEED_BASE = settings.if_tensorfeed_base
+
 # 可观测性
 IF_HEALTH_CHECK_INTERVAL = settings.if_health_check_interval
 IF_HEALTH_CHECK_ENABLED = settings.if_health_check_enabled
@@ -892,6 +759,11 @@ FREE_PROXY_REFRESH_MIN = settings.free_proxy_refresh_min
 PROXY_COOLDOWN_SECONDS = settings.proxy_cooldown_seconds
 IF_PROXY_MAX_USE_PER_DAY = settings.if_proxy_max_use_per_day
 IF_PROXY_USE_COOLDOWN_MAP = settings.if_proxy_use_cooldown_map
+# Cloudflare trace 出口探测器（v6.7.x）
+IF_PROXY_TRACE_ENABLED = settings.if_proxy_trace_enabled
+IF_PROXY_TRACE_TTL = settings.if_proxy_trace_ttl
+IF_PROXY_TRACE_MAX_PER_ROUND = settings.if_proxy_trace_max_per_round
+IF_PROXY_TRACE_CONCURRENCY = settings.if_proxy_trace_concurrency
 ACCOUNT_DB_FILE = settings.account_db_file
 EMAIL_DB_FILE = settings.email_db_file
 NANOBANANA_ACCOUNT_TARGET = settings.nanobanana_account_target
@@ -917,8 +789,20 @@ REG_BACKOFF_EMAIL = settings.reg_backoff_email
 REG_BACKOFF_IP = settings.reg_backoff_ip
 REG_BACKOFF_TRANSIENT_BASE = settings.reg_backoff_transient_base
 REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
+# fal.ai minimax-H3 视频提供商（Playwright 浏览器即服务）
+IF_FALAI_ENABLED = settings.if_falai_enabled
+IF_FALAI_HCAPTCHA_SITEKEY = settings.if_falai_hcaptcha_sitekey
+IF_FALAI_HCAPTCHA_MODE = settings.if_falai_hcaptcha_mode
+IF_FALAI_BROWSER_HEADFUL = settings.if_falai_browser_headful
+IF_FALAI_BROWSER_POOL_SIZE = settings.if_falai_browser_pool_size
+IF_FALAI_VERIFY_TIMEOUT = settings.if_falai_verify_timeout
+IF_FALAI_POLL_INTERVAL = settings.if_falai_poll_interval
+IF_FALAI_POLL_TIMEOUT = settings.if_falai_poll_timeout
 # 公开接口限速（0 = 关闭）
 IF_REQUESTS_PER_MINUTE = settings.if_requests_per_minute
+# L1 秒级令牌桶（None = 默认取 IF_REQUESTS_PER_MINUTE；<=0 关闭 L1）
+IF_RATE_TOKEN_CAPACITY = settings.if_rate_token_capacity
+IF_RATE_TOKEN_REFILL_PER_SEC = settings.if_rate_token_refill_per_sec
 
 # ── 存储驱动（ISSUE-01）──────────────────────────
 IF_STORAGE_BACKEND = settings.if_storage_backend
@@ -1082,6 +966,8 @@ __all__ = [
     "IF_GALLERY_PASSWORD",
     "IF_LRU_CACHE_SIZE",
     "IF_LRU_CACHE_TTL",
+    "IF_TENSORFEED_CACHE_TTL",
+    "IF_TENSORFEED_BASE",
     "IF_HEALTH_CHECK_INTERVAL",
     "IF_HEALTH_CHECK_ENABLED",
     "IF_ALERT_CHECK_INTERVAL",
@@ -1109,6 +995,10 @@ __all__ = [
     "PROXY_COOLDOWN_SECONDS",
     "IF_PROXY_MAX_USE_PER_DAY",
     "IF_PROXY_USE_COOLDOWN_MAP",
+    "IF_PROXY_TRACE_ENABLED",
+    "IF_PROXY_TRACE_TTL",
+    "IF_PROXY_TRACE_MAX_PER_ROUND",
+    "IF_PROXY_TRACE_CONCURRENCY",
     "ACCOUNT_DB_FILE",
     "EMAIL_DB_FILE",
     "NANOBANANA_ACCOUNT_TARGET",
@@ -1127,7 +1017,17 @@ __all__ = [
     "IF_SLOW_REQUEST_MS",
     "IF_SLOW_LOG_SIZE",
     "DEFAULT_MODEL",
+    "IF_FALAI_ENABLED",
+    "IF_FALAI_HCAPTCHA_SITEKEY",
+    "IF_FALAI_HCAPTCHA_MODE",
+    "IF_FALAI_BROWSER_HEADFUL",
+    "IF_FALAI_BROWSER_POOL_SIZE",
+    "IF_FALAI_VERIFY_TIMEOUT",
+    "IF_FALAI_POLL_INTERVAL",
+    "IF_FALAI_POLL_TIMEOUT",
     "IF_REQUESTS_PER_MINUTE",
+    "IF_RATE_TOKEN_CAPACITY",
+    "IF_RATE_TOKEN_REFILL_PER_SEC",
     "IF_STORAGE_BACKEND",
     "IF_REDIS_URL",
     "IF_REDIS_ENABLED",

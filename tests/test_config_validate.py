@@ -6,9 +6,6 @@
 - _resolve_proxy_and_init_groups 的代理 fallback（HTTPS_PROXY/HTTP_PROXY 环境变量）
 - settings_json 十个分组结构完整
 """
-import os
-
-import pytest
 
 from api.config import Settings
 
@@ -90,8 +87,18 @@ class TestProxyFallback:
         s = Settings(_env_file=None)
         s._resolve_proxy_and_init_groups()
         # 十个分组全部非空
-        for attr in ("_db", "_http", "_solver", "_cache", "_provider",
-                     "_pool", "_queue", "_observability", "_edit", "_security"):
+        for attr in (
+            "_db",
+            "_http",
+            "_solver",
+            "_cache",
+            "_provider",
+            "_pool",
+            "_queue",
+            "_observability",
+            "_edit",
+            "_security",
+        ):
             assert getattr(s, attr) is not None, f"分组 {attr} 未初始化"
 
 
@@ -100,8 +107,18 @@ class TestSettingsJson:
         s = Settings(_env_file=None)
         s._resolve_proxy_and_init_groups()
         js = s.settings_json()
-        assert set(js) == {"db", "http", "solver", "cache", "provider",
-                           "pool", "queue", "observability", "edit", "security"}
+        assert set(js) == {
+            "db",
+            "http",
+            "solver",
+            "cache",
+            "provider",
+            "pool",
+            "queue",
+            "observability",
+            "edit",
+            "security",
+        }
         # 抽查关键字段
         assert "file" in js["db"]
         assert "host" in js["http"]

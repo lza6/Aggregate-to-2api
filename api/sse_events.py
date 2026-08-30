@@ -11,6 +11,7 @@ v4.2 新增：与全局广播 /v1/events/tasks 不同，本模块提供**按任�
 - 线程安全：publish 可能来自 async worker 协程，用 asyncio.Lock（同 loop 内有效）
 - 所有方法均为协程/线程安全，供 FastAPI 路由与 worker 同时调用
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,15 +29,12 @@ HEARTBEAT_INTERVAL = 15.0
 
 def _sse_encode(event: str, data: dict, event_id: int) -> str:
     """标准 SSE 编码：event + id + data。"""
-    return (
-        f"id: {event_id}\n"
-        f"event: {event}\n"
-        f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-    )
+    return f"id: {event_id}\n" f"event: {event}\n" f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 class StoredEvent:
     """环形缓冲中的一条历史事件（供 Last-Event-ID 回放）。"""
+
     __slots__ = ("id", "event", "data", "ts")
 
     def __init__(self, event_id: int, event: str, data: dict) -> None:
@@ -107,10 +105,7 @@ class TaskEventHub:
         扁平 dict 列表，供 /v1/tasks/{id}/logs 等只读端点直接消费。
         """
         buf = self._buffers.get(task_id) or []
-        return [
-            {"id": e.id, "event": e.event, "data": e.data, "ts": e.ts}
-            for e in buf
-        ]
+        return [{"id": e.id, "event": e.event, "data": e.data, "ts": e.ts} for e in buf]
 
     def subscriber_count(self, task_id: str) -> int:
         return len(self._subscribers.get(task_id, []))

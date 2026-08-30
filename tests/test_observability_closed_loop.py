@@ -6,6 +6,7 @@
 3. /v1/tasks/{id}/logs：内存日志过滤 + 慢日志画像 + SSE 回放 + DB 终态聚合；
 4. alerting 新增规则：连续失败 / IP 批量封禁 / AUTH 激增。
 """
+
 from __future__ import annotations
 
 import pytest
@@ -55,8 +56,10 @@ class TestHandlerTracks:
     def test_app_error_recorded(self):
         from api.handlers import app_error_handler
         from api.errors import AppError, ErrorCodes
+
         # 直接调用 handler（不经 HTTP），验证只记录不抛
         import asyncio
+
         exc = AppError(ErrorCodes.UNAUTHORIZED, "no key", 401)
         asyncio.run(app_error_handler(None, exc))
         assert count_of(ErrorCodes.UNAUTHORIZED) == 1
@@ -65,6 +68,7 @@ class TestHandlerTracks:
         from api.handlers import starlette_http_exception_handler
         from starlette.exceptions import HTTPException as StarletteHTTPException
         import asyncio
+
         exc = StarletteHTTPException(404, "not found")
         asyncio.run(starlette_http_exception_handler(None, exc))
         assert count_of("SYS.003") == 1  # 404 → NOT_FOUND
@@ -72,6 +76,7 @@ class TestHandlerTracks:
     def test_generic_exception_recorded(self):
         from api.handlers import generic_exception_handler
         import asyncio
+
         asyncio.run(generic_exception_handler(None, ValueError("boom")))
         assert count_of("SYS.001") >= 1
 
@@ -81,6 +86,7 @@ class TestHandlerTracks:
         from fastapi.testclient import TestClient
         from api.routes.generate import router
         from api.handlers import register_exception_handlers
+
         app = FastAPI()
         register_exception_handlers(app)
         app.include_router(router)
@@ -94,6 +100,7 @@ class TestHandlerTracks:
 def make_logs_app() -> FastAPI:
     from api.routes.tasks import router
     from api.handlers import register_exception_handlers
+
     app = FastAPI()
     register_exception_handlers(app)  # AppError → 统一错误结构（422 而非 500）
     app.include_router(router)
@@ -105,6 +112,7 @@ def logs_client(monkeypatch):
     monkeypatch.setenv("IF_API_KEYS", "")
     import api.config as config_module
     from api.config import Settings
+
     config_module.settings = Settings()
     return TestClient(make_logs_app())
 
@@ -136,37 +144,53 @@ class TestTaskLogsEndpoint:
 class TestAlertRulesExpanded:
     def test_provider_consecutive_failures_rule(self):
         from api.alerting import AlertEngine
+
         engine = AlertEngine()
         engine._rules.clear()  # 清除默认，聚焦新增
         from api.alerting import AlertRule
-        engine.add_rule(AlertRule(
-            name="provider_consecutive_failures", severity="warning",
-            message="x", cooldown=0.0,
-            check=lambda ctx: ctx.get("max_consecutive_failures", 0) >= 10,
-        ))
+
+        engine.add_rule(
+            AlertRule(
+                name="provider_consecutive_failures",
+                severity="warning",
+                message="x",
+                cooldown=0.0,
+                check=lambda ctx: ctx.get("max_consecutive_failures", 0) >= 10,
+            )
+        )
         assert len(engine.evaluate({"max_consecutive_failures": 10})) == 1
         assert len(engine.evaluate({"max_consecutive_failures": 3})) == 0
 
     def test_ip_batch_block_rule(self):
         from api.alerting import AlertEngine, AlertRule
+
         engine = AlertEngine()
         engine._rules.clear()
-        engine.add_rule(AlertRule(
-            name="ip_batch_block", severity="critical",
-            message="x", cooldown=0.0,
-            check=lambda ctx: ctx.get("blocked_ip_count", 0) >= 20,
-        ))
+        engine.add_rule(
+            AlertRule(
+                name="ip_batch_block",
+                severity="critical",
+                message="x",
+                cooldown=0.0,
+                check=lambda ctx: ctx.get("blocked_ip_count", 0) >= 20,
+            )
+        )
         assert len(engine.evaluate({"blocked_ip_count": 20})) == 1
         assert len(engine.evaluate({"blocked_ip_count": 5})) == 0
 
     def test_auth_surge_rule(self):
         from api.alerting import AlertEngine, AlertRule
+
         engine = AlertEngine()
         engine._rules.clear()
-        engine.add_rule(AlertRule(
-            name="auth_error_surge", severity="warning",
-            message="x", cooldown=0.0,
-            check=lambda ctx: ctx.get("auth_error_count", 0) >= 30,
-        ))
+        engine.add_rule(
+            AlertRule(
+                name="auth_error_surge",
+                severity="warning",
+                message="x",
+                cooldown=0.0,
+                check=lambda ctx: ctx.get("auth_error_count", 0) >= 30,
+            )
+        )
         assert len(engine.evaluate({"auth_error_count": 30})) == 1
         assert len(engine.evaluate({"auth_error_count": 2})) == 0

@@ -1,8 +1,8 @@
 """IMP-06: 幂等提交测试。"""
+
 import time
 
 import pytest
-import pytest_asyncio
 
 
 class TestIdempotencyTable:
@@ -13,9 +13,7 @@ class TestIdempotencyTable:
         """idempotency_keys 表应存在。"""
         _, conn, lock = await tmp_db._get_write_conn()
         async with lock:
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='idempotency_keys'"
-            )
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='idempotency_keys'")
             rows = await cursor.fetchall()
         assert len(rows) == 1
 
@@ -57,8 +55,7 @@ class TestIdempotencyTable:
         _, conn, lock = await tmp_db._get_write_conn()
         async with lock:
             await conn.execute(
-                "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)"
-                " VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)" " VALUES (?, ?, ?)",
                 (key_stale, "task-stale", time.time() - IF_IDEMPOTENCY_TTL - 60),
             )
             await conn.commit()
@@ -82,15 +79,14 @@ class TestIdempotencyDispatch:
 
     async def test_known_returns_existing(self, tmp_db, monkeypatch):
         """幂等 key 已存在时返回已有 task_id。"""
-        from api.meta import db
         from api.dispatch import _dispatch_generate
         from api.models import GenerateRequest
+
         monkeypatch.setattr("api.dispatch.db", tmp_db)
 
         await tmp_db.save_idempotency("known-key", "existing-task-999")
 
-        req = GenerateRequest(prompt="test", aspect_ratio="1:1",
-                              idempotency_key="known-key")
+        req = GenerateRequest(prompt="test", aspect_ratio="1:1", idempotency_key="known-key")
         req.model = "imagefree/default"
         req.priority = None
         req.resolution = "1K"
@@ -101,9 +97,9 @@ class TestIdempotencyDispatch:
 
     async def test_without_key_normal(self, tmp_db, monkeypatch):
         """不带幂等 key 时正常走原流程。"""
-        from api.meta import db
         from api.dispatch import _dispatch_generate
         from api.models import GenerateRequest
+
         monkeypatch.setattr("api.dispatch.db", tmp_db)
 
         req = GenerateRequest(prompt="test", aspect_ratio="1:1")

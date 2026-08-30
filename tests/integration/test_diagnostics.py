@@ -2,6 +2,7 @@
 
 覆盖：/v1/diagnostics 只读零副作用 + 各 section 字段齐全；/v1/slow 阈值与统计。
 """
+
 import pytest
 
 
@@ -17,8 +18,7 @@ class TestDiagnostics:
         assert body["status"] == "ok"
         assert isinstance(body["timestamp"], int)
         # 各 section 存在
-        for section in ("db", "queue", "workers", "token_pools",
-                        "solver", "slow_log", "disk"):
+        for section in ("db", "queue", "workers", "token_pools", "solver", "slow_log", "disk"):
             assert section in body, f"缺少 {section} 段"
         # db 段字段
         assert "size_mb" in body["db"]

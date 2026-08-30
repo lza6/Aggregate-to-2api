@@ -1,6 +1,6 @@
 """持久化队列存储单元测试。"""
+
 import asyncio
-import os
 import tempfile
 
 import pytest

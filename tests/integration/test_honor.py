@@ -1,4 +1,5 @@
 """集成测试：捐赠页（/v1/honor）+ 首页 footer 捐赠入口。"""
+
 import pytest
 
 

@@ -12,6 +12,7 @@
 
 用法：在 lifespan 中调用 init_telemetry()，关闭时调用 shutdown_telemetry()。
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,6 +37,7 @@ try:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _F
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _H
     from opentelemetry.instrumentation.logging import LoggingInstrumentor as _L
+
     _FastAPIInstrumentor = _F
     _HTTPXClientInstrumentor = _H
     _LoggingInstrumentor = _L
@@ -86,7 +88,12 @@ def init_telemetry() -> None:
         log.info("OTel 包未安装，跳过追踪初始化")
         return
     # 实时读 env（A-02 后 config 缓存了 import 时的值；测试/运行时改 env 需生效）
-    if os.getenv("IF_OTEL_ENABLED", "1" if app_config.OTEL_ENABLED else "0").strip().lower() not in {"1", "true", "yes", "on"}:
+    if os.getenv("IF_OTEL_ENABLED", "1" if app_config.OTEL_ENABLED else "0").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         log.info("OTel 未启用（IF_OTEL_ENABLED=0），跳过追踪初始化")
         return
 
@@ -95,7 +102,12 @@ def init_telemetry() -> None:
     provider = TracerProvider(resource=resource)
 
     # Console 导出器（调试用，需显式设置 IF_OTEL_CONSOLE_EXPORTER=1）
-    if os.getenv("IF_OTEL_CONSOLE_EXPORTER", "1" if app_config.OTEL_CONSOLE_EXPORTER else "0").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.getenv("IF_OTEL_CONSOLE_EXPORTER", "1" if app_config.OTEL_CONSOLE_EXPORTER else "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
     # OTLP 导出器（生产环境对接上游追踪系统如 Jaeger、Tempo）
@@ -134,8 +146,12 @@ def init_telemetry() -> None:
         root_logger.addFilter(TraceIdLogFilter())
 
     _otel_enabled = True
-    log.info("OTel 追踪已初始化（service=%s, exporter=%s, otel=%s）",
-             service_name, otlp_endpoint or "console", _OTEL_AVAILABLE)
+    log.info(
+        "OTel 追踪已初始化（service=%s, exporter=%s, otel=%s）",
+        service_name,
+        otlp_endpoint or "console",
+        _OTEL_AVAILABLE,
+    )
 
 
 def shutdown_telemetry() -> None:

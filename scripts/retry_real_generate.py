@@ -1,8 +1,11 @@
 """best-effort 真实出图重试：上游限流（429 too frequent）窗口外重试，成功即退出。"""
-import sys, time
+
+import sys
+import time
 import httpx
 
 BASE = "http://127.0.0.1:8100"
+
 
 def main() -> int:
     deadline = time.monotonic() + 900  # 最多 15 分钟
@@ -11,8 +14,10 @@ def main() -> int:
         while time.monotonic() < deadline:
             attempt += 1
             try:
-                r = c.post(BASE + "/v1/generate/async",
-                           json={"prompt": "a cute husky puppy", "aspect_ratio": "1:1", "download": False})
+                r = c.post(
+                    BASE + "/v1/generate/async",
+                    json={"prompt": "a cute husky puppy", "aspect_ratio": "1:1", "download": False},
+                )
                 if r.status_code != 200:
                     print(f"[{attempt}] submit HTTP {r.status_code}", flush=True)
                     time.sleep(30)
@@ -36,6 +41,7 @@ def main() -> int:
             time.sleep(45)  # 等待限流窗口
     print("REAL GENERATION FAILED after 15min (upstream rate limit window)", flush=True)
     return 1
+
 
 if __name__ == "__main__":
     try:

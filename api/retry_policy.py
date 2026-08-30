@@ -3,6 +3,7 @@
 为 worker 提供统一的 transient/permanent 错误分类和重试退避计算。
 F-04: 新增 AdaptiveRetryStrategy，支持按错误类型分类的自适应退避策略。
 """
+
 import random
 import time
 from email.utils import parsedate_to_datetime
@@ -146,7 +147,7 @@ class AdaptiveRetryStrategy:
         min_delay = base * (1 - jitter)
         max_delay = base * (1 + jitter)
         delay_val = random.uniform(min_delay, max_delay) * (2 ** (attempt - 1))
-        return min(delay_val, AdaptiveRetryStrategy.MAX_DELAY)
+        return float(min(delay_val, AdaptiveRetryStrategy.MAX_DELAY))
 
     @staticmethod
     def delay_from_retry_after(header_value: str | None) -> float | None:

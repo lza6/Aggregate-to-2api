@@ -12,6 +12,7 @@
    - 在各阶段记录上下文与临时凭据，避免异常后残留脏数据。
 4. 支持 MOCK 模式（IF_MOCK_REGISTER=1）：用于无外部依赖的高速 CI/E2E 测试。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,6 +41,7 @@ MOCK_REGISTER = config.MOCK_REGISTER
 
 class RegistrationStage(str, enum.Enum):
     """注册阶段状态枚举。"""
+
     INIT = "init"
     EMAIL_ALLOCATED = "email_allocated"
     CAPTCHA_SOLVED = "captcha_solved"
@@ -65,10 +67,11 @@ STAGE_LABELS: dict[str, str] = {
 
 class RegistrationErrorCategory(str, enum.Enum):
     """注册故障分类。"""
-    CF_BLOCKED = "cf_blocked"            # CF 阻断 / Turnstile 求解失败 / WAF 拦截
+
+    CF_BLOCKED = "cf_blocked"  # CF 阻断 / Turnstile 求解失败 / WAF 拦截
     EMAIL_RATE_LIMITED = "email_rate_limited"  # 邮箱频控 (429 / 验证码收取超时 / 建箱限流)
-    IP_BLOCKED = "ip_blocked"            # IP 污染 / 提供商风控 (403 Forbidden / 注册被拒)
-    TRANSIENT = "transient"              # 其他瞬态网络错误 (连接抖动 / 超时 / 5xx)
+    IP_BLOCKED = "ip_blocked"  # IP 污染 / 提供商风控 (403 Forbidden / 注册被拒)
+    TRANSIENT = "transient"  # 其他瞬态网络错误 (连接抖动 / 超时 / 5xx)
 
 
 class RegistrationError(Exception):
@@ -99,6 +102,7 @@ class RegistrationError(Exception):
 @dataclass
 class RegistrationSession:
     """注册会话上下文与断点快照。"""
+
     provider: str
     session_id: str = field(default_factory=lambda: f"reg_{int(time.time()*1000)}")
     stage: RegistrationStage = RegistrationStage.INIT
@@ -194,9 +198,9 @@ class AdaptiveRegistrationBackoff:
 
     def compute_backoff(self, provider: str, category: RegistrationErrorCategory) -> float:
         """根据故障类别与连续失败次数计算退避秒数。"""
-        prov_stats = self._stats.setdefault(provider, {
-            "cf_blocked": 0, "email_rate_limited": 0, "ip_blocked": 0, "transient": 0, "total": 0
-        })
+        prov_stats = self._stats.setdefault(
+            provider, {"cf_blocked": 0, "email_rate_limited": 0, "ip_blocked": 0, "transient": 0, "total": 0}
+        )
         prov_stats[category.value] = prov_stats.get(category.value, 0) + 1
         prov_stats["total"] = prov_stats.get("total", 0) + 1
 
@@ -309,6 +313,7 @@ def _ip_to_proxy(ip_or_proxy: str) -> str | None:
     # 裸 IP：在池里找 host 相同者（若存在），否则直连
     try:
         from .proxy_pool import proxy_pool
+
         host_target = ip_or_proxy
         for entry in proxy_pool.entries:
             if _proxy_host(entry.url) == host_target:
@@ -322,6 +327,7 @@ def _mail_ai_extract_enabled() -> bool:
     """AI 兜底邮件提取总开关：IF_MAIL_AI_EXTRACT=1 且能拿到配置。"""
     try:
         from .mail_extract import _ai_enabled
+
         return _ai_enabled()
     except Exception:
         return False
@@ -448,6 +454,7 @@ class NanobananaRegisterer:
 
         if MOCK_REGISTER:
             import random
+
             email = f"mocknb{int(time.time())}{random.randint(0, 999)}@mock.com"
             session.advance_to(RegistrationStage.COMPLETED, email=email, credits=4)
             adaptive_backoff.record_success(self.provider)
@@ -465,7 +472,9 @@ class NanobananaRegisterer:
             # 阶段 1: 邮箱分配
             try:
                 email, src = await email_pool.allocate(self.provider)
-                src_name = (src or {}).get("source", "unknown") if isinstance(src, dict) else getattr(src, "name", "unknown")
+                src_name = (
+                    (src or {}).get("source", "unknown") if isinstance(src, dict) else getattr(src, "name", "unknown")
+                )
                 session.advance_to(
                     RegistrationStage.EMAIL_ALLOCATED,
                     email=email,
@@ -474,8 +483,14 @@ class NanobananaRegisterer:
                 )
             except Exception as e:
                 err_str = str(e)
-                cat = RegistrationErrorCategory.EMAIL_RATE_LIMITED if "429" in err_str or "限流" in err_str else RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"邮箱池分配失败: {e}", category=cat, stage=RegistrationStage.INIT, provider=self.provider)
+                cat = (
+                    RegistrationErrorCategory.EMAIL_RATE_LIMITED
+                    if "429" in err_str or "限流" in err_str
+                    else RegistrationErrorCategory.TRANSIENT
+                )
+                raise RegistrationError(
+                    f"邮箱池分配失败: {e}", category=cat, stage=RegistrationStage.INIT, provider=self.provider
+                )
 
             self._ensure_client(email)
             session.proxy_used = self._current_proxy or "direct"
@@ -494,7 +509,12 @@ class NanobananaRegisterer:
                 session.advance_to(RegistrationStage.CAPTCHA_SOLVED, captcha_token=captcha)
             except Exception as e:
                 solver_guard.record_failure("cf_solver_failed")
-                raise RegistrationError(f"Turnstile 求解失败: {e}", category=RegistrationErrorCategory.CF_BLOCKED, stage=RegistrationStage.EMAIL_ALLOCATED, provider=self.provider)
+                raise RegistrationError(
+                    f"Turnstile 求解失败: {e}",
+                    category=RegistrationErrorCategory.CF_BLOCKED,
+                    stage=RegistrationStage.EMAIL_ALLOCATED,
+                    provider=self.provider,
+                )
 
             # 阶段 3: 发起 sign-up 注册
             try:
@@ -508,13 +528,28 @@ class NanobananaRegisterer:
                     json={"email": email, "password": password, "name": "TfUser", "callbackURL": "/zh"},
                 )
             except Exception as e:
-                raise RegistrationError(f"注册请求异常: {e}", category=RegistrationErrorCategory.TRANSIENT, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                raise RegistrationError(
+                    f"注册请求异常: {e}",
+                    category=RegistrationErrorCategory.TRANSIENT,
+                    stage=RegistrationStage.CAPTCHA_SOLVED,
+                    provider=self.provider,
+                )
 
             if r.status_code == 403:
                 self._ensure_client(email, force_rotate=True)
-                raise RegistrationError("sign-up 触发 403 风控", category=RegistrationErrorCategory.IP_BLOCKED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                raise RegistrationError(
+                    "sign-up 触发 403 风控",
+                    category=RegistrationErrorCategory.IP_BLOCKED,
+                    stage=RegistrationStage.CAPTCHA_SOLVED,
+                    provider=self.provider,
+                )
             if r.status_code == 429:
-                raise RegistrationError("sign-up 触发 429 限流", category=RegistrationErrorCategory.EMAIL_RATE_LIMITED, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                raise RegistrationError(
+                    "sign-up 触发 429 限流",
+                    category=RegistrationErrorCategory.EMAIL_RATE_LIMITED,
+                    stage=RegistrationStage.CAPTCHA_SOLVED,
+                    provider=self.provider,
+                )
             if r.status_code != 200:
                 email_pool.record(email, self.provider, "error", "signup_fail")
                 resp_text = str(r.text)[:150]
@@ -524,8 +559,17 @@ class NanobananaRegisterer:
                 elif "turnstile" in resp_text.lower() or "captcha" in resp_text.lower():
                     cat = RegistrationErrorCategory.CF_BLOCKED
                 else:
-                    cat = RegistrationErrorCategory.IP_BLOCKED if r.status_code in (401, 403) else RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"sign-up 失败 HTTP {r.status_code}: {resp_text}", category=cat, stage=RegistrationStage.CAPTCHA_SOLVED, provider=self.provider)
+                    cat = (
+                        RegistrationErrorCategory.IP_BLOCKED
+                        if r.status_code in (401, 403)
+                        else RegistrationErrorCategory.TRANSIENT
+                    )
+                raise RegistrationError(
+                    f"sign-up 失败 HTTP {r.status_code}: {resp_text}",
+                    category=cat,
+                    stage=RegistrationStage.CAPTCHA_SOLVED,
+                    provider=self.provider,
+                )
 
             session.advance_to(RegistrationStage.VERIFICATION_SENT)
 
@@ -535,6 +579,7 @@ class NanobananaRegisterer:
             if not link and _mail_ai_extract_enabled():
                 # AI 兜底：正则未命中时尝试 LLM 提取（默认关闭，失败返回 None 不阻塞）
                 from .mail_extract import extract_verify_link as _ai_extract_link
+
                 link = await _ai_extract_link(mail, ai=True)
             if not link:
                 log.info("nanobanana %s 未收到验证链接，尝试直接登录", email)
@@ -569,7 +614,12 @@ class NanobananaRegisterer:
                     json={"email": email, "password": password, "callbackURL": "/zh"},
                 )
             except Exception as e:
-                raise RegistrationError(f"sign-in 请求网络异常: {e}", category=RegistrationErrorCategory.TRANSIENT, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
+                raise RegistrationError(
+                    f"sign-in 请求网络异常: {e}",
+                    category=RegistrationErrorCategory.TRANSIENT,
+                    stage=RegistrationStage.CODE_OR_LINK_RECEIVED,
+                    provider=self.provider,
+                )
 
             # 从 client jar 提取累积的全部 cookies（含重定向/其它响应累积的 __Secure-better-auth.session_data 等），
             # 而非仅 login 响应 cookies。
@@ -583,14 +633,24 @@ class NanobananaRegisterer:
                     cat = RegistrationErrorCategory.EMAIL_RATE_LIMITED
                 else:
                     cat = RegistrationErrorCategory.TRANSIENT
-                raise RegistrationError(f"登录失败 HTTP {login.status_code}: {str(login.text)[:120]}", category=cat, stage=RegistrationStage.CODE_OR_LINK_RECEIVED, provider=self.provider)
+                raise RegistrationError(
+                    f"登录失败 HTTP {login.status_code}: {str(login.text)[:120]}",
+                    category=cat,
+                    stage=RegistrationStage.CODE_OR_LINK_RECEIVED,
+                    provider=self.provider,
+                )
 
             session.advance_to(RegistrationStage.LOGGED_IN, session_cookie=cookie, credits=4)
             session_data = _session_data_from_cookies(self.client.cookies)
             email_pool.record(email, self.provider, "ok", note="no_verify" if not link else "verified")
             adaptive_backoff.record_success(self.provider)
             session.advance_to(RegistrationStage.COMPLETED)
-            log.info("nanobanana 注册成功 %s credits=4 (session: %s, has_session_data=%s)", email, session.session_id, bool(session_data))
+            log.info(
+                "nanobanana 注册成功 %s credits=4 (session: %s, has_session_data=%s)",
+                email,
+                session.session_id,
+                bool(session_data),
+            )
             self.live_session_snapshot = session.snapshot()
 
             return {
@@ -683,7 +743,7 @@ class NanobananaRegisterer:
                         self.turnstile_page,
                         self.SITEKEY,
                         config.TURNSTILE_TIMEOUT,
-                        proxy=config.PROXY,   # 同一出口，与登录一致
+                        proxy=config.PROXY,  # 同一出口，与登录一致
                     )
                     body = [{"captchaToken": captcha}]
                 except Exception:
@@ -691,6 +751,7 @@ class NanobananaRegisterer:
 
             payload = json.dumps(body).replace("$", "$$") if "$" in json.dumps(body) else json.dumps(body)
             from .providers.action_sniffer import action_sniffer, is_stale_action_response
+
             claim_action = await action_sniffer.get_action_id("claim_daily_checkin")
             r = await _th(
                 self.client.post,
@@ -776,7 +837,11 @@ class NanobananaRegisterer:
             )
 
             cookie = "; ".join(f"{k}={v}" for k, v in self.client.cookies.items())
-            if login.status_code == 400 or "__Secure-better-auth.session_token" not in self.client.cookies or not cookie:
+            if (
+                login.status_code == 400
+                or "__Secure-better-auth.session_token" not in self.client.cookies
+                or not cookie
+            ):
                 log.warning("nanobanana re_login 失败 %s: HTTP %s（无 session_token）", email, login.status_code)
                 return None
 

@@ -14,6 +14,7 @@
 路由决策记录（环形缓冲，内存，最多 1000 条）供前端"路由记录"展示，
 让开发者知道自己的请求被哪个 provider 处理、为什么。
 """
+
 from __future__ import annotations
 
 import math
@@ -22,23 +23,24 @@ import time
 from dataclasses import dataclass
 
 _MAX_RECORDS = 1000
-_OPEN_COOLDOWN = 30.0       # 熔断时长（秒）
-_OPEN_FAIL_RATIO = 0.5      # 触发熔断的失败率阈值
-_OPEN_MIN_SAMPLES = 5       # 触发熔断的最少样本数
-_LATENCY_FLOOR = 100.0      # 时延下限（平滑 log，防除零/负值）
-_INIT_EWMA = 2000.0         # 初始预估时延（2s，冷启动公平）
-_ALPHA = 0.2                # EWMA 平滑系数
+_OPEN_COOLDOWN = 30.0  # 熔断时长（秒）
+_OPEN_FAIL_RATIO = 0.5  # 触发熔断的失败率阈值
+_OPEN_MIN_SAMPLES = 5  # 触发熔断的最少样本数
+_LATENCY_FLOOR = 100.0  # 时延下限（平滑 log，防除零/负值）
+_INIT_EWMA = 2000.0  # 初始预估时延（2s，冷启动公平）
+_ALPHA = 0.2  # EWMA 平滑系数
 
 
 @dataclass
 class ProviderNodeStats:
     """单个 provider 的路由统计。"""
+
     provider_id: str
     success_count: int = 0
     failure_count: int = 0
     ewma_latency_ms: float = _INIT_EWMA
     in_flight_requests: int = 0
-    circuit_state: str = "CLOSED"       # CLOSED | OPEN | HALF_OPEN
+    circuit_state: str = "CLOSED"  # CLOSED | OPEN | HALF_OPEN
     circuit_open_until: float = 0.0
     consecutive_failures: int = 0
     last_result_ts: float = 0.0
@@ -47,20 +49,29 @@ class ProviderNodeStats:
 @dataclass
 class RoutingRecord:
     """一次路由决策（供前端路由记录展示）。"""
+
     ts: float
     request_id: str
     model: str
     selected_provider: str
-    requested_provider: str          # 原始（fallback 后真实处理的 provider 见 selected）
+    requested_provider: str  # 原始（fallback 后真实处理的 provider 见 selected）
     score: float
-    scores: dict[str, float]         # 所有候选的评分快照
+    scores: dict[str, float]  # 所有候选的评分快照
     latency_ms: int = 0
-    success: bool | None = None      # None=尚未完成（fallback 时请求还在途）
+    success: bool | None = None  # None=尚未完成（fallback 时请求还在途）
     reason: str = "best_score"
 
 
 class AdaptiveRouter:
-    """多提供商自适应路由引擎（线程安全，供 async 环境调用）。"""
+    """多提供商自适应路由引擎。
+
+    线程安全策略：保留 threading.Lock（非 asyncio.Lock）。所有 record_*/select_best/
+    node_snapshot 方法为同步、操作纯内存 dict（微秒级）。record_result 由 dispatch.py
+    async _dispatch_generate 经同步调用链触发（registry.adaptive_router.record_result），
+    换 asyncio.Lock 会把 record_result/select_best/node_snapshot 全部传染成 async，污染
+    provider_for（同步）等调用链。asyncio 单线程事件循环无竞争零阻塞，此锁非阻塞源。
+    真正的 async 阻塞源是 sqlite3 I/O（见 account_pool/email_pool 的同步 sqlite3 混入）。
+    """
 
     def __init__(self, alpha: float = _ALPHA, initial_explore_rate: float = 0.10) -> None:
         self.alpha = alpha
@@ -106,8 +117,7 @@ class AdaptiveRouter:
             if is_success:
                 stats.success_count += 1
                 stats.consecutive_failures = 0
-                stats.ewma_latency_ms = (self.alpha * max(0.0, latency_ms)
-                                         + (1 - self.alpha) * stats.ewma_latency_ms)
+                stats.ewma_latency_ms = self.alpha * max(0.0, latency_ms) + (1 - self.alpha) * stats.ewma_latency_ms
                 if stats.circuit_state == "HALF_OPEN":
                     # HALF_OPEN 时成功一个 → 熔断确认恢复
                     stats.circuit_state = "CLOSED"
@@ -118,8 +128,7 @@ class AdaptiveRouter:
                 stats.ewma_latency_ms = max(_INIT_EWMA, stats.ewma_latency_ms * 1.5)
                 # 熔断判定：失败率 > 阈值且样本足够
                 total = stats.success_count + stats.failure_count
-                if (total >= _OPEN_MIN_SAMPLES
-                        and (stats.failure_count / total) > _OPEN_FAIL_RATIO):
+                if total >= _OPEN_MIN_SAMPLES and (stats.failure_count / total) > _OPEN_FAIL_RATIO:
                     stats.circuit_state = "OPEN"
                     stats.circuit_open_until = time.time() + _OPEN_COOLDOWN
 
@@ -137,13 +146,43 @@ class AdaptiveRouter:
         """
         with self._lock:
             now = time.time()
-            self._record(RoutingRecord(
-                ts=now, request_id=request_id, model=model_id,
-                selected_provider=provider_id, requested_provider=provider_id,
-                score=self._calculate_score(provider_id),
-                scores={provider_id: self._calculate_score(provider_id)},
-                reason="direct",
-            ))
+            self._record(
+                RoutingRecord(
+                    ts=now,
+                    request_id=request_id,
+                    model=model_id,
+                    selected_provider=provider_id,
+                    requested_provider=provider_id,
+                    score=self._calculate_score(provider_id),
+                    scores={provider_id: self._calculate_score(provider_id)},
+                    reason="direct",
+                )
+            )
+
+    def record_fallback(self, provider_id: str, model_id: str, requested_provider: str, request_id: str = "") -> None:
+        """记录一次「degraded 跨商降级」决策（selected != requested）。
+
+        供 provider_for 在首选 provider 被标记 degraded 时写入观测记录，前端路由面板据此
+        显示该请求被降级到能力匹配的健康备用 provider（reason=degraded_fallback），
+        而非继续把流量打向降级的首选。与 record_direct 同构（同一 RoutingRecord 字段集）。
+        """
+        with self._lock:
+            now = time.time()
+            self._record(
+                RoutingRecord(
+                    ts=now,
+                    request_id=request_id,
+                    model=model_id,
+                    selected_provider=provider_id,
+                    requested_provider=requested_provider,
+                    score=self._calculate_score(provider_id),
+                    scores={
+                        provider_id: self._calculate_score(provider_id),
+                        requested_provider: self._calculate_score(requested_provider),
+                    },
+                    reason="degraded_fallback",
+                )
+            )
 
     # ── 核心打分 ──
     def _calculate_score(self, pid: str) -> float:
@@ -168,9 +207,15 @@ class AdaptiveRouter:
             return False, st
         return True, st
 
-    def select_best(self, candidates: list[str], *, request_id: str = "",
-                    model: str = "", requested_provider: str = "",
-                    explore: bool | None = None) -> str:
+    def select_best(
+        self,
+        candidates: list[str],
+        *,
+        request_id: str = "",
+        model: str = "",
+        requested_provider: str = "",
+        explore: bool | None = None,
+    ) -> str:
         """从候选 provider 中选出路由目标。
 
         候选应为健康/或已从熔断恢复的 provider。返回选中的 provider_id，
@@ -191,19 +236,24 @@ class AdaptiveRouter:
                 # 全部熔断 → 兜底：返回第一个候选（最坏也只是慢，不卡死）
                 scores = self._snapshot_scores(candidates)
                 picked = candidates[0]
-                self._record(RoutingRecord(
-                    ts=now, request_id=request_id, model=model,
-                    selected_provider=picked, requested_provider=requested_provider,
-                    score=scores.get(picked, 0.0), scores=scores,
-                    reason="fallback_all_open",
-                ))
+                self._record(
+                    RoutingRecord(
+                        ts=now,
+                        request_id=request_id,
+                        model=model,
+                        selected_provider=picked,
+                        requested_provider=requested_provider,
+                        score=scores.get(picked, 0.0),
+                        scores=scores,
+                        reason="fallback_all_open",
+                    )
+                )
                 self._record_inflight_locked(picked)
                 return picked
 
             # 探索：epsilon 衰减（样本越多探索越少）
             sample_total = sum(
-                self.nodes[p].success_count + self.nodes[p].failure_count
-                for p in valid if p in self.nodes
+                self.nodes[p].success_count + self.nodes[p].failure_count for p in valid if p in self.nodes
             )
             eps = self.base_explore_rate * max(0.05, (1.0 - sample_total / 200.0))
             if explore is not None:
@@ -215,17 +265,24 @@ class AdaptiveRouter:
             if do_explore:
                 # 随机选一个有效候选（探测恢复）
                 import random as _random
+
                 picked = valid[int(_random.random() * len(valid))]
                 reason = "explore"
             else:
                 picked = max(valid, key=lambda pid: scores[pid])
                 reason = "best_score"
-            self._record(RoutingRecord(
-                ts=now, request_id=request_id, model=model,
-                selected_provider=picked, requested_provider=requested_provider,
-                score=scores.get(picked, 0.0), scores=scores,
-                reason=reason,
-            ))
+            self._record(
+                RoutingRecord(
+                    ts=now,
+                    request_id=request_id,
+                    model=model,
+                    selected_provider=picked,
+                    requested_provider=requested_provider,
+                    score=scores.get(picked, 0.0),
+                    scores=scores,
+                    reason=reason,
+                )
+            )
             self._record_inflight_locked(picked)
             return picked
 
@@ -236,6 +293,7 @@ class AdaptiveRouter:
     @staticmethod
     def _rand() -> float:
         import random as _random
+
         return _random.random()
 
     # ── 面板 ──

@@ -1,4 +1,5 @@
 """OpenAI/Anthropic 兼容聊天端点。"""
+
 from __future__ import annotations
 
 import inspect
@@ -23,9 +24,17 @@ log = logging.getLogger("imagefree_api.chat")
 
 _ROLE = Literal["user", "assistant", "system", "tool"]
 _REASONING_EFFORT = {
-    "minimal": "quick", "low": "quick", "quick": "quick",
-    "medium": "balanced", "balanced": "balanced", "none": "balanced", "": "balanced",
-    "high": "deep", "max": "deep", "ultra": "deep", "deep": "deep",
+    "minimal": "quick",
+    "low": "quick",
+    "quick": "quick",
+    "medium": "balanced",
+    "balanced": "balanced",
+    "none": "balanced",
+    "": "balanced",
+    "high": "deep",
+    "max": "deep",
+    "ultra": "deep",
+    "deep": "deep",
 }
 
 
@@ -117,9 +126,7 @@ def _int_usage(usage: dict[str, Any], *keys: str) -> int | None:
     return None
 
 
-def _normalize_usage(
-    result: dict[str, Any], text: str, messages: list[dict[str, Any]]
-) -> dict[str, int]:
+def _normalize_usage(result: dict[str, Any], text: str, messages: list[dict[str, Any]]) -> dict[str, int]:
     raw = result.get("usage") or {}
     prompt = _int_usage(raw, "prompt_tokens", "input_tokens")
     completion = _int_usage(raw, "completion_tokens", "output_tokens")
@@ -300,9 +307,7 @@ async def _openai_stream(
             elif event_type == "reasoning":
                 text = str(event.get("text") or "")
                 reasoning_parts.append(text)
-                yield _sse_data(
-                    _openai_chunk(response_id, request.model, created, {"reasoning_content": text})
-                )
+                yield _sse_data(_openai_chunk(response_id, request.model, created, {"reasoning_content": text}))
             elif event_type == "tool_call":
                 call = {
                     "index": len(tool_calls),
@@ -314,21 +319,13 @@ async def _openai_stream(
                     },
                 }
                 tool_calls.append(call)
-                yield _sse_data(
-                    _openai_chunk(response_id, request.model, created, {"tool_calls": [call]})
-                )
+                yield _sse_data(_openai_chunk(response_id, request.model, created, {"tool_calls": [call]}))
             elif event_type == "usage":
                 pending_usage = event.get("usage") or {}
             elif event_type == "finish":
                 finish_reason = str(event.get("finish_reason") or finish_reason)
-                yield _sse_data(
-                    _openai_chunk(
-                        response_id, request.model, created, {}, finish_reason=finish_reason
-                    )
-                )
-        usage = _normalize_usage(
-            {"usage": pending_usage}, "".join(text_parts), messages
-        )
+                yield _sse_data(_openai_chunk(response_id, request.model, created, {}, finish_reason=finish_reason))
+        usage = _normalize_usage({"usage": pending_usage}, "".join(text_parts), messages)
         if (request.stream_options or {}).get("include_usage"):
             usage_chunk = _openai_chunk(response_id, request.model, created, {})
             usage_chunk["choices"] = []
@@ -345,9 +342,7 @@ async def _openai_stream(
             )
         )
     except Exception as exc:
-        usage = _normalize_usage(
-            {"usage": pending_usage}, "".join(text_parts), messages
-        )
+        usage = _normalize_usage({"usage": pending_usage}, "".join(text_parts), messages)
         await _record(
             **_record_args(
                 provider_name,
@@ -383,9 +378,7 @@ def _anthropic_stop_reason(finish_reason: str, tool_calls: list[dict[str, Any]])
     return "tool_use" if finish_reason == "tool_calls" or tool_calls else "end_turn"
 
 
-def _anthropic_content(
-    text: str, reasoning: str, tool_calls: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+def _anthropic_content(text: str, reasoning: str, tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     content: list[dict[str, Any]] = []
     if text:
         content.append({"type": "text", "text": text})
@@ -421,9 +414,7 @@ async def messages(request: MessagesRequest, raw_request: Request):
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-    _, text, reasoning, tool_calls, finish_reason, usage = await _chat_collect(
-        request, message_payload
-    )
+    _, text, reasoning, tool_calls, finish_reason, usage = await _chat_collect(request, message_payload)
     return {
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "message",
@@ -595,8 +586,7 @@ async def list_chat_models():
     models = registry.all_chat_models()
     items = [_chat_model_public(m) for m in models]
     items.sort(key=lambda m: m["id"])
-    return {"items": items, "count": len(items),
-            "auth_required": auth.auth_enabled()}
+    return {"items": items, "count": len(items), "auth_required": auth.auth_enabled()}
 
 
 @router.get("/v1/chat/auth/status")
@@ -608,8 +598,8 @@ async def chat_auth_status(request: Request):
     供站长管理面板「一键复制」（复制按钮仅站长可见）。
     未启用鉴权（开放模式）时 key 为空。
     """
-    from ..auth import (first_key, public_keymask, check_admin_key,
-                        admin_enabled)
+    from ..auth import first_key, public_keymask, check_admin_key, admin_enabled
+
     enabled = auth.auth_enabled()
     full_key = ""
     # 站长自助取完整 Key：需携带管理面有效 Key（IF_ADMIN_KEYS 或业务 Key 池）

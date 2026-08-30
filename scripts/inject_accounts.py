@@ -11,6 +11,7 @@
   # mock 注册（测试/演示号池补号逻辑，不碰上游）
   python scripts/inject_accounts.py --provider nanobanana --count 10 --mock
 """
+
 import argparse
 import os
 import sys
@@ -28,9 +29,9 @@ def _import_file(pool, provider: str, path: str) -> int:
                 continue
             if line.startswith("{"):  # JSON
                 import json
+
                 acc = json.loads(line)
-                pool.add(provider, acc["email"], acc.get("cookie", ""),
-                         acc.get("password"), int(acc.get("credits", 0)))
+                pool.add(provider, acc["email"], acc.get("cookie", ""), acc.get("password"), int(acc.get("credits", 0)))
             else:  # tab 分隔
                 parts = line.split("\t")
                 email, cookie = parts[0], parts[1]
@@ -48,8 +49,11 @@ def main() -> int:
     ap.add_argument("--count", type=int, default=10, help="批量注册数量")
     ap.add_argument("--real", action="store_true", help="真实注册（需 cf_solver+邮箱）")
     ap.add_argument("--mock", action="store_true", help="mock 注册（不碰上游）")
-    ap.add_argument("--use-proxy-pool", action="store_true",
-                    help="每号从代理池轮换出口 IP（需 IF_PROXY_FILE 或 IF_FREE_PROXY=1，防批量注册同 IP 风控）")
+    ap.add_argument(
+        "--use-proxy-pool",
+        action="store_true",
+        help="每号从代理池轮换出口 IP（需 IF_PROXY_FILE 或 IF_FREE_PROXY=1，防批量注册同 IP 风控）",
+    )
     ap.add_argument("--db", default="data/account_pool.db")
     args = ap.parse_args()
 
@@ -59,6 +63,7 @@ def main() -> int:
 
     from api.account_pool import AccountPool
     from api import config
+
     pool = AccountPool(args.db)
 
     if args.import_file:
@@ -77,7 +82,8 @@ def main() -> int:
 
     async def _run():
         from api.proxy_pool import proxy_pool
-        from api.free_proxy_fetcher import FreeProxyFetcher, _precheck
+        from api.free_proxy_fetcher import FreeProxyFetcher
+
         # H4(审计修复): --use-proxy-pool 必须显式加载代理源，否则 proxy_pool.enabled 恒 False（静默 no-op）。
         if args.use_proxy_pool:
             if config.PROXY_FILE:
@@ -87,11 +93,14 @@ def main() -> int:
                 if config.FREE_PROXY_ENABLED:
                     f = FreeProxyFetcher(proxy_pool)
                     import httpx as _hx
+
                     f._client = _hx.AsyncClient(timeout=15.0, proxy=config.PROXY)
                     stats = await f._fetch_once()
                     print(f"免费代理抓取: injected={stats['injected']}")
                 if not proxy_pool.enabled:
-                    print("[错误] 代理池仍为空（需 IF_PROXY_FILE 或 IF_FREE_PROXY=1）。注册流量含凭据，禁止回退直连批量注册。")
+                    print(
+                        "[错误] 代理池仍为空（需 IF_PROXY_FILE 或 IF_FREE_PROXY=1）。注册流量含凭据，禁止回退直连批量注册。"
+                    )
                     return
         done = 0
         for i in range(args.count):
@@ -101,10 +110,13 @@ def main() -> int:
                     reg.proxy = await proxy_pool.acquire(prefer_source="residential")
                 acc = await reg.register_one()
                 if acc:
-                    pool.add(args.provider, acc["email"], acc["cookie"], acc.get("password"),
-                             credits=acc.get("credits", 0))
+                    pool.add(
+                        args.provider, acc["email"], acc["cookie"], acc.get("password"), credits=acc.get("credits", 0)
+                    )
                     done += 1
-                    print(f"[{i+1}/{args.count}] 注册成功 {acc['email']} credits={acc.get('credits')} proxy={reg.proxy or 'direct'}")
+                    print(
+                        f"[{i+1}/{args.count}] 注册成功 {acc['email']} credits={acc.get('credits')} proxy={reg.proxy or 'direct'}"
+                    )
                 else:
                     print(f"[{i+1}/{args.count}] 注册失败（跳过）")
             except Exception as e:

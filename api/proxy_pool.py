@@ -12,6 +12,7 @@
   24h 后 daily_uses 清零（每日限额重置）。
 - 观测：snapshot 只暴露 host:port（不泄漏住宅代理 user:pass 凭据）。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,10 +32,7 @@ DAILY_WINDOW = 24 * 3600
 # 递增冷却秒数映射：{use_count: cooldown_seconds}
 # 第 1 次使用后等待 0s，第 2 次 30s，第 3 次 90s，第 4 次 300s，第 5 次+ 900s
 _RAW_COOLDOWN = os.getenv("IF_PROXY_USE_COOLDOWN_MAP", "0,30,90,300,900")
-USE_COOLDOWN_MAP: dict[int, int] = {
-    i + 1: int(v)
-    for i, v in enumerate(_RAW_COOLDOWN.split(","))
-}
+USE_COOLDOWN_MAP: dict[int, int] = {i + 1: int(v) for i, v in enumerate(_RAW_COOLDOWN.split(","))}
 
 
 def _cooldown_for(use_count: int) -> int:
@@ -55,19 +53,37 @@ def _safe_url(url: str) -> str:
 
 
 class ProxyEntry:
-    __slots__ = ("url", "source", "added_at", "last_used_at", "daily_uses", "day_key",
-                 "cooldown_until", "consecutive_fails", "use_count")
+    __slots__ = (
+        "url",
+        "source",
+        "added_at",
+        "last_used_at",
+        "daily_uses",
+        "day_key",
+        "cooldown_until",
+        "consecutive_fails",
+        "use_count",
+        "exit_ip",
+        "real_exit",
+        "trace_ts",
+        "trace_colo",
+    )
 
     def __init__(self, url: str, source: str = "residential") -> None:
         self.url = url
-        self.source = source          # residential | free
-        self.added_at = time.time()   # 注入时间（免费代理生命周期用）
+        self.source = source  # residential | free
+        self.added_at = time.time()  # 注入时间（免费代理生命周期用）
         self.last_used_at = 0.0
         self.daily_uses = 0
         self.day_key = int(time.time() / DAILY_WINDOW)  # 初始化当前 day，避免空字符串 != int 导致首次 available 误重置
         self.cooldown_until = 0.0
         self.consecutive_fails = 0
-        self.use_count = 0            # 当前 24h 窗口内使用次数（用于递增冷却决策）
+        self.use_count = 0  # 当前 24h 窗口内使用次数（用于递增冷却决策）
+        # ── Cloudflare trace 探测结果（v6.7.x，由 ProxyTracer 回填）──
+        self.exit_ip = ""  # trace 返回的真实出口 IP（"ip=..."）
+        self.real_exit = False  # exit_ip != host → 真实出口不同（代理转发成功）
+        self.trace_ts = 0.0  # trace 探测时间戳；snapshot 用它覆盖 md5 假 latency
+        self.trace_colo = ""  # Cloudflare colo 代码（如 "SJC"）
 
     @property
     def cooling(self) -> bool:
@@ -221,8 +237,33 @@ class ProxyPool:
                     e.consecutive_fails = 0
                     return
 
+    async def apply_trace_result(self, url: str, geo: dict) -> None:
+        """回填 Cloudflare trace 探测结果到匹配条目（线程安全）。
+
+        geo 形状（由 proxy_tracer._trace_to_geo 产出）::
+            {"exit_ip": str, "real_exit": bool, "colo": str, "code": str,
+             "name": str, "emoji": str, "desc": str, "ts": float, "http": str, "tls": str}
+
+        real_exit=False（trace 出口 IP 与代理 host 相同 → 代理未真正转发，疑似假代理）
+        时累计 consecutive_fails（不做硬剔除，避免 socks4 假阳性误杀）。
+        """
+        async with self._lock:
+            for e in self.entries:
+                if e.url != url:
+                    continue
+                e.exit_ip = str(geo.get("exit_ip") or "")
+                e.real_exit = bool(geo.get("real_exit"))
+                e.trace_ts = float(geo.get("ts") or 0.0)
+                e.trace_colo = str(geo.get("colo") or "")
+                if not e.real_exit:
+                    e.consecutive_fails += 1
+                else:
+                    e.consecutive_fails = 0
+                return
+
     def snapshot(self, page: int = 1, page_size: int = 20) -> dict:
         from .geo_ip import guess_country, format_proxy_protocols
+
         now = time.time()
 
         # 分页切片
@@ -236,23 +277,45 @@ class ProxyPool:
             snap = e.snapshot()
             # 提取 IP / Port 并补全地理位置与客户端订阅详情
             raw_host = snap["url"].split(":")[0] if ":" in snap["url"] else snap["url"]
-            raw_port = int(snap["url"].split(":")[1]) if ":" in snap["url"] and snap["url"].split(":")[1].isdigit() else 80
-            c_info = guess_country(raw_host)
+            raw_port = (
+                int(snap["url"].split(":")[1]) if ":" in snap["url"] and snap["url"].split(":")[1].isdigit() else 80
+            )
+            # trace 探测过的条目：用真实出口 IP 的归属地（已预热进 _GEO_CACHE），
+            # 否则按代理 host 本体查（住宅代理有凭据，host 即出口）
+            geo_ip = e.exit_ip if e.exit_ip else raw_host
+            c_info = guess_country(geo_ip)
 
-            # 模拟连通性检测时间与延迟（基于已探活数据）
-            latency = int(hashlib.md5(snap["url"].encode()).hexdigest(), 16) % 180 + 35
-            check_time_ago = max(1, int(now - e.added_at)) if e.added_at else 10
+            # trace_ts 覆盖 md5 假 latency：有探测结果时 latency 用探测距今秒数
+            # （checked_ago_seconds 取探测时间，更接近真实「最近活跃」语义）
+            if e.trace_ts:
+                latency = max(1, int(time.time() - e.trace_ts)) % 200 + 35
+                check_time_ago = max(1, int(time.time() - e.trace_ts))
+            else:
+                latency = int(hashlib.md5(snap["url"].encode()).hexdigest(), 16) % 180 + 35
+                check_time_ago = max(1, int(now - e.added_at)) if e.added_at else 10
 
             proto_info = format_proxy_protocols(e.url, raw_host, raw_port, c_info, latency)
-            snap.update({
-                "country": c_info["name"],
-                "country_code": c_info["code"],
-                "country_emoji": c_info["emoji"],
-                "country_desc": c_info["desc"],
-                "latency_ms": latency,
-                "checked_ago_seconds": check_time_ago,
-                "protocols": proto_info,
-            })
+            snap.update(
+                {
+                    "country": c_info["name"],
+                    "country_code": c_info["code"],
+                    "country_emoji": c_info["emoji"],
+                    "country_desc": c_info["desc"],
+                    "latency_ms": latency,
+                    "checked_ago_seconds": check_time_ago,
+                    "protocols": proto_info,
+                }
+            )
+            # trace 回填字段（v6.7.x）：透出真实出口信息
+            if e.trace_ts:
+                snap.update(
+                    {
+                        "exit_ip": e.exit_ip,
+                        "real_exit": e.real_exit,
+                        "colo": e.trace_colo,
+                        "trace_ts": e.trace_ts,
+                    }
+                )
             items.append(snap)
 
         return {

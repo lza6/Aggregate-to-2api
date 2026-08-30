@@ -1,4 +1,5 @@
 """测试 WebSocket 日志推送。"""
+
 import logging
 
 from api.log_ws import LogBuffer, WsLogHandler

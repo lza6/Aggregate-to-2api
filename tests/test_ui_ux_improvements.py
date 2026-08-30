@@ -5,8 +5,8 @@ UI/UX 回归测试套件
 3. WebSocket 日志重连与心跳指示器
 4. 公开落地页为 Vue3（不再是无鉴权单文件 docs.html）——见 test_public_landing_is_vue3
 """
+
 from pathlib import Path
-import pytest
 
 
 def test_public_landing_is_vue3_and_no_anon_generator():
@@ -19,7 +19,7 @@ def test_public_landing_is_vue3_and_no_anon_generator():
     built_index = Path("landing/dist/index.html")
     assert built_index.exists(), "landing/dist/index.html 不存在（公开首页未构建为 Vue3 产物）"
     content = built_index.read_text(encoding="utf-8")
-    assert 'id="app"' in content, "公开首页必须为 Vue3 挂载点（<div id=\"app\">）"
+    assert 'id="app"' in content, '公开首页必须为 Vue3 挂载点（<div id="app">）'
     assert "/assets/" in content, "公开首页必须引用 Vite 构建产物（/assets/*）"
     # 防止退化：公开落地页绝不能带回无鉴权生成器
     for banned in ("pg-prompt", "pg-model", "/v1/generate", "在线使用"):
@@ -30,7 +30,6 @@ def test_docs_html_is_no_longer_public_homepage():
     """docs.html 已不是公开首页（被 Vue3 landing 替代），不应再被任何路由服务/首页引用。"""
     # 公开首页 shell 来自 landing，docs.html 不再出现在 GET / 的响应
     # （避免把「无鉴权生成器」误当 feature 去维护）
-    import re
     for src in [Path("api/routes/health.py"), Path("api/routes/generate.py"), Path("api/meta.py")]:
         assert src.exists()
         text = src.read_text(encoding="utf-8")

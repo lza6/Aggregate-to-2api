@@ -4,9 +4,13 @@
 （solve）/ 上游调用久（upstream）/ 重试累计（retry）。内存环形缓冲，不落盘——
 配合 /v1/slow 端点与看板实时查看；进程重启即清零，符合诊断数据语义。
 
-线程安全：asyncio 场景下 record 均为同步短临界区，用 threading.Lock 保护
-（worker 池虽在同一事件循环，但 snapshot 可能被任意线程的端点调用）。
+线程安全：asyncio 场景下 record 均为同步短临界区（纯内存 deque append/pop，微秒级），
+用 threading.Lock 保护——asyncio 单线程事件循环无竞争零阻塞。record 由 worker loop
+（_process async）经 _record_slow（同步方法）调用，换 asyncio.Lock 会把 _record_slow/
+record 传染成 async，污染同步调用链。snapshot/stats 虽可能被端点 async 调用，但锁内仅
+内存拷贝，无需 async 化。真正的 async 阻塞源是 sqlite3 I/O（见 account_pool/email_pool）。
 """
+
 from __future__ import annotations
 
 import threading
@@ -38,16 +42,16 @@ class SlowSample:
     task_id: str
     model: str
     provider: str
-    queue_ms: float = 0.0          # 入队 → worker 取走
-    wait_token_ms: float = 0.0     # 取 token 等待
-    solve_ms: float = 0.0          # Turnstile 求解耗时
-    upstream_ms: float = 0.0       # 上游提交+轮询
-    retry_ms: float = 0.0          # 重试退避累计
-    total_ms: float = 0.0          # 全程
-    status: str = "completed"      # completed / error
-    trace_id: str = ""             # B2: 全链路 traceId（日志/审计/慢日志 grep 串联）
-    submit_ms: float = 0.0         # B3: 上游提交首字节耗时
-    poll_ms: float = 0.0           # B3: 上游轮询到完成耗时
+    queue_ms: float = 0.0  # 入队 → worker 取走
+    wait_token_ms: float = 0.0  # 取 token 等待
+    solve_ms: float = 0.0  # Turnstile 求解耗时
+    upstream_ms: float = 0.0  # 上游提交+轮询
+    retry_ms: float = 0.0  # 重试退避累计
+    total_ms: float = 0.0  # 全程
+    status: str = "completed"  # completed / error
+    trace_id: str = ""  # B2: 全链路 traceId（日志/审计/慢日志 grep 串联）
+    submit_ms: float = 0.0  # B3: 上游提交首字节耗时
+    poll_ms: float = 0.0  # B3: 上游轮询到完成耗时
     created_at: float = field(default_factory=time.time)
 
     def slowest_stage(self) -> str:
@@ -67,8 +71,7 @@ class SlowLog:
     超容量淘汰最旧；所有方法 O(1)（stats 为 O(n)，n≤maxsize）。
     """
 
-    def __init__(self, enabled: bool = True, threshold_ms: float = 5000.0,
-                 maxsize: int = 500):
+    def __init__(self, enabled: bool = True, threshold_ms: float = 5000.0, maxsize: int = 500):
         self._enabled = enabled
         self._threshold_ms = threshold_ms
         self._buf: deque[SlowSample] = deque(maxlen=max(1, maxsize))
@@ -91,8 +94,7 @@ class SlowLog:
         with self._lock:
             items = list(self._buf)
         if not items:
-            return {"count": 0, "avg_total_ms": 0.0, "max_total_ms": 0.0,
-                    "slowest_stage": None}
+            return {"count": 0, "avg_total_ms": 0.0, "max_total_ms": 0.0, "slowest_stage": None}
         totals = [s.total_ms for s in items]
         slowest = max(items, key=lambda s: s.total_ms)
         return {

@@ -14,6 +14,7 @@ const ChatPlayground = lazy(() => import('./pages/ChatPlayground').then(m => ({ 
 const GeneratePage = lazy(() => import('./pages/Generate').then(m => ({ default: m.GeneratePage })));
 const HealthPage = lazy(() => import('./pages/Health').then(m => ({ default: m.HealthPage })));
 const SecurityPage = lazy(() => import('./pages/Security').then(m => ({ default: m.SecurityPage })));
+const EcosystemPage = lazy(() => import('./pages/Ecosystem').then(m => ({ default: m.EcosystemPage })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/generate" element={<GeneratePage />} />
             <Route path="/health" element={<HealthPage />} />
             <Route path="/security" element={<SecurityPage />} />
+            <Route path="/ecosystem" element={<EcosystemPage />} />
           </Routes>
         </Suspense>
       </Layout>

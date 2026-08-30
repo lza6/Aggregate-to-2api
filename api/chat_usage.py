@@ -1,4 +1,5 @@
 """聊天 API 用量记录与额度统计。"""
+
 from __future__ import annotations
 
 import os
@@ -110,9 +111,7 @@ class ChatUsageTracker:
         )
         model_rows = await model_cursor.fetchall()
 
-        today_start = datetime.combine(
-            datetime.now().date(), datetime.min.time()
-        ).timestamp()
+        today_start = datetime.combine(datetime.now().date(), datetime.min.time()).timestamp()
         today_row = await self._query_one(
             "SELECT COUNT(*), COALESCE(SUM(prompt_tokens + completion_tokens + reasoning_tokens), 0) "
             "FROM chat_usage WHERE created_at >= ?",
@@ -158,12 +157,9 @@ class ChatUsageTracker:
         now = time.time()
         available = sum(1 for entry in proxy_pool.entries if entry.available(now))
         effective_proxies = max(available, 1)
-        per_proxy = max(
-            0, int(os.getenv("IF_TRYINGOPEN_HOURLY_PER_IP", "20") or 20)
-        )
+        per_proxy = max(0, int(os.getenv("IF_TRYINGOPEN_HOURLY_PER_IP", "20") or 20))
         used_row = await self._query_one(
-            "SELECT COUNT(*) FROM chat_usage "
-            "WHERE created_at > ? AND success = 1",
+            "SELECT COUNT(*) FROM chat_usage " "WHERE created_at > ? AND success = 1",
             (now - 3600,),
         )
         used = int(used_row[0] or 0)

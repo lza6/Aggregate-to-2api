@@ -3,7 +3,7 @@
 验证 Engine 在 IF_WORKER_AUTO=true 时根据排队长度和空闲时间
 在 [WORKERS_MIN, WORKERS_MAX] 区间内弹性增减 worker。
 """
-import asyncio
+
 import time
 
 import pytest
@@ -214,7 +214,9 @@ async def test_scale_down_per_cycle_limited(auto_scale_config, tmp_db):
     finally:
         await e.stop()
 
+
 # ── P-TEST-A3 追加：_shrink_one_worker 与 _resume_from_queue ─────────
+
 
 @pytest.mark.asyncio
 async def test_shrink_one_worker_removes_most_idle(auto_scale_config, tmp_db):
@@ -241,6 +243,7 @@ async def test_shrink_one_worker_removes_most_idle(auto_scale_config, tmp_db):
 @pytest.mark.asyncio
 async def test_shrink_on_empty_workers_noop(tmp_db):
     from api.worker import Engine
+
     engine = Engine(tmp_db)
     engine._shrink_one_worker()  # 空 worker 列表不抛错
     assert engine._workers == []
@@ -250,6 +253,7 @@ async def test_shrink_on_empty_workers_noop(tmp_db):
 async def test_resume_from_queue_without_db_returns_zero(tmp_db):
     """未启用持久化队列（_queue_db=None）→ 恢复 0 条。"""
     from api.worker import Engine
+
     engine = Engine(tmp_db)
     assert await engine._resume_from_queue() == 0
 

@@ -30,6 +30,7 @@ class TestErrorCodes:
     def test_category_format(self):
         """所有错误码应遵循 CATEGORY.NNN 格式。"""
         import re
+
         for name in dir(ErrorCodes):
             if name.startswith("_"):
                 continue
@@ -55,11 +56,20 @@ class TestLegacyCodeMapping:
     def test_all_legacy_codes_mapped(self):
         """所有旧版常量应映射到分层格式。"""
         legacy = [
-            "QUEUE_FULL", "RATE_LIMITED", "INVALID_MODEL",
-            "INVALID_PROMPT", "INVALID_RATIO", "PROVIDER_DOWN",
-            "SOLVER_CIRCUIT_OPEN", "TASK_TIMEOUT",
-            "PROVIDER_OUT_OF_CREDITS", "NOT_FOUND", "UNAUTHORIZED",
-            "IDEMPOTENCY_KEY_EXISTS", "BAD_REQUEST", "INTERNAL_ERROR",
+            "QUEUE_FULL",
+            "RATE_LIMITED",
+            "INVALID_MODEL",
+            "INVALID_PROMPT",
+            "INVALID_RATIO",
+            "PROVIDER_DOWN",
+            "SOLVER_CIRCUIT_OPEN",
+            "TASK_TIMEOUT",
+            "PROVIDER_OUT_OF_CREDITS",
+            "NOT_FOUND",
+            "UNAUTHORIZED",
+            "IDEMPOTENCY_KEY_EXISTS",
+            "BAD_REQUEST",
+            "INTERNAL_ERROR",
         ]
         for code in legacy:
             resolved = _resolve_code(code)
@@ -69,11 +79,20 @@ class TestLegacyCodeMapping:
     def test_legacy_map_contains_all_old_codes(self):
         """_LEGACY_CODE_MAP 覆盖所有旧版常量。"""
         expected = {
-            "QUEUE_FULL", "RATE_LIMITED", "INVALID_MODEL",
-            "INVALID_PROMPT", "INVALID_RATIO", "PROVIDER_DOWN",
-            "SOLVER_CIRCUIT_OPEN", "TASK_TIMEOUT",
-            "PROVIDER_OUT_OF_CREDITS", "NOT_FOUND", "UNAUTHORIZED",
-            "IDEMPOTENCY_KEY_EXISTS", "BAD_REQUEST", "INTERNAL_ERROR",
+            "QUEUE_FULL",
+            "RATE_LIMITED",
+            "INVALID_MODEL",
+            "INVALID_PROMPT",
+            "INVALID_RATIO",
+            "PROVIDER_DOWN",
+            "SOLVER_CIRCUIT_OPEN",
+            "TASK_TIMEOUT",
+            "PROVIDER_OUT_OF_CREDITS",
+            "NOT_FOUND",
+            "UNAUTHORIZED",
+            "IDEMPOTENCY_KEY_EXISTS",
+            "BAD_REQUEST",
+            "INTERNAL_ERROR",
         }
         assert set(_LEGACY_CODE_MAP.keys()) == expected
 
@@ -232,6 +251,7 @@ class TestErrorResponse:
         """响应结构应为 {error: {code, message, details}}。"""
         resp = error_response(ErrorCodes.BAD_REQUEST, "错误", 400, {"field": "x"})
         import json
+
         body = json.loads(resp.body)
         assert "error" in body
         assert body["error"]["code"] == "VAL.004"
@@ -301,5 +321,6 @@ class TestEdgeCases:
         """未知旧版错误码的 error_response 应保持原样。"""
         resp = error_response("UNKNOWN", "test", 400)
         import json
+
         body = json.loads(resp.body)
         assert body["error"]["code"] == "UNKNOWN"

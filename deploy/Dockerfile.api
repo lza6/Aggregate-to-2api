@@ -1,4 +1,5 @@
 # ===== 第一阶段：构建依赖 =====
+# build context = 仓库根（..），requirements.txt 在根，api/ 在根。
 FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -21,7 +22,7 @@ WORKDIR /app
 # 仅从 builder 复制已安装的依赖
 COPY --from=builder /root/.local /root/.local
 
-# 复制应用源码
+# 复制应用源码（context 为仓库根，api/ 在根）
 COPY api ./api
 
 # 确保数据目录存在
@@ -29,7 +30,7 @@ RUN mkdir -p /app/data
 
 EXPOSE 8100
 
-# 健康检查
+# 健康检查：用 /v1/healthz（status=ok|degraded）判定 readiness，与 docker-compose 的 livez 区分口径。
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request; import json; r = urllib.request.urlopen('http://127.0.0.1:8100/v1/healthz', timeout=5); body = json.loads(r.read()); assert body.get('status') in ('ok', 'degraded'), f'healthz status: {body.get(\"status\")}'"
 

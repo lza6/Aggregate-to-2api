@@ -4,6 +4,7 @@
 熔断阈值触发 OPEN、half-open 探测放行、探测成功恢复、连续失败重置。
 全部使用独立 SolverGuard 实例（不触碰模块级单例），避免污染服务状态。
 """
+
 import time
 
 import pytest
@@ -64,7 +65,14 @@ class TestStats:
         assert g.snapshot()["rejected_total"] == 2
 
     def test_reason_categories_are_known(self):
-        assert set(REASON_CATEGORIES) == {"timeout", "transport", "http_error", "rate_limit", "solver_rejected", "other"}
+        assert set(REASON_CATEGORIES) == {
+            "timeout",
+            "transport",
+            "http_error",
+            "rate_limit",
+            "solver_rejected",
+            "other",
+        }
 
 
 # ── 熔断状态机 ────────────────────────────────────
@@ -207,4 +215,3 @@ class TestClusterFederation:
         g.record_success(0.5, node_url="http://solver-1:8001")
         assert g.circuit_open is False
         assert g.snapshot()["solver_status"] == "ok"
-

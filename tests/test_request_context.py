@@ -9,7 +9,6 @@
 6. 并发请求隔离（各自的 context 不互相污染）
 7. trace_id 从请求头 X-Trace-ID 提取
 """
-import uuid
 
 import pytest
 
@@ -111,15 +110,19 @@ class TestRequestContextMiddleware:
             nonlocal context_in_handler
             context_in_handler = get_current_context()
             # send dummy response
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
 
         middleware = RequestContextMiddleware(app)
         await middleware(scope, _mock_receive, _mock_send)
@@ -142,15 +145,19 @@ class TestRequestContextMiddleware:
         }
 
         async def app(scope, receive, send):
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
 
         middleware = RequestContextMiddleware(app)
         await middleware(scope, _mock_receive, _mock_send)
@@ -197,15 +204,19 @@ class TestRequestContextMiddleware:
             await _mock_send(message)
 
         async def app(scope, receive, send):
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
 
         middleware = RequestContextMiddleware(app)
         await middleware(scope, _mock_receive, send_capture)
@@ -235,15 +246,19 @@ class TestRequestContextMiddleware:
                 await _mock_send(message)
 
             async def app(scope, receive, send):
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b"",
-                })
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 200,
+                        "headers": [],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b"",
+                    }
+                )
 
             middleware = RequestContextMiddleware(app)
             await middleware(scope, _mock_receive, send_capture)
@@ -270,15 +285,19 @@ class TestRequestContextMiddleware:
             nonlocal trace_in_handler
             ctx = get_current_context()
             trace_in_handler = ctx.trace_id if ctx else None
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
 
         middleware = RequestContextMiddleware(app)
         await middleware(scope, _mock_receive, _mock_send)
@@ -301,15 +320,19 @@ class TestRequestContextMiddleware:
             nonlocal trace_in_handler
             ctx = get_current_context()
             trace_in_handler = ctx.trace_id if ctx else None
-            await send({
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
 
         middleware = RequestContextMiddleware(app)
         await middleware(scope, _mock_receive, _mock_send)
@@ -340,15 +363,19 @@ class TestRequestContextMiddleware:
                     result = None
                 else:
                     result = f"{ctx.client_ip}:{ctx.trace_id}"
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b"",
-                })
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 200,
+                        "headers": [],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b"",
+                    }
+                )
 
             middleware = RequestContextMiddleware(app)
             await middleware(scope, _mock_receive, _mock_send)
@@ -384,10 +411,14 @@ class TestLogRecordFilter:
         token = request_context_var.set(ctx)
         try:
             import logging
+
             record = logging.LogRecord(
-                name="test", level=logging.INFO,
-                pathname=__file__, lineno=42,
-                msg="处理请求", args=(),
+                name="test",
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=42,
+                msg="处理请求",
+                args=(),
                 exc_info=None,
             )
             f = RequestIdLogFilter()
@@ -402,10 +433,14 @@ class TestLogRecordFilter:
         from api.context import RequestIdLogFilter
 
         import logging
+
         record = logging.LogRecord(
-            name="test", level=logging.INFO,
-            pathname=__file__, lineno=42,
-            msg="服务启动中", args=(),
+            name="test",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=42,
+            msg="服务启动中",
+            args=(),
             exc_info=None,
         )
         f = RequestIdLogFilter()
@@ -427,10 +462,14 @@ class TestLogRecordFilter:
         token = request_context_var.set(ctx)
         try:
             import logging
+
             record = logging.LogRecord(
-                name="test", level=logging.INFO,
-                pathname=__file__, lineno=42,
-                msg="正在生成图像 [trace=abcdef1234567890]", args=(),
+                name="test",
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=42,
+                msg="正在生成图像 [trace=abcdef1234567890]",
+                args=(),
                 exc_info=None,
             )
             f = RequestIdLogFilter()
@@ -442,6 +481,7 @@ class TestLogRecordFilter:
 
 
 # ── 辅助函数 ─────────────────────────────────
+
 
 async def _mock_receive() -> dict:
     return {"type": "http.disconnect"}

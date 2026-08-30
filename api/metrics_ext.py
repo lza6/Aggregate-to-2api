@@ -4,6 +4,7 @@
 而 prometheus 全局 REGISTRY 不会清——重复注册会抛 Duplicated timeseries。
 统一走 _metric 工厂：已注册同名指标时复用既有 collector。
 """
+
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, REGISTRY
 
 
@@ -39,7 +40,13 @@ requests_total = _metric(Counter, "imagefree_requests_total", "累计请求数",
 images_total = _metric(Counter, "imagefree_images_total", "累计成功出图数", ("provider",))
 errors_total = _metric(Counter, "imagefree_errors_total", "累计失败数", ("provider", "reason"))
 errors_by_code = _metric(Counter, "imagefree_errors_by_code", "分层错误码分布（P0-P1 高频）", ("code",))
-generate_duration = _metric(Histogram, "imagefree_generate_duration_seconds", "生成耗时", ("provider", "model"), buckets=[1, 5, 10, 30, 60, 120, 300])
+generate_duration = _metric(
+    Histogram,
+    "imagefree_generate_duration_seconds",
+    "生成耗时",
+    ("provider", "model"),
+    buckets=[1, 5, 10, 30, 60, 120, 300],
+)
 processing_gauge = _metric(Gauge, "imagefree_processing", "当前生成中的任务数")
 queue_size = _metric(Gauge, "imagefree_queued", "当前排队任务数")
 token_pool_watermark = _metric(Gauge, "imagefree_token_pool_watermark", "Token 池水位", ("pool",))
@@ -87,6 +94,7 @@ def imagefree_metrics(engine_snapshot: dict, stats_overview: dict, solver_snapsh
     # 分层错误码分布增量（P0-P1 高频；进程内计数，非 DB 累计）
     try:
         from .error_tracker import snapshot as _err_snapshot
+
         for _code, _n in _err_snapshot().items():
             _counter_inc_absolute(errors_by_code, int(_n), _code)
     except Exception:

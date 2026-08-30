@@ -8,9 +8,9 @@
 - _parse_input_images（>3 拒绝 / 非 data URI / 坏 base64 / 超大）
 - _uptime_human（秒/分钟/小时/天）
 """
+
 import base64
 import os
-import sys
 import tempfile
 
 import pytest
@@ -37,8 +37,7 @@ def _b64(data: bytes) -> str:
 
 
 PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
-    "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk" "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 )
 
 
@@ -111,6 +110,7 @@ class TestParseInputImage:
 
     def test_oversize_413(self):
         from api import config
+
         big = b"x" * (config.MAX_IMAGE_BYTES + 1)
         with pytest.raises(AppError) as ei:
             _parse_input_image(f"data:image/png;base64,{_b64(big)}")
@@ -124,9 +124,13 @@ class TestParseInputImage:
 
     def test_private_ip_ssrf_rejected(self):
         # 用字面 IPv4 主机（无需 DNS）：私网/回环/链路本地一律拒绝
-        for u in ("http://127.0.0.1/x.png", "http://10.0.0.1/x.png",
-                  "http://192.168.1.1/x.png", "http://172.16.0.1/x.png",
-                  "http://169.254.1.1/x.png"):
+        for u in (
+            "http://127.0.0.1/x.png",
+            "http://10.0.0.1/x.png",
+            "http://192.168.1.1/x.png",
+            "http://172.16.0.1/x.png",
+            "http://169.254.1.1/x.png",
+        ):
             with pytest.raises(AppError) as ei:
                 _parse_input_image(u)
             assert ei.value.status_code in (400, 422)
@@ -179,6 +183,7 @@ class TestParseInputImages:
 
     def test_oversize_413(self):
         from api import config
+
         big = b"x" * (config.MAX_IMAGE_BYTES + 1)
         with pytest.raises(AppError) as ei:
             _parse_input_images([f"data:image/png;base64,{_b64(big)}"])
@@ -209,14 +214,17 @@ class TestRequestBodyLimit:
     不启动完整 app（避免 lifespan/worker/solver 预热），只挂中间件 + 一个回显路由，
     用极小的 max_body_size 验证 413 门禁本身生效，保持轻量、不挂。
     """
+
     def _mw(self):
         import starlette.middleware.body_limit as _bl
+
         MW = getattr(_bl, "RequestBodyLimitMiddleware", None) or getattr(_bl, "BodySizeLimitMiddleware")
         return MW
 
     def _app(self, limit):
         from fastapi import FastAPI
         from fastapi.responses import JSONResponse
+
         app = FastAPI()
 
         @app.post("/v1/generate")
@@ -228,13 +236,14 @@ class TestRequestBodyLimit:
 
     def test_oversized_request_body_413(self):
         from starlette.testclient import TestClient
+
         c = TestClient(self._app(64), raise_server_exceptions=False)
-        r = c.post("/v1/generate", content=b"x" * 4096,
-                   headers={"Content-Type": "application/json"})
+        r = c.post("/v1/generate", content=b"x" * 4096, headers={"Content-Type": "application/json"})
         assert r.status_code == 413
 
     def test_small_body_passes_guard(self):
         from starlette.testclient import TestClient
+
         c = TestClient(self._app(64), raise_server_exceptions=False)
         r = c.post("/v1/generate", content=b"ok", headers={"Content-Type": "application/json"})
         assert r.status_code == 200

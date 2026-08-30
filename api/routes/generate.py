@@ -1,4 +1,5 @@
 """生成相关路由（v4.2 拆分：main.py 迁移）。"""
+
 from __future__ import annotations
 
 
@@ -26,6 +27,7 @@ def _guard(request: Request, prompt: str) -> None:
     （Authorization: Bearer / X-API-Key / ?api_key=）。未配置 IF_API_KEYS 时保持开放兼容。
     """
     from .. import auth
+
     auth.guard_generate_request(request)
     check_generate_request(request, prompt)
 
@@ -38,7 +40,14 @@ def _prepare(request: Request, req: GenerateRequest) -> None:
     """
     _guard(request, req.prompt)
     _validate_ratio(req.aspect_ratio)
-    _validate_model(req.model, "txt2vid" if req.duration else "txt2img")
+    # 图生视频（images 非空）用 img2vid，否则 duration 非空为 txt2vid，默认 txt2img
+    if req.images:
+        kind = "img2vid"
+    elif req.duration:
+        kind = "txt2vid"
+    else:
+        kind = "txt2img"
+    _validate_model(req.model, kind)
     req.client_ip = request.state.client_ip if hasattr(request.state, "client_ip") else None
     req.user_agent = request.headers.get("user-agent", "")[:500] if request.headers.get("user-agent") else "Unknown"
 
@@ -62,8 +71,7 @@ async def generate_sync(request: Request, req: GenerateRequest):
     body = task_to_public(task)
     body["status"] = "queued"
     body["error"] = "仍在排队/生成中，GET /v1/tasks/{id} 查询"
-    return JSONResponse(status_code=202, content=body,
-                        headers={"Location": f"{request.base_url}v1/tasks/{task_id}"})
+    return JSONResponse(status_code=202, content=body, headers={"Location": f"{request.base_url}v1/tasks/{task_id}"})
 
 
 @router.post("/v1/generate/async", response_model=TaskInfo, summary="生成图片/视频（异步，立即返回）")

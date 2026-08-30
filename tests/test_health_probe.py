@@ -7,7 +7,7 @@
 4. 切换不丢任务（failover 后 generate 仍正常返回）
 5. IF_HEALTH_CHECK_ENABLED=0 时跳过健康检查循环
 """
-import asyncio
+
 import os
 import time
 
@@ -22,17 +22,20 @@ from api.providers.registry import Registry
 
 # ── Mock 提供商 ──────────────────────────────────────
 MODEL_A = ModelSpec(
-    id="prov_a/model-x", provider="prov_a",
+    id="prov_a/model-x",
+    provider="prov_a",
     upstream_model="model-x",
     capabilities=(CAP_TXT2IMG, CAP_IMG2IMG),
 )
 MODEL_B = ModelSpec(
-    id="prov_b/model-y", provider="prov_b",
+    id="prov_b/model-y",
+    provider="prov_b",
     upstream_model="model-y",
     capabilities=(CAP_TXT2IMG,),
 )
 MODEL_C = ModelSpec(
-    id="prov_c/model-z", provider="prov_c",
+    id="prov_c/model-z",
+    provider="prov_c",
     upstream_model="model-z",
     capabilities=(CAP_IMG2IMG,),
 )
@@ -40,6 +43,7 @@ MODEL_C = ModelSpec(
 
 class MockProviderA(Provider):
     """支持 txt2img+img2img，health_check 返回当前 health_status。"""
+
     prefix = "prov_a"
     display_name = "Provider A"
     models = {"prov_a/model-x": MODEL_A}
@@ -50,9 +54,16 @@ class MockProviderA(Provider):
         self.last_health_check = time.time()
         self.generated: list[str] = []
 
-    async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1",
-                       images: list[bytes] | None = None, resolution: str = "1K",
-                       download: bool = False, **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str = "1:1",
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         self.generated.append(prompt)
         return GenerationResult(status="completed", asset_url="https://a.example/img.png")
 
@@ -63,12 +74,14 @@ class MockProviderA(Provider):
 
 class MockProviderB(Provider):
     """支持 txt2img（model-y）和 txt2img+img2img（model-x-alt），health_check 返回当前 health_status。"""
+
     prefix = "prov_b"
     display_name = "Provider B"
     models = {
         "prov_b/model-y": MODEL_B,
         "prov_b/model-x-alt": ModelSpec(
-            id="prov_b/model-x-alt", provider="prov_b",
+            id="prov_b/model-x-alt",
+            provider="prov_b",
             upstream_model="model-x-alt",
             capabilities=(CAP_TXT2IMG, CAP_IMG2IMG),
         ),
@@ -80,9 +93,16 @@ class MockProviderB(Provider):
         self.last_health_check = time.time()
         self.generated: list[str] = []
 
-    async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1",
-                       images: list[bytes] | None = None, resolution: str = "1K",
-                       download: bool = False, **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str = "1:1",
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         self.generated.append(prompt)
         return GenerationResult(status="completed", asset_url="https://b.example/img.png")
 
@@ -93,6 +113,7 @@ class MockProviderB(Provider):
 
 class MockProviderC(Provider):
     """仅支持 img2img，用于验证能力不匹配场景。health_check 返回当前 health_status。"""
+
     prefix = "prov_c"
     display_name = "Provider C"
     models = {"prov_c/model-z": MODEL_C}
@@ -102,9 +123,16 @@ class MockProviderC(Provider):
         self.health_status = "healthy"
         self.last_health_check = time.time()
 
-    async def generate(self, model: str, prompt: str, aspect_ratio: str = "1:1",
-                       images: list[bytes] | None = None, resolution: str = "1K",
-                       download: bool = False, **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str = "1:1",
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         return GenerationResult(status="completed", asset_url="https://c.example/img.png")
 
     async def health_check(self) -> str:
@@ -134,10 +162,12 @@ class TestHealthCheckExecution:
         for p in reg.providers.values():
             p.health_status = "unknown"
             p.last_health_check = 0.0
+
             # 覆写 health_check 使其返回 healthy
             async def _healthy(_self=p):
                 _self.last_health_check = time.time()
                 return "healthy"
+
             p.health_check = _healthy
 
         await reg.health_check_all()
@@ -343,6 +373,7 @@ class TestHealthCheckDisabled:
     def test_health_check_enabled_config(self):
         """IF_HEALTH_CHECK_ENABLED 默认应为 True。"""
         import api.config as cfg
+
         assert cfg.IF_HEALTH_CHECK_ENABLED is True
 
     @pytest.mark.asyncio
@@ -351,9 +382,11 @@ class TestHealthCheckDisabled:
         reg = fresh_registry
         for p in reg.providers.values():
             p.health_status = "unknown"
+
             async def _healthy(_self=p):
                 _self.last_health_check = time.time()
                 return "healthy"
+
             p.health_check = _healthy
         await reg.health_check_all()
         for p in reg.providers.values():

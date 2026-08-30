@@ -12,6 +12,7 @@
   - 若所有节点均不可用，集群整体进入 OPEN 状态并按周期放行探测。
 - 暴露：snapshot() 供 /healthz, /v1/stats 与 /metrics 消费，包含 nodes 明细。
 """
+
 from __future__ import annotations
 
 import logging
@@ -153,7 +154,11 @@ class SolverNodeState:
         win_ok = sum(1 for _, ok, _ in win if ok)
         win_dur = sum(d for _, _, d in win)
         is_rl = self._rate_limited_until > now
-        status = "circuit_open" if (self._circuit_open or is_rl) else ("degraded" if self._consecutive_failures > 0 else "ok")
+        status = (
+            "circuit_open"
+            if (self._circuit_open or is_rl)
+            else ("degraded" if self._consecutive_failures > 0 else "ok")
+        )
 
         return {
             "url": self.url,
@@ -376,7 +381,9 @@ class SolverGuard:
         all_open = bool(node_snaps and all(n["circuit_open"] for n in node_snaps))
         max_consecutive = max((n["consecutive_failures"] for n in node_snaps), default=0)
         last_failure = max((n["last_failure_at"] for n in node_snaps if n["last_failure_at"] is not None), default=None)
-        opened_at = min((n["circuit_opened_at"] for n in node_snaps if n["circuit_opened_at"] is not None), default=None)
+        opened_at = min(
+            (n["circuit_opened_at"] for n in node_snaps if n["circuit_opened_at"] is not None), default=None
+        )
 
         cluster_status = "circuit_open" if all_open else ("degraded" if (any_open or max_consecutive > 0) else "ok")
 

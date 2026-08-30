@@ -8,10 +8,14 @@
 
 独立轻量组件，不引入外部依赖；进程重启即清零（符合诊断数据语义，与 slow_log 一致）。
 """
+
 from __future__ import annotations
 
 import threading
 
+# 保留 threading.Lock（非 asyncio.Lock）：record/snapshot 为纯内存 dict 计数（微秒级），
+# asyncio 单线程事件循环无竞争零阻塞；换 asyncio.Lock 会把同步 record 传染成 async，
+# 污染 handlers/metrics_ext 等同步调用链。此锁非 async 阻塞源。
 _lock = threading.Lock()
 _counts: dict[str, int] = {}
 
@@ -54,13 +58,16 @@ def reset() -> None:
 
 
 # ── 前端错误遥测（D5）：独立计数 + ring buffer，不污染后端 P0-P1 聚合 ──
+# 保留 threading.Lock：与 _lock 同理，纯内存计数微秒级，asyncio 无竞争零阻塞。
 _frontend_lock = threading.Lock()
 _frontend_counts: dict[str, int] = {}
 _frontend_recent: list[dict] = []
 _FRONTEND_MAX_RECENT = 50
 
 
-def record_frontend_error(*, code: str, message: str, stack: str | None = None, url: str | None = None, ua: str | None = None) -> None:
+def record_frontend_error(
+    *, code: str, message: str, stack: str | None = None, url: str | None = None, ua: str | None = None
+) -> None:
     """记录一次前端错误（幂等，线程安全）。与后端 AppError 计数隔离。"""
     if not code:
         code = "FE.UNKNOWN"

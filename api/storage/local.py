@@ -1,4 +1,5 @@
 """单机内存与 SQLite 存储适配实现（Zero-External-Dependency 模式）。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -64,6 +65,7 @@ class SQLiteLeaseLock(DistributedLock):
         if self._store is None:
             from .. import config
             from ..db.lease_store import LeaseStore
+
             path = self._db_path or os.path.join(os.path.dirname(config.DB_FILE) or ".", "edit_leases.db")
             self._store = LeaseStore(path)
         return self._store

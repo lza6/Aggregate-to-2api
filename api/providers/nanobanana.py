@@ -13,6 +13,7 @@
   轮询 GET /api/tasks/{taskId} 至 success 取 resultUrls。图生图换 editImageAction + imageUrls。
 - 亮点：号池每天签到续额，不是用完即丢 → 号池「每日自动签到」守护任务。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,16 @@ import httpx
 
 from .. import config
 from .action_sniffer import action_sniffer, is_stale_action_response
-from .base import CAP_IMG2IMG, CAP_TXT2IMG, MOCK_REGISTER, GenerationResult, ModelSpec, Provider, ProviderError, ProviderRateLimited
+from .base import (
+    CAP_IMG2IMG,
+    CAP_TXT2IMG,
+    MOCK_REGISTER,
+    GenerationResult,
+    ModelSpec,
+    Provider,
+    ProviderError,
+    ProviderRateLimited,
+)
 
 log = logging.getLogger("providers.nanobanana")
 
@@ -80,7 +90,9 @@ _CREDITS_PER_IMAGE = {
 _DEFAULT_CREDITS_PER_IMAGE = 4
 
 
-def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None) -> int:
+def image_credit_cost(
+    upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None
+) -> int:
     """按上游模型 + 分辨率返回单张图消耗的积分（镜像上游 encodeImageCost）。
 
     _CREDITS_PER_IMAGE 是唯一事实源：表内每个档位（含 `:1K/:2K/:4K`）都必须被本函数
@@ -88,7 +100,13 @@ def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | No
     """
     res = resolution or "1K"
     if upstream == "grok-imagine":
-        key = "grok-imagine:edit" if task_type == "edit" else "grok-imagine:quality" if quality_mode == "quality" else "grok-imagine:fast"
+        key = (
+            "grok-imagine:edit"
+            if task_type == "edit"
+            else "grok-imagine:quality"
+            if quality_mode == "quality"
+            else "grok-imagine:fast"
+        )
         return _CREDITS_PER_IMAGE.get(key, _DEFAULT_CREDITS_PER_IMAGE)
     lookup = upstream
     if upstream == "nano-banana-pro" and res == "4K":
@@ -128,19 +146,25 @@ class NanobananaProvider(Provider):
     def _build_models(self) -> None:
         for upstream, (name, caps) in _UPSTREAM_MODELS.items():
             self.models[f"nanobanana/{upstream}"] = ModelSpec(
-                id=f"nanobanana/{upstream}", provider=self.prefix, upstream_model=upstream,
-                capabilities=caps, display_name=name,
+                id=f"nanobanana/{upstream}",
+                provider=self.prefix,
+                upstream_model=upstream,
+                capabilities=caps,
+                display_name=name,
                 description="号池每日签到续额，非用完即丢",
                 aspect_ratios=("1:1", "3:4", "4:3", "9:16", "16:9", "21:9"),
-                resolutions=("1K", "2K", "4K"), credits=4, account_required=True,
+                resolutions=("1K", "2K", "4K"),
+                credits=4,
+                account_required=True,
             )
 
     def needs_account(self) -> bool:
         return True
 
     async def startup(self) -> None:
-        self._client = httpx.AsyncClient(proxy=config.PROXY, timeout=httpx.Timeout(60.0),
-                                         headers={"User-Agent": config.USER_AGENT})
+        self._client = httpx.AsyncClient(
+            proxy=config.PROXY, timeout=httpx.Timeout(60.0), headers={"User-Agent": config.USER_AGENT}
+        )
         self.accounts = self._load_accounts()
         # ISSUE-03: 启动后台 keepalive 嗅探（默认 6h 一次，提前发现上游改版自愈），幂等
         (self._action_sniffer or action_sniffer).start_keepalive()
@@ -157,6 +181,7 @@ class NanobananaProvider(Provider):
 
     def _load_accounts(self) -> list[dict]:
         from ..account_pool import account_pool
+
         accs = account_pool.get("nanobanana")
         # M1(审计修复): 生产进程过滤 mock 残留账号，防测试号泄漏上线
         if not MOCK_REGISTER:
@@ -176,6 +201,7 @@ class NanobananaProvider(Provider):
 
     async def credits(self) -> int | None:
         from ..account_pool import account_pool
+
         return account_pool.total_credits("nanobanana")
 
     async def health(self) -> dict:
@@ -191,9 +217,16 @@ class NanobananaProvider(Provider):
         s = json.dumps(obj, ensure_ascii=False)
         return s.replace("$", "$$") if "$" in s else s
 
-    async def generate(self, model: str, prompt: str, aspect_ratio: str,
-                       images: list[bytes] | None = None, resolution: str = "1K",
-                       download: bool = False, **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str,
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         if not self._client:
             return GenerationResult(status="error", error="nanobanana 未启动")
         acc = self._next_account()
@@ -225,9 +258,9 @@ class NanobananaProvider(Provider):
         # 仅当 acc 是真实号池账号（非 mock）才落库，避免测试号污染统计。
         if acc.get("email") and acc.get("cookie") != "mock-session":
             try:
-                cost = image_credit_cost(upstream, resolution,
-                                         task_type="edit" if images else None)
+                cost = image_credit_cost(upstream, resolution, task_type="edit" if images else None)
                 from ..account_pool import account_pool
+
                 account_pool.consume_credits("nanobanana", acc["email"], cost)
             except Exception as e:
                 log.warning("nanobanana 扣减积分失败 %s: %s", acc.get("email"), e)
@@ -235,16 +268,25 @@ class NanobananaProvider(Provider):
 
     def _action_headers(self, cookie: str, action_id: str) -> dict:
         return {
-            "Cookie": cookie, "Next-Action": action_id,
+            "Cookie": cookie,
+            "Next-Action": action_id,
             "Accept": "text/x-component",
             "Content-Type": "text/plain;charset=UTF-8",
             "Next-Router-State-Tree": "%5B%22%22%2C%7B%22children%22%3A%5B%22zh%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%5D%7D%5D%7D%5D%2Cnull%2Cnull%2Ctrue",
         }
 
     async def _submit_image(self, cookie, upstream, prompt, aspect_ratio, resolution) -> str:
-        body = [{"prompt": prompt, "model": upstream, "aspectRatio": aspect_ratio,
-                 "resolution": resolution, "outputFormat": "png",
-                 "googleSearch": False, "grokQualityMode": "fast"}]
+        body = [
+            {
+                "prompt": prompt,
+                "model": upstream,
+                "aspectRatio": aspect_ratio,
+                "resolution": resolution,
+                "outputFormat": "png",
+                "googleSearch": False,
+                "grokQualityMode": "fast",
+            }
+        ]
         r = await self._post_with_self_heal(_KIND_GENERATE, cookie, body)
         return await self._parse_action_response(r)
 
@@ -254,15 +296,25 @@ class NanobananaProvider(Provider):
             f"{self.base_url}/api/upload/nano-banana",
             headers={"Cookie": cookie, "User-Agent": config.USER_AGENT},
             files={"file": ("edit.png", images[0], "image/png")},
-            data={"model": upstream})
+            data={"model": upstream},
+        )
         if up.status_code != 200:
             raise ProviderError(f"nanobanana 上传失败: {up.status_code} {up.text[:120]}")
         url = (up.json() or {}).get("url")
         if not url:
             raise ProviderError(f"nanobanana 上传响应缺 url: {up.text[:120]}")
-        body = [{"prompt": prompt, "model": upstream, "imageUrls": [url],
-                 "aspectRatio": aspect_ratio, "resolution": "1K", "outputFormat": "png",
-                 "googleSearch": False, "grokQualityMode": "fast"}]
+        body = [
+            {
+                "prompt": prompt,
+                "model": upstream,
+                "imageUrls": [url],
+                "aspectRatio": aspect_ratio,
+                "resolution": "1K",
+                "outputFormat": "png",
+                "googleSearch": False,
+                "grokQualityMode": "fast",
+            }
+        ]
         r = await self._post_with_self_heal(_KIND_EDIT, cookie, body)
         return await self._parse_action_response(r)
 
@@ -274,16 +326,18 @@ class NanobananaProvider(Provider):
     async def _post_with_self_heal(self, kind: str, cookie: str, body: list) -> httpx.Response:
         """提交 Server Action；遇 404 / Action 不匹配时 force_refresh 嗅探并自愈重试一次。"""
         action_id = await self._get_action(kind)
-        r = await self._client.post(f"{self.base_url}/zh",
-                                    headers=self._action_headers(cookie, action_id),
-                                    content=self._rsc_encode(body))
+        r = await self._client.post(
+            f"{self.base_url}/zh", headers=self._action_headers(cookie, action_id), content=self._rsc_encode(body)
+        )
         if is_stale_action_response(r):
             log.warning("nanobanana %s Action 失配(%s)，触发嗅探自愈", kind, r.status_code)
             fresh_id = await self._get_action(kind, force_refresh=True)
             if fresh_id and fresh_id != action_id:
-                r = await self._client.post(f"{self.base_url}/zh",
-                                            headers=self._action_headers(cookie, fresh_id),
-                                            content=self._rsc_encode(body))
+                r = await self._client.post(
+                    f"{self.base_url}/zh",
+                    headers=self._action_headers(cookie, fresh_id),
+                    content=self._rsc_encode(body),
+                )
         return r
 
     async def _parse_action_response(self, r: httpx.Response) -> str:
@@ -320,8 +374,7 @@ class NanobananaProvider(Provider):
     async def _poll_task(self, cookie, task_id, timeout) -> str:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            r = await self._client.get(f"{self.base_url}/api/tasks/{task_id}",
-                                       headers={"Cookie": cookie})
+            r = await self._client.get(f"{self.base_url}/api/tasks/{task_id}", headers={"Cookie": cookie})
             data = r.json()
             state = data.get("state")
             if state == "success":
@@ -339,4 +392,3 @@ class NanobananaProvider(Provider):
                 raise ProviderError(f"nanobanana 生成失败: {str(data)[:200]}")
             await asyncio.sleep(3.0)
         raise ProviderError("nanobanana 生成超时")
-

@@ -20,6 +20,7 @@
 用法：
   python scripts/mock_cfsolver.py [--port 8001] [--node-id node-1] [--delay 0.1]
 """
+
 import argparse
 import asyncio
 import sys
@@ -33,9 +34,9 @@ import uvicorn
 app = FastAPI(title="Mock Turnstile Solver")
 
 _state = {
-    "fault": "ok",          # ok | fail | timeout | down
-    "delay": 0.2,           # 默认模拟求解延迟（秒）
-    "node_id": "node-default"
+    "fault": "ok",  # ok | fail | timeout | down
+    "delay": 0.2,  # 默认模拟求解延迟（秒）
+    "node_id": "node-default",
 }
 _results: dict[str, dict] = {}
 
@@ -50,7 +51,7 @@ async def turnstile(request: Request, url: str = "", sitekey: str = "", proxy: s
         "status": "process",
         "message": "solving turnstile",
         "start_time": start_time,
-        "node_id": _state["node_id"]
+        "node_id": _state["node_id"],
     }
     # 模拟真实求解耗时（异步并发，不阻塞事件循环）
     asyncio.create_task(_resolve(task_id, start_time))
@@ -70,7 +71,7 @@ async def _resolve(task_id: str, start_time: float) -> None:
             "status": "error",
             "elapsed_time": elapsed,
             "value": "captcha_fail",
-            "node_id": _state["node_id"]
+            "node_id": _state["node_id"],
         }
     elif fault == "timeout":
         _results[task_id] = {
@@ -78,21 +79,23 @@ async def _resolve(task_id: str, start_time: float) -> None:
             "elapsed_time": elapsed,
             "value": "timeout",
             "message": "Tugas timeout",
-            "node_id": _state["node_id"]
+            "node_id": _state["node_id"],
         }
     else:
         _results[task_id] = {
             "status": "success",
             "value": f"mock-token-{_state['node_id']}-{task_id[:8]}",
             "elapsed_time": elapsed,
-            "node_id": _state["node_id"]
+            "node_id": _state["node_id"],
         }
 
 
 @app.get("/result")
 async def result(id: str):
     if not id or id not in _results:
-        return JSONResponse(status_code=404, content={"status": "error", "message": "task_id tidak valid atau sudah expired"})
+        return JSONResponse(
+            status_code=404, content={"status": "error", "message": "task_id tidak valid atau sudah expired"}
+        )
 
     res = _results.get(id)
     if res.get("status") == "process":
@@ -142,7 +145,9 @@ def main():
     _state["node_id"] = args.node_id
 
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    print(f"[mock_cfsolver] node={args.node_id} delay={args.delay}s listening http://{args.host}:{args.port}", flush=True)
+    print(
+        f"[mock_cfsolver] node={args.node_id} delay={args.delay}s listening http://{args.host}:{args.port}", flush=True
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

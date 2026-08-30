@@ -1,4 +1,5 @@
 """全局异常处理器（v4.2 拆分：main.py 迁移）。"""
+
 from __future__ import annotations
 
 import logging
@@ -49,6 +50,7 @@ async def validation_exception_handler(request, exc):
     """
     error_tracker_record(ErrorCodes.BAD_REQUEST)
     from fastapi.exception_handlers import request_validation_exception_handler
+
     return await request_validation_exception_handler(request, exc)
 
 
@@ -58,6 +60,7 @@ def register_exception_handlers(app) -> None:
     app.add_exception_handler(Exception, generic_exception_handler)
     try:
         from fastapi.exceptions import RequestValidationError
+
         app.add_exception_handler(RequestValidationError, validation_exception_handler)
     except Exception:
         pass

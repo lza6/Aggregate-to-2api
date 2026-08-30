@@ -7,6 +7,7 @@
 U-02: 实时日志推送 — 前端可 WebSocket 连接 /v1/logs/ws 接收实时日志流。
 O-04: 深度可观测性 — 日志 + 指标 + 追踪联动。
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -7,6 +7,7 @@
 - LLM 返回合法 JSON / 纯文本 / 失败时分别处理；
 - 失败严格返回 None，不抛异常、不阻塞。
 """
+
 import asyncio
 import os
 
@@ -22,9 +23,7 @@ class TestRegexFastPath:
 
     def test_link_regex(self):
         mail = {"bodyHtml": '<a href="https://nanobanana-pro.com/api/auth/verify-email?token=abc&amp;c=1">确认</a>'}
-        assert me._regex_verify_link(mail) == (
-            "https://nanobanana-pro.com/api/auth/verify-email?token=abc"
-        )
+        assert me._regex_verify_link(mail) == ("https://nanobanana-pro.com/api/auth/verify-email?token=abc")
 
     def test_no_mail(self):
         assert me._regex_code(None) is None
@@ -44,9 +43,7 @@ class TestDisabledByDefault:
             return {"text": '{"code":"654321"}'}
 
         async def _run():
-            r = await me.extract_code(
-                {"bodyPreview": "请验证"}, ai=False, chat_fn=fake_chat, model="m"
-            )
+            r = await me.extract_code({"bodyPreview": "请验证"}, ai=False, chat_fn=fake_chat, model="m")
             return r
 
         r = asyncio.run(_run())
@@ -63,7 +60,9 @@ class TestAIFallback:
         async def _run():
             return await me.extract_code(
                 {"bodyPreview": "请确认您的邮箱"},
-                ai=True, chat_fn=fake_chat, model="m",
+                ai=True,
+                chat_fn=fake_chat,
+                model="m",
             )
 
         assert asyncio.run(_run()) == "654321"
@@ -75,12 +74,12 @@ class TestAIFallback:
         async def _run():
             return await me.extract_verify_link(
                 {"bodyHtml": "点击完成验证"},
-                ai=True, chat_fn=fake_chat, model="m",
+                ai=True,
+                chat_fn=fake_chat,
+                model="m",
             )
 
-        assert asyncio.run(_run()) == (
-            "https://nanobanana-pro.com/api/auth/verify-email?token=xyz&cb=1"
-        )
+        assert asyncio.run(_run()) == ("https://nanobanana-pro.com/api/auth/verify-email?token=xyz&cb=1")
 
     def test_regex_still_wins_when_present(self):
         async def fake_chat(model, messages):
@@ -88,7 +87,10 @@ class TestAIFallback:
 
         async def _run():
             return await me.extract_code(
-                {"bodyPreview": "验证码 112233"}, ai=True, chat_fn=fake_chat, model="m",
+                {"bodyPreview": "验证码 112233"},
+                ai=True,
+                chat_fn=fake_chat,
+                model="m",
             )
 
         assert asyncio.run(_run()) == "112233"
@@ -99,7 +101,10 @@ class TestAIFallback:
 
         async def _run():
             return await me.extract_code(
-                {"bodyPreview": "请验证"}, ai=True, chat_fn=fake_chat, model="m",
+                {"bodyPreview": "请验证"},
+                ai=True,
+                chat_fn=fake_chat,
+                model="m",
             )
 
         assert asyncio.run(_run()) is None
@@ -110,7 +115,10 @@ class TestAIFallback:
 
         async def _run():
             return await me.extract_code(
-                {"bodyPreview": "请验证"}, ai=True, chat_fn=fake_chat, model="m",
+                {"bodyPreview": "请验证"},
+                ai=True,
+                chat_fn=fake_chat,
+                model="m",
             )
 
         assert asyncio.run(_run()) is None

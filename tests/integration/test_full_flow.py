@@ -1,4 +1,5 @@
 """集成测试：完整文生图流程（全 mock 模式）。"""
+
 import asyncio
 import pytest
 
@@ -8,6 +9,7 @@ def _disable_rate_limit():
     """文生图主链路用例共享同一 per-IP 限速窗口；关闭限速避免前面
     用例的计数把本项目误伤为 429（P0-4 顺序污染，直接改模块级常量、不 reload）。"""
     import api.config as cfg
+
     saved = cfg.IF_REQUESTS_PER_MINUTE
     cfg.IF_REQUESTS_PER_MINUTE = 0
     yield
@@ -21,9 +23,14 @@ class TestFullFlow:
     async def test_txt2img_complete_flow(self, app_with_mocks):
         """同步提交文生图，轮询直到终态。"""
         client = app_with_mocks
-        r = await client.post("/v1/generate", json={
-            "prompt": "a cat", "aspect_ratio": "1:1", "model": "imagefree/default",
-        })
+        r = await client.post(
+            "/v1/generate",
+            json={
+                "prompt": "a cat",
+                "aspect_ratio": "1:1",
+                "model": "imagefree/default",
+            },
+        )
         assert r.status_code in (200, 202)
         body = r.json()
         assert "id" in body
@@ -90,8 +97,7 @@ class TestFullFlow:
         # P3-2: GC 可观测闭环
         assert "base64_gc" in body
         gc = body["base64_gc"]
-        for k in ("total_files", "hot_files", "cold_files",
-                  "pending_cleanup_count", "quota_gb", "usage_pct"):
+        for k in ("total_files", "hot_files", "cold_files", "pending_cleanup_count", "quota_gb", "usage_pct"):
             assert k in gc, f"base64_gc 缺少字段 {k}"
 
     async def test_gallery_endpoint(self, app_with_mocks):
@@ -102,13 +108,18 @@ class TestFullFlow:
         assert "items" in body
         assert "count" in body
 
+
 @pytest.mark.integration
 class TestIdempotencyFlow:
     """P-TEST-A8: 幂等 key 集成链路（conftest 已设 IF_IDEMPOTENCY_ENABLED=1）。"""
 
     async def test_same_key_returns_same_task(self, app_with_mocks):
-        payload = {"prompt": "a cat", "aspect_ratio": "1:1",
-                   "model": "imagefree/default", "idempotency_key": "itg-key-001"}
+        payload = {
+            "prompt": "a cat",
+            "aspect_ratio": "1:1",
+            "model": "imagefree/default",
+            "idempotency_key": "itg-key-001",
+        }
         r1 = await app_with_mocks.post("/v1/generate/async", json=payload)
         assert r1.status_code == 200
         r2 = await app_with_mocks.post("/v1/generate/async", json=payload)
@@ -116,10 +127,22 @@ class TestIdempotencyFlow:
         assert r1.json()["id"] == r2.json()["id"]
 
     async def test_different_key_different_task(self, app_with_mocks):
-        r1 = await app_with_mocks.post("/v1/generate/async", json={
-            "prompt": "a cat", "aspect_ratio": "1:1", "model": "imagefree/default",
-            "idempotency_key": "itg-key-a"})
-        r2 = await app_with_mocks.post("/v1/generate/async", json={
-            "prompt": "a cat", "aspect_ratio": "1:1", "model": "imagefree/default",
-            "idempotency_key": "itg-key-b"})
+        r1 = await app_with_mocks.post(
+            "/v1/generate/async",
+            json={
+                "prompt": "a cat",
+                "aspect_ratio": "1:1",
+                "model": "imagefree/default",
+                "idempotency_key": "itg-key-a",
+            },
+        )
+        r2 = await app_with_mocks.post(
+            "/v1/generate/async",
+            json={
+                "prompt": "a cat",
+                "aspect_ratio": "1:1",
+                "model": "imagefree/default",
+                "idempotency_key": "itg-key-b",
+            },
+        )
         assert r1.json()["id"] != r2.json()["id"]

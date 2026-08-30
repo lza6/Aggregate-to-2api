@@ -4,6 +4,7 @@
 1. 本地轻量离线 IP 段/前缀 + 内置中文国家映射（极速、无外部网络阻塞依赖）
 2. 生成 V2Ray / Clash / Shadowsocks / Socks5 / HTTP 订阅链接与标准格式
 """
+
 from __future__ import annotations
 
 import base64
@@ -103,6 +104,7 @@ def _query_ip_api_online(ip: str) -> dict | None:
     """调用免费无限 IP-API 接口获取精准省/市/ISP 归属地（带 1.5s 极速超时）。"""
     try:
         import urllib.request
+
         url = f"http://ip-api.com/json/{ip}?lang=zh-CN"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         with urllib.request.urlopen(req, timeout=1.5) as resp:
@@ -140,7 +142,29 @@ def guess_country(ip: str) -> dict:
         res = {"code": "LAN", "name": "本地回环", "desc": "本机服务 (127.0.0.1)", "emoji": "🏠"}
         _GEO_CACHE[ip] = res
         return res
-    if ip.startswith(("10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "169.254.")):
+    if ip.startswith(
+        (
+            "10.",
+            "192.168.",
+            "172.16.",
+            "172.17.",
+            "172.18.",
+            "172.19.",
+            "172.20.",
+            "172.21.",
+            "172.22.",
+            "172.23.",
+            "172.24.",
+            "172.25.",
+            "172.26.",
+            "172.27.",
+            "172.28.",
+            "172.29.",
+            "172.30.",
+            "172.31.",
+            "169.254.",
+        )
+    ):
         res = {"code": "LAN", "name": "局域网", "desc": "内网私有地址", "emoji": "🏢"}
         _GEO_CACHE[ip] = res
         return res
@@ -205,7 +229,7 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
         "path": "",
         "tls": "",
         "sni": "",
-        "alpn": ""
+        "alpn": "",
     }
     vmess_b64 = base64.b64encode(json.dumps(vmess_dict).encode("utf-8")).decode("utf-8")
     vmess_link = f"vmess://{vmess_b64}"
@@ -217,13 +241,7 @@ def format_proxy_protocols(raw_url: str, ip: str, port: int, country_info: dict,
     ss_link = f"ss://{ss_userinfo}@{ip}:{port}#{enc_name}"
 
     # 4. Clash 标准代理节点配置字典
-    clash_proxy = {
-        "name": node_name,
-        "type": "socks5",
-        "server": ip,
-        "port": port,
-        "udp": True
-    }
+    clash_proxy = {"name": node_name, "type": "socks5", "server": ip, "port": port, "udp": True}
 
     # 5. 一键导入 Scheme (支持一键拉起 V2RayN / Clash / Shadowrocket)
     v2ray_import = vmess_link
@@ -253,14 +271,7 @@ def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
     优先输出 ss:// (Shadowsocks) + vmess:// + socks5:// 混合格式。
     """
     if fmt == "clash":
-        lines = [
-            "port: 7890",
-            "socks-port: 7891",
-            "allow-lan: true",
-            "mode: rule",
-            "log-level: info",
-            "proxies:"
-        ]
+        lines = ["port: 7890", "socks-port: 7891", "allow-lan: true", "mode: rule", "log-level: info", "proxies:"]
         proxy_names = []
         for p in proxies:
             cp = p.get("clash_proxy") if p else None
@@ -268,30 +279,32 @@ def generate_subscription_text(proxies: list[dict], fmt: str = "base64") -> str:
                 continue
             name = cp["name"]
             proxy_names.append(name)
-            lines.append(f"  - name: \"{name}\"")
+            lines.append(f'  - name: "{name}"')
             lines.append(f"    type: {cp.get('type', 'socks5')}")
             lines.append(f"    server: {cp['server']}")
             lines.append(f"    port: {cp['port']}")
             lines.append("    udp: true")
 
-        quoted_names = [f"\"{n}\"" for n in proxy_names]
+        quoted_names = [f'"{n}"' for n in proxy_names]
         names_str = ", ".join(quoted_names)
 
-        lines.extend([
-            "proxy-groups:",
-            "  - name: \"🚀 节点选择\"",
-            "    type: select",
-            f"    proxies: [\"♻️ 自动选择\", \"DIRECT\", {names_str}]",
-            "  - name: \"♻️ 自动选择\"",
-            "    type: url-test",
-            "    url: http://www.gstatic.com/generate_204",
-            "    interval: 300",
-            f"    proxies: [{names_str}]",
-            "rules:",
-            "  - GEOIP,LAN,DIRECT",
-            "  - GEOIP,CN,DIRECT",
-            "  - MATCH,\"🚀 节点选择\""
-        ])
+        lines.extend(
+            [
+                "proxy-groups:",
+                '  - name: "🚀 节点选择"',
+                "    type: select",
+                f'    proxies: ["♻️ 自动选择", "DIRECT", {names_str}]',
+                '  - name: "♻️ 自动选择"',
+                "    type: url-test",
+                "    url: http://www.gstatic.com/generate_204",
+                "    interval: 300",
+                f"    proxies: [{names_str}]",
+                "rules:",
+                "  - GEOIP,LAN,DIRECT",
+                "  - GEOIP,CN,DIRECT",
+                '  - MATCH,"🚀 节点选择"',
+            ]
+        )
         return "\n".join(lines)
 
     links = []

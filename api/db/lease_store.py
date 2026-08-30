@@ -6,6 +6,7 @@
 - release：持锁者按 token 释放（DELETE WHERE key=? AND token=?）。
 - 异常宕机：无续租 → expires_at 过期 → 新 acquire 自动覆盖，杜绝僵尸死锁。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,8 +49,8 @@ class LeaseStore:
             await self._conn.execute("PRAGMA journal_mode=WAL")
             await self._conn.execute("PRAGMA synchronous=NORMAL")
             await self._conn.execute("PRAGMA busy_timeout=10000")
-            await self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
-            await self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+            await self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
+            await self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
             await self._conn.execute("PRAGMA temp_store=MEMORY")
             await self._conn.executescript(_SCHEMA)
             await self._conn.commit()
@@ -67,8 +68,7 @@ class LeaseStore:
         now = time.time()
         async with self._tx_lock:
             async with self._conn.execute("BEGIN IMMEDIATE"):
-                cur = await self._conn.execute(
-                    "SELECT expires_at FROM edit_leases WHERE key=?", (key,))
+                cur = await self._conn.execute("SELECT expires_at FROM edit_leases WHERE key=?", (key,))
                 row = await cur.fetchone()
                 if row and row["expires_at"] > now:
                     await self._conn.rollback()
@@ -99,15 +99,14 @@ class LeaseStore:
         await self.open()
         async with self._tx_lock:
             async with self._conn.execute("BEGIN IMMEDIATE"):
-                cur = await self._conn.execute(
-                    "DELETE FROM edit_leases WHERE key=? AND token=?", (key, token))
+                cur = await self._conn.execute("DELETE FROM edit_leases WHERE key=? AND token=?", (key, token))
                 await self._conn.commit()
                 return cur.rowcount > 0
 
     async def get(self, key: str) -> dict | None:
         await self.open()
         cur = await self._conn.execute(
-            "SELECT key, holder, token, expires_at, created_at FROM edit_leases WHERE key=?",
-            (key,))
+            "SELECT key, holder, token, expires_at, created_at FROM edit_leases WHERE key=?", (key,)
+        )
         row = await cur.fetchone()
         return dict(row) if row else None

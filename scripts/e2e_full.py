@@ -25,14 +25,13 @@
 用法：
   python scripts/e2e_full.py [--api-port 8101]
 """
+
 import argparse
 import os
 import socket
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 
 import httpx
 
@@ -79,28 +78,43 @@ class E2ERunner:
         self._solver_log = open(os.path.join(ROOT, "data", "e2e_solver.log"), "wb")
         p = subprocess.Popen(
             [PY, os.path.join(ROOT, "scripts", "mock_cfsolver.py"), "--port", str(self.solver_port)],
-            cwd=ROOT, stdout=self._solver_log, stderr=subprocess.STDOUT)
+            cwd=ROOT,
+            stdout=self._solver_log,
+            stderr=subprocess.STDOUT,
+        )
         self.procs.append(p)
         if not wait_port(self.solver_port, 15, "mock solver"):
             raise SystemExit(1)
         print("  [ok] mock cf_solver 已启动")
 
         env = dict(os.environ)
-        env.update({
-            "IF_HOST": "127.0.0.1", "IF_PORT": str(self.api_port),
-            "IF_CF_SOLVER_URL": f"http://127.0.0.1:{self.solver_port}",
-            "IF_MOCK_UPSTREAM": "1", "IF_MOCK_REGISTER": "1", "IF_ACCOUNT_AUTO": "0",
-            "IF_TURNSTILE_POLL_INTERVAL": "0.2", "IF_TOKEN_POOL_SIZE": "4",
-            "IF_DB_FILE": "data/e2e_full.db",
-            "IF_PROXY": "",
-            "HTTP_PROXY": "", "HTTPS_PROXY": "",
-            "IF_DLQ_ENABLED": "1", "IF_IDEMPOTENCY_ENABLED": "1",
-            "IF_SYNC_TIMEOUT": "30",
-        })
+        env.update(
+            {
+                "IF_HOST": "127.0.0.1",
+                "IF_PORT": str(self.api_port),
+                "IF_CF_SOLVER_URL": f"http://127.0.0.1:{self.solver_port}",
+                "IF_MOCK_UPSTREAM": "1",
+                "IF_MOCK_REGISTER": "1",
+                "IF_ACCOUNT_AUTO": "0",
+                "IF_TURNSTILE_POLL_INTERVAL": "0.2",
+                "IF_TOKEN_POOL_SIZE": "4",
+                "IF_DB_FILE": "data/e2e_full.db",
+                "IF_PROXY": "",
+                "HTTP_PROXY": "",
+                "HTTPS_PROXY": "",
+                "IF_DLQ_ENABLED": "1",
+                "IF_IDEMPOTENCY_ENABLED": "1",
+                "IF_SYNC_TIMEOUT": "30",
+            }
+        )
         self._api_log = open(os.path.join(ROOT, "data", "e2e_api.log"), "wb")
         p = subprocess.Popen(
             [PY, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", str(self.api_port)],
-            cwd=ROOT, env=env, stdout=self._api_log, stderr=subprocess.STDOUT)
+            cwd=ROOT,
+            env=env,
+            stdout=self._api_log,
+            stderr=subprocess.STDOUT,
+        )
         self.procs.append(p)
         if not wait_port(self.api_port, 60, "api"):
             raise SystemExit(1)
@@ -213,8 +227,7 @@ class E2ERunner:
         # P3-2: GC 可观测闭环
         gc = j.get("base64_gc") or {}
         self.check("统计含 base64_gc", "base64_gc" in j)
-        self.check("base64_gc 含 pending_cleanup_count",
-                   "pending_cleanup_count" in gc)
+        self.check("base64_gc 含 pending_cleanup_count", "pending_cleanup_count" in gc)
         r = self.get("/v1/gallery")
         self.check("画廊 HTTP 200", r["status"] == 200)
         r = self.get("/v1/errors")
@@ -245,11 +258,11 @@ class E2ERunner:
         self.check("指标含 imagefree_db_rows", "imagefree_db_rows" in text)
 
     def _verify_fault_tolerance(self) -> None:
-        self.post(f"/__fault?mode=down", timeout=2)
+        self.post("/__fault?mode=down", timeout=2)
         time.sleep(0.5)
         r = self.get("/v1/healthz")
         self.check("cf_solver 故障时健康检查仍工作", r["status"] == 200, str(r["status"]))
-        self.post(f"/__fault?mode=ok", timeout=2)
+        self.post("/__fault?mode=ok", timeout=2)
         time.sleep(1)
 
     def _report(self) -> None:

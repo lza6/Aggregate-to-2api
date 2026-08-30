@@ -2,6 +2,7 @@
 
 设计在 api/db/__init__.py 的 QueueDB 之上或替代之，独立于 imagefree.db。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,8 +46,8 @@ class QueueStore:
             await self._conn.execute("PRAGMA journal_mode=WAL")
             await self._conn.execute("PRAGMA synchronous=NORMAL")
             await self._conn.execute("PRAGMA busy_timeout=10000")
-            await self._conn.execute("PRAGMA cache_size=-64000")      # 64MB
-            await self._conn.execute("PRAGMA mmap_size=268435456")    # 256MB
+            await self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
+            await self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
             await self._conn.execute("PRAGMA temp_store=MEMORY")
             await self._conn.executescript(_SCHEMA)
             await self._conn.commit()
@@ -67,8 +68,7 @@ class QueueStore:
 
     async def mark_processing(self, task_id: str) -> None:
         await self.open()
-        await self._conn.execute(
-            "UPDATE task_queue SET status='processing' WHERE task_id=?", (task_id,))
+        await self._conn.execute("UPDATE task_queue SET status='processing' WHERE task_id=?", (task_id,))
         await self._conn.commit()
 
     async def mark_completed(self, task_id: str) -> None:
@@ -80,8 +80,8 @@ class QueueStore:
         """返回按 priority/seq 排序的 pending 任务 [(priority, seq, task_id)]。"""
         await self.open()
         cur = await self._conn.execute(
-            "SELECT priority, seq, task_id FROM task_queue WHERE status = 'pending'"
-            " ORDER BY priority ASC, seq ASC")
+            "SELECT priority, seq, task_id FROM task_queue WHERE status = 'pending'" " ORDER BY priority ASC, seq ASC"
+        )
         rows = await cur.fetchall()
         return [(r["priority"], r["seq"], r["task_id"]) for r in rows]
 
@@ -89,7 +89,6 @@ class QueueStore:
         """清理超期 pending 记录，返回删除数。"""
         await self.open()
         cutoff = time.time() - retention_days * 86400
-        cur = await self._conn.execute(
-            "DELETE FROM task_queue WHERE status='pending' AND created_at < ?", (cutoff,))
+        cur = await self._conn.execute("DELETE FROM task_queue WHERE status='pending' AND created_at < ?", (cutoff,))
         await self._conn.commit()
         return {"deleted": cur.rowcount}

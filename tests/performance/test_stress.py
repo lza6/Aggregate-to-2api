@@ -7,6 +7,7 @@
   IF_MOCK_UPSTREAM=1 IF_MOCK_REGISTER=1 IF_ACCOUNT_AUTO=0 \\
   python -m uvicorn api.main:app --host 127.0.0.1 --port 8100
 """
+
 import argparse
 import json
 import sys
@@ -27,12 +28,15 @@ def stress_test(api_url: str, concurrency: int = 50, timeout: int = 30):
     start = time.time()
     for i in range(concurrency):
         t0 = time.time()
-        body = json.dumps({
-            "prompt": f"stress test {i}",
-            "aspect_ratio": "1:1",
-        }).encode()
+        body = json.dumps(
+            {
+                "prompt": f"stress test {i}",
+                "aspect_ratio": "1:1",
+            }
+        ).encode()
         req = urllib.request.Request(
-            url, data=body,
+            url,
+            data=body,
             headers={"Content-Type": "application/json"},
         )
         try:
@@ -54,7 +58,7 @@ def stress_test(api_url: str, concurrency: int = 50, timeout: int = 30):
     elapsed = time.time() - start
     rps = concurrency / elapsed
 
-    print(f"\n结果:")
+    print("\n结果:")
     print(f"  总请求: {concurrency}")
     print(f"  RPS: {rps:.1f}")
     print(f"  成功: {results['ok']}")

@@ -4,13 +4,13 @@
 _normalize_usage 兜底、_anthropic_content 解析失败、流式异常帧、
 chat_auth_status 管理员取完整 key 等）。
 """
+
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from api.errors import AppError
@@ -80,9 +80,7 @@ async def _noop_record(**kwargs):
 
 
 async def request(application: FastAPI, method: str, url: str, **kwargs):
-    async with AsyncClient(
-        transport=ASGITransport(app=application), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
         return await client.request(method, url, **kwargs)
 
 
@@ -104,6 +102,7 @@ def test_openai_effort_unknown_falls_back():
 def test_provider_kwargs_strips_known_fields():
     """_provider_kwargs 用 model_dump，需 pydantic 模型。"""
     from api.routes.chat import ChatCompletionsRequest
+
     req = ChatCompletionsRequest(
         model="m",
         messages=[],
@@ -191,8 +190,12 @@ def test_openai_chunk_shape():
 
 def test_openai_response_with_reasoning_and_tool_calls():
     resp = chat._openai_response(
-        "model", "text", "reasoning", [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}],
-        "tool_calls", {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+        "model",
+        "text",
+        "reasoning",
+        [{"id": "c1", "function": {"name": "f", "arguments": "{}"}}],
+        "tool_calls",
+        {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
     )
     msg = resp["choices"][0]["message"]
     assert msg["content"] == "text"
@@ -209,9 +212,13 @@ def test_anthropic_stop_reason_with_tool_calls():
 
 def test_anthropic_content_with_invalid_tool_args():
     """tool arguments 非合法 JSON → 回退空 dict。"""
-    content = chat._anthropic_content("", "", [
-        {"id": "c1", "function": {"name": "f", "arguments": "not-json"}},
-    ])
+    content = chat._anthropic_content(
+        "",
+        "",
+        [
+            {"id": "c1", "function": {"name": "f", "arguments": "not-json"}},
+        ],
+    )
     assert len(content) == 1
     assert content[0]["type"] == "tool_use"
     assert content[0]["input"] == {}
@@ -224,8 +231,11 @@ def test_anthropic_content_empty_returns_default():
 
 def test_chat_model_public_shape():
     spec = ModelSpec(
-        id="m1", provider="p", upstream_model="up",
-        capabilities=(CAP_CHAT,), meta={"context_window": 8, "pricePerMTok": 1.0, "messageLimit": 5, "cheaperFallbackId": "m0"},
+        id="m1",
+        provider="p",
+        upstream_model="up",
+        capabilities=(CAP_CHAT,),
+        meta={"context_window": 8, "pricePerMTok": 1.0, "messageLimit": 5, "cheaperFallbackId": "m0"},
     )
     out = chat._chat_model_public(spec)
     assert out["id"] == "m1"
@@ -246,7 +256,9 @@ async def test_anthropic_stream_emits_blocks(app, fake_provider):
         {"type": "finish", "finish_reason": "stop"},
     ]
     resp = await request(
-        app, "POST", "/v1/messages",
+        app,
+        "POST",
+        "/v1/messages",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}], "stream": True, "max_tokens": 100},
     )
     assert resp.status_code == 200
@@ -269,7 +281,9 @@ async def test_anthropic_stream_tool_call(app, fake_provider):
         {"type": "finish", "finish_reason": "tool_calls"},
     ]
     resp = await request(
-        app, "POST", "/v1/messages",
+        app,
+        "POST",
+        "/v1/messages",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}], "stream": True, "max_tokens": 100},
     )
     assert resp.status_code == 200
@@ -280,18 +294,23 @@ async def test_anthropic_stream_tool_call(app, fake_provider):
 @pytest.mark.asyncio
 async def test_openai_stream_server_error_frame(app, fake_provider):
     """流式中 provider 抛异常 → 发 server_error 帧后 [DONE]。"""
+
     class _BoomProvider(FakeChatProvider):
         def chat_stream(self, model, messages, **kwargs):
             async def it():
                 yield {"type": "text", "text": "partial"}
                 raise RuntimeError("boom")
+
             return it()
+
     fake_provider.events = []
     monkeypatch_provider = _BoomProvider()
     # 替换 registry 中的 provider
     registry.chat_providers["tryingopen"] = monkeypatch_provider
     resp = await request(
-        app, "POST", "/v1/chat/completions",
+        app,
+        "POST",
+        "/v1/chat/completions",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}], "stream": True},
     )
     assert resp.status_code == 200
@@ -302,16 +321,21 @@ async def test_openai_stream_server_error_frame(app, fake_provider):
 @pytest.mark.asyncio
 async def test_anthropic_stream_error_frame(app, fake_provider):
     """Anthropic 流式 provider 抛异常 → 发 error 事件后 message_stop。"""
+
     class _BoomProvider(FakeChatProvider):
         def chat_stream(self, model, messages, **kwargs):
             async def it():
                 yield {"type": "text", "text": "x"}
                 raise RuntimeError("boom")
+
             return it()
+
     monkeypatch_provider = _BoomProvider()
     registry.chat_providers["tryingopen"] = monkeypatch_provider
     resp = await request(
-        app, "POST", "/v1/messages",
+        app,
+        "POST",
+        "/v1/messages",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}], "stream": True, "max_tokens": 100},
     )
     assert resp.status_code == 200
@@ -345,6 +369,7 @@ async def test_chat_auth_status_admin_gets_full_key(app, monkeypatch):
     monkeypatch.setattr(chat_mod, "AppError", AppError)
     # patch 函数内部 from ..auth import
     import api.auth as auth_mod
+
     monkeypatch.setattr(auth_mod, "first_key", fake_first_key, raising=False)
     monkeypatch.setattr(auth_mod, "public_keymask", fake_public_keymask, raising=False)
     monkeypatch.setattr(auth_mod, "check_admin_key", fake_check_admin_key, raising=False)
@@ -382,6 +407,7 @@ async def test_chat_auth_status_anonymous_no_full_key(app, monkeypatch):
     monkeypatch.setattr(chat_mod.auth, "admin_enabled", fake_admin_enabled)
     monkeypatch.setattr(chat_mod, "AppError", AppError)
     import api.auth as auth_mod
+
     monkeypatch.setattr(auth_mod, "first_key", fake_first_key, raising=False)
     monkeypatch.setattr(auth_mod, "public_keymask", fake_public_keymask, raising=False)
     monkeypatch.setattr(auth_mod, "check_admin_key", fake_check_admin_key, raising=False)
@@ -419,6 +445,7 @@ async def test_chat_auth_status_open_mode(app, monkeypatch):
 async def test_chat_remaining_endpoint(app, monkeypatch):
     """/v1/chat/remaining 委托 chat_usage.remaining_credits。"""
     from api.routes import chat as chat_mod
+
     called = []
 
     async def fake_remaining():
@@ -476,7 +503,9 @@ async def test_chat_collect_provider_exception_503(app, fake_provider, monkeypat
     registry.chat_providers["tryingopen"] = boom
 
     resp = await request(
-        app, "POST", "/v1/chat/completions",
+        app,
+        "POST",
+        "/v1/chat/completions",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}]},
     )
     assert resp.status_code == 503
@@ -488,13 +517,16 @@ async def test_chat_collect_provider_exception_503(app, fake_provider, monkeypat
 @pytest.mark.asyncio
 async def test_record_swallows_chat_usage_exception(app, monkeypatch):
     """_record 内部 chat_usage.record 抛异常时被吞（不外泄到响应）。"""
+
     async def boom_record(**kwargs):
         raise RuntimeError("db down")
 
     monkeypatch.setattr(chat.chat_usage, "record", boom_record)
 
     resp = await request(
-        app, "POST", "/v1/chat/completions",
+        app,
+        "POST",
+        "/v1/chat/completions",
         json={"model": MODEL, "messages": [{"role": "user", "content": "Hi"}]},
     )
     # 即使 record 抛异常，主流程仍应正常返回 200（record 失败被吞）

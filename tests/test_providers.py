@@ -1,4 +1,5 @@
 """多提供商网关单测：注册表 / 模型命名 / 路由分发 / mock 生成链路。"""
+
 import asyncio
 import os
 
@@ -9,7 +10,6 @@ os.environ.setdefault("IF_MOCK_REGISTER", "1")
 
 from api.providers import registry
 from api.providers.registry import bootstrap
-from api.providers.base import GenerationResult, ProviderError
 from api.meta import engine
 
 
@@ -137,22 +137,43 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
     await engine.start()
     try:
         # imagefree → 引擎队列
-        tid = await _dispatch_generate(type("R", (), {"prompt": "x", "aspect_ratio": "1:1",
-                                                      "download": False, "model": "imagefree/default",
-                                                      "resolution": "1K", "duration": None,
-                                                      "priority": None})())
+        tid = await _dispatch_generate(
+            type(
+                "R",
+                (),
+                {
+                    "prompt": "x",
+                    "aspect_ratio": "1:1",
+                    "download": False,
+                    "model": "imagefree/default",
+                    "resolution": "1K",
+                    "duration": None,
+                    "priority": None,
+                },
+            )()
+        )
         assert tid and (await tmp_db.get(tid)) is not None
 
         # nanobanana mock 号池 → 后台任务 completed
         prov = registry.providers["nanobanana"]
         monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best",
-                           lambda *a, **kw: "nanobanana")
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
         await prov.startup()
-        tid2 = await _dispatch_generate(type("R", (), {"prompt": "cat", "aspect_ratio": "1:1",
-                                                       "download": False, "model": "nanobanana/nano-banana-pro",
-                                                       "resolution": "1K", "duration": None,
-                                                       "priority": None})())
+        tid2 = await _dispatch_generate(
+            type(
+                "R",
+                (),
+                {
+                    "prompt": "cat",
+                    "aspect_ratio": "1:1",
+                    "download": False,
+                    "model": "nanobanana/nano-banana-pro",
+                    "resolution": "1K",
+                    "duration": None,
+                    "priority": None,
+                },
+            )()
+        )
         for _ in range(50):
             s = (await tmp_db.get(tid2))["status"]
             if s in ("completed", "error"):
@@ -172,7 +193,6 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
     P0 立即执行（不信号量），P1 有限并发（4），P2 串行排队（1）。
     """
     from api.dispatch import _dispatch_generate, _provider_sem, _HIGH_CONCURRENCY, _NORMAL_CONCURRENCY
-    from api.worker import QueueFull
 
     monkeypatch.setattr("api.dispatch.db", tmp_db)
     engine.db = tmp_db
@@ -180,8 +200,7 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
     try:
         prov = registry.providers["nanobanana"]
         monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best",
-                           lambda *a, **kw: "nanobanana")
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
         await prov.startup()
 
         # 验证信号量按 limit 隔离
@@ -205,11 +224,21 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
         # 提交 3 个不同优先级的非 imagefree 任务，验证它们都能完成
         tids = {}
         for prio, label in [(0, "p0"), (1, "p1"), (2, "p2")]:
-            tid = await _dispatch_generate(type("R", (), {
-                "prompt": f"priority-{label}", "aspect_ratio": "1:1",
-                "download": False, "model": "nanobanana/nano-banana-pro",
-                "resolution": "1K", "duration": None, "priority": prio,
-            })())
+            tid = await _dispatch_generate(
+                type(
+                    "R",
+                    (),
+                    {
+                        "prompt": f"priority-{label}",
+                        "aspect_ratio": "1:1",
+                        "download": False,
+                        "model": "nanobanana/nano-banana-pro",
+                        "resolution": "1K",
+                        "duration": None,
+                        "priority": prio,
+                    },
+                )()
+            )
             tids[prio] = tid
 
         # 等待所有任务完成
@@ -238,8 +267,7 @@ async def test_dispatch_edit_routes(tmp_db, monkeypatch):
     try:
         prov = registry.providers["nanobanana"]
         monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best",
-                           lambda *a, **kw: "nanobanana")
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
         await prov.startup()
         tid = await _dispatch_edit("nanobanana/nano-banana-pro", "make red", b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, False)
         for _ in range(50):
@@ -257,6 +285,7 @@ async def test_dispatch_edit_routes(tmp_db, monkeypatch):
 
 def test_normalize_model_legacy():
     from api.dispatch import _normalize_model
+
     assert _normalize_model("default") == "imagefree/default"
     assert _normalize_model("anime") == "imagefree/anime"
     assert _normalize_model("nanobanana/nano-banana-pro") == "nanobanana/nano-banana-pro"

@@ -9,6 +9,7 @@
   只有显式 IF_ADMIN_KEY_OPEN=1 时才开放（本地运维模式）。
 - public_keymask() 用于 UI 展示脱敏前缀（不泄露完整 Key）。
 """
+
 from __future__ import annotations
 
 import hmac
@@ -24,6 +25,10 @@ from .errors import AppError, ErrorCodes
 
 log = logging.getLogger("imagefree_api.auth")
 
+# 保留 threading.Lock（非 asyncio.Lock）：临界区为纯内存 dict/deque 操作（微秒级），
+# asyncio 单线程事件循环无竞争零阻塞；换 asyncio.Lock 会使 check_chat_rate_limit→
+# guard_chat_request 被迫变 async，传染到 sync 调用链（routes/generate._prepare 等），
+# 风险远大于收益。真正的 async 阻塞源是 sqlite3 I/O（见 account_pool/email_pool），非此锁。
 _lock = threading.Lock()
 _chat_buckets: dict[str, deque[float]] = {}
 _WINDOW_SECONDS = 60.0
@@ -111,8 +116,7 @@ def check_api_key(request: Request, *, scope: str = "chat") -> None:
     # 常数时间比较防时序侧信道；任一 Key 匹配即通过
     ok = any(hmac.compare_digest(provided, k) for k in keys)
     if not ok:
-        raise AppError(ErrorCodes.UNAUTHORIZED, "API Key 无效或已撤销", 401,
-                       details={"scope": scope})
+        raise AppError(ErrorCodes.UNAUTHORIZED, "API Key 无效或已撤销", 401, details={"scope": scope})
 
 
 def check_admin_key(request: Request, *, scope: str = "admin-security") -> None:
@@ -143,8 +147,7 @@ def check_admin_key(request: Request, *, scope: str = "admin-security") -> None:
         )
     ok = any(hmac.compare_digest(provided, k) for k in keys)
     if not ok:
-        raise AppError(ErrorCodes.UNAUTHORIZED, "管理 Key 无效或已撤销", 401,
-                       details={"scope": scope})
+        raise AppError(ErrorCodes.UNAUTHORIZED, "管理 Key 无效或已撤销", 401, details={"scope": scope})
 
 
 def check_chat_rate_limit(request: Request) -> None:
@@ -163,8 +166,7 @@ def check_chat_rate_limit(request: Request) -> None:
             raise AppError(ErrorCodes.RATE_LIMITED, "聊天请求过于频繁，请稍后重试", 429)
         bucket.append(now)
         if len(_chat_buckets) > 10000:
-            expired = [k for k, v in _chat_buckets.items()
-                       if not v or now - v[-1] >= _WINDOW_SECONDS]
+            expired = [k for k, v in _chat_buckets.items() if not v or now - v[-1] >= _WINDOW_SECONDS]
             for k in expired:
                 _chat_buckets.pop(k, None)
 
@@ -187,6 +189,7 @@ def _client_ip_of(request: Request) -> str:
     """提取真实客户端 IP（优先受信代理路径，回退 socket）。"""
     try:
         from .request_guard import get_client_ip as _get_ip
+
         return _get_ip(request)
     except Exception:
         xff = request.headers.get("x-forwarded-for", "")
@@ -194,4 +197,4 @@ def _client_ip_of(request: Request) -> str:
             first = xff.split(",", 1)[0].strip()
             if first and not first.lower().startswith(("127.", "10.", "192.168.", "::1", "unknown")):
                 return first
-        return (request.client.host if request.client else "unknown")
+        return request.client.host if request.client else "unknown"

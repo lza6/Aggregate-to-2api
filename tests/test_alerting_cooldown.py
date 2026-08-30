@@ -2,6 +2,7 @@
 
 覆盖 api/alerting.py 缺失分支（should_trigger 冷却内/外、evaluate 多规则并行、默认规则命中）。
 """
+
 from __future__ import annotations
 
 import time
@@ -43,14 +44,24 @@ def test_evaluate_multiple_rules_in_parallel():
     """多条规则同时命中 → 返回多条告警，各自独立冷却。"""
     engine = AlertEngine()
     engine._rules.clear()
-    engine.add_rule(AlertRule(
-        name="a", severity="warning", message="A",
-        check=lambda ctx: True, cooldown=100.0,
-    ))
-    engine.add_rule(AlertRule(
-        name="b", severity="critical", message="B",
-        check=lambda ctx: ctx.get("hit_b", False), cooldown=100.0,
-    ))
+    engine.add_rule(
+        AlertRule(
+            name="a",
+            severity="warning",
+            message="A",
+            check=lambda ctx: True,
+            cooldown=100.0,
+        )
+    )
+    engine.add_rule(
+        AlertRule(
+            name="b",
+            severity="critical",
+            message="B",
+            check=lambda ctx: ctx.get("hit_b", False),
+            cooldown=100.0,
+        )
+    )
     result = engine.evaluate({"hit_b": True})
     names = {r["name"] for r in result}
     assert names == {"a", "b"}
@@ -125,10 +136,15 @@ def test_evaluate_entry_has_required_fields():
     """触发的告警条目包含 name/severity/message/timestamp。"""
     engine = AlertEngine()
     engine._rules.clear()
-    engine.add_rule(AlertRule(
-        name="x", severity="critical", message="boom",
-        check=lambda ctx: True, cooldown=100.0,
-    ))
+    engine.add_rule(
+        AlertRule(
+            name="x",
+            severity="critical",
+            message="boom",
+            check=lambda ctx: True,
+            cooldown=100.0,
+        )
+    )
     result = engine.evaluate({})
     assert len(result) == 1
     entry = result[0]
@@ -142,9 +158,14 @@ def test_add_rule_appends():
     """add_rule 追加到规则列表。"""
     engine = AlertEngine()
     before = len(engine._rules)
-    engine.add_rule(AlertRule(
-        name="custom", severity="warning", message="m",
-        check=lambda ctx: False, cooldown=1.0,
-    ))
+    engine.add_rule(
+        AlertRule(
+            name="custom",
+            severity="warning",
+            message="m",
+            check=lambda ctx: False,
+            cooldown=1.0,
+        )
+    )
     assert len(engine._rules) == before + 1
     assert engine._rules[-1].name == "custom"

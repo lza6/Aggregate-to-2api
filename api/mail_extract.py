@@ -10,6 +10,7 @@
 调用方：``api/registerer.py`` 的 ``_extract_code`` / ``_extract_verify_link``
 （两者委托到本模块，保持函数签名与历史行为兼容）。
 """
+
 from __future__ import annotations
 
 import json
@@ -34,16 +35,8 @@ def _mail_blob(mail: dict | None, prefer_html: bool = False) -> str:
     if not mail:
         return ""
     if prefer_html:
-        return (
-            str(mail.get("bodyHtml") or "")
-            + str(mail.get("bodyPreview") or "")
-            + str(mail.get("subject") or "")
-        )
-    return (
-        str(mail.get("bodyPreview") or "")
-        + str(mail.get("bodyHtml") or "")
-        + str(mail.get("subject") or "")
-    )
+        return str(mail.get("bodyHtml") or "") + str(mail.get("bodyPreview") or "") + str(mail.get("subject") or "")
+    return str(mail.get("bodyPreview") or "") + str(mail.get("bodyHtml") or "") + str(mail.get("subject") or "")
 
 
 def _regex_code(mail: dict | None) -> str | None:
@@ -76,12 +69,12 @@ async def _ai_extract_kind(
     if kind == "code":
         instruction = (
             "请从以下临时邮箱收到的验证码邮件中提取 6 位数字验证码。"
-            "只输出 JSON：{\"code\":\"123456\"}；找不到则 {\"code\":null}。"
+            '只输出 JSON：{"code":"123456"}；找不到则 {"code":null}。'
         )
     else:
         instruction = (
             "请从以下临时邮箱收到的验证邮件中提取用于邮箱验证的 https 链接。"
-            "只输出 JSON：{\"link\":\"https://...\"}；找不到则 {\"link\":null}。"
+            '只输出 JSON：{"link":"https://..."}；找不到则 {"link":null}。'
         )
     system = "你是邮件验证码提取助手。只输出合法 JSON，不要解释。"
     messages = [
@@ -151,6 +144,7 @@ def _default_chat_fn() -> tuple[_ChatFn, str] | None:
     """
     try:
         from .providers.registry import bootstrap, registry
+
         bootstrap()
         prefix = "tryingopen"
         provider = registry.chat_providers.get(prefix)

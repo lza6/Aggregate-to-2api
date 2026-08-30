@@ -4,6 +4,7 @@
 业务逻辑已迁移至：routes/、dispatch.py、dispatch_edit.py、lifespan.py、
 handlers.py、bg_tasks.py、models.py、meta.py、sse_events.py。
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ log = logging.getLogger("imagefree_api")
 
 # ── 顶层挂载日志缓冲区（在 uvicorn 模块导入阶段直接生效）──
 from .log_buffer import log_buffer  # noqa: E402
+
 _root_logger = logging.getLogger()
 _root_logger.setLevel(logging.INFO)
 if log_buffer not in _root_logger.handlers:
@@ -31,9 +33,9 @@ if log_buffer not in _root_logger.handlers:
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="6.7.0",
+    version="6.8.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
-                "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
+    "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
 )
 app.add_middleware(

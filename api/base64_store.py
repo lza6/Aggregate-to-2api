@@ -3,6 +3,7 @@
 数据写入 data/imgs/<task_id>.<ext>，DB 仅存 file:// 路径。
 文件通过 mtime 判定过期，由周期性清理任务移除。
 """
+
 import logging
 import os
 import time
@@ -160,7 +161,7 @@ def gc_stats() -> dict:
                     hot_bytes += size
             except OSError:
                 continue
-    _gib = 1024 ** 3
+    _gib = 1024**3
     usage_pct = (total_bytes / (quota_gb * _gib) * 100) if quota_gb > 0 else 0.0
     return {
         "total_files": total_files,
@@ -191,7 +192,7 @@ def dir_size_gb(directory: str) -> float:
                 total += os.path.getsize(os.path.join(root, fname))
             except OSError:
                 continue
-    return total / (1024 ** 3)
+    return total / (1024**3)
 
 
 def list_oldest_files(directory: str, n: int | None = None) -> list[str]:
@@ -213,12 +214,11 @@ def list_oldest_files(directory: str, n: int | None = None) -> list[str]:
     files.sort(key=lambda t: t[0])
     paths = [fpath for _mtime, fpath in files]
     if n is not None:
-        return paths[:max(0, n)]
+        return paths[: max(0, n)]
     return paths
 
 
-def enforce_quota(directory: str, max_gb: float,
-                  audit_fn=None) -> int:
+def enforce_quota(directory: str, max_gb: float, audit_fn=None) -> int:
     """配额保护：目录超过 max_gb 上限时，按 mtime 从旧到新删除文件直至 ≤80% 上限。
 
     audit_fn(path: str, detail: str) 可选回调（生产由 main 传入 audit_log.record）。
@@ -236,14 +236,13 @@ def enforce_quota(directory: str, max_gb: float,
     freed = 0.0
     for fpath in list_oldest_files(d):
         try:
-            fsize_gb = os.path.getsize(fpath) / (1024 ** 3)
+            fsize_gb = os.path.getsize(fpath) / (1024**3)
             os.unlink(fpath)
             freed += fsize_gb
             deleted += 1
             if audit_fn is not None:
                 try:
-                    audit_fn(fpath,
-                             f"配额 {max_gb}GB 超限（当前 {size:.2f}GB），删除至 {target_gb}GB")
+                    audit_fn(fpath, f"配额 {max_gb}GB 超限（当前 {size:.2f}GB），删除至 {target_gb}GB")
                 except Exception:  # 审计回调失败不阻断清理
                     log.warning("base64 配额审计写入失败 %s", fpath)
         except OSError as e:
@@ -252,6 +251,5 @@ def enforce_quota(directory: str, max_gb: float,
         if size - freed <= target_gb:
             break
     if deleted:
-        log.info("base64 配额保护: 删除 %d 个文件（%s 超过 %.1fGB 上限）",
-                 deleted, config.IF_BASE64_DIR, max_gb)
+        log.info("base64 配额保护: 删除 %d 个文件（%s 超过 %.1fGB 上限）", deleted, config.IF_BASE64_DIR, max_gb)
     return deleted

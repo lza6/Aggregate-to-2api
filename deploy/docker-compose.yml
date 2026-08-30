@@ -1,14 +1,16 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v6.7.0
-# 注意：docker-compose 需从 deploy/ 目录运行（build context: . 指向 deploy/）
+# 版本: v6.8.0
+# 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
+#       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
+#       须从 deploy/ 目录运行：cd deploy && docker compose up -d
 
 services:
   cfsolver:
     build:
-      context: .
-      dockerfile: Dockerfile.cfsolver
-    image: imagefree-cfsolver:6.7.0
+      context: ..
+      dockerfile: deploy/Dockerfile.cfsolver
+    image: imagefree-cfsolver:6.8.0
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -33,9 +35,9 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
-    image: imagefree-api:6.7.0
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: imagefree-api:6.8.0
     container_name: imagefree-api
     restart: unless-stopped
     mem_limit: 256m
@@ -69,6 +71,8 @@ services:
       - HTTPS_PROXY=
       - NO_PROXY=*
     healthcheck:
+      # livez 只看进程活（uvicorn 已起、/v1/livez 返回 ok），readiness 降级不会误杀容器；
+      # readiness 判定走 /v1/healthz（status=ok/degraded），Dockerfile.api 内置用 healthz。
       test: ["CMD", "python", "-c", "import urllib.request, json; r = urllib.request.urlopen('http://127.0.0.1:8100/v1/livez', timeout=5); body = json.loads(r.read()); assert body.get('status') == 'ok'"]
       interval: 30s
       timeout: 10s

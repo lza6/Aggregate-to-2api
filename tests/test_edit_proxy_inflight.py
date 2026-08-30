@@ -9,11 +9,10 @@
 _EditProxyPool 在 api.dispatch_edit 中定义，导入会触发 meta 模块级
 代码执行（DB 初始化、prometheus 注册等）。
 """
+
 import asyncio
 import os
-import sys
 import tempfile
-import time
 
 import pytest
 
@@ -28,6 +27,7 @@ def _import_pool_cls():
     os.environ["IF_ACCOUNT_AUTO"] = "0"
     os.environ["IF_MOCK_REGISTER"] = "1"
     from api.dispatch_edit import _EditProxyPool
+
     return _EditProxyPool
 
 
@@ -49,6 +49,7 @@ class TestEditProxyPoolInflight:
     async def test_sem_inflight_limits_concurrency(self, monkeypatch):
         """sem_inflight 应限制并发代理数。"""
         from api import config
+
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 2)
         pool = _EditProxyPool()
         pool.proxies = ["http://proxy1:8080", "http://proxy2:8080"]
@@ -75,6 +76,7 @@ class TestEditProxyPoolInflight:
     async def test_release_proxy_releases_semaphore(self, monkeypatch):
         """release_proxy 应释放信号量。"""
         from api import config
+
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 2)
         pool = _EditProxyPool()
         pool.proxies = ["http://proxy1:8080"]
@@ -108,6 +110,7 @@ class TestEditProxyPoolInflight:
     async def test_round_robin_with_semaphore(self, monkeypatch):
         """信号量下 round-robin 分配仍正确。"""
         from api import config
+
         monkeypatch.setattr(config, "EDIT_PROXY_PARALLEL", 3)
         pool = _EditProxyPool()
         pool.proxies = ["http://p1", "http://p2", "http://p3"]

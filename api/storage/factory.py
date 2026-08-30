@@ -1,4 +1,5 @@
 """存储驱动工厂与全局单例管理器。"""
+
 from __future__ import annotations
 
 import logging
@@ -25,6 +26,7 @@ def get_storage_adapter() -> StorageAdapter:
     if backend == "redis" and redis_url:
         try:
             from .redis_adapter import RedisStorageAdapter
+
             adapter = RedisStorageAdapter(redis_url)
             _STORAGE_ADAPTER = adapter
             log.info("启用 Redis 存储适配器 (IF_STORAGE_BACKEND=redis)")

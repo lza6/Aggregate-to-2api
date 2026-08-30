@@ -13,6 +13,7 @@
 - GET /v1/account-pool     → AccountPoolResponse（无 response_model，运行时取真实字段）
 - GET /v1/meta             → ChatAuthStatus 的公开探测子集（无 response_model）
 """
+
 from __future__ import annotations
 
 import pytest
@@ -33,8 +34,10 @@ def client():
 def schema():
     """运行时生成 OpenAPI schema（与 /openapi.json 等价）。"""
     return get_openapi(
-        title=app.title, version=app.version,
-        openapi_version=app.openapi_version, routes=app.routes,
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        routes=app.routes,
     )
 
 
@@ -64,8 +67,16 @@ class TestTaskInfoContract:
 
     # frontend/src/api.ts: Task 接口字段（人工抄录，漂移即红）
     FRONTEND_TASK_FIELDS = {
-        "id", "status", "prompt", "image_url", "error",
-        "duration_sec", "created_at", "model", "client_ip", "client_location",
+        "id",
+        "status",
+        "prompt",
+        "image_url",
+        "error",
+        "duration_sec",
+        "created_at",
+        "model",
+        "client_ip",
+        "client_location",
     }
 
     def test_taskinfo_schema_fields_stable(self, schema):
@@ -74,10 +85,22 @@ class TestTaskInfoContract:
         props = set(ti.get("properties", {}).keys())
         # TaskInfo 的字段集合（api/models.py:39-51）
         expected = {
-            "id", "status", "image_url", "image_base64", "image_mime",
-            "error", "created_at", "duration_sec", "type", "model",
-            "prompt", "aspect_ratio", "client_ip", "client_location",
-            "user_agent", "timings",
+            "id",
+            "status",
+            "image_url",
+            "image_base64",
+            "image_mime",
+            "error",
+            "created_at",
+            "duration_sec",
+            "type",
+            "model",
+            "prompt",
+            "aspect_ratio",
+            "client_ip",
+            "client_location",
+            "user_agent",
+            "timings",
         }
         assert props == expected, f"TaskInfo 字段漂移: 缺 {expected - props}, 多 {props - expected}"
 
@@ -104,8 +127,12 @@ class TestRuntimeResponseContract:
         body = r.json()
         # health.py /v1/meta 返回字段
         expected = {
-            "sitekey", "aspect_ratios", "supported_resolutions",
-            "gallery_requires_password", "auth_enabled", "api_key_mask",
+            "sitekey",
+            "aspect_ratios",
+            "supported_resolutions",
+            "gallery_requires_password",
+            "auth_enabled",
+            "api_key_mask",
         }
         assert expected.issubset(body.keys()), f"/v1/meta 缺字段: {expected - set(body.keys())}"
 
@@ -116,9 +143,17 @@ class TestRuntimeResponseContract:
         body = r.json()
         # chat_usage.py stats() 返回字段（前端 api.ts ChatUsageStats）
         expected = {
-            "period", "total_calls", "ok_calls", "fail_calls",
-            "prompt_tokens", "completion_tokens", "reasoning_tokens",
-            "tool_calls", "avg_duration_ms", "today_calls", "today_tokens",
+            "period",
+            "total_calls",
+            "ok_calls",
+            "fail_calls",
+            "prompt_tokens",
+            "completion_tokens",
+            "reasoning_tokens",
+            "tool_calls",
+            "avg_duration_ms",
+            "today_calls",
+            "today_tokens",
             "by_model",
         }
         assert expected.issubset(body.keys()), f"/v1/chat/usage 缺字段: {expected - set(body.keys())}"
@@ -130,8 +165,13 @@ class TestRuntimeResponseContract:
         body = r.json()
         # admin.py account_pool_dashboard 顶层字段（前端 api.ts AccountPoolResponse）
         expected = {
-            "accounts", "email_pool", "items", "items_total",
-            "page", "page_size", "total_pages",
+            "accounts",
+            "email_pool",
+            "items",
+            "items_total",
+            "page",
+            "page_size",
+            "total_pages",
         }
         assert expected.issubset(body.keys()), f"/v1/account-pool 缺字段: {expected - set(body.keys())}"
         # items 为数组（即便空也是数组，不是 None）
@@ -187,12 +227,15 @@ class TestSecurityResponseContract:
     def test_block_ip_record_fields(self, client, monkeypatch):
         """POST /v1/admin/security/block-ip 成功 → record 含前端期望字段。"""
         # 用临时 SQLite 库，避免污染默认库（store 路径随 config）
-        r = client.post("/v1/admin/security/block-ip", json={
-            "ip": "203.0.113.99",
-            "block_type": "block",
-            "reason": "contract-test",
-            "ttl_seconds": 3600,
-        })
+        r = client.post(
+            "/v1/admin/security/block-ip",
+            json={
+                "ip": "203.0.113.99",
+                "block_type": "block",
+                "reason": "contract-test",
+                "ttl_seconds": 3600,
+            },
+        )
         assert r.status_code == 200, f"block-ip 应开放放行（{r.status_code}）: {r.text[:200]}"
         body = r.json()
         assert body["ok"] is True
@@ -213,3 +256,59 @@ class TestSecurityResponseContract:
         assert set(body.keys()) == {"items", "count"}
         assert isinstance(body["items"], list)
         assert isinstance(body["count"], int)
+
+
+# ── E. 前端版本一致性契约（V7-4：防 landing/admin 版本漂移）──────────────
+class TestFrontendVersionConsistency:
+    """前端三处版本来源（landing package.json / frontend package.json / 后端 app.version）
+    必须一致，杜绝「改进指南 P0-1」式 v6.5.0 vs v6.7.0 漂移。
+
+    V7-4：CI 校验 landing 版本 == package.json 版本 == 后端 app.version。
+    landing/vite.config.js 用 define.__APP_VERSION__ 注入 package.json.version，
+    App.vue 页脚引用该常量；本测试断言源数据一致，防发版只改一处。
+    """
+
+    def test_landing_version_equals_backend(self):
+        """landing/package.json version 必须等于 api/main.py app.version。"""
+        import json
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        landing_pkg = json.loads((root / "landing" / "package.json").read_text(encoding="utf-8"))
+        assert landing_pkg["version"] == app.version, (
+            f"landing package.json({landing_pkg['version']}) != 后端 app.version({app.version})，"
+            f"发版时只改了一处，违反版本一致性契约"
+        )
+
+    def test_frontend_version_equals_backend(self):
+        """frontend/package.json version 必须等于 api/main.py app.version。"""
+        import json
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        frontend_pkg = json.loads((root / "frontend" / "package.json").read_text(encoding="utf-8"))
+        assert frontend_pkg["version"] == app.version, (
+            f"frontend package.json({frontend_pkg['version']}) != 后端 app.version({app.version})，"
+            f"违反版本一致性契约"
+        )
+
+    def test_landing_built_dist_version_matches_source(self):
+        """landing 构建产物 assets/*.js 必须含当前版本字符串（防 __APP_VERSION__ 注入失效）。
+
+        dist 由 vite build 产出（.gitignore 忽略，本地构建后才存在）；
+        未构建时跳过（CI 在 deploy 前会构建，本地可 skip）。
+        """
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        assets_dir = root / "landing" / "dist" / "assets"
+        if not assets_dir.exists():
+            pytest.skip("landing/dist 未构建，跳过产物版本断言（CI deploy 前构建）")
+        version = app.version
+        matched = False
+        for js_file in assets_dir.glob("*.js"):
+            content = js_file.read_text(encoding="utf-8", errors="ignore")
+            if version in content:
+                matched = True
+                break
+        assert matched, f"landing/dist/assets/*.js 未找到版本字符串 {version}，__APP_VERSION__ 注入可能失效"

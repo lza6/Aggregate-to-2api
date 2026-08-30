@@ -1,11 +1,8 @@
 """M2/M4/M5/M7/M8 的 pytest 用例：统一异常、/metrics、healthz 深指标、DB 清理、轻量投影。"""
-import asyncio
-import os
+
 import time
 
 import pytest
-
-from api.db import DB, task_to_public
 
 
 # ── M7: DB TTL 清理 ──────────────────────────────
@@ -109,10 +106,12 @@ class TestHealthz:
 
 # ── P13/P15: 磁盘日志与 healthz 新段单测 ──────────────
 
+
 class TestDiskLogger:
     def test_setup_creates_dir_and_writes(self, tmp_path):
         import logging
         from api.disk_logger import setup_disk_logging, teardown_disk_logging
+
         # 单元测试不 import api.main（无 basicConfig），裸进程 root level=WARNING
         # 会把 info 记录在 handler 之前过滤掉——生产服务 root 是 INFO，测试对齐该前提
         root = logging.getLogger()
@@ -123,7 +122,9 @@ class TestDiskLogger:
         try:
             logging.getLogger("disk.test").info("hello-disk")
             h.flush()
-            import os, glob
+            import os
+            import glob
+
             files = glob.glob(os.path.join(log_dir, "imagefree-api.log*"))
             assert files, f"日志目录无文件: {os.listdir(log_dir) if os.path.isdir(log_dir) else log_dir}"
             content = ""
@@ -138,6 +139,7 @@ class TestDiskLogger:
     def test_teardown_removes_handler(self, tmp_path):
         import logging
         from api.disk_logger import setup_disk_logging, teardown_disk_logging
+
         h = setup_disk_logging(str(tmp_path / "logs2"))
         assert h in logging.getLogger().handlers
         teardown_disk_logging(h)
@@ -147,6 +149,7 @@ class TestDiskLogger:
         """TimedRotatingFileHandler 配置了 backupCount=保留天数。"""
         from api.disk_logger import setup_disk_logging
         import logging
+
         h = setup_disk_logging(str(tmp_path / "logs3"), retention_days=5)
         assert h.backupCount == 5
         logging.getLogger().removeHandler(h)

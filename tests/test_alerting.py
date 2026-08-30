@@ -1,4 +1,5 @@
 """测试内置告警引擎。"""
+
 from api.alerting import AlertRule, AlertEngine
 
 
@@ -18,13 +19,15 @@ def test_alert_rule_condition():
 def test_alert_engine_cooldown():
     """验证告警冷却机制。"""
     engine = AlertEngine()
-    engine.add_rule(AlertRule(
-        name="cooldown_test",
-        severity="warning",
-        message="冷却测试",
-        cooldown=5.0,
-        check=lambda ctx: True,
-    ))
+    engine.add_rule(
+        AlertRule(
+            name="cooldown_test",
+            severity="warning",
+            message="冷却测试",
+            cooldown=5.0,
+            check=lambda ctx: True,
+        )
+    )
     result = engine.evaluate({"value": 1})
     assert len(result) == 1
     result2 = engine.evaluate({"value": 1})

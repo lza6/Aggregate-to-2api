@@ -5,7 +5,6 @@
 - aifreeforever._generate 429 → ProviderRateLimited + waitTime 提示（mock httpx）
 - registry.find_alternative 降级查询
 """
-import json
 
 import httpx
 import pytest
@@ -19,10 +18,10 @@ bootstrap()
 
 # ── nanobanana RSC 解析 ──────────────────────────
 
+
 def _rsc_response(lines: list[str], status: int = 200) -> httpx.Response:
     body = "\n".join(lines)
-    return httpx.Response(status_code=status, text=body,
-                          headers={"Content-Type": "text/x-component"})
+    return httpx.Response(status_code=status, text=body, headers={"Content-Type": "text/x-component"})
 
 
 class TestNanobananaRscParse:
@@ -44,12 +43,14 @@ class TestNanobananaRscParse:
     async def test_multiple_zero_lines_skip_invalid(self):
         p = registry.providers["nanobanana"]
         # 前几行非 dict / 无 success → 跳过，直到有效行
-        r = _rsc_response([
-            '0:"flight-data"',
-            '0:[1,2,3]',
-            '0:{"foo":1}',
-            '0:{"success":true,"taskId":"t789"}',
-        ])
+        r = _rsc_response(
+            [
+                '0:"flight-data"',
+                "0:[1,2,3]",
+                '0:{"foo":1}',
+                '0:{"success":true,"taskId":"t789"}',
+            ]
+        )
         assert await p._parse_action_response(r) == "t789"
 
     @pytest.mark.asyncio
@@ -83,14 +84,14 @@ class TestNanobananaRscParse:
 
 # ── aifreeforever 429 限流分支 ──────────────────────
 
+
 class TestAifreeforever429:
     @pytest.mark.asyncio
     async def test_429_raises_rate_limited_with_waittime(self, monkeypatch):
         p = registry.providers["aifreeforever"]
 
         async def _fake_post(self, url, **kw):
-            return httpx.Response(429, json={"waitTime": 120},
-                                  request=httpx.Request("POST", url))
+            return httpx.Response(429, json={"waitTime": 120}, request=httpx.Request("POST", url))
 
         monkeypatch.setattr(httpx.AsyncClient, "post", _fake_post)
         with pytest.raises(ProviderRateLimited) as ei:
@@ -126,6 +127,7 @@ class TestAifreeforever429:
 
 
 # ── registry 降级查询 ─────────────────────────────
+
 
 class TestFindAlternative:
     def test_alternative_for_down_provider(self):

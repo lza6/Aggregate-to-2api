@@ -2,6 +2,7 @@
 
 注意：本模块不能 import 任何 routes/ 子模块（避免循环），只做状态持有与工具函数。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,8 +19,7 @@ log = logging.getLogger("imagefree_api")
 # ── 全局单例（main.py 组装时初始化）──
 db: DB = DB(config.DB_FILE)
 engine: Engine = Engine(db)
-gallery_cache: LRUCache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.IF_LRU_CACHE_TTL,
-                                   persist_db=db)
+gallery_cache: LRUCache = LRUCache(maxsize=config.IF_LRU_CACHE_SIZE, ttl=config.IF_LRU_CACHE_TTL, persist_db=db)
 
 # 路由/提供商（providers.registry 模块级单例 registry 已存在）
 from .providers import registry  # noqa: E402,F401

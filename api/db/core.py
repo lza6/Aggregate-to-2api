@@ -1,4 +1,5 @@
 """DB 类完整实现：连接管理/读写分离/批量写/查询/清理/幂等/DLQ/缓存持久化。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -56,6 +57,7 @@ atexit.register(_atexit_stop_db_threads)
 
 class BatchWrite:
     """写操作缓冲条目（IMP-25）。"""
+
     __slots__ = ("sql", "params")
 
     def __init__(self, sql: str, params: tuple):
@@ -147,8 +149,7 @@ class DB:
 
     async def _rebuild_for_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         """当前 loop 与连接池绑定 loop 不一致：关旧连接、在新 loop 重建。"""
-        log.warning("DB 连接池 loop 漂移（%s → %s），重建连接池",
-                    self._pool_loop, loop)
+        log.warning("DB 连接池 loop 漂移（%s → %s），重建连接池", self._pool_loop, loop)
         old_loop = self._pool_loop
         old_alive = old_loop is not None and not old_loop.is_closed()
         for conn in (*self._connections, *self._read_conns):
@@ -180,8 +181,8 @@ class DB:
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA synchronous=NORMAL")
         await conn.execute("PRAGMA busy_timeout=10000")
-        await conn.execute("PRAGMA cache_size=-64000")      # 64MB 页缓存
-        await conn.execute("PRAGMA mmap_size=268435456")    # 256MB 内存映射 I/O
+        await conn.execute("PRAGMA cache_size=-64000")  # 64MB 页缓存
+        await conn.execute("PRAGMA mmap_size=268435456")  # 256MB 内存映射 I/O
         await conn.execute("PRAGMA temp_store=MEMORY")
         await conn.execute("PRAGMA wal_autocheckpoint=1000")
         _LIVE_CONNS.append(conn)
@@ -422,24 +423,36 @@ class DB:
             cursor = await conn.execute("PRAGMA table_info(requests)")
             rows = await cursor.fetchall()
             cols = {r[1] for r in rows}
-            for col, ddl in (("image_base64", "TEXT"), ("image_mime", "TEXT"),
-                             ("type", "TEXT DEFAULT 'txt'"), ("model", "TEXT DEFAULT 'default'"),
-                             ("upstream_task_id", "TEXT"),
-                             ("day", "TEXT"), ("month", "TEXT"),
-                             ("proxy_used", "TEXT"),
-                             ("client_ip", "TEXT"),
-                             ("user_agent", "TEXT"),
-                             ("trace_id", "TEXT DEFAULT ''")):
+            for col, ddl in (
+                ("image_base64", "TEXT"),
+                ("image_mime", "TEXT"),
+                ("type", "TEXT DEFAULT 'txt'"),
+                ("model", "TEXT DEFAULT 'default'"),
+                ("upstream_task_id", "TEXT"),
+                ("day", "TEXT"),
+                ("month", "TEXT"),
+                ("proxy_used", "TEXT"),
+                ("client_ip", "TEXT"),
+                ("user_agent", "TEXT"),
+                ("trace_id", "TEXT DEFAULT ''"),
+            ):
                 if col not in cols:
                     await conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {ddl}")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_created_status ON requests(created_at, status)")
             await conn.commit()
 
     # ── 写 ────────────────────────────────────────
-    async def create_request(self, task_id: str, prompt: str, aspect_ratio: str, download: bool,
-                             type_: str = "txt", model: str = "default",
-                             client_ip: str | None = None,
-                             user_agent: str | None = None) -> None:
+    async def create_request(
+        self,
+        task_id: str,
+        prompt: str,
+        aspect_ratio: str,
+        download: bool,
+        type_: str = "txt",
+        model: str = "default",
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.create_request",
@@ -447,12 +460,14 @@ class DB:
         ):
             now = time.time()
             import datetime
+
             dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
             day = dt.strftime("%Y-%m-%d")
             month = dt.strftime("%Y-%m")
             trace_id = ""
             try:
                 from ..context import get_current_trace_id
+
                 trace_id = get_current_trace_id() or ""
             except Exception:
                 pass
@@ -460,8 +475,20 @@ class DB:
                 "INSERT INTO requests (id, prompt, aspect_ratio, download, status, created_at,"
                 " type, model, day, month, client_ip, user_agent, trace_id)"
                 " VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)",
-                (task_id, prompt, aspect_ratio, int(download), now, type_, model, day, month,
-                 client_ip, user_agent, trace_id),
+                (
+                    task_id,
+                    prompt,
+                    aspect_ratio,
+                    int(download),
+                    now,
+                    type_,
+                    model,
+                    day,
+                    month,
+                    client_ip,
+                    user_agent,
+                    trace_id,
+                ),
             )
 
     async def mark_started(self, task_id: str) -> None:
@@ -482,9 +509,16 @@ class DB:
                 (task_id,),
             )
 
-    async def mark_finished(self, task_id: str, status: str, image_url: str | None,
-                            error: str | None, duration_sec: float | None,
-                            image_base64: str | None = None, image_mime: str | None = None) -> None:
+    async def mark_finished(
+        self,
+        task_id: str,
+        status: str,
+        image_url: str | None,
+        error: str | None,
+        duration_sec: float | None,
+        image_base64: str | None = None,
+        image_mime: str | None = None,
+    ) -> None:
         tracer = get_tracer()
         with tracer.start_as_current_span(
             "db.mark_finished",
@@ -495,8 +529,7 @@ class DB:
             await self._enqueue_write(
                 "UPDATE requests SET status=?, image_url=?, image_base64=?, image_mime=?,"
                 " error=?, finished_at=?, duration_sec=? WHERE id=?",
-                (status, image_url, image_base64, image_mime, error, time.time(),
-                 duration_sec, task_id),
+                (status, image_url, image_base64, image_mime, error, time.time(), duration_sec, task_id),
             )
 
     async def update_upstream_task(self, task_id: str, upstream_task_id: str) -> None:
@@ -514,8 +547,7 @@ class DB:
                 (proxy, task_id),
             )
 
-    async def recover_stale_tasks(self, reason: str = "服务重启，任务中断",
-                                   stale_after: float = 300.0) -> int:
+    async def recover_stale_tasks(self, reason: str = "服务重启，任务中断", stale_after: float = 300.0) -> int:
         """启动时回收上次进程遗留的 pending/processing 孤儿任务。"""
         cutoff = time.time() - stale_after
         _, conn, conn_lock = await self._get_write_conn()
@@ -530,22 +562,56 @@ class DB:
 
     # ── 读 ────────────────────────────────────────
     _PUBLIC_COLS = (
-        "id", "status", "image_url", "image_base64", "image_mime", "error",
-        "created_at", "duration_sec", "type", "model", "client_ip", "user_agent",
+        "id",
+        "status",
+        "image_url",
+        "image_base64",
+        "image_mime",
+        "error",
+        "created_at",
+        "duration_sec",
+        "type",
+        "model",
+        "client_ip",
+        "user_agent",
     )
     _TASK_LIST_COLS = (
-        "id", "status", "image_url", "error",
-        "created_at", "duration_sec", "type", "model", "aspect_ratio", "client_ip", "user_agent",
+        "id",
+        "status",
+        "image_url",
+        "error",
+        "created_at",
+        "duration_sec",
+        "type",
+        "model",
+        "aspect_ratio",
+        "client_ip",
+        "user_agent",
     )
     _GALLERY_COLS = (
-        "id", "status", "image_url", "image_mime", "error",
-        "created_at", "finished_at", "duration_sec", "type", "model",
-        "prompt", "aspect_ratio",
+        "id",
+        "status",
+        "image_url",
+        "image_mime",
+        "error",
+        "created_at",
+        "finished_at",
+        "duration_sec",
+        "type",
+        "model",
+        "prompt",
+        "aspect_ratio",
     )
     _ERROR_COLS = (
-        "id", "status", "error",
-        "created_at", "duration_sec", "type", "model",
-        "prompt", "aspect_ratio",
+        "id",
+        "status",
+        "error",
+        "created_at",
+        "duration_sec",
+        "type",
+        "model",
+        "prompt",
+        "aspect_ratio",
     )
 
     async def get(self, task_id: str) -> dict | None:
@@ -568,9 +634,14 @@ class DB:
             return None
         return self._row_to_dict(row, default=False)
 
-    async def list_tasks(self, limit: int = 50, offset: int = 0,
-                          status: str | None = None, model: str | None = None,
-                          sort: str = "created_at") -> tuple[list[dict], int]:
+    async def list_tasks(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        status: str | None = None,
+        model: str | None = None,
+        sort: str = "created_at",
+    ) -> tuple[list[dict], int]:
         """任务列表查询（IMP-41）。"""
         await self._ensure_flushed()
         where = []
@@ -606,7 +677,8 @@ class DB:
         conn = await self._get_read_conn()
         cursor = await conn.execute(
             f"SELECT {cols} FROM requests WHERE status='completed' AND image_url IS NOT NULL"
-            " ORDER BY finished_at DESC LIMIT ?", (limit,),
+            " ORDER BY finished_at DESC LIMIT ?",
+            (limit,),
         )
         rows = await cursor.fetchall()
         return [self._row_to_dict(r) for r in rows]
@@ -617,8 +689,8 @@ class DB:
         cols = ", ".join(self._ERROR_COLS)
         conn = await self._get_read_conn()
         cursor = await conn.execute(
-            f"SELECT {cols} FROM requests WHERE status='error'"
-            " ORDER BY created_at DESC LIMIT ?", (limit,),
+            f"SELECT {cols} FROM requests WHERE status='error'" " ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         )
         rows = await cursor.fetchall()
         return [self._row_to_dict(r) for r in rows]
@@ -649,6 +721,7 @@ class DB:
         """近 N 天：每天请求/出图/失败（IMP-07: 直接用 day 列）。"""
         await self._ensure_flushed()
         import datetime
+
         cutoff_dt = datetime.date.today() - datetime.timedelta(days=days)
         cutoff = cutoff_dt.strftime("%Y-%m-%d")
         conn = await self._get_read_conn()
@@ -657,7 +730,8 @@ class DB:
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
             " FROM requests WHERE day >= ?"
-            " GROUP BY day ORDER BY day", (cutoff,),
+            " GROUP BY day ORDER BY day",
+            (cutoff,),
         )
         rows = await cursor.fetchall()
         return [{"day": r[0], "total": r[1], "images": r[2], "errors": r[3]} for r in rows]
@@ -666,6 +740,7 @@ class DB:
         """近 N 月：每月请求/出图/失败。"""
         await self._ensure_flushed()
         import datetime
+
         now = datetime.date.today()
         y, m = now.year, now.month
         for _ in range(months):
@@ -680,7 +755,8 @@ class DB:
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
             " FROM requests WHERE month >= ?"
-            " GROUP BY month ORDER BY month", (cutoff,),
+            " GROUP BY month ORDER BY month",
+            (cutoff,),
         )
         rows = await cursor.fetchall()
         return [{"month": r[0], "total": r[1], "images": r[2], "errors": r[3]} for r in rows]
@@ -729,9 +805,7 @@ class DB:
         cutoff = time.time() - window_seconds
         await self._ensure_flushed()
         conn = await self._get_read_conn()
-        cursor = await conn.execute(
-            "SELECT COUNT(*) FROM requests WHERE created_at >= ?", (cutoff,)
-        )
+        cursor = await conn.execute("SELECT COUNT(*) FROM requests WHERE created_at >= ?", (cutoff,))
         row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
@@ -800,8 +874,8 @@ class DB:
     async def save_idempotency(self, key: str, task_id: str) -> None:
         """保存幂等 key → task_id 映射。"""
         await self._enqueue_write(
-            "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)"
-            " VALUES (?, ?, ?)", (key, task_id, time.time()),
+            "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, task_id, created_at)" " VALUES (?, ?, ?)",
+            (key, task_id, time.time()),
         )
 
     async def get_idempotency(self, key: str) -> dict | None:
@@ -842,7 +916,8 @@ class DB:
         conn = await self._get_read_conn()
         cursor = await conn.execute(
             "SELECT id, task_id, model, error, attempts, created_at, last_attempt_at, raw_log"
-            " FROM dead_letter_queue ORDER BY created_at DESC LIMIT ?", (limit,),
+            " FROM dead_letter_queue ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         )
         rows = await cursor.fetchall()
         return [dict(zip(row.keys(), row)) for row in rows]

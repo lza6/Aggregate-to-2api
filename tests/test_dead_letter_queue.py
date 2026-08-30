@@ -4,6 +4,7 @@
 - DB push_dlq / list_dlq / retry_dlq / clear_dlq
 - worker 重试满后 push_dlq
 """
+
 import asyncio
 
 import pytest
@@ -37,6 +38,7 @@ class TestDeadLetterQueueDB:
     async def test_list_dlq_ordered_by_created_at(self, tmp_db: DB):
         """list_dlq 应按 created_at 降序排列。"""
         import time
+
         for i in range(3):
             await tmp_db.push_dlq(f"task-{i:03d}", "default", "err", 2)
             time.sleep(0.01)  # 确保时间戳不同
@@ -91,7 +93,6 @@ class TestDeadLetterQueueWorker:
     @pytest.mark.asyncio
     async def test_worker_pushes_dlq_on_retry_exhaustion(self, tmp_db, monkeypatch):
         """worker 重试满后应 push_dlq。"""
-        import api.worker as w
         from api.worker import Engine
         from api import turnstile_client as w_turnstile
         from api import imagefree_client as w_imagefree
@@ -128,7 +129,6 @@ class TestDeadLetterQueueWorker:
     @pytest.mark.asyncio
     async def test_worker_skip_dlq_when_disabled(self, tmp_db, monkeypatch):
         """IF_DLQ_ENABLED=0 时重试耗尽也不 push_dlq。"""
-        import api.worker as w
         from api.worker import Engine
         from api import turnstile_client as w_turnstile
         from api import imagefree_client as w_imagefree
@@ -154,6 +154,7 @@ class TestDeadLetterQueueWorker:
         finally:
             await e.stop()
 
+
 class TestDLQRequeueEngine:
     """S-9: DLQ 真重入队——引擎层（mark_pending_again + requeue_dlq_task）。"""
 
@@ -172,6 +173,7 @@ class TestDLQRequeueEngine:
     async def test_requeue_dlq_task_puts_back_to_queue(self, tmp_db):
         """失败任务 → requeue → 出现在队列中且状态 pending。"""
         from api.worker import Engine
+
         eng = Engine(tmp_db)
         await tmp_db.create_request("t-rq2", "p", "1:1", False)
         await tmp_db.mark_finished("t-rq2", "error", None, "upstream err", 1.0)
@@ -187,6 +189,7 @@ class TestDLQRequeueEngine:
     @pytest.mark.asyncio
     async def test_requeue_nonexistent_task(self, tmp_db):
         from api.worker import Engine
+
         eng = Engine(tmp_db)
         ok = await eng.requeue_dlq_task("no-such-task")
         assert ok is False
@@ -194,6 +197,7 @@ class TestDLQRequeueEngine:
     @pytest.mark.asyncio
     async def test_requeue_config_flag_default_off(self):
         from api import config
+
         # 默认关：防止被刷；端点行为由集成测试覆盖
         assert config.IF_DLQ_REQUEUE is False
 
@@ -201,9 +205,11 @@ class TestDLQRequeueEngine:
     async def test_requeue_queue_full_rolls_back(self, tmp_db):
         """队列满时重入队失败且状态回滚为 error。"""
         from api.worker import Engine, QueueFull  # noqa: F401
+
         eng = Engine(tmp_db)
         # 填满 normal 队列（默认 NORMAL_QUEUE_MAX 可能很大，用 monkeypatch 缩小）
         import api.config as cfg
+
         monkey_old = cfg.NORMAL_QUEUE_MAX
         cfg.NORMAL_QUEUE_MAX = 1
         try:

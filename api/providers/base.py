@@ -9,6 +9,7 @@
 v4.4 新增 ChatProvider：文本对话提供商抽象基类（与图像 Provider 平行），
 支持流式 SSE 输出 / 思考链 / 工具调用模拟 / 多模态图片输入。
 """
+
 from __future__ import annotations
 
 import abc
@@ -38,22 +39,23 @@ CAP_IMG2VID = "img2vid"
 @dataclass(frozen=True)
 class ModelSpec:
     """统一模型描述。id = "<provider_prefix>/<真实模型名>"（外部命名契约）。"""
-    id: str                 # 外部暴露 id，如 "nanobanana/nano-banana-pro"
-    provider: str           # 提供商前缀，如 "nanobanana"
-    upstream_model: str     # 上游真实模型 ID，如 "nano-banana-pro"
+
+    id: str  # 外部暴露 id，如 "nanobanana/nano-banana-pro"
+    provider: str  # 提供商前缀，如 "nanobanana"
+    upstream_model: str  # 上游真实模型 ID，如 "nano-banana-pro"
     capabilities: tuple[str, ...]
     display_name: str = ""
     description: str = ""
     aspect_ratios: tuple[str, ...] = ("1:1", "3:4", "4:3", "9:16", "16:9")
     resolutions: tuple[str, ...] = ("1K", "2K", "4K")
-    credits: int | None = None        # 上游积分费率（None=不适用）
-    account_required: bool = False    # 是否需要号池账号
+    credits: int | None = None  # 上游积分费率（None=不适用）
+    account_required: bool = False  # 是否需要号池账号
     meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class GenerationResult:
-    status: str               # "completed" | "error"
+    status: str  # "completed" | "error"
     asset_url: str | None = None
     asset_bytes: bytes | None = None
     asset_mime: str | None = None
@@ -71,7 +73,7 @@ class ProviderRateLimited(ProviderError):
 
 
 class Provider(abc.ABC):
-    prefix: str = "base"          # 唯一前缀，模型 id 用
+    prefix: str = "base"  # 唯一前缀，模型 id 用
     display_name: str = "Base"
     base_url: str = ""
     # 该提供商固定支持的模型（ID → ModelSpec），注册表自动收集
@@ -102,10 +104,16 @@ class Provider(abc.ABC):
 
     # ── 生成（子类实现）───────────────────────────
     @abc.abstractmethod
-    async def generate(self, model: str, prompt: str,
-                       aspect_ratio: str, images: list[bytes] | None = None,
-                       resolution: str = "1K", download: bool = False,
-                       **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str,
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         """统一生成入口。images 非空=图生图（capability 需含 img2img）。"""
 
     # ── 额度 / 健康（可选覆写）────────────────────
@@ -127,18 +135,14 @@ class Provider(abc.ABC):
         self.health_status = "down"
         self._healthy = False
         self.last_health_check = __import__("time").time()
-        __import__("logging").getLogger("providers").warning(
-            "提供商 %s 标记为 down: %s", self.prefix, reason
-        )
+        __import__("logging").getLogger("providers").warning("提供商 %s 标记为 down: %s", self.prefix, reason)
 
     def mark_up(self) -> None:
         """标记提供商为恢复健康。"""
         self.health_status = "healthy"
         self._healthy = True
         self.last_health_check = __import__("time").time()
-        __import__("logging").getLogger("providers").info(
-            "提供商 %s 标记为 healthy", self.prefix
-        )
+        __import__("logging").getLogger("providers").info("提供商 %s 标记为 healthy", self.prefix)
 
     # ── 代理/号池钩子（有需要时覆写）──────────────
     def needs_proxy_per_request(self) -> bool:
@@ -152,8 +156,8 @@ class Provider(abc.ABC):
 
 # ── 文本对话（chat）能力枚举 ──────────────────────
 CAP_CHAT = "chat"
-CAP_CHAT_VISION = "chat_vision"    # 支持图片输入
-CAP_CHAT_TOOLS = "chat_tools"      # 支持（模拟的）函数调用
+CAP_CHAT_VISION = "chat_vision"  # 支持图片输入
+CAP_CHAT_TOOLS = "chat_tools"  # 支持（模拟的）函数调用
 
 
 class ChatProvider(abc.ABC):
@@ -200,36 +204,46 @@ class ChatProvider(abc.ABC):
 
     # ── 核心接口（子类实现）───────────────────────
     @abc.abstractmethod
-    def chat_stream(self, model: str, messages: list[dict],
-                    tools: list | None = None, tool_choice: Any = None,
-                    effort: str = "balanced",
-                    **kw) -> AsyncIterator[dict]:
+    def chat_stream(
+        self,
+        model: str,
+        messages: list[dict],
+        tools: list | None = None,
+        tool_choice: Any = None,
+        effort: str = "balanced",
+        **kw,
+    ) -> AsyncIterator[dict]:
         """流式聊天入口（异步生成器）。messages 为 OpenAI 格式（role/content）。"""
 
-    async def chat_collect(self, model: str, messages: list[dict],
-                           tools: list | None = None, tool_choice: Any = None,
-                           effort: str = "balanced",
-                           **kw) -> dict:
+    async def chat_collect(
+        self,
+        model: str,
+        messages: list[dict],
+        tools: list | None = None,
+        tool_choice: Any = None,
+        effort: str = "balanced",
+        **kw,
+    ) -> dict:
         """非流式聚合：收集全部事件返回完整结果。"""
         text_parts: list[str] = []
         reasoning_parts: list[str] = []
         tool_calls: list[dict] = []
         usage: dict | None = None
         finish_reason = "stop"
-        async for ev in self.chat_stream(model, messages, tools=tools,
-                                         tool_choice=tool_choice, effort=effort, **kw):
+        async for ev in self.chat_stream(model, messages, tools=tools, tool_choice=tool_choice, effort=effort, **kw):
             etype = ev.get("type")
             if etype == "text":
                 text_parts.append(ev.get("text", ""))
             elif etype == "reasoning":
                 reasoning_parts.append(ev.get("text", ""))
             elif etype == "tool_call":
-                tool_calls.append({
-                    "id": ev.get("id") or f"call_{int(time.time()*1000):x}",
-                    "type": "function",
-                    "function": {"name": ev.get("name", ""),
-                                 "arguments": ev.get("arguments") or "{}"},
-                })
+                tool_calls.append(
+                    {
+                        "id": ev.get("id") or f"call_{int(time.time()*1000):x}",
+                        "type": "function",
+                        "function": {"name": ev.get("name", ""), "arguments": ev.get("arguments") or "{}"},
+                    }
+                )
                 finish_reason = "tool_calls"
             elif etype == "usage":
                 usage = ev.get("usage")

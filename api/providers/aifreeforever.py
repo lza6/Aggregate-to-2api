@@ -10,6 +10,7 @@
 - 风控：每 IP 每日限额，429 返回 {waitTime:秒} 且逐次递增，约 24h 重置 → 每请求必须轮换出口 IP。
 - 求解 token 走 turnstile_client（cf_solver），token 与签发 IP 绑定 → 每 IP 需独立求解。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -53,10 +54,15 @@ _UPSTREAM_MODELS = {
 }
 
 _BROWSER_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"),
-    "Accept": "*/*", "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+    ),
+    "Accept": "*/*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 
@@ -68,25 +74,37 @@ class AifreeforeverProvider(Provider):
 
     def __init__(self) -> None:
         super().__init__()
-        self._proxy_pool = None      # main 注入：每请求取一个新住宅 IP
+        self._proxy_pool = None  # main 注入：每请求取一个新住宅 IP
         self._build_models()
 
     def _build_models(self) -> None:
         for upstream, (name, caps, ratios) in _UPSTREAM_MODELS.items():
             self.models[f"aifreeforever/{upstream}"] = ModelSpec(
-                id=f"aifreeforever/{upstream}", provider=self.prefix, upstream_model=upstream,
-                capabilities=caps, display_name=name,
+                id=f"aifreeforever/{upstream}",
+                provider=self.prefix,
+                upstream_model=upstream,
+                capabilities=caps,
+                display_name=name,
                 description="匿名使用，每 IP 每日限额",
                 aspect_ratios=ratios or ("1:1", "3:4", "4:3", "16:9", "9:16", "3:2", "2:3"),
-                resolutions=(), credits=None, account_required=False,
+                resolutions=(),
+                credits=None,
+                account_required=False,
             )
 
     def needs_proxy_per_request(self) -> bool:
         return True  # 每请求必须新出口 IP（每 IP 每日限额）
 
-    async def generate(self, model: str, prompt: str, aspect_ratio: str,
-                       images: list[bytes] | None = None, resolution: str = "1K",
-                       download: bool = False, **kw) -> GenerationResult:
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        aspect_ratio: str,
+        images: list[bytes] | None = None,
+        resolution: str = "1K",
+        download: bool = False,
+        **kw,
+    ) -> GenerationResult:
         # 1) 分配出口 IP（优先代理池轮换，无代理时回退直连）
         proxy = None
         if self._proxy_pool is not None:
@@ -104,17 +122,17 @@ class AifreeforeverProvider(Provider):
         for attempt_i in range(2):
             try:
                 token, _ = await turnstile_client.solve_turnstile(
-                    config.CF_SOLVER_URL, turnstile_page, SITEKEY,
-                    config.TURNSTILE_TIMEOUT, proxy=None)  # 始终直连，代理绕 cf 会触发拦截
+                    config.CF_SOLVER_URL, turnstile_page, SITEKEY, config.TURNSTILE_TIMEOUT, proxy=None
+                )  # 始终直连，代理绕 cf 会触发拦截
                 break
             except Exception as e:
                 log.warning("aifreeforever turnstile 求解失败(第%d次): %s", attempt_i + 1, e)
                 if attempt_i == 0:
                     await asyncio.sleep(3)
         if token is None:
-            return GenerationResult(status="error",
-                error="aifreeforever 验证码求解失败（cf_solver 直连超时）",
-                proxy_used=proxy)
+            return GenerationResult(
+                status="error", error="aifreeforever 验证码求解失败（cf_solver 直连超时）", proxy_used=proxy
+            )
 
         # 3) 图生图前置合规检查
         if images:
@@ -123,12 +141,13 @@ class AifreeforeverProvider(Provider):
                 if not ok:
                     return GenerationResult(status="error", error="aifreeforever 图片合规检查未通过", proxy_used=proxy)
             except Exception as e:
-                return GenerationResult(status="error", error=f"aifreeforever 图片检查失败: {str(e)[:120]}", proxy_used=proxy)
+                return GenerationResult(
+                    status="error", error=f"aifreeforever 图片检查失败: {str(e)[:120]}", proxy_used=proxy
+                )
 
         # 4) 生成（成功/失败回填代理池，驱动冷却与 24h 每日限额——M9 审计修复）
         try:
-            urls = await self._generate(token, model.split("/", 1)[-1], prompt,
-                                        aspect_ratio, images, proxy)
+            urls = await self._generate(token, model.split("/", 1)[-1], prompt, aspect_ratio, images, proxy)
         except ProviderRateLimited as e:
             if proxy and self._proxy_pool is not None:
                 await self._proxy_pool.mark_failure(proxy, rate_limited=True)
@@ -146,9 +165,9 @@ class AifreeforeverProvider(Provider):
         if download:
             try:
                 raw = await self._download(url, proxy)
-                return GenerationResult(status="completed", asset_url=url,
-                                        asset_bytes=raw, asset_mime="image/webp",
-                                        proxy_used=proxy)
+                return GenerationResult(
+                    status="completed", asset_url=url, asset_bytes=raw, asset_mime="image/webp", proxy_used=proxy
+                )
             except Exception as e:
                 log.warning("aifreeforever 下载失败（不影响 URL 交付）: %s", e)
         return GenerationResult(status="completed", asset_url=url, proxy_used=proxy)
@@ -156,10 +175,13 @@ class AifreeforeverProvider(Provider):
     # ── 内部调用 ──────────────────────────────────
     def _headers(self, token: str | None = None) -> dict:
         h = dict(_BROWSER_HEADERS)
-        h.update({
-            "Origin": self.base_url, "Referer": f"{self.base_url}/image-generators",
-            "x-api-secret": "",
-        })
+        h.update(
+            {
+                "Origin": self.base_url,
+                "Referer": f"{self.base_url}/image-generators",
+                "x-api-secret": "",
+            }
+        )
         if token:
             h["x-captcha-verified-at"] = str(int(time.time() * 1000))
             h["x-turnstile-token"] = token
@@ -167,14 +189,15 @@ class AifreeforeverProvider(Provider):
 
     async def _moderate(self, image_bytes: bytes, proxy: str | None) -> bool:
         async with httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(60.0)) as c:
-            r = await c.post(f"{self.base_url}/api/moderate-image",
-                             headers=self._headers(),
-                             files={"file": ("edit.png", image_bytes, "image/png")})
+            r = await c.post(
+                f"{self.base_url}/api/moderate-image",
+                headers=self._headers(),
+                files={"file": ("edit.png", image_bytes, "image/png")},
+            )
             return r.json().get("result") == "pass"
 
     async def _generate(self, token, upstream, prompt, aspect_ratio, images, proxy) -> list[str]:
-        body: dict = {"modelId": upstream, "prompt": prompt,
-                      "aspect_ratio": aspect_ratio, "turnstileToken": token}
+        body: dict = {"modelId": upstream, "prompt": prompt, "aspect_ratio": aspect_ratio, "turnstileToken": token}
         if images:
             # base64 data URI 直传（逆向实证可行）；最多 3 张
             refs = [f"data:image/png;base64,{base64.b64encode(im).decode()}" for im in images[:3]]
@@ -183,8 +206,7 @@ class AifreeforeverProvider(Provider):
             else:
                 body["referenceImageUrls"] = refs
         async with httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(120.0)) as c:
-            r = await c.post(f"{self.base_url}/api/v2/generate-image",
-                             headers=self._headers(token), json=body)
+            r = await c.post(f"{self.base_url}/api/v2/generate-image", headers=self._headers(token), json=body)
             try:
                 data = r.json()
             except Exception:

@@ -1,10 +1,20 @@
-import asyncio, httpx, json, re, time
+import asyncio
+import httpx
+import re
+import time
 from api.turnstile_client import solve_turnstile
 from api import config
 from api.account_pool import account_pool
 
+
 async def main():
-    session = httpx.AsyncClient(headers={"User-Agent": config.USER_AGENT, "Origin": "https://temp-mail.org", "Referer": "https://temp-mail.org/"})
+    session = httpx.AsyncClient(
+        headers={
+            "User-Agent": config.USER_AGENT,
+            "Origin": "https://temp-mail.org",
+            "Referer": "https://temp-mail.org/",
+        }
+    )
     print("1. Creating temp-mail mailbox...")
     tr = await session.post("https://web2.temp-mail.org/mailbox", json={})
     if tr.status_code != 200:
@@ -16,14 +26,22 @@ async def main():
     print(f"1. Got email: {email}")
 
     print("2. Solving Turnstile...")
-    captcha, _ = await solve_turnstile(config.CF_SOLVER_URL, "https://nanobanana-pro.com/zh", "0x4AAAAAACBMF7NSqVf-BSmE", 60.0)
+    captcha, _ = await solve_turnstile(
+        config.CF_SOLVER_URL, "https://nanobanana-pro.com/zh", "0x4AAAAAACBMF7NSqVf-BSmE", 60.0
+    )
     print(f"2. Solved captcha: {captcha[:20]}")
 
     print("3. Submitting sign-up...")
     password = "Tf@Pass" + str(int(time.time()))
-    reg_r = await session.post("https://nanobanana-pro.com/api/auth/sign-up/email",
-                              headers={"Origin": "https://nanobanana-pro.com", "Referer": "https://nanobanana-pro.com/zh", "x-turnstile-token": captcha},
-                              json={"email": email, "password": password, "name": "TfUser", "callbackURL": "/zh"})
+    reg_r = await session.post(
+        "https://nanobanana-pro.com/api/auth/sign-up/email",
+        headers={
+            "Origin": "https://nanobanana-pro.com",
+            "Referer": "https://nanobanana-pro.com/zh",
+            "x-turnstile-token": captcha,
+        },
+        json={"email": email, "password": password, "name": "TfUser", "callbackURL": "/zh"},
+    )
     print("3. Sign-up response:", reg_r.status_code, reg_r.text)
     if reg_r.status_code != 200:
         return
@@ -38,7 +56,9 @@ async def main():
             if msgs and isinstance(msgs, list):
                 mid = msgs[0].get("_id")
                 print(f"Found message id: {mid}")
-                det_r = await session.get(f"https://web2.temp-mail.org/messages/{mid}", headers={"Authorization": f"Bearer {token}"})
+                det_r = await session.get(
+                    f"https://web2.temp-mail.org/messages/{mid}", headers={"Authorization": f"Bearer {token}"}
+                )
                 if det_r.status_code == 200:
                     bHtml = det_r.json().get("bodyHtml", "")
                     m = re.findall(r'https://[^\s"\'<>]+/api/auth/verify-email\?token=[^\s"\'<>]+', bHtml)
@@ -55,10 +75,18 @@ async def main():
     print("Verify response status:", vr.status_code)
 
     print("6. Solving login Turnstile...")
-    login_captcha, _ = await solve_turnstile(config.CF_SOLVER_URL, "https://nanobanana-pro.com/zh", "0x4AAAAAACBMF7NSqVf-BSmE", 60.0)
-    login_r = await session.post("https://nanobanana-pro.com/api/auth/sign-in/email",
-                                headers={"Origin": "https://nanobanana-pro.com", "Referer": "https://nanobanana-pro.com/zh", "x-turnstile-token": login_captcha},
-                                json={"email": email, "password": password, "callbackURL": "/zh"})
+    login_captcha, _ = await solve_turnstile(
+        config.CF_SOLVER_URL, "https://nanobanana-pro.com/zh", "0x4AAAAAACBMF7NSqVf-BSmE", 60.0
+    )
+    login_r = await session.post(
+        "https://nanobanana-pro.com/api/auth/sign-in/email",
+        headers={
+            "Origin": "https://nanobanana-pro.com",
+            "Referer": "https://nanobanana-pro.com/zh",
+            "x-turnstile-token": login_captcha,
+        },
+        json={"email": email, "password": password, "callbackURL": "/zh"},
+    )
     print("Login status:", login_r.status_code, "cookies:", dict(login_r.cookies))
 
     cookie_str = "; ".join([f"{k}={v}" for k, v in login_r.cookies.items()])
@@ -67,6 +95,7 @@ async def main():
         print("7. SUCCESS! Added account to DB. Total active accounts:", len(account_pool.get("nanobanana")))
     else:
         print("Failed to get session cookie")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

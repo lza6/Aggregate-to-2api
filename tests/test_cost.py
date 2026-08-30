@@ -6,6 +6,7 @@
 - /v1/cost 端点（含 IF_USD_PER_CREDIT=0 默认与启用后图片成本估算）
 - 成本告警规则（cost_over_budget / cost_burn_rate_warning）
 """
+
 from __future__ import annotations
 
 import time
@@ -15,7 +16,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from api import chat_usage
-from api.alerting import AlertEngine, AlertRule
+from api.alerting import AlertEngine
 from api.errors import AppError
 from api.handlers import app_error_handler
 from api.routes import admin
@@ -25,9 +26,7 @@ MODEL = "tryingopen/qwen/qwen3.8-27b"
 
 
 async def _request(application: FastAPI, method: str, url: str, **kwargs):
-    async with AsyncClient(
-        transport=ASGITransport(app=application), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
         return await client.request(method, url, **kwargs)
 
 
@@ -48,12 +47,22 @@ async def test_chat_usage_has_by_provider(tmp_db):
     """stats() 返回 by_provider 字段，按 provider 聚合 cost/calls/tokens。"""
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=100, completion_tokens=50,
-        cost_usd=0.5, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=100,
+        completion_tokens=50,
+        cost_usd=0.5,
+        duration_ms=1,
+        success=True,
     )
     await tracker.record(
-        provider="nanobanana", model="nano-banana-pro", prompt_tokens=20, completion_tokens=10,
-        cost_usd=0.2, duration_ms=1, success=True,
+        provider="nanobanana",
+        model="nano-banana-pro",
+        prompt_tokens=20,
+        completion_tokens=10,
+        cost_usd=0.2,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
     stats = await tracker.stats("24h")
@@ -71,8 +80,13 @@ async def test_chat_usage_by_model_has_provider(tmp_db):
     """by_model 每项含 provider 字段（M6-F3）。"""
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=10, completion_tokens=5,
-        cost_usd=0.1, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=10,
+        completion_tokens=5,
+        cost_usd=0.1,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
     stats = await tracker.stats("24h")
@@ -87,12 +101,18 @@ async def test_chat_usage_records_day_month(tmp_db):
 
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=1, completion_tokens=1,
-        cost_usd=0.0, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=1,
+        completion_tokens=1,
+        cost_usd=0.0,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
     row = await tracker._query_one(
-        "SELECT day, month FROM chat_usage ORDER BY id DESC LIMIT 1", (),
+        "SELECT day, month FROM chat_usage ORDER BY id DESC LIMIT 1",
+        (),
     )
     assert row is not None
     day, month = row[0], row[1]
@@ -110,12 +130,22 @@ async def test_cost_monthly_aggregation(tmp_db):
     """cost_monthly 按月聚合 cost_usd + calls。"""
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=10, completion_tokens=5,
-        cost_usd=0.3, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=10,
+        completion_tokens=5,
+        cost_usd=0.3,
+        duration_ms=1,
+        success=True,
     )
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=20, completion_tokens=10,
-        cost_usd=0.7, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=20,
+        completion_tokens=10,
+        cost_usd=0.7,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
     rows = await tracker.cost_monthly(12)
@@ -131,12 +161,22 @@ async def test_cost_by_provider_model(tmp_db):
     """cost_by_provider_model 按 provider+model 聚合。"""
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=5, completion_tokens=5,
-        cost_usd=0.4, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=5,
+        completion_tokens=5,
+        cost_usd=0.4,
+        duration_ms=1,
+        success=True,
     )
     await tracker.record(
-        provider="nanobanana", model="nano-banana-pro", prompt_tokens=5, completion_tokens=5,
-        cost_usd=0.6, duration_ms=1, success=True,
+        provider="nanobanana",
+        model="nano-banana-pro",
+        prompt_tokens=5,
+        completion_tokens=5,
+        cost_usd=0.6,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
     rows = await tracker.cost_by_provider_model(12)
@@ -156,31 +196,52 @@ async def test_v1_cost_endpoint(cost_app, tmp_db, monkeypatch):
     # 注入 tmp_db 到 chat_usage_tracker，并清空 gallery_cache
     monkeypatch.setattr(chat_usage.chat_usage_tracker, "_db", tmp_db)
     from api.meta import gallery_cache
+
     await gallery_cache.invalidate("cost:summary")
 
     tracker = chat_usage.ChatUsageTracker(db=tmp_db)
     await tracker.record(
-        provider="tryingopen", model=MODEL, prompt_tokens=10, completion_tokens=5,
-        cost_usd=0.5, duration_ms=1, success=True,
+        provider="tryingopen",
+        model=MODEL,
+        prompt_tokens=10,
+        completion_tokens=5,
+        cost_usd=0.5,
+        duration_ms=1,
+        success=True,
     )
     await tmp_db._ensure_flushed()
 
     # account_pool.cost_summary 用 monkeypatch 返回 0（避免依赖真实号池）
     async def _fake_cost_summary(provider):
         return {
-            "total_credits_used": 0, "total_images_used": 0,
-            "total_credits_earned": 0, "accounts_with_usage": 0,
-            "total_accounts": 0, "avg_cost_per_image": None,
+            "total_credits_used": 0,
+            "total_images_used": 0,
+            "total_credits_earned": 0,
+            "accounts_with_usage": 0,
+            "total_accounts": 0,
+            "avg_cost_per_image": None,
         }
+
     from api import account_pool
+
     monkeypatch.setattr(account_pool.account_pool, "cost_summary", _fake_cost_summary)
 
     resp = await _request(cost_app, "GET", "/v1/cost")
     assert resp.status_code == 200
     body = resp.json()
-    for key in ("month_to_date_usd", "today_usd", "budget_usd",
-                "budget_remaining_pct", "over_budget", "burn_rate_warning",
-                "monthly", "by_provider", "by_model", "image_cost_usd_mtd", "note"):
+    for key in (
+        "month_to_date_usd",
+        "today_usd",
+        "budget_usd",
+        "budget_remaining_pct",
+        "over_budget",
+        "burn_rate_warning",
+        "monthly",
+        "by_provider",
+        "by_model",
+        "image_cost_usd_mtd",
+        "note",
+    ):
         assert key in body, f"缺少字段 {key}"
     assert body["today_usd"] == 0.5
     assert body["budget_remaining_pct"] == 100  # budget=0 → 100
@@ -196,20 +257,27 @@ async def test_v1_cost_image_cost_usd(cost_app, tmp_db, monkeypatch):
     """IF_USD_PER_CREDIT=0.01 + account_pool credits_used_total=100 → image_cost_usd_mtd ≈ 1.0。"""
     monkeypatch.setattr(chat_usage.chat_usage_tracker, "_db", tmp_db)
     from api.meta import gallery_cache
+
     await gallery_cache.invalidate("cost:summary")
 
     # 配置 IF_USD_PER_CREDIT=0.01
     from api import config
+
     monkeypatch.setattr(config, "IF_USD_PER_CREDIT", 0.01)
 
     # account_pool.cost_summary 返回 credits_used_total=100
     async def _fake_cost_summary(provider):
         return {
-            "total_credits_used": 100, "total_images_used": 10,
-            "total_credits_earned": 0, "accounts_with_usage": 1,
-            "total_accounts": 1, "avg_cost_per_image": 10,
+            "total_credits_used": 100,
+            "total_images_used": 10,
+            "total_credits_earned": 0,
+            "accounts_with_usage": 1,
+            "total_accounts": 1,
+            "avg_cost_per_image": 10,
         }
+
     from api import account_pool
+
     monkeypatch.setattr(account_pool.account_pool, "cost_summary", _fake_cost_summary)
 
     # 无 token 成本数据 → month_to_date = 0 + image 1.0

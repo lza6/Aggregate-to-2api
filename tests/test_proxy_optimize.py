@@ -1,4 +1,6 @@
-"""代理池优化策略单测：use_count 递增冷却、优先选未使用 IP、每日限制、24h 重置。"""
+"""代理池优化策略单测：use_count 递增冷却、优先选未使用 IP、每日限制、24h 重置、
+trace 回填（v6.7.x）。"""
+
 import os
 import time
 
@@ -6,8 +8,8 @@ import pytest
 
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 
-from api.config import IF_PROXY_USE_COOLDOWN_MAP, IF_PROXY_MAX_USE_PER_DAY
-from api.proxy_pool import ProxyEntry, ProxyPool, USE_COOLDOWN_MAP, _cooldown_for
+from api.config import IF_PROXY_MAX_USE_PER_DAY
+from api.proxy_pool import ProxyEntry, ProxyPool, _cooldown_for
 
 
 class TestProxyEntry:
@@ -220,3 +222,98 @@ class TestProxyPool:
         assert pool.entries[0].use_count == 1
         # 现在可用检查应该返回 False（已达每日限额）
         assert not pool.entries[0].available(time.time())
+
+
+# ── trace 回填（v6.7.x）──────────────────────────
+class TestApplyTraceResult:
+    @pytest.mark.asyncio
+    async def test_real_exit_backfills_exit_ip_and_clears_fails(self):
+        """real_exit=True 时回填 exit_ip/trace_ts/colo 并清零 consecutive_fails。"""
+        e = ProxyEntry("http://2.2.2.2:80", source="free")
+        e.consecutive_fails = 3
+        pool = ProxyPool()
+        pool.entries = [e]
+        geo = {
+            "exit_ip": "9.9.9.9",
+            "real_exit": True,
+            "colo": "SJC",
+            "code": "US",
+            "name": "美国",
+            "emoji": "🇺🇸",
+            "desc": "美国 · Cloudflare SJC",
+            "ts": time.time(),
+            "http": "HTTP/2",
+            "tls": "TLSv1.3",
+        }
+        await pool.apply_trace_result(e.url, geo)
+        assert e.exit_ip == "9.9.9.9"
+        assert e.real_exit is True
+        assert e.trace_ts == geo["ts"]
+        assert e.trace_colo == "SJC"
+        assert e.consecutive_fails == 0  # real_exit → 清零
+
+    @pytest.mark.asyncio
+    async def test_fake_proxy_increments_fails(self):
+        """real_exit=False（出口 IP == host，疑似假代理）时 consecutive_fails +1。"""
+        e = ProxyEntry("http://2.2.2.2:80", source="free")
+        e.consecutive_fails = 1
+        pool = ProxyPool()
+        pool.entries = [e]
+        geo = {
+            "exit_ip": "2.2.2.2",
+            "real_exit": False,
+            "colo": "SJC",
+            "code": "US",
+            "name": "美国",
+            "emoji": "🇺🇸",
+            "desc": "美国",
+            "ts": time.time(),
+            "http": "",
+            "tls": "",
+        }
+        await pool.apply_trace_result(e.url, geo)
+        assert e.exit_ip == "2.2.2.2"
+        assert e.real_exit is False
+        assert e.consecutive_fails == 2  # 增量
+        assert e.trace_ts > 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_url_is_noop(self):
+        """未匹配条目时安全返回（无副作用）。"""
+        pool = ProxyPool()
+        pool.entries = [ProxyEntry("http://1.1.1.1:80", source="free")]
+        geo = {"exit_ip": "9.9.9.9", "real_exit": True, "ts": time.time()}
+        await pool.apply_trace_result("http://9.9.9.9:9999", geo)
+        assert pool.entries[0].exit_ip == ""  # 未被改动
+
+
+class TestSnapshotTraceFields:
+    def test_snapshot_exposes_exit_ip_real_exit_colo_when_traced(self):
+        """trace 过的条目 snapshot 透出 exit_ip/real_exit/colo + trace_ts 覆盖 latency。"""
+        e = ProxyEntry("http://2.2.2.2:80", source="free")
+        e.trace_ts = time.time() - 10
+        e.exit_ip = "9.9.9.9"
+        e.real_exit = True
+        e.trace_colo = "SJC"
+        pool = ProxyPool()
+        pool.entries = [e]
+        snap = pool.snapshot()
+        item = snap["items"][0]
+        assert item["exit_ip"] == "9.9.9.9"
+        assert item["real_exit"] is True
+        assert item["colo"] == "SJC"
+        assert item["trace_ts"] == e.trace_ts
+        # trace_ts 覆盖 md5 假 latency：checked_ago_seconds 接近 10（探测距今）
+        assert 9 <= item["checked_ago_seconds"] <= 15
+
+    def test_snapshot_without_trace_uses_md5_latency(self):
+        """未 trace 的条目 snapshot 不带 exit_ip/real_exit/colo，latency 走 md5。"""
+        e = ProxyEntry("http://2.2.2.2:80", source="free")
+        pool = ProxyPool()
+        pool.entries = [e]
+        snap = pool.snapshot()
+        item = snap["items"][0]
+        assert "exit_ip" not in item
+        assert "real_exit" not in item
+        assert "colo" not in item
+        assert item["latency_ms"] > 0

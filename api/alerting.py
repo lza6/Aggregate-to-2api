@@ -2,6 +2,7 @@
 
 为独立部署提供轻量告警能力：规则评估 + 冷却抑制 + 日志触达。
 """
+
 import logging
 import time
 from typing import Callable
@@ -55,51 +56,83 @@ class AlertEngine:
 
     def _setup_default_rules(self) -> None:
         """注册内置默认规则。"""
-        self.add_rule(AlertRule(
-            name="queue_backlog", severity="warning",
-            message="排队任务数超过 1000",
-            check=lambda ctx: ctx.get("queued", 0) > 1000, cooldown=300.0,
-        ))
-        self.add_rule(AlertRule(
-            name="high_error_rate", severity="critical",
-            message="错误率超过 20%（近 5 分钟窗口）",
-            check=lambda ctx: (
-                ctx.get("window_requests", 0) > 0 and
-                ctx.get("window_errors", 0) / ctx.get("window_requests", 1) > 0.2
-            ), cooldown=300.0,
-        ))
-        self.add_rule(AlertRule(
-            name="solver_circuit_open", severity="critical",
-            message="求解器熔断已开启 >=30s",
-            check=lambda ctx: ctx.get("solver_circuit_open", False), cooldown=60.0,
-        ))
-        self.add_rule(AlertRule(
-            name="token_pool_empty", severity="warning",
-            message="token 池空超过 10s",
-            check=lambda ctx: ctx.get("token_pool_empty", False), cooldown=120.0,
-        ))
-        self.add_rule(AlertRule(
-            name="provider_down", severity="warning",
-            message="提供商持续不可用 >5min",
-            check=lambda ctx: ctx.get("provider_down", False), cooldown=300.0,
-        ))
-        self.add_rule(AlertRule(
-            name="provider_consecutive_failures", severity="warning",
-            message="单个提供商连续失败次数超阈值（≥10）",
-            check=lambda ctx: ctx.get("max_consecutive_failures", 0) >= 10, cooldown=300.0,
-        ))
-        self.add_rule(AlertRule(
-            name="ip_batch_block", severity="critical",
-            message="IP 批量封禁/限流数量超阈值（≥20）",
-            check=lambda ctx: ctx.get("blocked_ip_count", 0) >= 20, cooldown=300.0,
-        ))
-        self.add_rule(AlertRule(
-            name="auth_error_surge", severity="warning",
-            message="AUTH.001 错误在近窗口内超阈值（≥30）",
-            # ctx['auth_error_count'] 为近窗口增量（breakdown 引擎在窗口期外重置，
-            # 由 bg_tasks 用 count_of - 上轮快照计算），避免进程内累计值造成永久告警。
-            check=lambda ctx: ctx.get("auth_error_count", 0) >= 30, cooldown=300.0,
-        ))
+        self.add_rule(
+            AlertRule(
+                name="queue_backlog",
+                severity="warning",
+                message="排队任务数超过 1000",
+                check=lambda ctx: ctx.get("queued", 0) > 1000,
+                cooldown=300.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="high_error_rate",
+                severity="critical",
+                message="错误率超过 20%（近 5 分钟窗口）",
+                check=lambda ctx: (
+                    ctx.get("window_requests", 0) > 0
+                    and ctx.get("window_errors", 0) / ctx.get("window_requests", 1) > 0.2
+                ),
+                cooldown=300.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="solver_circuit_open",
+                severity="critical",
+                message="求解器熔断已开启 >=30s",
+                check=lambda ctx: ctx.get("solver_circuit_open", False),
+                cooldown=60.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="token_pool_empty",
+                severity="warning",
+                message="token 池空超过 10s",
+                check=lambda ctx: ctx.get("token_pool_empty", False),
+                cooldown=120.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="provider_down",
+                severity="warning",
+                message="提供商持续不可用 >5min",
+                check=lambda ctx: ctx.get("provider_down", False),
+                cooldown=300.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="provider_consecutive_failures",
+                severity="warning",
+                message="单个提供商连续失败次数超阈值（≥10）",
+                check=lambda ctx: ctx.get("max_consecutive_failures", 0) >= 10,
+                cooldown=300.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="ip_batch_block",
+                severity="critical",
+                message="IP 批量封禁/限流数量超阈值（≥20）",
+                check=lambda ctx: ctx.get("blocked_ip_count", 0) >= 20,
+                cooldown=300.0,
+            )
+        )
+        self.add_rule(
+            AlertRule(
+                name="auth_error_surge",
+                severity="warning",
+                message="AUTH.001 错误在近窗口内超阈值（≥30）",
+                # ctx['auth_error_count'] 为近窗口增量（breakdown 引擎在窗口期外重置，
+                # 由 bg_tasks 用 count_of - 上轮快照计算），避免进程内累计值造成永久告警。
+                check=lambda ctx: ctx.get("auth_error_count", 0) >= 30,
+                cooldown=300.0,
+            )
+        )
 
     def add_rule(self, rule: AlertRule) -> None:
         """添加一条告警规则。"""

@@ -5,6 +5,7 @@
 
 用法：pytest tests/performance/ --benchmark-only
 """
+
 import pytest
 
 
@@ -15,6 +16,7 @@ class TestEngineBenchmark:
     def test_engine_submit_perf(self, benchmark, tmp_db, no_proxy_env):
         """引擎提交操作的基准测试。"""
         from api.worker import Engine
+
         engine = Engine(tmp_db)
 
         async def _setup():
@@ -22,13 +24,13 @@ class TestEngineBenchmark:
             return engine
 
         import asyncio
+
         engine = asyncio.run(_setup())
 
         def _submit():
             import asyncio
-            task_id = asyncio.run(
-                engine.submit("benchmark prompt", "1:1", False, "default")
-            )
+
+            task_id = asyncio.run(engine.submit("benchmark prompt", "1:1", False, "default"))
             return task_id
 
         benchmark.pedantic(_submit, rounds=50, iterations=2)
@@ -45,6 +47,7 @@ class TestDBBenchmark:
 
         def _create_and_query():
             import uuid
+
             tid = str(uuid.uuid4())
             db.create_request(tid, "test prompt", "1:1", False, "txt", "default")
             return db.get(tid)

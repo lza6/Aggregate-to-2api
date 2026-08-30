@@ -3,6 +3,7 @@
 IMP-11: 支持持久化回写 DB。set 时同步写入 cache_store 表；后台 reaper 每轮清理后
 flush 变更到 DB；stop 时全量刷新；start 时从 DB 恢复缓存，避免重启后空窗期。
 """
+
 import asyncio
 import json
 import logging
@@ -15,6 +16,7 @@ log = logging.getLogger("cache")
 
 class _DbPending:
     """挂起变更缓冲区：批量写回 DB，减少单次写入频率。"""
+
     __slots__ = ("upserts", "deletes")
 
     def __init__(self) -> None:
@@ -36,8 +38,7 @@ class LRUCache:
     - 启动时从 DB 加载恢复缓存，避免重启后空窗期
     """
 
-    def __init__(self, maxsize: int = 128, ttl: float = 5.0,
-                 persist_db: object | None = None) -> None:
+    def __init__(self, maxsize: int = 128, ttl: float = 5.0, persist_db: object | None = None) -> None:
         self._maxsize = maxsize
         self._ttl = ttl
         self._data: OrderedDict[str, tuple[float, Any]] = OrderedDict()

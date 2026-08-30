@@ -3,6 +3,7 @@
 提供统一的请求上下文管理，用 contextvars 替代函数参数透传 trace_id、request_id 等。
 后续 A-01/A-03 可逐步迁移使用此上下文。
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -13,8 +14,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── ContextVar ─────────────────────────────────────────────
-request_context_var: contextvars.ContextVar[Optional["RequestContext"]] = (
-    contextvars.ContextVar("request_context", default=None)
+request_context_var: contextvars.ContextVar[Optional["RequestContext"]] = contextvars.ContextVar(
+    "request_context", default=None
 )
 
 
@@ -130,7 +131,8 @@ class RequestContextMiddleware:
                     if path != "/v1/logs" and not path.startswith("/static"):
                         try:
                             from .log_buffer import log_buffer
-                            log_msg = f"{client_host} - \"{method} {path} HTTP/1.1\" {status} ({dur}ms)"
+
+                            log_msg = f'{client_host} - "{method} {path} HTTP/1.1" {status} ({dur}ms)'
                             record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, log_msg, (), None)
                             log_buffer.emit(record)
                         except Exception:

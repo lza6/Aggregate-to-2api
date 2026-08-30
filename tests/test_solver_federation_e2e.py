@@ -1,11 +1,10 @@
 """Turnstile 求解集群 Federation、429 熔断与双缓冲池 E2E 集成测试。"""
+
 import asyncio
 import time
 import pytest
-import httpx
 
-from api import config
-from api.solver_guard import SolverGuard, solver_guard
+from api.solver_guard import SolverGuard
 from api import turnstile_client
 from api.worker.token_pool import TokenPoolManager
 
@@ -34,7 +33,7 @@ async def test_solver_federation_least_inflight_and_weights():
     n1 = guard._nodes["http://node1:8001"]
     n2 = guard._nodes["http://node2:8001"]
     n1.acquire_inflight()
-    n1.acquire_inflight() # inflight=2, weight=2 -> score=1.0
+    n1.acquire_inflight()  # inflight=2, weight=2 -> score=1.0
 
     # 此时 node2 (inflight=0, weight=1 -> score=0.0) 应当被选中
     selected = guard.select_node()
@@ -87,6 +86,7 @@ async def test_token_pool_double_buffering_zero_latency(monkeypatch):
     manager = TokenPoolManager(engine)
 
     solve_count = 0
+
     async def mock_solve(*args, **kwargs):
         nonlocal solve_count
         solve_count += 1
@@ -107,7 +107,7 @@ async def test_token_pool_double_buffering_zero_latency(monkeypatch):
     t1 = await manager.acquire("direct", timeout=1.0)
     cost1 = time.monotonic() - t0
     assert t1 == "token-active-1"
-    assert cost1 < 0.05 # 极速 0ms 获取
+    assert cost1 < 0.05  # 极速 0ms 获取
 
     # 2. 第二次获取：Active 为空，触发 Double-Buffer Swap 从 Standby 取得
     t0 = time.monotonic()

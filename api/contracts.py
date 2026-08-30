@@ -13,6 +13,7 @@
 - nanobanana.py:206       提交 RSC     {"success":true,"taskId":...}
 - nanobanana.py:222-232   轮询响应    {"state":"success","resultUrls":[...]} / assets[...]
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ── 契约模型（都只声明字段类型，不施加跨字段约束）─────────────
+
 
 class ImageGenerationResponse(BaseModel):
     """文生图成功响应。

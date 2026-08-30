@@ -6,6 +6,7 @@
 - DB.flush() 在 stop 后缓冲区空
 - 幂等重放：flush 后数据可查询
 """
+
 import asyncio
 import os
 import tempfile
@@ -304,7 +305,7 @@ class TestBatchTimer:
             row1 = await db.get("t1")
             row2 = await db.get("t2")
             assert row1 is not None, f"t1 未找到 (buffer={len(db._write_buffer)})"
-            assert row2 is not None, f"t2 未找到"
+            assert row2 is not None, "t2 未找到"
         finally:
             await _cleanup(db, path)
 

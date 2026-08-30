@@ -19,6 +19,7 @@ ID 为 7fb1e44a…，与旧静态 7fa3d4d2… 已不同），造成生成/签到
   `createServerReference)("<action_id>",...,a.callServer,void 0,a.findSourceMapURL,"<actionName>")`
   如 unifiedGenerateImageAction / unifiedEditImageAction / claimDailyCheckinAction。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -71,7 +72,7 @@ _STALE_MARKERS = (
 
 # createServerReference)("<hex>",[^)]*,"<actionName>") —— 逆向确认的 Next.js 编码
 _CSR_RE = re.compile(r'createServerReference\)\s*\(\s*"([0-9a-f]{20,80})"[^)]*?"([A-Za-z_][A-Za-z0-9_]*)"\s*\)')
-_HEX_LIKE_RE = re.compile(r'[0-9a-f]{24,80}')
+_HEX_LIKE_RE = re.compile(r"[0-9a-f]{24,80}")
 
 
 def _default_persist_path() -> str:
@@ -103,7 +104,7 @@ def _nearby_action_id(text: str, name: str, window: int = 300) -> str | None:
     """降级策略：在 name 前方窗口内找最接近的形似 actionId 的 hex（csr 正则失配时兜底）。"""
     for m in re.finditer(re.escape(name), text):
         s = max(0, m.start() - window)
-        region = text[s:m.end()]
+        region = text[s : m.end()]
         cands = [hm.group() for hm in _HEX_LIKE_RE.finditer(region)]
         for h in reversed(cands):  # 越靠近 name 越可能正确
             if _looks_like_action_id(h):
@@ -163,7 +164,7 @@ class ActionSniffer:
         self._transport = transport
         self._proxy = proxy if proxy is not None else config.PROXY
         self._user_agent = user_agent or config.USER_AGENT
-        self._tlock = threading.Lock()   # 保护内存缓存/计数器（同步快路径）
+        self._tlock = threading.Lock()  # 保护内存缓存/计数器（同步快路径）
         self._alock: asyncio.Lock | None = None  # 串行嗅探（懒加载避免模块导入时绑定 loop）
         self._cache: dict[str, str] = {}  # kind -> 已嗅探/持久化的 Action ID（静态值只作兜底，不预置）
         self._failures: dict[str, int] = {k: 0 for k in STATIC_ACTION_IDS}
@@ -260,8 +261,7 @@ class ActionSniffer:
                 "last_sniff_at": self._last_sniff_at,
                 "cooldown": _SNIFF_COOLDOWN,
                 "actions": {
-                    k: (self._cache.get(k) or STATIC_ACTION_IDS.get(k, ""))[:12] + "…"
-                    for k in STATIC_ACTION_IDS
+                    k: (self._cache.get(k) or STATIC_ACTION_IDS.get(k, ""))[:12] + "…" for k in STATIC_ACTION_IDS
                 },
                 "failures": dict(self._failures),
             }

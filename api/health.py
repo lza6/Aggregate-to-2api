@@ -3,6 +3,7 @@
 HealthRegistry 整合 solver_guard、provider_health、DB 连接等散落的健康状态，
 提供统一视图供 /v1/healthz 消费。
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,7 @@ log = logging.getLogger("health")
 @dataclass
 class HealthStatus:
     """单个组件的健康状态。"""
+
     component: str
     status: Literal["healthy", "degraded", "down"]
     last_check: float
@@ -42,8 +44,11 @@ class HealthRegistry:
         """注册一个健康检查组件。"""
         self._check_fns[component] = check_fn
         self._components[component] = HealthStatus(
-            component=component, status="healthy",
-            last_check=time.time(), consecutive_failures=0, message="",
+            component=component,
+            status="healthy",
+            last_check=time.time(),
+            consecutive_failures=0,
+            message="",
         )
 
     async def check_all(self) -> dict[str, HealthStatus]:
@@ -60,8 +65,10 @@ class HealthRegistry:
             old = self._components.get(name)
             consecutive = (old.consecutive_failures + 1) if status == "down" else 0
             self._components[name] = HealthStatus(
-                component=name, status=status,  # type: ignore[arg-type]
-                last_check=time.time(), consecutive_failures=consecutive,
+                component=name,
+                status=status,  # type: ignore[arg-type]
+                last_check=time.time(),
+                consecutive_failures=consecutive,
                 message=message,
             )
         return dict(self._components)

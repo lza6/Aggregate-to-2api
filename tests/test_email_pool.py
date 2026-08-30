@@ -7,13 +7,9 @@
 4. 邮件轮询提取与关键词过滤。
 5. 注册记录持久化与域名风控统计。
 """
+
 from __future__ import annotations
 
-import asyncio
-import json
-import os
-import sqlite3
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,14 +17,13 @@ import pytest
 from api.email_pool import (
     BaseMailSource,
     CustomImapSource,
-    Do22Source,
     EmailPool,
     GuerrillaMailSource,
     LinshiMailSource,
+    MailGwSource,
     MailSource,
     MailTmSource,
-    TempMailSource,
-    TempTfSource,
+    TempMailIoSource,
 )
 
 
@@ -120,8 +115,10 @@ class TestMailTmSource:
                 return token_resp
             return MagicMock(status_code=404)
 
-        with patch.object(src.session, "get", new_callable=AsyncMock) as mock_get, \
-             patch.object(src.session, "post", new_callable=AsyncMock, side_effect=mock_post):
+        with (
+            patch.object(src.session, "get", new_callable=AsyncMock) as mock_get,
+            patch.object(src.session, "post", new_callable=AsyncMock, side_effect=mock_post),
+        ):
             mock_get.return_value = domains_resp
             addr, state = await src.new_address()
             assert addr.endswith("@mailtm.me")
@@ -282,16 +279,20 @@ class TestEmailPoolStrategy:
         # 构造一个始终 429 报错的源和一个正常源
         class FailingSource(BaseMailSource):
             name = "fail-source"
+
             async def new_address(self) -> tuple[str, dict]:
                 self.mark_failure("429 Too Many Requests")
                 raise RuntimeError("429 Too Many Requests")
+
             async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
                 return []
 
         class WorkingSource(BaseMailSource):
             name = "work-source"
+
             async def new_address(self) -> tuple[str, dict]:
                 return "good@work.com", {"source": self.name}
+
             async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]:
                 return [{"subject": "Verification", "bodyHtml": "Code is 889900"}]
 
@@ -309,3 +310,157 @@ class TestEmailPoolStrategy:
         mail = await test_pool.wait_for_mail(addr, state, timeout=3.0, contains="889900")
         assert mail is not None
         assert "889900" in mail["bodyHtml"]
+
+
+# ── 7. TempMailIoSource 测试 ──────────────────────────────
+class TestTempMailIoSource:
+    @pytest.mark.asyncio
+    async def test_tempmailio_new_address(self):
+        src = TempMailIoSource()
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"email": "abc12345@temp-mail.io", "token": "tok_123"}
+        with patch.object(src.session, "post", new_callable=AsyncMock, return_value=mock_response):
+            addr, state = await src.new_address()
+            assert addr == "abc12345@temp-mail.io"
+            assert state["token"] == "tok_123"
+            assert state["source"] == "temp-mail.io"
+        await src.session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_tempmailio_429_backoff(self):
+        src = TempMailIoSource()
+        mock_response = MagicMock(status_code=429)
+        mock_response.text = "rate limited"
+        with patch.object(src.session, "post", new_callable=AsyncMock, return_value=mock_response):
+            with pytest.raises(RuntimeError):
+                await src.new_address()
+            assert src.failure_count == 1
+            assert src.is_available() is False
+        await src.session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_tempmailio_fetch_mails(self):
+        src = TempMailIoSource()
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = [
+            {
+                "id": "m1",
+                "from": {"address": "no-reply@auth.com"},
+                "subject": "Verification",
+                "body_html": "<p>Code is 246810</p>",
+                "body_text": "Code is 246810",
+                "intro": "Code is 246810",
+            }
+        ]
+        with patch.object(src.session, "get", new_callable=AsyncMock, return_value=mock_response):
+            mails = await src.fetch_mails("abc12345@temp-mail.io", {"token": "tok_123"})
+            assert len(mails) == 1
+            assert mails[0]["subject"] == "Verification"
+            assert mails[0]["from"] == "no-reply@auth.com"
+            assert "246810" in mails[0]["bodyHtml"]
+        await src.session.aclose()
+
+
+# ── 8. MailGwSource 测试 ──────────────────────────────────
+class TestMailGwSource:
+    @pytest.mark.asyncio
+    async def test_mailgw_new_address(self):
+        src = MailGwSource()
+        domains_resp = MagicMock(status_code=200)
+        domains_resp.json.return_value = [{"domain": "westcast-systems.com", "isActive": True}]
+        account_resp = MagicMock(status_code=201)
+        account_resp.json.return_value = {"id": "acc_1", "address": "test@westcast-systems.com"}
+        token_resp = MagicMock(status_code=200)
+        token_resp.json.return_value = {"token": "gw_token"}
+
+        async def mock_post(url, json=None, headers=None):
+            if "/domains" in url:
+                return domains_resp
+            if "/accounts" in url:
+                return account_resp
+            if "/token" in url:
+                return token_resp
+            return MagicMock(status_code=404)
+
+        with (
+            patch.object(src.session, "get", new_callable=AsyncMock, return_value=domains_resp),
+            patch.object(src.session, "post", new_callable=AsyncMock, side_effect=mock_post),
+        ):
+            addr, state = await src.new_address()
+            assert addr.endswith("@westcast-systems.com")
+            assert state["token"] == "gw_token"
+            assert state["source"] == "mail.gw"
+        await src.session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_mailgw_domains_fallback(self):
+        src = MailGwSource()
+        mock_response = MagicMock(status_code=500)
+        with patch.object(src.session, "get", new_callable=AsyncMock, return_value=mock_response):
+            domains = await src._get_domains()
+            assert domains == ["westcast-systems.com"]
+        await src.session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_mailgw_429_backoff(self):
+        src = MailGwSource()
+        mock_response = MagicMock(status_code=429)
+        mock_response.text = "too many"
+        with (
+            patch.object(src.session, "get", new_callable=AsyncMock, return_value=MagicMock(status_code=500)),
+            patch.object(src.session, "post", new_callable=AsyncMock, return_value=mock_response),
+        ):
+            with pytest.raises(RuntimeError):
+                await src.new_address()
+            assert src.failure_count == 1
+            assert src.is_available() is False
+        await src.session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_mailgw_fetch_mails_hydra(self):
+        src = MailGwSource()
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {
+            "hydra:member": [
+                {
+                    "id": "m1",
+                    "from": {"address": "no-reply@service.com"},
+                    "subject": "Welcome",
+                    "bodyHtml": "<p>Code is 13579</p>",
+                    "bodyText": "Code is 13579",
+                }
+            ]
+        }
+        with patch.object(src.session, "get", new_callable=AsyncMock, return_value=mock_response):
+            mails = await src.fetch_mails("test@westcast-systems.com", {"token": "gw_token"})
+            assert len(mails) == 1
+            assert mails[0]["subject"] == "Welcome"
+            assert mails[0]["from"] == "no-reply@service.com"
+            assert "13579" in mails[0]["bodyHtml"]
+        await src.session.aclose()
+
+
+# ── 9. 新源注册进 EmailPool 测试 ──────────────────────────
+class TestPoolNewSourcesRegistered:
+    @pytest.fixture
+    def pool(self, tmp_path):
+        db_file = str(tmp_path / "test_registered.db")
+        return EmailPool(db_path=db_file)
+
+    def test_new_sources_registered(self, pool):
+        names = [s.name for s in pool.get_sources()]
+        assert "temp-mail.io" in names
+        assert "mail.gw" in names
+
+        # 别名命中
+        assert pool._find_source("temp-mail.io") is not None
+        assert pool._find_source("tempmail.io") is not None
+        assert pool._find_source("mail.gw") is not None
+        assert pool._find_source("mailgw") is not None
+
+        # score 排序符合 priority：temp-mail.io(95) > mail.gw(75)
+        src_io = pool._find_source("temp-mail.io")
+        src_gw = pool._find_source("mail.gw")
+        assert src_io.priority == 95
+        assert src_gw.priority == 75
+        assert src_io.score() > src_gw.score()

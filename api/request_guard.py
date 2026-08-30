@@ -9,6 +9,7 @@
   对端为准，杜绝伪造 XFF 绕过封禁/限流/白名单或把第三方 IP 打黑。
 - 安全加固（S1 修复）：daily_limit / 滑窗桶统一使用墙上时钟，避免异构时间戳导致桶永不清理。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,11 @@ from .db.ip_blocklist_store import ip_blocklist_store
 
 log = logging.getLogger("request_guard")
 
+# 保留 threading.Lock（非 asyncio.Lock）：临界区为纯内存 dict/deque 操作（微秒级），
+# asyncio 单线程事件循环无竞争零阻塞；且 check_rate_limit 被同步调用链（routes/generate.
+# _prepare→check_generate_request→check_rate_limit）使用，换 asyncio.Lock 会传染成 async。
+# async 路径阻塞源是 ip_blocklist_store.list_all 的 sqlite3 I/O（见 _sync_blocklist_cache），
+# 该 I/O 已 await，非此锁。真正的 P1 是同步 sqlite3 混入 async（account_pool/email_pool）。
 _lock = threading.Lock()
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
@@ -32,9 +38,30 @@ _DAY_SECONDS = 86400.0
 
 # 常见私网/保留前缀：XFF 段命中这些视为「不可信源」，不作为最终客户端身份
 _PRIVATE_PREFIX_HINTS = (
-    "127.", "10.", "192.168.", "169.254.", "172.16.", "172.17.", "172.18.", "172.19.",
-    "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.",
-    "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "::1", "fe80:", "fc00:", "fd",
+    "127.",
+    "10.",
+    "192.168.",
+    "169.254.",
+    "172.16.",
+    "172.17.",
+    "172.18.",
+    "172.19.",
+    "172.20.",
+    "172.21.",
+    "172.22.",
+    "172.23.",
+    "172.24.",
+    "172.25.",
+    "172.26.",
+    "172.27.",
+    "172.28.",
+    "172.29.",
+    "172.30.",
+    "172.31.",
+    "::1",
+    "fe80:",
+    "fc00:",
+    "fd",
     "unknown",
 )
 
@@ -248,7 +275,10 @@ def _record_auto_block_violation(ip: str, reason: str) -> None:
 async def _auto_block_ip(ip: str, reason: str) -> None:
     try:
         rec = await ip_blocklist_store.add_or_update(
-            ip=ip, block_type="block", reason=reason, ttl_seconds=_auto_block_ttl(),
+            ip=ip,
+            block_type="block",
+            reason=reason,
+            ttl_seconds=_auto_block_ttl(),
         )
         apply_ip_rule(ip, rec)
         log.warning("安全风控: 自动封禁 %s (TTL=%ss, reason=%s)", ip, _auto_block_ttl(), reason)
@@ -302,8 +332,9 @@ def check_rate_limit(request: Request) -> None:
             bucket.append(now)
         # 清理过期键（统一墙上时钟时间基）
         if len(_ip_daily_records) > 10000:
-            expired = [k for k, v in _ip_daily_records.items()
-                       if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS)]
+            expired = [
+                k for k, v in _ip_daily_records.items() if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS)
+            ]
             for k in expired:
                 _ip_daily_records.pop(k, None)
 

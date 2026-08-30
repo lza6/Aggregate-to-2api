@@ -9,6 +9,7 @@
 - created_at: 创建时间戳
 - updated_at: 更新时间戳
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -156,9 +157,7 @@ class IPBlocklistStore:
         conn = await self._get_conn()
         try:
             placeholders = ",".join("?" * len(ips))
-            cur = await conn.execute(
-                f"SELECT * FROM ip_blocklist WHERE ip IN ({placeholders})", list(ips)
-            )
+            cur = await conn.execute(f"SELECT * FROM ip_blocklist WHERE ip IN ({placeholders})", list(ips))
             rows = await cur.fetchall()
             out: dict[str, dict] = {}
             for r in rows:
@@ -191,9 +190,7 @@ class IPBlocklistStore:
         now = time.time()
         conn = await self._get_conn()
         try:
-            cur = await conn.execute(
-                "DELETE FROM ip_blocklist WHERE expire_at > 0 AND expire_at < ?", (now,)
-            )
+            cur = await conn.execute("DELETE FROM ip_blocklist WHERE expire_at > 0 AND expire_at < ?", (now,))
             await conn.commit()
             return cur.rowcount
         finally:

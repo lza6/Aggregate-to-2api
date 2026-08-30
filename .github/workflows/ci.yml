@@ -73,10 +73,9 @@ jobs:
         run: pip install ruff
       - name: 运行 ruff check（失败则 CI 失败）
         run: ruff check api/ --no-fix
-      - name: 校验 deploy/api 与 api 同步
-        run: |
-          python scripts/sync_deploy.py sync
-          python scripts/sync_deploy.py check
+      # v6.8.0: deploy/api 副本已废除（build context 改为仓库根），sync_deploy.py 降级为废弃提示，不阻断 CI。
+      - name: deploy/api 同步校验（已废弃，仅提示）
+        run: python scripts/sync_deploy.py check
 
   docker:
     name: Docker 构建验证

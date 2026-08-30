@@ -1,4 +1,5 @@
 """tryingopen ChatProvider 定向测试。"""
+
 from __future__ import annotations
 
 import json
@@ -36,10 +37,12 @@ def sse(*events: dict) -> FakeResponse:
 
 # 生产里普通对话默认走真流式增量（_request_stream_events）；以下两个 case 测的是聚合
 # 路径 _parse_response / _request_once，故显式传一个非空 tools 强制 streaming=False 走聚合。
-_TEST_TOOLS = [{
-    "type": "function",
-    "function": {"name": "lookup", "parameters": {"type": "object"}},
-}]
+_TEST_TOOLS = [
+    {
+        "type": "function",
+        "function": {"name": "lookup", "parameters": {"type": "object"}},
+    }
+]
 
 
 @pytest.mark.asyncio
@@ -71,7 +74,9 @@ async def test_chat_stream_parses_sse_and_usage(monkeypatch):
         lambda payload, proxy: provider._parse_response(response),
     )
 
-    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS)
+    events = await collect(
+        provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS
+    )
 
     assert [(event["type"], event.get("text"), event.get("finish_reason")) for event in events] == [
         ("reasoning", "先想", None),
@@ -99,9 +104,13 @@ def test_convert_messages_folds_system_images_and_stable_ids():
                 {"type": "image_url", "image_url": {"url": "https://example.test/a.png"}},
             ],
         },
-        {"role": "assistant", "content": "已处理", "tool_calls": [
-            {"id": "call-1", "function": {"name": "lookup", "arguments": {"q": "x"}}},
-        ]},
+        {
+            "role": "assistant",
+            "content": "已处理",
+            "tool_calls": [
+                {"id": "call-1", "function": {"name": "lookup", "arguments": {"q": "x"}}},
+            ],
+        },
     ]
 
     first = provider._convert_messages(messages)
@@ -123,10 +132,12 @@ def test_convert_messages_folds_system_images_and_stable_ids():
 @pytest.mark.asyncio
 async def test_tool_call_emulation_and_plain_text(monkeypatch):
     provider = TryingopenChatProvider()
-    tools = [{
-        "type": "function",
-        "function": {"name": "lookup", "parameters": {"type": "object"}},
-    }]
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "lookup", "parameters": {"type": "object"}},
+        }
+    ]
     tool_response = tryingopen._AttemptResult(text='前置说明 {"tool_call":{"name":"lookup","arguments":{"q":"x"}}}')
     monkeypatch.setattr(provider, "_request_once", lambda payload, proxy: tool_response)
     tool_events = await collect(
@@ -153,8 +164,15 @@ async def test_refresh_models_updates_registry(monkeypatch):
     registry = SimpleNamespace(_chat_models={})
     provider._registry_ref = registry
     catalog = [
-        {"id": "z-ai/glm-5.3-flash", "name": "GLM Flash", "context": "128k", "supportsTools": True,
-         "supportsImages": True, "pricePerMTok": 0.2, "messageLimit": 20},
+        {
+            "id": "z-ai/glm-5.3-flash",
+            "name": "GLM Flash",
+            "context": "128k",
+            "supportsTools": True,
+            "supportsImages": True,
+            "pricePerMTok": 0.2,
+            "messageLimit": 20,
+        },
         {"id": "qwen/qwen3.8-27b", "name": "Qwen", "context": "1m"},
     ]
     monkeypatch.setattr(provider, "_fetch_catalog", lambda: catalog)
@@ -204,7 +222,9 @@ async def test_429_marks_proxy_retries_and_succeeds(monkeypatch):
     monkeypatch.setattr(provider, "_request_once", request)
     monkeypatch.setenv("IF_TRYINGOPEN_MAX_ATTEMPTS", "2")
 
-    events = await collect(provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS)
+    events = await collect(
+        provider, "tryingopen/qwen/qwen3.8-27b", [{"role": "user", "content": "hi"}], tools=_TEST_TOOLS
+    )
 
     assert calls == 2
     assert failures == [("http://free-1", True)]
@@ -221,7 +241,5 @@ def test_fallback_catalog_has_required_models_and_kimi_meta():
 
 
 def test_parse_fenced_tool_call_variants():
-    calls = tryingopen._parse_plaintext_tool_calls(
-        '```json\n{"tool":{"name":"lookup","parameters":{"q":"x"}}}\n```'
-    )
+    calls = tryingopen._parse_plaintext_tool_calls('```json\n{"tool":{"name":"lookup","parameters":{"q":"x"}}}\n```')
     assert calls == [{"name": "lookup", "arguments": '{"q":"x"}'}]

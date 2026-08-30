@@ -612,6 +612,75 @@ export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count
   return res.json();
 }
 
+// ── v6.7.0: TensorFeed AI 生态展示 ──
+export interface AiEcosystemModel {
+  id: string;
+  name?: string;
+  inputPrice?: number | null;
+  outputPrice?: number | null;
+  contextWindow?: number | null;
+  tier?: string | null;
+  released?: string | null;
+}
+export interface AiEcosystemProvider {
+  id: string;
+  name: string;
+  models: AiEcosystemModel[];
+}
+export interface AiEcosystemService {
+  name: string;
+  status: string;
+  provider?: string | null;
+}
+export interface AiEcosystemNewsItem {
+  title?: string;
+  source?: string;
+  url?: string;
+  publishedAt?: string;
+}
+export interface AiEcosystemResponse {
+  models: {
+    available: boolean;
+    last_updated?: string | null;
+    count: number;
+    providers: AiEcosystemProvider[];
+  };
+  status: {
+    available: boolean;
+    all_operational: boolean;
+    service_count: number;
+    services: AiEcosystemService[];
+    issues: string[];
+  };
+  today: {
+    available: boolean;
+    generated_at?: string | null;
+    news: AiEcosystemNewsItem[];
+    inference: Record<string, unknown>;
+    papers: unknown[];
+    hf: unknown[];
+  };
+  health: {
+    available: boolean;
+    news_count: number | null;
+    model_count: number | null;
+  };
+  cache: {
+    ttl_seconds: number;
+    fetched_from_upstream_at: number;
+  };
+  stale?: boolean;
+}
+
+export async function fetchAiEcosystem(): Promise<AiEcosystemResponse> {
+  const res = await fetch(`${API_BASE}/v1/ai-ecosystem`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`AI 生态数据获取失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
 /** 聊天补全（供 playground 用）；流式 SSE 响应体由页面自行 reader 解析；自动携带本地保存的 Key */
 export async function chatCompletions(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
   return fetch(`${API_BASE}/v1/chat/completions`, {

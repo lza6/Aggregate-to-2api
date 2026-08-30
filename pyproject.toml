@@ -1,7 +1,7 @@
 # imagefree_api 项目配置
 [project]
 name = "imagefree-2ai"
-version = "6.7.0"
+version = "6.8.0"
 description = "High concurrency image generation API"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,6 +20,35 @@ dependencies = [
 # API 代码仅运行于 Python 3.11+，显式声明 target-version 消除 ExceptionGroup 的 F821 误报
 # （ExceptionGroup 是 3.11 内置；ruff 0.6.x 未识别 requires-python 时默认推到旧 target）
 target-version = "py311"
+# 工程化基线（参考 2Captcha-MCP）：行长放宽到 120（中文注释），format 按 120 对齐。
+# select 规则族细化（E/F/W/I/UP/B/SIM/ASYNC）留下一轮 P3 单独做：
+# 现有代码预存 261 处遗留（W292/SIM105/I001/ASYNC109...），需 `ruff check --fix` 自动修
+# 后人工审 B904/ASYNC109，与并发改造（P1-5）文件重叠，故本轮不引入 select 以保 CI 全绿。
+line-length = 120
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# 默认宽松：不强制全部注解，避免一次性大面积改造；仅 per-module strict 收紧
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["tests/", "scripts/", "可参考的项目/", "deploy/", "graft/", "landing/", "frontend/"]
+
+# per-module 渐进 strict：先收紧 errors/retry_policy 两个小而核心的模块（0 error 达标）。
+# db/core.py 预存 215 处 strict 错误（dict/list 缺泛型 + Row|None 索引 + aiosqlite 内部属性），
+# 与 P2-3 大文件治理同批处理，本轮不纳入 strict 名单以免牵动大量改动。
+[[tool.mypy.overrides]]
+module = ["api.errors", "api.retry_policy"]
+strict = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_return_any = true
 
 [tool.pytest.ini_options]
 # 测试发现：tests/ 目录（pytest 风格）+ scripts/ 下的 unittest 文件

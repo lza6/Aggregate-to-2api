@@ -6,6 +6,7 @@
 - 当 Active Buffer 消耗至低水位或为空时，无缝原子切换 (Swap) 至 Standby Buffer，
   并触发后台协程自适应补齐新的 Standby Buffer，实现全天候 0 毫秒零排队取用。
 """
+
 from __future__ import annotations
 
 import asyncio
