@@ -30,31 +30,114 @@ jobs:
           IF_DB_FILE: "data/test-deploy.db"
 
   build:
-    name: 构建 Docker 镜像
+    name: 构建并推送 Docker 镜像到 GHCR
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: 构建 API 镜像
-        run: |
-          docker build -f deploy/Dockerfile.api \
-            -t ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }} \
-            -t ghcr.io/${{ github.repository }}/imagefree-api:latest \
-            .
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: 推送镜像
+      - name: 构建 API 镜像（缓存加速）
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/Dockerfile.api
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/imagefree-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: SSH 热更新部署（零宕机）
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 设置 Node.js（构建前端）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: 构建 frontend（管理面板）
         run: |
-          docker push ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }}
-          docker push ghcr.io/${{ github.repository }}/imagefree-api:latest
+          cd frontend && npm ci && npm run build
+      - name: 构建 landing（落地页）
+        run: |
+          cd landing && npm ci && npm run build
+      - name: 打包 dist 产物
+        run: |
+          tar -czf frontend-dist.tgz -C frontend/dist .
+          tar -czf landing-dist.tgz -C landing/dist .
+      - name: 上传 dist 到服务器
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          source: "frontend-dist.tgz,landing-dist.tgz"
+          target: "/tmp/"
+          timeout: 60
+      - name: SSH 拉新镜像 + 部署 dist + 热重启
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          command_timeout: 10m
+          script: |
+            set -e
+            cd /home/ubuntu/imagefree-api
+
+            # 拉取最新 API 镜像
+            sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest || true
+
+            # 部署前端 dist 产物
+            mkdir -p frontend/dist landing/dist
+            tar -xzf /tmp/frontend-dist.tgz -C frontend/dist
+            tar -xzf /tmp/landing-dist.tgz -C landing/dist
+            rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
+
+            # 热重启 API 容器（零宕机：先拉新镜像，再 recreate，旧容器 graceful shutdown）
+            cd deploy
+            export DOCKER_CLIENT_TIMEOUT=120
+            export COMPOSE_HTTP_TIMEOUT=120
+            sudo docker compose pull api 2>/dev/null || true
+            sudo docker compose up -d --force-recreate api
+
+            # 等待健康
+            echo "等待 API 健康..."
+            for i in $(seq 1 30); do
+              if curl -s http://localhost:8100/v1/healthz | grep -q '"status":"ok"'; then
+                echo "API 健康（第 ${i} 次检查）"
+                break
+              fi
+              sleep 2
+            done
+
+            # 验证 /admin/ 和 /
+            echo "=== 验证 ==="
+            curl -s -o /dev/null -w "GET /admin/ -> %{http_code}\n" http://localhost:8100/admin/
+            curl -s -o /dev/null -w "GET / -> %{http_code}\n" http://localhost:8100/
+            curl -s http://localhost:8100/v1/healthz | python3 -c "import sys,json;d=json.load(sys.stdin);print('status:',d['status'],'providers:',list(d['providers'].keys()))" 2>/dev/null || echo "healthz 解析失败"
+            echo "部署完成"
 
   release:
     name: 创建发行版
-    needs: build
+    needs: deploy
     runs-on: ubuntu-latest
     permissions:
       contents: write

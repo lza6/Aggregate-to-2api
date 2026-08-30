@@ -89,7 +89,16 @@ if _FRONTEND_DIR.exists():
                     raise
 
         app.mount("/admin", SPAStaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
-        log.info("前端管理面板已挂载到 /admin（含 SPA 深链回退）")
+
+        # /admin 不带斜杠时 starlette 的 StaticFiles(html=True) 会 404（它期望目录索引），
+        # 用 redirect 把 /admin → /admin/ 触发 SPA 的 index.html 兜底。
+        from fastapi.responses import RedirectResponse
+
+        @app.get("/admin", include_in_schema=False)
+        async def _admin_redirect() -> RedirectResponse:
+            return RedirectResponse(url="/admin/", status_code=307)
+
+        log.info("前端管理面板已挂载到 /admin（含 SPA 深链回退 + /admin→/admin/ 重定向）")
     except Exception as e:
         log.warning("前端管理面板挂载失败: %s", e)
 

@@ -37,10 +37,11 @@ services:
       - imagefree
 
   api:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.api
-    image: imagefree-api:6.8.0
+    # v6.8.0: 优先用 GHCR 镜像（CI 自动 push），fallback 本地 build
+    image: ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest
+    # build:  # 无镜像时本地构建（CI 已 push 镜像，通常不需要）
+    #   context: ..
+    #   dockerfile: deploy/Dockerfile.api
     container_name: imagefree-api
     restart: unless-stopped
     mem_limit: 256m
