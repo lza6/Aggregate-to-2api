@@ -102,21 +102,25 @@ jobs:
             set -e
             cd /home/ubuntu/imagefree-api
 
-            # 拉取最新 API 镜像
-            sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest || true
+            # git pull 最新代码（Dockerfile/compose 等）
+            sudo git fetch origin && sudo git reset --hard origin/main
+
+            cd deploy
+
+            # 拉取最新 API 镜像（GHCR）；失败则本地 build
+            sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest 2>/dev/null && \
+              export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
+              { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
 
             # 部署前端 dist 产物
-            mkdir -p frontend/dist landing/dist
-            tar -xzf /tmp/frontend-dist.tgz -C frontend/dist
-            tar -xzf /tmp/landing-dist.tgz -C landing/dist
+            mkdir -p ../frontend/dist ../landing/dist
+            tar -xzf /tmp/frontend-dist.tgz -C ../frontend/dist
+            tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # 热重启 API 容器（零宕机：先拉新镜像，再 recreate，旧容器 graceful shutdown）
-            cd deploy
-            export DOCKER_CLIENT_TIMEOUT=120
-            export COMPOSE_HTTP_TIMEOUT=120
-            sudo docker compose pull api 2>/dev/null || true
-            sudo docker compose up -d --force-recreate api
+            # 热重启 API 容器（cfsolver 不动，只重建 api）
+            export DOCKER_BUILDKIT=0
+            sudo docker compose up -d --force-recreate --no-build api
 
             # 等待健康
             echo "等待 API 健康..."
@@ -128,8 +132,9 @@ jobs:
               sleep 2
             done
 
-            # 验证 /admin/ 和 /
+            # 验证
             echo "=== 验证 ==="
+            curl -s -o /dev/null -w "GET /admin -> %{http_code}\n" http://localhost:8100/admin
             curl -s -o /dev/null -w "GET /admin/ -> %{http_code}\n" http://localhost:8100/admin/
             curl -s -o /dev/null -w "GET / -> %{http_code}\n" http://localhost:8100/
             curl -s http://localhost:8100/v1/healthz | python3 -c "import sys,json;d=json.load(sys.stdin);print('status:',d['status'],'providers:',list(d['providers'].keys()))" 2>/dev/null || echo "healthz 解析失败"

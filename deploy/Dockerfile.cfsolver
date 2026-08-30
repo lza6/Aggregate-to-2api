@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖
+# context=仓库根(..)，cf_solver 在 deploy/cf_solver/
 COPY deploy/cf_solver/requirements.txt ./
 RUN pip install --no-cache-dir --user -r requirements.txt
 
