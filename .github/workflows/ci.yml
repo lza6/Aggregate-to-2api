@@ -70,7 +70,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: 安装 ruff
-        run: pip install ruff
+        # 锁定版本：与本地开发环境一致（0.15.x 默认规则集变更会引入 BLE001/SIM102 等噪声）
+        run: pip install "ruff==0.14.9"
       - name: 运行 ruff check（失败则 CI 失败）
         run: ruff check api/ --no-fix
       # v6.8.0: deploy/api 副本已废除（build context 改为仓库根），sync_deploy.py 降级为废弃提示，不阻断 CI。
