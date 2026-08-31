@@ -17,3 +17,5 @@ opentelemetry-instrumentation-fastapi>=0.40b0
 opentelemetry-instrumentation-httpx>=0.40b0
 opentelemetry-instrumentation-logging>=0.40b0
 prometheus-client>=0.21
+# pytest-timeout：单测兜底超时，防真实网络类用例卡死 CI（deploy.yml / ci.yml 均依赖）
+pytest-timeout>=2.3
