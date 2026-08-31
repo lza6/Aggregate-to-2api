@@ -15,8 +15,8 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from api.account_pool import account_pool
-from api.registerer import build_registerers
+from api.account_pool import account_pool  # noqa: E402 (needs sys.path set above)
+from api.registerer import build_registerers  # noqa: E402 (needs sys.path set above)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("batch_register")

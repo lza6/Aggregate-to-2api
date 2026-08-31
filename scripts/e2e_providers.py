@@ -186,7 +186,7 @@ class ProvidersE2E:
         self.check("nanobanana 组存在", "nanobanana" in items)
         self.check("aifreeforever 组存在", "aifreeforever" in items)
         nb = items.get("nanobanana") or []
-        ids = {m["id"] for m in mm}
+        ids = {m["id"] for m in nb}
         self.check(
             "seedance-1.5-pro 480P 视频模型",
             "nanobanana/seedance-1.5-pro" in ids,

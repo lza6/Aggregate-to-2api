@@ -79,6 +79,14 @@ htmlcov/
 *.db-wal
 data/data/
 
+# P2-5: Python 工具缓存（可再生成，不入库）
+.mypy_cache/
+.ruff_cache/
+graft/.cache/
+
+# P2-5: uv 锁文件（如团队确定不用 uv 时忽略）
+uv.lock
+
 # v6.5.1: local-only (not committed)
 data/action_ids.json
 docs/artifacts/

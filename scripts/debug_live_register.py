@@ -8,11 +8,11 @@ import time
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("debug_register")
 
-from api import config
-from api import turnstile_client
-from api.account_pool import account_pool
-from api.email_pool import email_pool
-from api.registerer import NanobananaRegisterer, _browser_headers, _extract_verify_link, _th
+from api import config  # noqa: E402 (needs sys.path set above)
+from api import turnstile_client  # noqa: E402 (needs sys.path set above)
+from api.account_pool import account_pool  # noqa: E402 (needs sys.path set above)
+from api.email_pool import email_pool  # noqa: E402 (needs sys.path set above)
+from api.registerer import NanobananaRegisterer, _browser_headers, _extract_verify_link, _th  # noqa: E402 (needs sys.path set above)
 
 
 async def step_by_step_nanobanana():

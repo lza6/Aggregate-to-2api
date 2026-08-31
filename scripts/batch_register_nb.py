@@ -68,7 +68,6 @@ async def main():
     registerer = NanobananaRegisterer()
     start_time = time.time()
     consecutive_fail = 0
-    total_start = len(registered)
 
     # 信号处理
     shutting_down = False

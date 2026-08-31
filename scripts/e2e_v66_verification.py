@@ -71,7 +71,7 @@ def seed_mock_account() -> None:
 def main() -> int:
     _reconfigure_stdout()
     ap = argparse.ArgumentParser(description="v6.6.0 专项真实验证")
-    args = ap.parse_args()
+    ap.parse_args()
 
     for port in (SOLVER_PORT, API_PORT):
         if port_open(port):
