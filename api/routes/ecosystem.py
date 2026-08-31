@@ -144,13 +144,14 @@ def _norm_today(raw: dict | None) -> dict:
     papers_raw = (raw.get("papers") or {}).get("ai_trending") or {}
     papers_items = papers_raw.get("papers") or []
     hf_items = (raw.get("hf") or {}).get("models") or {}
+    hf_list = hf_items.get("items") if isinstance(hf_items, dict) else []
     return {
         "available": True,
         "generated_at": raw.get("generated_at"),
         "news": news_raw[:3],
         "inference": raw.get("inference") or {},
         "papers": papers_items[:3],
-        "hf": hf_items.get("items")[:3] if isinstance(hf_items, dict) else [],
+        "hf": hf_list[:3] if isinstance(hf_list, list) else [],
     }
 
 

@@ -212,8 +212,17 @@ class MailTmSource(BaseMailSource):
             r = await self.session.get(f"{self.BASE}/domains?page=1")
             if r.status_code == 200:
                 data = r.json()
-                items = data.get("hydra:member") or data.get("domains") or []
-                domains = [d.get("domain") for d in items if d.get("domain") and d.get("isActive", True)]
+                # 上游可能返回 list（API 变更）或 dict（hydra:member/domains），两种都兼容
+                if isinstance(data, list):
+                    items = data
+                elif isinstance(data, dict):
+                    items = data.get("hydra:member") or data.get("domains") or []
+                else:
+                    items = []
+                domains = [
+                    d.get("domain") for d in items
+                    if isinstance(d, dict) and d.get("domain") and d.get("isActive", True)
+                ]
                 if domains:
                     self._cached_domains = domains
                     self._domains_fetched_at = now

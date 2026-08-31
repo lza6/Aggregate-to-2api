@@ -362,6 +362,7 @@ class Engine:
     async def _worker_batch_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None:
         """P-02: 批量 worker 循环。批量从队列取任务，批量获取 token，并行处理。"""
         batch_size = config.IF_WORKER_BATCH_SIZE
+        last_beat = time.monotonic()  # idle 心跳：空闲时也周期 beat 防误判 stale
         while True:
             if stop_event and stop_event.is_set():
                 log.info("batch_worker[%d] 收到退出信号", idx)
@@ -372,6 +373,9 @@ class Engine:
                 item = await asyncio.wait_for(self.queue.get(), timeout=0.1)
                 tasks.append(item)
             except asyncio.TimeoutError:
+                if time.monotonic() - last_beat >= 30.0:
+                    worker_health.beat(idx)
+                    last_beat = time.monotonic()
                 continue
             except asyncio.CancelledError:
                 raise
@@ -389,6 +393,7 @@ class Engine:
                         w.last_active = time.monotonic()
                         break
             worker_health.beat(idx)
+            last_beat = time.monotonic()
             self.processing += len(tasks)
             # 并行处理：用 asyncio.wait 逐个判定，已完成任务保留真实结果，仅未完成者标超时
             # 修正：避免 asyncio.timeout 包裹 gather 误伤已完成任务（P1-C）
@@ -435,6 +440,8 @@ class Engine:
                     self.queue.task_done()
 
     async def _worker_loop(self, idx: int, stop_event: asyncio.Event | None = None) -> None:
+        # idle 心跳计时器：空闲时也周期性 beat，防止空闲 worker 被 sweep 误判 stale（体检误报"失联"）
+        last_beat = time.monotonic()
         while True:
             if stop_event and stop_event.is_set():
                 log.info("worker[%d] 收到退出信号", idx)
@@ -442,6 +449,10 @@ class Engine:
             try:
                 priority, seq, task_id = await asyncio.wait_for(self.queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
+                # 空闲心跳：每 30s beat 一次（远小于 stale 阈值 180s）
+                if time.monotonic() - last_beat >= 30.0:
+                    worker_health.beat(idx)
+                    last_beat = time.monotonic()
                 continue
             except asyncio.CancelledError:
                 log.info("worker[%d] 等待队列时被取消", idx)
@@ -453,6 +464,7 @@ class Engine:
                         w.last_active = time.monotonic()
                         break
             worker_health.beat(idx)
+            last_beat = time.monotonic()
             self.processing += 1
             try:
                 async with asyncio.timeout(config.TASK_HARD_TIMEOUT):
