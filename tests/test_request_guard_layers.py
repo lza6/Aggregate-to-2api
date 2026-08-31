@@ -15,14 +15,13 @@ from fastapi import Request
 
 from api import request_guard
 
+from api import config  # noqa: E402 (kept after request_guard to keep import grouping)
+from api.errors import AppError  # noqa: E402 (kept after request_guard to keep import grouping)
+
 
 def _set_cfg_attr(monkeypatch, obj, name, value):
     """对可能不存在的 config 属性用 setdefault 风格 setattr（monkeypatch 支持 raising=False）。"""
     monkeypatch.setattr(obj, name, value, raising=False)
-
-
-from api import config
-from api.errors import AppError
 
 
 def _mk_request(client_host: str | None = "1.2.3.4", xff: str | None = None) -> Request:

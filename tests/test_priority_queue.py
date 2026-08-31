@@ -151,12 +151,10 @@ async def test_submit_priority_passthrough(engine):
     task = await engine.db.get(tid)
     assert task["prompt"] == "test-prompt"
     assert task["aspect_ratio"] == "16:9"
-
-
 @pytest.mark.asyncio
 async def test_submit_default_priority(engine):
     """submit（无 priority 参数）默认使用 priority=2 (normal)。"""
-    tid = await engine.submit("default-prompt", "1:1", False)
+    await engine.submit("default-prompt", "1:1", False)
     assert engine.queue.count(2) == 1
     assert engine.queue.count(0) == 0
     assert engine.queue.count(1) == 0
@@ -166,7 +164,6 @@ async def test_submit_default_priority(engine):
 async def test_worker_decrements_count(engine):
     """_worker_loop 消费后 _queue_counts 对应级别递减。"""
     # 手动设定 _started=True 然后覆盖 _worker_loop 为单次消费
-    original_loop = engine._worker_loop
     consumed = []
 
     async def _single_consume(idx):

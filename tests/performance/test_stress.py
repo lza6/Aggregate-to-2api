@@ -41,7 +41,7 @@ def stress_test(api_url: str, concurrency: int = 50, timeout: int = 30):
         )
         try:
             r = urllib.request.urlopen(req, timeout=timeout)
-            d = json.loads(r.read().decode())
+            json.loads(r.read().decode())
             if r.status == 200:
                 results["ok"] += 1
             else:

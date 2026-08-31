@@ -18,6 +18,7 @@ import pytest
 
 from api import config
 from api.db import QueueDB
+from api.db.queue_store import QueueStore
 
 
 class TestQueueDB:
@@ -152,8 +153,6 @@ class TestQueueStore:
     """QueueStore（异步 aiosqlite）基础操作验证——Engine 当前实际使用的新实现。"""
 
     def _make_store(self) -> tuple["QueueStore", str]:
-        from api.db.queue_store import QueueStore
-
         fd, path = tempfile.mkstemp(suffix=".queue.db")
         os.close(fd)
         store = QueueStore(path)

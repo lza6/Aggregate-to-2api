@@ -111,9 +111,6 @@ class TestConnectionPool:
         """读操作走 _read_conns，不用写连接池。"""
         db, path = await _make_db(pool_size=3)
         try:
-            read_conn_ids = {id(c) for c in db._read_conns}
-            write_conn_ids = {id(c) for c in db._connections}
-
             await db.create_request("t1", "p", "1:1", False)
             await db.flush()
 

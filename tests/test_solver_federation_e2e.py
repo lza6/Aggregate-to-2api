@@ -31,7 +31,6 @@ async def test_solver_federation_least_inflight_and_weights():
 
     # 给 node1 增加 inflight
     n1 = guard._nodes["http://node1:8001"]
-    n2 = guard._nodes["http://node2:8001"]
     n1.acquire_inflight()
     n1.acquire_inflight()  # inflight=2, weight=2 -> score=1.0
 

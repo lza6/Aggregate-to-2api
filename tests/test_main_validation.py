@@ -21,15 +21,15 @@ os.environ["IF_DB_FILE"] = _tmp_db
 os.environ["IF_ACCOUNT_AUTO"] = "0"
 os.environ["IF_MOCK_REGISTER"] = "1"
 
-from api.errors import AppError  # noqa: E402
-from api.dispatch import (  # noqa: E402
+from api.errors import AppError  # noqa: E402 (needs env vars set above)
+from api.dispatch import (  # noqa: E402 (needs env vars set above)
     _normalize_model,
     _parse_input_image,
     _parse_input_images,
     _validate_model,
     _validate_ratio,
 )
-from api.meta import _uptime_human
+from api.meta import _uptime_human  # noqa: E402 (needs env vars set above)
 
 
 def _b64(data: bytes) -> str:

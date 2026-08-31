@@ -93,7 +93,6 @@ async def test_scale_down_when_idle(auto_scale_config, tmp_db):
 @pytest.mark.asyncio
 async def test_scale_respects_lower_bound(auto_scale_config, tmp_db):
     """缩容不超过 WORKERS_MIN（2）。"""
-    monkeypatch = auto_scale_config  # fixture 已注入
     e = Engine(tmp_db)
     await e.start()
     try:

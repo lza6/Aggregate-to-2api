@@ -101,7 +101,7 @@ class TestCircuitBreak:
         assert picked == "good"
         # 到期后 → HALF_OPEN，bad 进入候选池（但 good 评分更高，仍选 good）
         r.nodes["bad"].circuit_open_until = time.time() - 1
-        picked2 = r.select_best(["bad", "good"], explore=False)
+        r.select_best(["bad", "good"], explore=False)
         assert r.nodes["bad"].circuit_state == "HALF_OPEN"
         # 测一下 HALF_OPEN 时 bad 成功一个 → CLOSED
         r.record_result("bad", 300.0, True)

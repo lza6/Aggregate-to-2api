@@ -159,7 +159,7 @@ class TestAccountFSM:
         pool.add("nanobanana", "fsm6@test.com", "cookie6", credits=5, status="active")
 
         with pytest.raises(RuntimeError):
-            async with pool.lease("nanobanana") as acc:
+            async with pool.lease("nanobanana"):
                 raise RuntimeError("403 Forbidden: Account suspended")
 
         dead_list = pool.list("nanobanana", status="dead")

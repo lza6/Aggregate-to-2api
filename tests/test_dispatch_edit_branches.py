@@ -554,7 +554,7 @@ async def test_dispatch_edit_provider_completed_marks_finished(monkeypatch):
     monkeypatch.setattr(dispatch_edit, "_provider_sem", fake_sem)
     monkeypatch.setattr(dispatch_edit.config, "EDIT_PROXY_FILE", "")
 
-    job_id = await _dispatch_edit("aifreeforever/model", "p", b"\x89PNG", True)
+    await _dispatch_edit("aifreeforever/model", "p", b"\x89PNG", True)
     await asyncio.sleep(0.05)
     assert marks
     assert marks[0][1] == "completed"
