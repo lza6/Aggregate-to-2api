@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 
 from . import config
@@ -14,6 +15,18 @@ from .error_tracker import count_of as _error_tracker_count_of
 from .db.ip_blocklist_store import ip_blocklist_store
 
 log = logging.getLogger("bg_tasks")
+
+
+def _seconds_until_next_0400(now: datetime.datetime) -> float:
+    """距下一个本地 04:00 的秒数（now 已 astimezone 本地化）。
+
+    纯函数：不依赖真实时钟，便于测试注入任意 `now`。04:00 整触发（若正在 04:00:00
+    则视为「刚刚过去」，算到次日 04:00；否则取当天 04:00，已过则取次日 04:00）。
+    """
+    target = now.replace(hour=4, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += datetime.timedelta(days=1)
+    return (target - now).total_seconds()
 
 
 async def run_background_tasks(db, engine, registry, solver_guard, worker_health, gallery_cache) -> None:
@@ -86,6 +99,30 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                     ctx["blocked_ip_count"] = len(await ip_blocklist_store.list_all(limit=2000))
                 except Exception:
                     ctx["blocked_ip_count"] = 0
+                # M6-F3：成本告警上下文注入（cost_over_budget / cost_burn_rate_warning）
+                # 口径与 /v1/cost 一致：token 成本（chat_usage）+ 图片成本（号池积分*IF_USD_PER_CREDIT）。
+                try:
+                    from .chat_usage import chat_usage_tracker as _cu
+                    from .account_pool import account_pool as _ap
+
+                    _now_dt = datetime.datetime.now()
+                    month_ts = datetime.datetime(_now_dt.year, _now_dt.month, 1).timestamp()
+                    token_mtd = await _cu.cost_usd_for_range(month_ts, datetime.datetime.now().timestamp())
+                    image_mtd = 0.0
+                    for _prov in ("nanobanana", "imagefree", "aifreeforever"):
+                        try:
+                            _cs = _ap.cost_summary(_prov)
+                            if _cs:
+                                image_mtd += int(_cs.get("total_credits_used") or 0) * float(
+                                    config.IF_USD_PER_CREDIT or 0.0
+                                )
+                        except Exception:
+                            continue
+                    ctx["month_to_date_usd"] = round(token_mtd + image_mtd, 6)
+                    ctx["budget_usd"] = float(config.IF_COST_BUDGET_USD or 0.0)
+                except Exception:
+                    ctx["month_to_date_usd"] = 0.0
+                    ctx["budget_usd"] = 0.0
                 alert_engine.evaluate(ctx)
             except asyncio.CancelledError:
                 raise
@@ -127,9 +164,27 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
             except Exception as e:
                 log.warning("worker 巡检循环异常: %s", e)
 
+    async def _retention_loop() -> None:
+        """P3-2: 每日 04:00（本地时间）分批 DB 巡检（DELETE + VACUUM ANALYZE）。
+
+        用 asyncio.sleep 精确对齐到下一个 04:00 本地时间；每次清理完成后重新计算
+        下一次 04:00。失败仅 warning，不影响 TaskGroup 其余任务（与 _cleanup_loop 一致）。
+        """
+        while True:
+            try:
+                now = datetime.datetime.now().astimezone()
+                await asyncio.sleep(_seconds_until_next_0400(now))
+                r = await db.cleanup_batched(config.DB_RETENTION_DAYS)
+                log.info("DB 每日04:00分批巡检: %s", r)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("DB 每日04:00分批巡检失败: %s", e)
+
     async with asyncio.TaskGroup() as tg:
         tg.create_task(_cleanup_loop())
         if config.IF_HEALTH_CHECK_ENABLED:
             tg.create_task(_health_check_loop(config.IF_HEALTH_CHECK_INTERVAL))
         tg.create_task(_provider_recover_loop())
         tg.create_task(_worker_sweep_loop())
+        tg.create_task(_retention_loop())

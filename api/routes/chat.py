@@ -7,7 +7,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from .. import auth
 from ..chat_usage import chat_usage_tracker as chat_usage
 from ..errors import AppError, ErrorCodes
+from ..providers.base import ChatProvider
 from ..providers.registry import bootstrap as providers_bootstrap
 from ..providers.registry import registry
 
@@ -77,10 +78,8 @@ class MessagesRequest(BaseModel):
     tool_choice: Any = None
 
 
-def _messages_payload(messages: list[BaseModel]) -> list[dict[str, Any]]:
+def _messages_payload(messages: Sequence[BaseModel]) -> list[dict[str, Any]]:
     return [message.model_dump(exclude_none=True) for message in messages]
-
-
 def _openai_effort(value: str | None) -> str:
     if not value:
         return "balanced"
@@ -98,7 +97,7 @@ def _provider_kwargs(request: BaseModel) -> dict[str, Any]:
     return values
 
 
-def _provider_for(model: str):
+def _provider_for(model: str) -> ChatProvider:
     providers_bootstrap()
     spec = registry.chat_model(model)
     if spec is None:
@@ -213,7 +212,7 @@ def _openai_chunk(
 async def _chat_collect(
     request: ChatCompletionsRequest | MessagesRequest,
     messages: list[dict[str, Any]],
-):
+) -> tuple[dict[str, Any], str, str, list[dict[str, Any]], str, dict[str, int]]:
     provider = _provider_for(request.model)
     provider_name = request.model.split("/", 1)[0]
     started = time.perf_counter()
@@ -284,8 +283,8 @@ def _openai_response(
 async def _openai_stream(
     request: ChatCompletionsRequest,
     messages: list[dict[str, Any]],
-    provider: Any,
-):
+    provider: ChatProvider,
+) -> Any:
     response_id = f"chatcmpl-{uuid.uuid4().hex}"
     created = int(time.time())
     provider_name = request.model.split("/", 1)[0]

@@ -6,12 +6,14 @@ import asyncio
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Response
 from fastapi.responses import FileResponse
 
 from .. import config
-from ..meta import db, engine, registry
+from ..meta import db, engine
+from ..providers import registry
 from ..errors import AppError, ErrorCodes
 from ..solver_guard import solver_guard
 from ..slow_log import slow_log
@@ -43,19 +45,19 @@ _zanshang_qr = _STATIC_DIR / "zanshang.jpg"
 # 原单文件 docs.html 交互文档不再挂载到 /，改为由落地页引导至 /admin 与 Swagger /docs。
 # 移除本 GET / 路由，避免在 api_router（先注册）中抢占根路径，挡住 landing 挂载。
 @router.get("/v1/terms", include_in_schema=False)
-async def terms():
+async def terms() -> FileResponse:
     """服务条款页面。"""
     return FileResponse(_TERMS_PAGE, media_type="text/html")
 
 
 @router.get("/v1/terms/index", include_in_schema=False)
-async def terms_index():
+async def terms_index() -> list[dict[str, Any]]:
     """服务条款子页面结构化列表。"""
     return [{"slug": slug, "title": meta["title"], "url": meta["url"]} for slug, meta in _TERMS_MAP.items()]
 
 
 @router.get("/v1/terms/{sub}", include_in_schema=False)
-async def terms_sub(sub: str):
+async def terms_sub(sub: str) -> FileResponse:
     """服务条款细分页面：service / privacy / content / disclaimer。"""
     if sub not in _TERMS_MAP:
         raise AppError(ErrorCodes.NOT_FOUND, f"未知的条款页面：{sub}", status_code=404)
@@ -63,13 +65,13 @@ async def terms_sub(sub: str):
 
 
 @router.get("/v1/honor", include_in_schema=False)
-async def honor():
+async def honor() -> FileResponse:
     """捐赠页。"""
     return FileResponse(_HONOR_PAGE, media_type="text/html")
 
 
 @router.get("/v1/honor/data", include_in_schema=False)
-async def honor_data():
+async def honor_data() -> dict[str, Any]:
     """捐赠数据接口。"""
     return {
         "status": "ok",
@@ -86,12 +88,12 @@ async def honor_data():
 
 
 # M5: cf_solver 探活结果 TTL 缓存
-_cf_probe_cache: dict = {"ok": False, "at": 0.0}
+_cf_probe_cache: dict[str, Any] = {"ok": False, "at": 0.0}
 
 
 async def _probe_cf_solver(force: bool = False) -> bool:
     if not force and time.time() - _cf_probe_cache["at"] < config.HEALTHZ_CACHE_TTL:
-        return _cf_probe_cache["ok"]
+        return _cf_probe_cache["ok"]  # type: ignore[no-any-return]
     try:
         from urllib.parse import urlsplit
 
@@ -115,7 +117,7 @@ async def _probe_cf_solver(force: bool = False) -> bool:
 
 
 @router.get("/v1/healthz")
-async def healthz():
+async def healthz() -> dict[str, Any]:
     """健康检查：本服务 + cf_solver 可用性 + solver 求解质量 + 统一健康视图（A-04）。"""
     cf_ok = await _probe_cf_solver()
     snap = engine.snapshot()
@@ -173,7 +175,7 @@ async def healthz():
 
 
 @router.get("/v1/livez", include_in_schema=True)
-async def livez() -> dict:
+async def livez() -> dict[str, Any]:
     """存活探针（liveness）：进程活即 ok，不探任何外部依赖。
 
     Docker healthcheck 用此端点——停 solver 时 readiness 降级而 liveness 不误杀，
@@ -183,7 +185,7 @@ async def livez() -> dict:
 
 
 @router.get("/v1/readyz", include_in_schema=True)
-async def readyz(response: Response) -> dict:
+async def readyz(response: Response) -> dict[str, Any]:
     """就绪探针（readiness）：聚合依赖探活，任一关键依赖不 ok → 503。
 
     探活项：cf_solver 可达、solver_guard 熔断状态、DB 可读、队列未堵。
@@ -223,13 +225,13 @@ async def readyz(response: Response) -> dict:
 
 
 @router.get("/v1/system")
-async def system_info():
+async def system_info() -> dict[str, Any]:
     """服务器规格与自适应并发参数（供前端看板展示）。"""
     return system_spec()
 
 
 @router.get("/v1/meta")
-async def meta():
+async def meta() -> dict[str, Any]:
     """暴露站点配置，方便调用方集成。
 
     安全（P0）：此处为公开只读探测端点，**不返回完整 API Key**，仅返回脱敏前缀与鉴权开关。
@@ -248,21 +250,21 @@ async def meta():
 
 
 @router.get("/static/zanshang.jpg", include_in_schema=False)
-async def zanshang_qr():
+async def zanshang_qr() -> FileResponse:
     if _zanshang_qr.exists():
         return FileResponse(_zanshang_qr, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
     raise AppError(ErrorCodes.NOT_FOUND, "赞赏码图片不存在", 404)
 
 
 @router.get("/static/logo.png", include_in_schema=False)
-async def logo_small():
+async def logo_small() -> FileResponse:
     if _logo_sm.exists():
         return FileResponse(_logo_sm, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
     raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)
 
 
 @router.get("/static/logo-md.png", include_in_schema=False)
-async def logo_medium():
+async def logo_medium() -> FileResponse:
     if _logo_md.exists():
         return FileResponse(_logo_md, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
     raise AppError(ErrorCodes.NOT_FOUND, "Logo not found", 404)

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Request
 
@@ -49,7 +50,7 @@ def _validate_block_type(block_type: str) -> str:
 
 
 @router.post("/v1/admin/security/block-ip")
-async def block_ip(request: Request, body: dict):
+async def block_ip(request: Request, body: dict[str, Any]) -> dict[str, Any]:
     """动态封禁 IP。
 
     body 支持：
@@ -102,7 +103,7 @@ async def block_ip(request: Request, body: dict):
 
 
 @router.delete("/v1/admin/security/unblock-ip")
-async def unblock_ip(request: Request, ip: str = ""):
+async def unblock_ip(request: Request, ip: str = "") -> dict[str, Any]:
     """解封 IP。"""
     _require_admin_key(request)
     ip = _validate_ip(ip)
@@ -115,7 +116,7 @@ async def unblock_ip(request: Request, ip: str = ""):
 
 
 @router.get("/v1/admin/security/blocklist")
-async def blocklist(request: Request, limit: int = 200):
+async def blocklist(request: Request, limit: int = 200) -> dict[str, Any]:
     """列出当前生效封禁规则。"""
     _require_admin_key(request)
     rules = await ip_blocklist_store.list_all(limit=max(1, min(limit, 1000)))
@@ -123,7 +124,7 @@ async def blocklist(request: Request, limit: int = 200):
 
 
 @router.get("/v1/admin/security/status")
-async def block_status(request: Request, ip: str = ""):
+async def block_status(request: Request, ip: str = "") -> dict[str, Any]:
     """查询单个 IP 的当前生效规则（不存在或已过期返回 None）。"""
     _require_admin_key(request)
     ip = _validate_ip(ip)
@@ -132,7 +133,7 @@ async def block_status(request: Request, ip: str = ""):
 
 
 @router.get("/v1/admin/security/stats")
-async def security_stats(request: Request):
+async def security_stats(request: Request) -> dict[str, Any]:
     """风控统计：封禁总数 + 当前活跃每日限制数。"""
     _require_admin_key(request)
     rules = await ip_blocklist_store.list_all(limit=10000)

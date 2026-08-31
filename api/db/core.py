@@ -406,17 +406,30 @@ class DB:
                     proxy_used TEXT,
                     error TEXT,
                     cost_usd REAL DEFAULT 0,
+                    day TEXT,
+                    month TEXT,
                     created_at REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_chat_usage_created ON chat_usage(created_at);
                 CREATE INDEX IF NOT EXISTS idx_chat_usage_model ON chat_usage(model, created_at);
             """)
-            # 兼容迁移：旧表缺 cost_usd 列则补（避免 create table 不重建旧库）
+            # 兼容迁移：旧表缺列则补（避免 create table 不重建旧库）
             try:
                 _cu = await conn.execute("PRAGMA table_info(chat_usage)")
                 _ccols = {r[1] for r in await _cu.fetchall()}
-                if "cost_usd" not in _ccols:
-                    await conn.execute("ALTER TABLE chat_usage ADD COLUMN cost_usd REAL DEFAULT 0")
+                for _cname, _cddl in (
+                    ("cost_usd", "REAL DEFAULT 0"),
+                    ("day", "TEXT"),
+                    ("month", "TEXT"),
+                ):
+                    if _cname not in _ccols:
+                        await conn.execute(f"ALTER TABLE chat_usage ADD COLUMN {_cname} {_cddl}")
+                # 索引必须在 ALTER 补列后建，否则旧库（无 month 列）报 no such column。
+                _ccols = {r[1] for r in await (await conn.execute("PRAGMA table_info(chat_usage)")).fetchall()}
+                if "month" in _ccols:
+                    await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_month ON chat_usage(month)")
+                if "provider" in _ccols:
+                    await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_provider ON chat_usage(provider, created_at)")
             except Exception:
                 pass
             await conn.commit()
@@ -791,6 +804,56 @@ class DB:
                 pass
         size_after = os.path.getsize(path) if os.path.exists(path) else 0
         return {"deleted": deleted, "size_before": size_before, "size_after": size_after}
+
+    async def cleanup_batched(self, retention_days: int, batch_size: int = 5000) -> dict:
+        """TTL 回收（分批，避免单条长 DELETE 锁表/占用内存）：删除超期请求记录。
+
+        每批先 `SELECT id ... WHERE created_at < ? LIMIT ?` 选出超期 id（SQLite 默认构建
+        不支持 `DELETE ... LIMIT`，故用 id 定位），再按 id 集合删除并提交一次；循环直到无
+        超期行。最后统一做 WAL checkpoint + VACUUM + ANALYZE。供夜间 04:00 分批巡检使用。
+        与 `cleanup()` 行为正交（cleanup 签名/行为保持不变），返回额外 `batches` 计数。
+        """
+        await self._ensure_flushed()
+        cutoff = time.time() - retention_days * 86400
+        conn0 = self._connections[0]
+        db_cursor = await conn0.execute("PRAGMA database_list")
+        db_row = await db_cursor.fetchone()
+        path = db_row[2]
+        size_before = os.path.getsize(path) if os.path.exists(path) else 0
+        _, conn, conn_lock = await self._get_write_conn()
+        deleted = 0
+        batches = 0
+        async with conn_lock:
+            while True:
+                sel = await conn.execute(
+                    "SELECT id FROM requests WHERE created_at < ? LIMIT ?", (cutoff, batch_size)
+                )
+                rows = await sel.fetchall()
+                if not rows:
+                    break
+                ids = [r[0] for r in rows]
+                placeholders = ",".join("?" * len(ids))
+                cur = await conn.execute(
+                    f"DELETE FROM requests WHERE id IN ({placeholders})", ids
+                )
+                await conn.commit()
+                deleted += cur.rowcount
+                batches += 1
+            try:
+                await conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            try:
+                await conn.execute("VACUUM")
+            except Exception as e:
+                log.warning("VACUUM 失败（可忽略，稍后自动重试）: %s", e)
+            await conn.commit()
+            try:
+                await conn.execute("ANALYZE")
+            except Exception:
+                pass
+        size_after = os.path.getsize(path) if os.path.exists(path) else 0
+        return {"deleted": deleted, "batches": batches, "size_before": size_before, "size_after": size_after}
 
     async def count(self) -> int:
         """总记录数（指标用）。"""

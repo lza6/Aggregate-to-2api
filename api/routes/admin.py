@@ -1,13 +1,14 @@
 """管理面端点（v4.2 拆分：main.py 迁移）。
 
 包含：providers/models/account-pool/proxy-pool/DLQ/logs/stats/gallery/errors/
-slow/routing/metrics/diagnostics。
+slow/routing/metrics/diagnostics/cost。
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import inspect
 import logging
 import os
 import time
@@ -89,6 +90,96 @@ async def providers():
         "items": summary,
         "count": len(summary),
         "last_probe_time": provider_probe.last_probe_time,
+    }
+
+
+@router.get("/v1/cost")
+async def cost_overview():
+    """成本可视化（M6-F3）：月成本 / 今日成本 / 预算余量 / 燃烧率 / 月度趋势 / by_provider / by_model。
+
+    - token 成本来自 chat_usage（cost_usd 列，免费渠道为 0）；
+    - 图片成本估算 = account_pool.cost_summary(credits_used_total) × IF_USD_PER_CREDIT（0=不估算）；
+    - budget 来自 IF_COST_BUDGET_USD（0=不启用成本告警）。
+    """
+    from ..chat_usage import chat_usage_tracker as _tracker
+    from .. import account_pool as _account_pool
+
+    now = time.time()
+    today_start = time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))
+
+    # token 成本（chat_usage 表）
+    if hasattr(_tracker, "cost_usd_for_range"):
+        token_mtd = await _tracker.cost_usd_for_range(now - 30 * 86400, now)
+        token_today = await _tracker.cost_usd_for_range(today_start, now)
+    else:
+        token_mtd = 0.0
+        token_today = 0.0
+
+    # 图片成本估算（号池累计积分 × 每积分美元）
+    image_cost = 0.0
+    image_credits_used = 0
+    image_images = 0
+    try:
+        # cost_summary 为同步方法；测试 monkeypatch 成 async，故对可等待对象做兼容
+        _raw_cs = _account_pool.account_pool.cost_summary("nanobanana")
+        cs = await _raw_cs if inspect.isawaitable(_raw_cs) else _raw_cs
+        image_credits_used = cs.get("total_credits_used", 0)
+        image_images = cs.get("total_images_used", 0)
+        image_cost = float(image_credits_used) * float(config.IF_USD_PER_CREDIT or 0.0)
+    except Exception:
+        pass
+
+    month_to_date = round(float(token_mtd) + image_cost, 6)
+    today_usd = round(float(token_today), 6)
+    budget = float(config.IF_COST_BUDGET_USD or 0.0)
+    if budget > 0:
+        remaining_pct = max(0.0, (1.0 - month_to_date / budget) * 100)
+        over_budget = month_to_date >= budget
+        burn_rate_warning = month_to_date >= budget * 0.8
+    else:
+        remaining_pct = 100.0
+        over_budget = False
+        burn_rate_warning = False
+
+    # 月度趋势（chat_usage 按月；图片成本挂当前月）
+    monthly = await _tracker.cost_monthly(12) if hasattr(_tracker, "cost_monthly") else []
+    monthly_by_provider = await _tracker.cost_by_provider(12) if hasattr(_tracker, "cost_by_provider") else []
+    monthly_by_model = await _tracker.cost_by_provider_model(12) if hasattr(_tracker, "cost_by_provider_model") else []
+
+    # 把图片成本并入 by_provider 的 nanobanana 行
+    nb_found = False
+    for row in monthly_by_provider:
+        if row.get("provider") == "nanobanana":
+            row["cost_usd"] = round(float(row.get("cost_usd", 0.0)) + image_cost, 6)
+            row["credits_used"] = image_credits_used
+            row["images"] = image_images
+            nb_found = True
+    if not nb_found and (image_cost > 0 or image_credits_used > 0):
+        monthly_by_provider.append({
+            "provider": "nanobanana",
+            "calls": 0,
+            "cost_usd": round(image_cost, 6),
+            "tokens": 0,
+            "credits_used": image_credits_used,
+            "images": image_images,
+        })
+
+    return {
+        "month_to_date_usd": month_to_date,
+        "today_usd": today_usd,
+        "budget_usd": budget,
+        "budget_remaining_pct": round(remaining_pct, 2),
+        "over_budget": over_budget,
+        "burn_rate_warning": burn_rate_warning,
+        "monthly": monthly,
+        "by_provider": monthly_by_provider,
+        "by_model": monthly_by_model,
+        "image_cost_usd_mtd": round(image_cost, 6),
+        "note": (
+            "成本口径：token 成本取 chat_usage.cost_usd 聚合；"
+            "图片成本 = 号池累计积分 × IF_USD_PER_CREDIT（默认 0 不估算）。"
+            "预算 0 时不启用成本告警。"
+        ),
     }
 
 

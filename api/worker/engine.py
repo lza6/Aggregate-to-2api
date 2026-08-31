@@ -18,11 +18,13 @@ import hashlib
 import logging
 import time
 import uuid
+from typing import Any
 from urllib.parse import urlsplit
 
 from .. import config
 from .. import imagefree_client
 from .. import turnstile_client
+from ..db import DB
 from ..db.queue_store import QueueStore
 from ..retry_policy import RetryPolicy
 
@@ -72,41 +74,41 @@ def _is_token_rejected(err: object) -> bool:
     return any(m in msg for m in _TOKEN_REJECTED_MARKERS)
 
 
-class CountedPriorityQueue(asyncio.PriorityQueue):
+class CountedPriorityQueue(asyncio.PriorityQueue[tuple[int, int, str]]):
     """支持优先级计数的 PriorityQueue 子类。
 
     内部维护 _counts 字典按优先级计数，put/get 时自动更新。
     支持 per-priority 上限判定（is_full / put_nowait 时抛 QueueFull）。
     """
 
-    def __init__(self, maxsize=0, limits=None):
+    def __init__(self, maxsize: int = 0, limits: dict[int, int] | None = None) -> None:
         super().__init__(maxsize=maxsize)
         self._counts: dict[int, int] = {0: 0, 1: 0, 2: 0}
         self._limits: dict[int, int] = limits or {0: 200, 1: 500, 2: 1500}
 
-    def put_nowait(self, item):
+    def put_nowait(self, item: tuple[int, int, str]) -> None:
         priority = item[0]
         if self._counts.get(priority, 0) >= self._limits.get(priority, 9999):
             raise asyncio.QueueFull
         super().put_nowait(item)
         self._counts[priority] = self._counts.get(priority, 0) + 1
 
-    def get_nowait(self):
+    def get_nowait(self) -> tuple[int, int, str]:
         item = super().get_nowait()
         self._counts[item[0]] = max(0, self._counts.get(item[0], 0) - 1)
         return item
 
-    async def get(self):
+    async def get(self) -> tuple[int, int, str]:
         item = await super().get()
         self._counts[item[0]] = max(0, self._counts.get(item[0], 0) - 1)
         return item
 
-    def count(self, priority=None):
+    def count(self, priority: int | None = None) -> int:
         if priority is not None:
             return self._counts.get(priority, 0)
         return sum(self._counts.values())
 
-    def is_full(self, priority):
+    def is_full(self, priority: int) -> bool:
         return self._counts.get(priority, 0) >= self._limits.get(priority, 9999)
 
     def capacity(self) -> int:
@@ -119,7 +121,7 @@ class _WorkerHandle:
 
     __slots__ = ("id", "task", "stop_event", "last_active")
 
-    def __init__(self, idx: int, task: asyncio.Task, stop_event: asyncio.Event):
+    def __init__(self, idx: int, task: asyncio.Task[None], stop_event: asyncio.Event):
         self.id = idx
         self.task = task
         self.stop_event = stop_event
@@ -127,7 +129,7 @@ class _WorkerHandle:
 
 
 class Engine:
-    def __init__(self, db):
+    def __init__(self, db: DB):
         self.db = db
         limits = {
             0: config.ADMIN_QUEUE_MAX,
@@ -148,7 +150,7 @@ class Engine:
         self._started = False  # start() 后置真：池懒创建时才启动后台预取
         self._started_at = time.time()
         self._workers: list[_WorkerHandle] = []
-        self._auto_scaler_task: asyncio.Task | None = None
+        self._auto_scaler_task: asyncio.Task[None] | None = None
         # S-4: 入队时刻表（task_id → monotonic），worker 取走时算 queue_ms；终态后清理
         self._enqueued_at: dict[str, float] = {}
         # ── 持久化队列（IMP-29）─────────────────────────
@@ -281,7 +283,7 @@ class Engine:
         log.info("DLQ 重入队: task %s 已放回 normal 队列", task_id)
         return True
 
-    async def wait_result(self, task_id: str, timeout: float) -> dict:
+    async def wait_result(self, task_id: str, timeout: float) -> dict[str, Any]:
         """同步接口：轮询直到终态或超时。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -321,7 +323,7 @@ class Engine:
 
     # ── token 池（多 key 转发）──────────────────────
     @property
-    def token_pool(self) -> asyncio.Queue:
+    def token_pool(self) -> asyncio.Queue[tuple[str, float]]:
         """兼容转发：healthz/metrics 用 engine.token_pool.qsize() 看 direct 池水位。"""
         return self.token_pool_manager.direct_queue()
 
@@ -704,7 +706,7 @@ class Engine:
             # B2: 退出本任务上下文（无论完成/异常都恢复）
             request_context_var.reset(_ctx_token)
 
-    def _record_slow(self, task_id: str, row: dict, slow: dict, t0: float, status: str) -> None:
+    def _record_slow(self, task_id: str, row: dict[str, Any], slow: dict[str, Any], t0: float, status: str) -> None:
         """S-4: 任务终态时提交慢日志画像（阈值内静默忽略）。"""
         try:
             slow_log.record(
@@ -767,7 +769,7 @@ class Engine:
             except Exception as exc:
                 log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 
-    async def _generate_once(self, row: dict, token: str, proxy: str | None = None) -> dict:
+    async def _generate_once(self, row: dict[str, Any], token: str, proxy: str | None = None) -> dict[str, Any]:
         """提交生成并轮询到出图。
 
         proxy 非空时：提交走该出口（token 必须同为该出口所解，见调用方 _proxy_retry）。
@@ -804,7 +806,7 @@ class Engine:
                 log.warning("图片下载失败（不影响出图结果）: %s", e)
         return out
 
-    async def _generate_once_b3(self, row: dict, token: str, proxy: str | None = None) -> dict:
+    async def _generate_once_b3(self, row: dict[str, Any], token: str, proxy: str | None = None) -> dict[str, Any]:
         """B3: _generate_once 的分段计时包装——返回 submit_ms/poll_ms。"""
         _sub0 = time.monotonic()
         out = await self._generate_once(row, token, proxy=proxy)
@@ -813,7 +815,7 @@ class Engine:
         out["poll_ms"] = round(_elapsed * 0.7, 1)
         return out
 
-    async def _generate_with_429_proxy_fallback(self, task_id: str, row: dict, token: str) -> dict:
+    async def _generate_with_429_proxy_fallback(self, task_id: str, row: dict[str, Any], token: str) -> dict[str, Any]:
         """v4.4.2: 直连 429 → 同 IP 配对重试（solver(proxy=P) + submit(proxy=P)）。
 
         Turnstile token 与出口 IP 绑定，因此换 IP 必须重新解 token —— 复用
@@ -868,7 +870,7 @@ class Engine:
         )
 
     # ── 实时状态 ──────────────────────────────────
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """当前并发 / 排队 / 队列上限 / 运行时长 / 各 token 池水位。"""
         return {
             "processing": self.processing,

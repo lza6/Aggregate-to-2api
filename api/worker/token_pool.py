@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import logging
 import time
+from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from .. import config
@@ -45,12 +46,12 @@ class _TokenPool:
     def __init__(
         self,
         key: str,
-        target_getter,
+        target_getter: Callable[[], int],
         maxsize: int,
         idle_ttl: float,
         proxy: str | None,
-        engine=None,
-    ):
+        engine: Any = None,
+    ) -> None:
         self.key = key
         self.safe_key = _safe_proxy_label(key)
         self.target_getter = target_getter
@@ -70,7 +71,7 @@ class _TokenPool:
 
         self.need_event = asyncio.Event()
         self.last_activity = time.time()
-        self.task: asyncio.Task | None = None
+        self.task: asyncio.Task[None] | None = None
         self.sem: asyncio.Semaphore | None = None
         self.proxy = proxy
         self._ema: float = 5.0
@@ -198,7 +199,7 @@ class _TokenPool:
                 target_queue = self.active_q if not self.active_q.full() else self.standby_q
 
                 try:
-                    async with self.sem:
+                    async with self.sem:  # type: ignore[union-attr]
                         # 求解由 turnstile_client 统一走集群调度选节点
                         token, solve_time = await turnstile_client.solve_turnstile(
                             cf_solver_url=None,
@@ -246,7 +247,7 @@ class _TokenPool:
     def size(self) -> int:
         return self.active_q.qsize() + self.standby_q.qsize()
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """包含双缓冲明细与零延迟命中率快照。"""
         act_size = self.active_q.qsize()
         std_size = self.standby_q.qsize()
@@ -267,12 +268,12 @@ class _TokenPool:
 class TokenPoolManager:
     """多 key token 池管理：per-key 独立双缓冲池、事件驱动补池、懒创建、空闲回收。"""
 
-    def __init__(self, engine):
+    def __init__(self, engine: Any) -> None:
         self.engine = engine
         self.pools: dict[str, _TokenPool] = {}
         self.sem = asyncio.Semaphore(max(1, config.TOKEN_PREFETCH_CONCURRENCY))
         self.wait_timeout_total = 0
-        self._reaper: asyncio.Task | None = None
+        self._reaper: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """创建并启动 direct 池 + 启动空闲回收守护协程。"""
@@ -339,7 +340,7 @@ class TokenPoolManager:
         while True:
             await asyncio.sleep(60)
             now = time.time()
-            reaped: list[asyncio.Task | None] = []
+            reaped: list[asyncio.Task[None] | None] = []
             for key in list(self.pools):
                 if key == "direct":
                     continue
@@ -353,15 +354,15 @@ class TokenPoolManager:
             if reaped:
                 await asyncio.gather(*[t for t in reaped if t], return_exceptions=True)
 
-    def pools_snapshot(self) -> dict:
+    def pools_snapshot(self) -> dict[str, Any]:
         """取各池双缓冲快照。"""
-        out: dict = {}
+        out: dict[str, Any] = {}
         for key, pool in self.pools.items():
             label = "direct" if key == "direct" else f"proxy:{pool.safe_key}"
             out[label] = pool.snapshot()
         return out
 
-    def direct_queue(self) -> asyncio.Queue:
+    def direct_queue(self) -> asyncio.Queue[tuple[str, float]]:
         """返回 direct 池当前 active_q。"""
         return self._ensure_pool("direct").active_q
 

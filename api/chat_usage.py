@@ -47,11 +47,15 @@ class ChatUsageTracker:
     ) -> None:
         """记录一次调用；cost_usd 为成本（USD），免费渠道为 0，付费渠道由 provider 填充。"""
         db = await self._get_db()
+        now_ts = time.time()
+        now_dt = datetime.fromtimestamp(now_ts)
+        day = now_dt.strftime("%Y-%m-%d")
+        month = now_dt.strftime("%Y-%m")
         await db._enqueue_write(
             "INSERT INTO chat_usage "
             "(provider, model, prompt_tokens, completion_tokens, reasoning_tokens, "
-            "tool_calls, duration_ms, success, proxy_used, error, cost_usd, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "tool_calls, duration_ms, success, proxy_used, error, cost_usd, day, month, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(provider),
                 str(model),
@@ -64,7 +68,9 @@ class ChatUsageTracker:
                 proxy_used,
                 error,
                 max(0.0, float(cost_usd or 0.0)),
-                time.time(),
+                day,
+                month,
+                now_ts,
             ),
         )
 
@@ -103,13 +109,21 @@ class ChatUsageTracker:
         await db._ensure_flushed()
         conn = await db._get_read_conn()
         model_cursor = await conn.execute(
-            "SELECT model, COUNT(*), COALESCE(SUM(prompt_tokens), 0), "
+            "SELECT model, provider, COUNT(*), COALESCE(SUM(prompt_tokens), 0), "
             "COALESCE(SUM(completion_tokens), 0) FROM chat_usage WHERE "
             + where
-            + " GROUP BY model ORDER BY COUNT(*) DESC, model",
+            + " GROUP BY model, provider ORDER BY COUNT(*) DESC, model",
             (cutoff,),
         )
         model_rows = await model_cursor.fetchall()
+
+        provider_cursor = await conn.execute(
+            "SELECT provider, COUNT(*), COALESCE(SUM(cost_usd), 0), "
+            "COALESCE(SUM(prompt_tokens + completion_tokens + reasoning_tokens), 0) "
+            "FROM chat_usage WHERE " + where + " GROUP BY provider ORDER BY COUNT(*) DESC, provider",
+            (cutoff,),
+        )
+        provider_rows = await provider_cursor.fetchall()
 
         today_start = datetime.combine(datetime.now().date(), datetime.min.time()).timestamp()
         today_row = await self._query_one(
@@ -129,11 +143,21 @@ class ChatUsageTracker:
         by_model = [
             {
                 "model": row[0],
-                "calls": int(row[1] or 0),
-                "prompt_tokens": int(row[2] or 0),
-                "completion_tokens": int(row[3] or 0),
+                "provider": row[1],
+                "calls": int(row[2] or 0),
+                "prompt_tokens": int(row[3] or 0),
+                "completion_tokens": int(row[4] or 0),
             }
             for row in model_rows
+        ]
+        by_provider = [
+            {
+                "provider": row[0],
+                "calls": int(row[1] or 0),
+                "cost_usd": round(float(row[2] or 0), 6),
+                "tokens": int(row[3] or 0),
+            }
+            for row in provider_rows
         ]
         return {
             "period": period,
@@ -150,7 +174,103 @@ class ChatUsageTracker:
             "cost_usd": round(float(cost_row[0] or 0), 6),
             "today_cost_usd": round(float(cost_sql[0] or 0), 6),
             "by_model": by_model,
+            "by_provider": by_provider,
         }
+
+    async def cost_monthly(self, months: int = 12) -> list[dict[str, Any]]:
+        """按月聚合 cost_usd + calls（M6-F3 成本可视化）。返回升序月份列表，当前月在末位。"""
+        months = max(1, int(months))
+        # 计算 months 个月前（含当前月）的起始月份标签（YYYY-MM）
+        month_idx = datetime.now().year * 12 + (datetime.now().month - 1)
+        start_idx = month_idx - (months - 1)
+        start_year, start_month = divmod(start_idx, 12)
+        start_month += 1
+        start_label = f"{start_year:04d}-{start_month:02d}"
+        db = await self._get_db()
+        await db._ensure_flushed()
+        conn = await db._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT month, COALESCE(SUM(cost_usd), 0), COUNT(*) FROM chat_usage "
+            "WHERE month IS NOT NULL AND month >= ? GROUP BY month ORDER BY month ASC",
+            (start_label,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "month": row[0],
+                "cost_usd": round(float(row[1] or 0), 6),
+                "calls": int(row[2] or 0),
+            }
+            for row in rows
+        ]
+
+    async def cost_by_provider_model(self, months: int = 12) -> list[dict[str, Any]]:
+        """按 provider+model 聚合 cost_usd + calls（M6-F3）。"""
+        months = max(1, int(months))
+        month_idx = datetime.now().year * 12 + (datetime.now().month - 1)
+        start_idx = month_idx - (months - 1)
+        start_year, start_month = divmod(start_idx, 12)
+        start_month += 1
+        start_label = f"{start_year:04d}-{start_month:02d}"
+        db = await self._get_db()
+        await db._ensure_flushed()
+        conn = await db._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT provider, model, COALESCE(SUM(cost_usd), 0), COUNT(*) FROM chat_usage "
+            "WHERE month IS NOT NULL AND month >= ? GROUP BY provider, model ORDER BY provider, model",
+            (start_label,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "provider": row[0],
+                "model": row[1],
+                "cost_usd": round(float(row[2] or 0), 6),
+                "calls": int(row[3] or 0),
+            }
+            for row in rows
+        ]
+
+    async def cost_usd_for_range(self, start_ts: float, end_ts: float) -> float:
+        """统计 [start_ts, end_ts) 时间窗内的 cost_usd 总和（/v1/cost 用）。"""
+        db = await self._get_db()
+        await db._ensure_flushed()
+        conn = await db._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM chat_usage WHERE created_at >= ? AND created_at < ?",
+            (float(start_ts), float(end_ts)),
+        )
+        row = await cursor.fetchone()
+        return round(float(row[0] or 0), 6)
+
+    async def cost_by_provider(self, months: int = 12) -> list[dict[str, Any]]:
+        """按 provider 聚合 cost_usd + calls + tokens（M6-F3 /v1/cost 的 by_provider）。"""
+        months = max(1, int(months))
+        month_idx = datetime.now().year * 12 + (datetime.now().month - 1)
+        start_idx = month_idx - (months - 1)
+        start_year, start_month = divmod(start_idx, 12)
+        start_month += 1
+        start_label = f"{start_year:04d}-{start_month:02d}"
+        db = await self._get_db()
+        await db._ensure_flushed()
+        conn = await db._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT provider, COUNT(*), COALESCE(SUM(cost_usd), 0), "
+            "COALESCE(SUM(prompt_tokens + completion_tokens + reasoning_tokens), 0) "
+            "FROM chat_usage WHERE month IS NOT NULL AND month >= ? "
+            "GROUP BY provider ORDER BY provider",
+            (start_label,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "provider": row[0],
+                "calls": int(row[1] or 0),
+                "cost_usd": round(float(row[2] or 0), 6),
+                "tokens": int(row[3] or 0),
+            }
+            for row in rows
+        ]
 
     async def remaining_credits(self) -> dict[str, Any]:
         """按可用代理数和每出口小时配额估算剩余额度。"""

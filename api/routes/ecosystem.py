@@ -17,6 +17,7 @@ import time
 
 import httpx
 from fastapi import APIRouter
+from typing import Any
 
 from .. import config
 from ..cache import LRUCache
@@ -34,7 +35,7 @@ _ecosystem_cache: LRUCache | None = None
 # 防击穿锁：并发未命中时只允许一方拉上游
 _fetch_lock = asyncio.Lock()
 # 最近一次成功拉取的上游快照（仅在成功时覆盖；上游失败时用于 stale 回退）
-_last_good: dict | None = None
+_last_good: dict[str, Any] | None = None
 
 # 共享 httpx.AsyncClient（参照 imagefree_client._get_client() 模式，timeout=20s + UA）
 _client: httpx.AsyncClient | None = None
@@ -70,7 +71,7 @@ def get_cache() -> LRUCache:
 # ── 上游抓取 + 归一化 ──────────────────────────────
 
 
-async def _get(path: str) -> dict | None:
+async def _get(path: str) -> dict[str, Any] | None:
     """拉取单个端点；非 200 / 非 JSON / 传输异常 → None（容错，不抛）。"""
     try:
         r = await _get_client().get(TENSORFEED_BASE + path)
@@ -90,12 +91,12 @@ async def _get(path: str) -> dict | None:
         return None
 
 
-def _norm_models(raw: dict | None) -> dict:
+def _norm_models(raw: dict[str, Any] | None) -> dict[str, Any]:
     """/api/models → {available, last_updated, count, providers:[{id,name,models:[...]}]}"""
     if not raw or not raw.get("ok"):
         return {"available": False, "last_updated": None, "count": 0, "providers": []}
-    providers: list[dict] = []
-    models_expanded: list[dict] = []
+    providers: list[dict[str, Any]] = []
+    models_expanded: list[dict[str, Any]] = []
     for p in raw.get("providers") or []:
         models = p.get("models") or []
         providers.append({
@@ -112,12 +113,12 @@ def _norm_models(raw: dict | None) -> dict:
     }
 
 
-def _norm_status(raw: dict | None) -> dict:
+def _norm_status(raw: dict[str, Any] | None) -> dict[str, Any]:
     """/api/status/summary → {available, all_operational, service_count, services, issues}"""
     if not raw or not raw.get("ok"):
         return {"available": False, "all_operational": False, "service_count": 0,
                 "services": [], "issues": []}
-    services: list[dict] = []
+    services: list[dict[str, Any]] = []
     issues: list[str] = []
     non_op = 0
     for s in raw.get("services") or []:
@@ -136,7 +137,7 @@ def _norm_status(raw: dict | None) -> dict:
     }
 
 
-def _norm_today(raw: dict | None) -> dict:
+def _norm_today(raw: dict[str, Any] | None) -> dict[str, Any]:
     """/api/today → {available, news(前3), inference, papers(前3), hf(前3)}"""
     if not raw or not raw.get("ok"):
         return {"available": False, "news": [], "inference": {}, "papers": [], "hf": []}
@@ -155,7 +156,7 @@ def _norm_today(raw: dict | None) -> dict:
     }
 
 
-def _norm_health(raw: dict | None) -> dict:
+def _norm_health(raw: dict[str, Any] | None) -> dict[str, Any]:
     """/api/health → {available, news_count, model_count}"""
     if not raw or not raw.get("ok"):
         return {"available": False, "news_count": None, "model_count": None}
@@ -164,7 +165,7 @@ def _norm_health(raw: dict | None) -> dict:
     return {"available": True, "news_count": news, "model_count": models}
 
 
-async def _fetch_upstream() -> dict:
+async def _fetch_upstream() -> dict[str, Any]:
     """并发拉 4 个端点 + 逐个容错归一化。"""
     models_raw, status_raw, today_raw, health_raw = await asyncio.gather(
         _get("/api/models"),
@@ -201,18 +202,18 @@ async def _fetch_upstream() -> dict:
 
 
 @router.get("/v1/ai-ecosystem")
-async def ai_ecosystem() -> dict:
+async def ai_ecosystem() -> dict[str, Any]:
     """TensorFeed AI 生态面板（模型价格 / 服务状态 / 今日简报 / 健康）。"""
     cache = get_cache()
     cached = await cache.get(_CACHE_KEY)
     if cached is not None:
-        return cached
+        return cached  # type: ignore[no-any-return]
 
     async with _fetch_lock:
         # double-check：锁内若已有人填充则直接返回，防击穿
         cached = await cache.get(_CACHE_KEY)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         global _last_good
         try:

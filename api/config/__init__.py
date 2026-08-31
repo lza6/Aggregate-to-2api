@@ -165,6 +165,11 @@ class Settings(BaseSettings):
     if_gallery_signing_secret: str = Field("", validation_alias="IF_GALLERY_SIGNING_SECRET")
     # 签名有效时长（秒）；默认 600s。仅校验 exp，不绑 IP（CGNAT/代理下 IP 漂移会误杀）。
     if_gallery_signing_ttl: int = Field(600, validation_alias="IF_GALLERY_SIGNING_TTL")
+    # ── 成本 / 预算（M6-F3 成本可视化）──
+    # 每积分折算美元（图片成本估算：credits_used * IF_USD_PER_CREDIT）；0 = 不估算图片成本
+    if_usd_per_credit: float = Field(0.0, validation_alias="IF_USD_PER_CREDIT")
+    # 月度预算（美元）；0 = 不启用成本告警（cost_over_budget / cost_burn_rate_warning）
+    if_cost_budget_usd: float = Field(0.0, validation_alias="IF_COST_BUDGET_USD")
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
@@ -184,6 +189,8 @@ class Settings(BaseSettings):
     if_health_check_interval: int = Field(60, validation_alias="IF_HEALTH_CHECK_INTERVAL")
     if_health_check_enabled: bool = Field(True, validation_alias="IF_HEALTH_CHECK_ENABLED")
     if_alert_check_interval: int = Field(60, validation_alias="IF_ALERT_CHECK_INTERVAL")
+    # P2-3 告警 webhook 外发（企业微信/钉钉/Slack 通用 JSON POST；空 = 不外发）
+    if_alert_webhook_url: str = Field("", validation_alias="IF_ALERT_WEBHOOK_URL")
     # P13: 磁盘日志落盘（空 = 关闭；默认 data/logs）
     if_log_dir: str = Field("data/logs", validation_alias="IF_LOG_DIR")
     if_log_retention_days: int = Field(14, validation_alias="IF_LOG_RETENTION_DAYS")
@@ -726,6 +733,14 @@ IF_GALLERY_PASSWORD = settings.if_gallery_password
 IF_GALLERY_SIGNING_SECRET = settings.if_gallery_signing_secret
 IF_GALLERY_SIGNING_TTL = settings.if_gallery_signing_ttl
 
+# 成本 / 预算（M6-F3）
+IF_USD_PER_CREDIT = settings.if_usd_per_credit
+IF_COST_BUDGET_USD = settings.if_cost_budget_usd
+
+# 成本 / 预算（M6-F3）
+IF_USD_PER_CREDIT = settings.if_usd_per_credit
+IF_COST_BUDGET_USD = settings.if_cost_budget_usd
+
 # 缓存
 IF_LRU_CACHE_SIZE = settings.if_lru_cache_size
 IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
@@ -738,6 +753,7 @@ IF_TENSORFEED_BASE = settings.if_tensorfeed_base
 IF_HEALTH_CHECK_INTERVAL = settings.if_health_check_interval
 IF_HEALTH_CHECK_ENABLED = settings.if_health_check_enabled
 IF_ALERT_CHECK_INTERVAL = settings.if_alert_check_interval
+IF_ALERT_WEBHOOK_URL = settings.if_alert_webhook_url
 # P13: 磁盘日志
 IF_LOG_DIR = settings.if_log_dir
 IF_LOG_RETENTION_DAYS = settings.if_log_retention_days
@@ -979,6 +995,8 @@ __all__ = [
     "IF_GALLERY_PASSWORD",
     "IF_GALLERY_SIGNING_SECRET",
     "IF_GALLERY_SIGNING_TTL",
+    "IF_USD_PER_CREDIT",
+    "IF_COST_BUDGET_USD",
     "IF_LRU_CACHE_SIZE",
     "IF_LRU_CACHE_TTL",
     "IF_TENSORFEED_CACHE_TTL",
@@ -986,6 +1004,7 @@ __all__ = [
     "IF_HEALTH_CHECK_INTERVAL",
     "IF_HEALTH_CHECK_ENABLED",
     "IF_ALERT_CHECK_INTERVAL",
+    "IF_ALERT_WEBHOOK_URL",
     "IF_LOG_DIR",
     "IF_LOG_RETENTION_DAYS",
     "MOCK_UPSTREAM",
