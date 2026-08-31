@@ -121,6 +121,19 @@ export async function fetchGallery(limit = 20, password?: string): Promise<{ ite
   return res.json();
 }
 
+/** P1-1 画廊签名 URL：站长签发有限期访问链接（管理 Key 鉴权，后端返回带 exp+sig 的 URL）。 */
+export async function signGallery(limit = 20, adminKey?: string): Promise<{ url: string; expires_in: number }> {
+  const q = new URLSearchParams({ limit: String(limit) });
+  const headers: Record<string, string> = {};
+  if (adminKey) headers['Authorization'] = `Bearer ${adminKey}`;
+  const res = await fetch(`${API_BASE}/v1/gallery/sign?${q}`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw { status: res.status, ...(body?.detail ?? body) };
+  }
+  return res.json();
+}
+
 export interface LogEntry {
   ts: number;
   level: string;
@@ -246,6 +259,49 @@ export interface Diagnostics {
 
 export async function fetchDiagnostics(): Promise<Diagnostics> {
   const res = await fetch(`${API_BASE}/v1/diagnostics`);
+  return res.json();
+}
+
+// ── v6.8.0: 成本可视化（M6-F3，对应后端 /v1/cost）──
+export interface CostMonthly {
+  month: string;
+  cost_usd: number;
+  calls: number;
+}
+
+export interface CostByProviderRow {
+  provider: string;
+  calls: number;
+  cost_usd: number;
+  tokens: number;
+  // 图片成本挂 nanobanana 行时追加
+  credits_used?: number;
+  images?: number;
+}
+
+export interface CostByModelRow {
+  provider: string;
+  model: string;
+  cost_usd: number;
+  calls: number;
+}
+
+export interface CostOverview {
+  month_to_date_usd: number;
+  today_usd: number;
+  budget_usd: number;
+  budget_remaining_pct: number;
+  over_budget: boolean;
+  burn_rate_warning: boolean;
+  monthly: CostMonthly[];
+  by_provider: CostByProviderRow[];
+  by_model: CostByModelRow[];
+  image_cost_usd_mtd: number;
+  note?: string;
+}
+
+export async function fetchCost(): Promise<CostOverview> {
+  const res = await fetch(`${API_BASE}/v1/cost`);
   return res.json();
 }
 

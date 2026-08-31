@@ -86,6 +86,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">AI 生态</span>
             <span className="nav-pip" />
           </NavLink>
+          <NavLink to="/costs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
+            <span className="nav-icon">💰</span>
+            <span className="nav-text">成本管理</span>
+            <span className="nav-pip" />
+          </NavLink>
           <NavLink to="/security" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">🛡️</span>
             <span className="nav-text">安全风控</span>
