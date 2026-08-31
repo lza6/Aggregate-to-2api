@@ -180,13 +180,15 @@ class HDownloadTest(unittest.IsolatedAsyncioTestCase):
 class MigrationCompatibilityTest(unittest.TestCase):
     def test_old_schema_reads_after_migration(self):
         """生产旧库没有 image_base64/image_mime 列，迁移后 get/task_to_public 必须正常。"""
-        d = tempfile.mkdtemp(); p = os.path.join(d, "old.db")
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "old.db")
         conn = sqlite3.connect(p)
         conn.execute("""CREATE TABLE requests (
             id TEXT PRIMARY KEY, prompt TEXT, aspect_ratio TEXT, download INTEGER DEFAULT 0,
             status TEXT, image_url TEXT, error TEXT, created_at REAL, started_at REAL,
             finished_at REAL, duration_sec REAL)""")
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         from api.db import task_to_public
         db = DB(p)  # 触发 ALTER 迁移
         tid = uuid.uuid4().hex

@@ -13,8 +13,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
 sys.path.insert(0, BASE_DIR)
 
-import api_server as app_mod
-import uvicorn
+import api_server as app_mod  # noqa: E402 (needs sys.path set above)
+import uvicorn  # noqa: E402 (needs sys.path set above)
 
 app_mod._auto_install()
 config = app_mod._load_config()

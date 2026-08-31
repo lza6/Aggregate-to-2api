@@ -4,7 +4,7 @@ import sys
 import time
 import uuid
 import asyncio
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
 from camoufox import DefaultAddons
@@ -702,7 +702,7 @@ class ClearanceAPIServer:
                             w2, t2, u2, s2, p2, b2 = await _navigate_and_poll(proxy_page, _temp_context, f"proxy:{proxy_str}")
                             if w2:
                                 waf_cookie, title, final_url, http_status, polls = w2, t2, u2, s2, p2
-                                logger.info(f"[AWS-Token] [OK] Proxy berhasil bypass CloudFront block")
+                                logger.info("[AWS-Token] [OK] Proxy berhasil bypass CloudFront block")
                             else:
                                 logger.warning(f"[AWS-Token] Proxy juga gagal. Judul: '{t2}' | blocked: {b2}")
                         finally:
@@ -1128,7 +1128,6 @@ def _auto_install():
                     continue
             print(f"  {'[OK]' if installed else '[WARN] Gagal install'}  {pkg}")
 
-    import shutil
     if not _camoufox_data_exists():
         print("  [NET]  Mengunduh data browser Camoufox...")
         subprocess.check_call([sys.executable, "-m", "camoufox", "fetch"])
@@ -1154,7 +1153,8 @@ def _camoufox_data_exists():
 def _check_xvfb(headless: bool):
     if sys.platform == "win32" or headless:
         return
-    import shutil, subprocess
+    import shutil
+    import subprocess
     if os.environ.get("DISPLAY", ""):
         print("  [OK]  DISPLAY terdeteksi, GUI dapat berjalan")
         return
@@ -1292,7 +1292,7 @@ def _check_port(cfg: dict) -> dict:
             break
         print(f"  [FAIL]  Port {port} sudah digunakan!")
         try:
-            new_port = int(input(f"  [RETRY]  Port pengganti : ").strip())
+            new_port = int(input("  [RETRY]  Port pengganti : ").strip())
             cfg = dict(cfg)
             cfg["port"] = new_port
             if input(f"  [SAVE]  Simpan port {new_port}? [Y/Enter] : ").strip().lower() not in ("n", "no"):

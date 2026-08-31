@@ -8,7 +8,6 @@
 
 运行：python -m unittest scripts.test_retry -v   （在项目根目录）
 """
-import asyncio
 import os
 import tempfile
 import unittest
