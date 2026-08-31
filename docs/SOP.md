@@ -92,27 +92,18 @@ npm run preview                  # 本地预览构建产物
 
 ## 3. 部署流程（本地 + 服务器）
 
-### 3.1 本地构建与同步检查
+### 3.1 本地构建
 
 ```powershell
-# 后端 — 检查 deploy/api 与根 api/ 是否漂移（改代码后必查）
-python scripts/sync_deploy.py check    # exit 1 = 有差异
-python scripts/sync_deploy.py sync     # 把 api/*.py、providers/、static/ 同步到 deploy/api/
-
 # 前端 — 构建 dist（§2）
 cd frontend; npm run build
 ```
 
-> `deploy/api` 是线上部署副本；**必须**保持与根 `api/` 一致（逐文件哈希比对），否则上线版本与本地开发版漂移（M9 风险）。
+> 后端代码经 CI 直接构建为 GHCR 镜像推送（§3.3），本地根 `api/` 与线上 `deploy/api/` 副本机制已于 v6.8.0 废弃，无需再跑 sync_deploy。
 
 ### 3.2 代码上传服务器
 
-方式 A（打包上传，推荐）：
-```bash
-# 本地把 deploy/api + deploy/cf_solver + 其余部署文件上传到 /home/ubuntu/imagefree-api
-# 前端 dist 上传到 /home/ubuntu/imagefree-api/frontend/dist（或独立静态目录）
-rsync -av deploy/ ubuntu@43.165.173.36:/home/ubuntu/imagefree-api/
-```
+方式 A（GHCR 镜像，推荐）：CI 构建并推送镜像后，服务器仅需拉取（见 §3.3）。
 
 方式 B（对照 deploy/README.deploy.md 手动上传 `api/` 目录）。
 
@@ -120,9 +111,13 @@ rsync -av deploy/ ubuntu@43.165.173.36:/home/ubuntu/imagefree-api/
 
 ```bash
 cd /home/ubuntu/imagefree-api
+# 拉取最新 API 镜像（GHCR，CI 已推送）；失败则本地 build 兜底
+sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest 2>/dev/null && \
+  export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
+  { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
 
 # 仅更新 api 服务（最常见）
-sudo docker compose build api && sudo docker compose up -d api
+sudo docker compose up -d api
 
 # 更新 cf_solver（改了 solver 相关才需要）
 sudo docker compose build && sudo docker compose up -d
@@ -316,14 +311,17 @@ sudo docker exec imagefree-api tail -50 /app/data/audit.log
 cd /home/ubuntu/imagefree-api
 # 1. 确认当前版本与可选目标版本
 git log --oneline -10
-# 2. 恢复到上一版本（先保证 deploy/api 与目标一致）
+# 2. 恢复到上一版本（GHCR 镜像回退：CI 推送对应 tag；或本地 build）
 git checkout <上一版本标签>
-# 3. 重建并重启 api 服务
-sudo docker compose build api && sudo docker compose up -d api
+# 3. 重新拉取/重建并重启 api 服务
+sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:<tag> 2>/dev/null && \
+  export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:<tag>" || \
+  sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:<tag> ..
+sudo docker compose up -d api
 # 4. 验证（§3.4 清单）
 ```
 
-**漂移防护**：回滚前务必跑 `python scripts/sync_deploy.py check`，确认根 `api/` 与 `deploy/api/` 一致，避免"回滚到一半"的半新半旧状态。回滚后 `sync` 一次再验证。
+> 镜像部署下源码由 CI 推送，回滚走 GHCR tag；`deploy/api` 副本机制与 sync_deploy 已废弃。
 
 ### 8.2 前端回滚
 
