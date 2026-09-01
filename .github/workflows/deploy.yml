@@ -120,11 +120,11 @@ jobs:
               export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
               { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
 
-            # cfsolver 镜像保险：compose 的 cfsolver 依赖 imagefree-cfsolver:6.8.0，
-            # 若宿主机该镜像被清理而 cfsolver 容器需 recreate（如 git reset 换了 compose），
-            # 会报 'No such image' 导致 compose up 失败。先本地 build 兜底（非 ghcr push）。
-            sudo docker build -f Dockerfile.cfsolver -t imagefree-cfsolver:6.8.0 .. 2>/dev/null || \
-              echo "cfsolver 镜像已存在或 build 失败（跳过，使用现有镜像）"
+            # cfsolver 兜底：若宿主机无 imagefree-cfsolver:6.8.0 镜像（被清理/首次部署），
+            # 本地 build（camoufox fetch 在构建期完成）。build 失败不致命——cfsolver 容器若
+            # 已在运行，下方 compose up 用 --no-deps 不 recreate cfsolver，部署仍可成功。
+            sudo docker image inspect imagefree-cfsolver:6.8.0 >/dev/null 2>&1 || \
+              { echo "cfsolver 镜像缺失，本地 build..."; export DOCKER_BUILDKIT=0; sudo docker build -f Dockerfile.cfsolver -t imagefree-cfsolver:6.8.0 ..; }
 
             # 部署前端 dist 产物
             mkdir -p ../frontend/dist ../landing/dist
@@ -132,9 +132,11 @@ jobs:
             tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # 热重启 API 容器（cfsolver 不动，只重建 api）
+            # 热重启 API 容器。--no-deps：cfsolver 已在运行，不重建/校验它（避免
+            # cfsolver 镜像缺失或 camoufox fetch 慢阻断 api 部署）。cfsolver 故障时
+            # api healthcheck 会反映，可单独排查。
             export DOCKER_BUILDKIT=0
-            sudo docker compose up -d --force-recreate --no-build api
+            sudo docker compose up -d --force-recreate --no-build --no-deps api
 
             # 等待健康
             echo "等待 API 健康..."
