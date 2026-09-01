@@ -9,6 +9,7 @@
 import pytest
 
 
+@pytest.mark.slow
 class TestEngineBenchmark:
     """引擎关键路径基准测试。"""
 
@@ -38,6 +39,7 @@ class TestEngineBenchmark:
 
 
 @pytest.mark.benchmark
+@pytest.mark.slow
 class TestDBBenchmark:
     """DB 操作基准测试。"""
 
@@ -46,16 +48,25 @@ class TestDBBenchmark:
         db = tmp_db
 
         def _create_and_query():
-            import uuid
+            import asyncio, uuid
 
             tid = str(uuid.uuid4())
-            db.create_request(tid, "test prompt", "1:1", False, "txt", "default")
-            return db.get(tid)
+
+            async def _do():
+                await db.create_request(tid, "test prompt", "1:1", False, "txt", "default")
+                return await db.get(tid)
+
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_do())
+            finally:
+                loop.close()
 
         benchmark.pedantic(_create_and_query, rounds=100, iterations=1)
 
 
 @pytest.mark.benchmark
+@pytest.mark.slow
 class TestConfigBenchmark:
     """配置加载基准测试。"""
 
