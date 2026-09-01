@@ -97,7 +97,7 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           source: "frontend-dist.tgz,landing-dist.tgz"
           target: "/tmp/"
-          timeout: 60
+          timeout: "60s"
       - name: SSH 拉新镜像 + 部署 dist + 热重启
         uses: appleboy/ssh-action@v1.0.3
         with:
