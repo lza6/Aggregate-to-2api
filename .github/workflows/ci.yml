@@ -35,7 +35,7 @@ jobs:
       - name: 安装依赖
         run: |
           pip install --no-cache-dir -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout
+          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
         run: |
@@ -109,7 +109,7 @@ jobs:
       - name: 安装依赖
         run: |
           pip install --no-cache-dir -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout
+          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
       - name: 版本一致性断言（失败则 CI 失败）
         run: |
           pytest tests/test_openapi_contract.py::TestFrontendVersionConsistency -v

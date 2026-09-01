@@ -21,7 +21,7 @@ jobs:
       - name: 安装依赖
         run: |
           pip install --no-cache-dir -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout
+          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
       - name: 运行测试
         # pytest-timeout 兜底：单个测试最长 120s，防网络类测试卡死 CI
         run: pytest tests/ -q -m "not integration and not chaos and not slow" --timeout=120 --cov=api --cov-report=term --cov-fail-under=70

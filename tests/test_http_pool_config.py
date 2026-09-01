@@ -60,10 +60,15 @@ class TestTurnstileClientPoolConfig:
 
     @staticmethod
     def _get_pool(client):
-        """从 httpx.AsyncClient 中提取连接池限制。"""
+        """从 httpx.AsyncClient 中提取连接池限制（兼容 httpx 0.28 的 _mounts/transport 差异）。"""
         for _, transport in client._mounts.items():
             if transport is not None:
-                return transport._pool
+                pool = getattr(transport, "_pool", None)
+                if pool is not None:
+                    return pool
+        t = client._transport
+        if t is not None:
+            return getattr(t, "_pool", None)
         return None
 
     @pytest.mark.asyncio
@@ -92,10 +97,15 @@ class TestImagefreeClientPoolConfig:
 
     @staticmethod
     def _get_pool(client):
-        """从 httpx.AsyncClient 中提取连接池限制。"""
+        """从 httpx.AsyncClient 中提取连接池限制（兼容 httpx 0.28 的 _mounts/transport 差异）。"""
         for _, transport in client._mounts.items():
             if transport is not None:
-                return transport._pool
+                pool = getattr(transport, "_pool", None)
+                if pool is not None:
+                    return pool
+        t = client._transport
+        if t is not None:
+            return getattr(t, "_pool", None)
         return None
 
     @pytest.mark.asyncio
