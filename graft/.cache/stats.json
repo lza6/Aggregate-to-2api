@@ -1,17 +1,17 @@
 {
-  "nodeCount": 4107,
-  "edgeCount": 8132,
+  "nodeCount": 4108,
+  "edgeCount": 8139,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 4107,
+  "totalCount": 4108,
   "readyCount": 0,
-  "staleCount": 17,
+  "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-09-01T02:03:08.368Z",
-  "lastFile": "deploy.yml"
+  "syncedAt": "2026-09-01T07:01:27.893Z",
+  "lastFile": "test_email_sources.py"
 }

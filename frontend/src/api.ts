@@ -192,6 +192,10 @@ export interface ProviderSummary {
   credits: number | null;
   error_count: number;
   degraded: boolean;
+  // v6.9.1: 是否需要号池账号（供前端把「不需要账号」提供商排前面、nanobanana 折叠到末尾）
+  needs_account?: boolean;
+  // v6.9.1: 是否每请求需轮换代理（供前端展示能力说明）
+  needs_proxy_per_request?: boolean;
 }
 
 export interface GalleryItem {
@@ -243,6 +247,22 @@ export async function fetchTasks(params?: { limit?: number; offset?: number; sta
 
 export async function fetchProviders(): Promise<{ items: Record<string, ProviderSummary>; count: number }> {
   return apiFetch<{ items: Record<string, ProviderSummary>; count: number }>('/v1/providers');
+}
+
+// v6.9.1: 邮箱池上游源清单（/v1/email-sources），供 Providers 页「邮箱池上游」卡片展示。
+// 与 ProviderCard 同形态：name / base_url(官网) / priority / available / success_count / failure_count / last_error。
+export interface EmailSource {
+  name: string;
+  base_url: string | null;
+  priority: number;
+  available: boolean;
+  success_count: number;
+  failure_count: number;
+  last_error: string | null;
+}
+
+export async function fetchEmailSources(): Promise<{ items: EmailSource[]; count: number }> {
+  return apiFetch<{ items: EmailSource[]; count: number }>('/v1/email-sources');
 }
 
 export async function fetchGallery(limit = 20, password?: string): Promise<{ items: GalleryItem[]; count: number }> {

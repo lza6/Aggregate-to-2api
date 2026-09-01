@@ -162,6 +162,14 @@ export function AccountsPage() {
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  // v6.9.1: nanobanana 号池已停用横幅开关（用户「把这个号池停一下」）。
+  // 默认展开横幅 + 折叠明细（保守做法：保留能力，仅 UI 降级），可用开关恢复查看明细。
+  const [poolPaused, setPoolPaused] = useState<boolean>(() => {
+    try { return localStorage.getItem('imagefreeNanobananaPoolPaused') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('imagefreeNanobananaPoolPaused', poolPaused ? '1' : '0'); } catch { /* ignore */ }
+  }, [poolPaused]);
   const { data, loading, error, reload } = useApi<AccountPoolData>(
     () => fetchAccountPool({ page, pageSize, search: filter }),
     { intervalMs: 10000 },
@@ -219,7 +227,41 @@ export function AccountsPage() {
         </button>
       </div>
 
-      {entries.length === 0 ? (
+      {/* v6.9.1: 号池停用横幅 —— NanoBanana Pro 每日签到暂停，保留后端能力仅 UI 降级 */}
+      <div className={`pool-paused-banner ${poolPaused ? 'is-paused' : ''}`}>
+        <div className="pool-paused-main">
+          <span className="pool-paused-icon">⏸</span>
+          <div className="pool-paused-text">
+            <div className="pool-paused-title">
+              {poolPaused ? '号池自动补号已暂停' : '号池自动补号运行中'}
+            </div>
+            <div className="pool-paused-desc">
+              {poolPaused
+                ? 'NanoBanana Pro 每日签到号池已停用（自动补号/签到会话卡片不展示），后端能力保留，可随时恢复'
+                : '号池已恢复展示，自动补号/签到会话与明细表正常显示'}
+            </div>
+          </div>
+        </div>
+        <button
+          className="tf-btn tf-btn-sm"
+          onClick={() => setPoolPaused(v => !v)}
+          title="切换号池停用状态"
+        >
+          {poolPaused ? '▸ 展开明细' : '▾ 折叠明细（停用号池）'}
+        </button>
+      </div>
+
+      {poolPaused ? (
+        <div className="pool-grid">
+          <div className="pool-disabled-placeholder tf-card">
+            <span className="pool-disabled-icon">⏸</span>
+            <div>
+              <div className="pool-disabled-title">号池管理已停用</div>
+              <div className="pool-disabled-desc">NanoBanana Pro（每日签到）自动补号暂停，达标率/补号速率/签到会话卡片不展示。后端能力保留，可点击上方「展开明细」恢复查看</div>
+            </div>
+          </div>
+        </div>
+      ) : entries.length === 0 ? (
         <Empty text="号池暂未初始化" hint="开启 IF_ACCOUNT_AUTO=1 后将自动开始账号注册与巡检" />
       ) : (
         <div className="pool-grid">
@@ -227,8 +269,8 @@ export function AccountsPage() {
         </div>
       )}
 
-      {/* v6.6.0: 号池补满速率监控（每日新增账号数 + 预计达标天数） */}
-      {data?.growth_stats ? (
+      {/* v6.9.1: 号池停用时隐藏补号速率 / 成本口径 / 签到会话 / 明细表（仅在展开明细时显示） */}
+      {!poolPaused && data?.growth_stats ? (
         <div className="pool-growth-section tf-card">
           <div className="detail-header">
             <div className="detail-title-group">
@@ -271,8 +313,8 @@ export function AccountsPage() {
         </div>
       ) : null}
 
-      {/* v6.6.0: 成本口径聚合（累计消耗出图 + 平均每张成本） */}
-      {data?.cost_summary ? (
+      {/* v6.6.0: 成本口径聚合（累计消耗出图 + 平均每张成本）—— 号池停用时隐藏 */}
+      {(!poolPaused && data?.cost_summary) ? (
         <div className="pool-growth-section tf-card">
           <div className="detail-header">
             <div className="detail-title-group">
@@ -308,8 +350,8 @@ export function AccountsPage() {
         </div>
       ) : null}
 
-      {/* v6.5.0: 最近一次注册会话阶段画像 + 每阶段耗时 */}
-      {data?.live_registration ? (
+      {/* v6.5.0: 最近一次注册会话阶段画像 + 每阶段耗时 —— 号池停用时隐藏 */}
+      {(!poolPaused && data?.live_registration) ? (
         <div className="accounts-detail-section tf-card">
           <div className="detail-header">
             <div className="detail-title-group">
@@ -348,7 +390,8 @@ export function AccountsPage() {
         </div>
       ) : null}
 
-      {/* 账号活跃明细 */}
+      {/* 账号活跃明细 —— 号池停用时整块隐藏（用户「号池停一下」= 不展示补号/签到/明细表） */}
+      {!poolPaused && (
       <div className="accounts-detail-section tf-card">
         <div className="detail-header">
           <div className="detail-title-group">
@@ -482,9 +525,10 @@ export function AccountsPage() {
           </table>
         </div>
       </div>
+      )}
 
-      {/* 分页控件 */}
-        {totalItems > pageSize && (
+      {/* 分页控件 —— 号池停用时隐藏（明细表不展示） */}
+        {!poolPaused && totalItems > pageSize && (
           <div className="pagination-bar">
             <span className="pagination-info">
               共 {totalItems} 条，第 {safePage}/{totalPages} 页
@@ -531,8 +575,8 @@ export function AccountsPage() {
           </div>
         )}
 
-      {/* 临时邮箱池分配统计 */}
-      {data?.email_pool && (
+      {/* 临时邮箱池分配统计 —— 号池停用时隐藏（nanobanana 专属卡片不展示） */}
+      {!poolPaused && data?.email_pool && (
         <div className="email-pool-section tf-card">
           <div className="email-pool-header">
             <h3 className="email-pool-title">📮 临时邮箱池分配统计</h3>
@@ -859,6 +903,74 @@ export function AccountsPage() {
           background: var(--bg-subtle);
           border-radius: var(--radius-md);
           color: var(--text-primary);
+        }
+
+        .pool-paused-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 18px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border-default);
+          background: var(--bg-subtle);
+          flex-wrap: wrap;
+        }
+
+        .pool-paused-banner.is-paused {
+          border-color: var(--warning);
+          background: var(--warning-bg, var(--bg-subtle));
+        }
+
+        .pool-paused-main {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .pool-paused-icon {
+          font-size: 22px;
+          color: var(--warning);
+        }
+
+        .pool-paused-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .pool-paused-desc {
+          font-size: 12px;
+          color: var(--text-muted);
+          margin-top: 2px;
+        }
+
+        .pool-disabled-placeholder {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 28px 24px;
+          border: 1px dashed var(--warning);
+          background: var(--bg-subtle);
+          grid-column: 1 / -1;
+        }
+
+        .pool-disabled-icon {
+          font-size: 32px;
+          color: var(--text-muted);
+        }
+
+        .pool-disabled-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .pool-disabled-desc {
+          font-size: 12.5px;
+          color: var(--text-muted);
+          margin-top: 4px;
+          max-width: 540px;
         }
 
         @media (max-width: 768px) {

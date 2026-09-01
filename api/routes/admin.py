@@ -546,6 +546,52 @@ async def get_proxy_pool(page: int = Query(1, ge=1), page_size: int = Query(20, 
     return proxy_pool.snapshot(page=page, page_size=page_size)
 
 
+# 邮箱池上游源官网映射：仅含独立官网的源；custom-imap（自建 IMAP）无官网 → base_url 为 null。
+# temp-mail / temp-mail.io / temp.tf 源类无 BASE 常量（用 API 字段存接口域名），此处补官网推测。
+_EMAIL_SOURCE_HOME_URLS: dict[str, str] = {
+    "linshi-email": "https://www.linshi-email.com",
+    "mail.tm": "https://mail.tm",
+    "mail.gw": "https://mail.gw",
+    "guerrillamail": "https://www.guerrillamail.com",
+    "22.do": "https://22.do",
+    "temp-mail": "https://temp-mail.org",
+    "temp-mail.io": "https://temp-mail.io",
+    "temp.tf": "https://temp.tf",
+}
+
+
+@router.get("/v1/email-sources")
+async def email_sources():
+    """邮箱池上游源清单（只读）：名称/官网/优先级/可用性/成败计数/最近错误。
+
+    供 Providers 页「邮箱池上游」卡片展示，与 ProviderCard 同形态。
+    custom-imap 无独立官网（自建 IMAP），base_url 返回 null。
+    纯只读端点，不触碰邮箱池业务逻辑。
+    """
+    from ..email_pool import email_pool
+
+    sources = email_pool.get_sources()
+    items: list[dict] = []
+    for s in sources:
+        home = _EMAIL_SOURCE_HOME_URLS.get(s.name)
+        if home is None:
+            # 回退：部分源用 BASE/API 常量存接口域名，可作展示兜底（如 mail.tm 的 api.mail.tm）
+            base = getattr(s, "BASE", None) or getattr(s, "API", None)
+            home = base or None
+        items.append(
+            {
+                "name": s.name,
+                "base_url": home,
+                "priority": s.priority,
+                "available": s.is_available(),
+                "success_count": s.success_count,
+                "failure_count": s.failure_count,
+                "last_error": s.last_error,
+            }
+        )
+    return {"items": items, "count": len(items)}
+
+
 @router.get("/v1/proxy-pool/subscribe", include_in_schema=False)
 async def get_proxy_subscription(format: str = Query("base64", description="订阅格式：base64 或 raw")):
     """代理订阅一键生成。"""
