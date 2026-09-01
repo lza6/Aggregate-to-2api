@@ -120,21 +120,15 @@ jobs:
               export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
               { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
 
-            # cfsolver 兜底：若宿主机无 imagefree-cfsolver:6.8.0 镜像（被清理/首次部署），
-            # 本地 build（camoufox fetch 在构建期完成）。build 失败不致命——cfsolver 容器若
-            # 已在运行，下方 compose up 用 --no-deps 不 recreate cfsolver，部署仍可成功。
-            sudo docker image inspect imagefree-cfsolver:6.8.0 >/dev/null 2>&1 || \
-              { echo "cfsolver 镜像缺失，本地 build..."; export DOCKER_BUILDKIT=0; sudo docker build -f Dockerfile.cfsolver -t imagefree-cfsolver:6.8.0 ..; }
-
             # 部署前端 dist 产物
             mkdir -p ../frontend/dist ../landing/dist
             tar -xzf /tmp/frontend-dist.tgz -C ../frontend/dist
             tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # 热重启 API 容器。--no-deps：cfsolver 已在运行，不重建/校验它（避免
-            # cfsolver 镜像缺失或 camoufox fetch 慢阻断 api 部署）。cfsolver 故障时
-            # api healthcheck 会反映，可单独排查。
+            # 热重启 API 容器。--no-deps：cfsolver 已在运行，完全不碰它（不 recreate、
+            # 不校验镜像、不 build）。cfsolver 镜像即便被宿主机清理也不阻断 api 部署
+            # （容器仍持有旧 image id 运行；真要重建 cfsolver 需手动 git clone 后 build）。
             export DOCKER_BUILDKIT=0
             sudo docker compose up -d --force-recreate --no-build --no-deps api
 
