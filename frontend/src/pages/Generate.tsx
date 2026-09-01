@@ -142,8 +142,9 @@ export function GeneratePage() {
       }).finally(close);
     });
     es.onerror = () => {
-      // 网络断连或服务端在终态后关流（服务端不回 self-close，可能留在 15s 心跳）——
-      // 主动查一次任务：已终态则收尾，未终态则转轮询兜底。
+      // P2-2: SSE 断线显式提示（网络抖动/服务端关流），并主动查一次任务状态：
+      // 已终态则收尾，未终态则转轮询兜底（保持既有能力）。
+      notify('任务事件流已断开，正在恢复…', 'info');
       void fetchTask(taskId).then((t) => {
         clearPoll();
         if (t.status === 'completed' || t.status === 'error') {
@@ -152,6 +153,7 @@ export function GeneratePage() {
           close();
         } else {
           // 未终态：回退轮询（startPoll 内部会 clearPoll）
+          notify('已切换为轮询查询任务进度', 'info');
           startPoll(taskId, false);
         }
       }).catch(() => { close(); });
