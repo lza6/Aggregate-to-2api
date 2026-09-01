@@ -115,12 +115,17 @@ class RequestContextMiddleware:
         )
         token = request_context_var.set(ctx)
         try:
-            # 包装 send 以注入 X-Request-ID 响应头
+            # 包装 send 以注入 X-Request-ID / X-Trace-ID 响应头（P3-2 链路级 TraceId 透传）
             async def send_with_request_id(message):
                 if message["type"] == "http.response.start":
                     status = message.get("status", 200)
                     headers = list(message.get("headers", []))
+                    existing = {k.lower() for k, _ in headers}
                     headers.append((b"X-Request-ID", ctx.request_id.encode()))
+                    # X-Trace-ID：透传入口 trace_id（若上游传 X-Trace-ID 则回声，否则回退 request_id）
+                    if b"x-trace-id" not in existing:
+                        trace_val = ctx.effective_trace_id()
+                        headers.append((b"X-Trace-ID", trace_val.encode()))
                     message["headers"] = headers
                     dur = round((time.time() - ctx.start_time) * 1000, 1)
                     path = scope.get("path", "")

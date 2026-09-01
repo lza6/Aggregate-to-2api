@@ -340,6 +340,85 @@ class TestRequestContextMiddleware:
         assert trace_in_handler is None
 
     @pytest.mark.asyncio
+    async def test_response_x_trace_id_echoes_inbound_header(self):
+        """P3-2: 入站带 X-Trace-ID → 响应回声同一 trace_id（链路透传）。"""
+        from api.context import RequestContextMiddleware
+
+        scope = {
+            "type": "http",
+            "client": ("10.0.0.1", 54321),
+            "headers": [(b"x-trace-id", b"inbound-trace-xyz")],
+        }
+        captured: list[tuple[bytes, bytes]] = []
+
+        async def app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                captured.extend(message.get("headers", []))
+
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, send)
+
+        header_map = {k.decode().lower(): v.decode() for k, v in captured}
+        assert header_map["x-trace-id"] == "inbound-trace-xyz"
+        assert "x-request-id" in header_map
+
+    @pytest.mark.asyncio
+    async def test_response_x_trace_id_falls_back_to_request_id(self):
+        """P3-2: 入站无 X-Trace-ID → 响应回退 request_id 作为 X-Trace-ID。"""
+        from api.context import RequestContextMiddleware
+
+        scope = {"type": "http", "client": ("10.0.0.1", 1), "headers": []}
+        captured: list[tuple[bytes, bytes]] = []
+
+        async def app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                captured.extend(message.get("headers", []))
+
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, send)
+
+        header_map = {k.decode().lower(): v.decode() for k, v in captured}
+        # X-Trace-ID 回退 = X-Request-ID（两者都由中间件注入，trace 回退 request_id）
+        assert header_map["x-trace-id"] == header_map["x-request-id"]
+        assert header_map["x-trace-id"]
+
+    @pytest.mark.asyncio
+    async def test_response_x_trace_id_not_duplicated_if_already_present(self):
+        """P3-2: 下游已设 X-Trace-ID 响应头 → 中间件不重复注入。"""
+        from api.context import RequestContextMiddleware
+
+        scope = {
+            "type": "http",
+            "client": ("10.0.0.1", 1),
+            "headers": [(b"x-trace-id", b"upstream-trace")],
+        }
+        captured: list[tuple[bytes, bytes]] = []
+
+        async def app(scope, receive, send):
+            # 下游已自己写了 X-Trace-ID 响应头
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [(b"X-Trace-ID", b"downstream-set")]})
+            await send({"type": "http.response.body", "body": b""})
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                captured.extend(message.get("headers", []))
+
+        middleware = RequestContextMiddleware(app)
+        await middleware(scope, _mock_receive, send)
+
+        trace_vals = [v.decode() for k, v in captured if k.decode().lower() == "x-trace-id"]
+        assert trace_vals == ["downstream-set"]  # 不被覆盖、不重复
+
+    @pytest.mark.asyncio
     async def test_concurrent_requests_isolation(self):
         """并发请求的 context 互不污染。"""
         from api.context import RequestContextMiddleware
