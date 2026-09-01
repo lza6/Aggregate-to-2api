@@ -183,8 +183,14 @@ class NanobananaProvider(Provider):
         """_load_accounts 的 async 入口：P2-3 后 account_pool.get 已 async，直接 await。
 
         委托给 self._load_accounts（测试通过 monkeypatch 该方法注入 mock 号池）。
+        兼容同步 lambda（返回 list）与 async def（返回 coroutine）：用 isawaitable 兜底。
         """
-        return await self._load_accounts()
+        import inspect
+
+        result = self._load_accounts()
+        if inspect.isawaitable(result):
+            result = await result
+        return result
 
     async def _load_accounts(self) -> list[dict]:
         from ..account_pool import account_pool
@@ -205,7 +211,7 @@ class NanobananaProvider(Provider):
         return await self._next_account()
 
     async def _next_account(self) -> dict:
-        self.accounts = await self._load_accounts()
+        self.accounts = await self._async_load_accounts()
         if not self.accounts:
             return {}
         for _ in range(len(self.accounts)):

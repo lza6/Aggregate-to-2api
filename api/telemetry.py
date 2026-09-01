@@ -104,12 +104,13 @@ class TailBasedErrorSampler:
         parent_context,  # noqa: ANN001
         trace_id: int,
         name: str,
+        kind=None,  # noqa: ANN001  OTel SDK 新版第 4 位是 SpanKind（旧版无此位）
         attributes=None,
         links=None,
         trace_state=None,
     ):  # noqa: ANN001
         # 错误请求：带 http.status_code>=500 或 error=true 属性 → 100% 采样
-        if attributes:
+        if attributes and isinstance(attributes, dict):
             status = attributes.get("http.status_code") or attributes.get("http.response.status_code")
             try:
                 if status is not None and int(status) >= 500 and self._error_sample_rate >= 1.0:
@@ -125,7 +126,7 @@ class TailBasedErrorSampler:
         # 正常请求：委托 TraceIdRatioBased（按比例采样）
         if self._ratio is not None:
             return self._ratio.should_sample(
-                parent_context, trace_id, name, attributes or {}, links or [], trace_state
+                parent_context, trace_id, name, kind, attributes or {}, links or [], trace_state
             )
         # 降级：按 sample_rate 概率采样（伪随机 trace_id 低位）
         if self._sample_rate >= 1.0:

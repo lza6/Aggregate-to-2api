@@ -106,5 +106,11 @@ class TestApiKeyQueryMask:
         from api.log_buffer import log_buffer
 
         snapshot = log_buffer.snapshot(200)
-        joined = "\n".join(snapshot)
+        # snapshot 返回 list[dict]（每条日志是 dict），需把 dict 序列化后再拼接扫描
+        import json
+
+        joined = "\n".join(
+            e if isinstance(e, str) else json.dumps(e, ensure_ascii=False, default=str)
+            for e in snapshot
+        )
         assert "sk-secret-leak-test-123" not in joined, "完整 api_key 不应落入访问日志"
