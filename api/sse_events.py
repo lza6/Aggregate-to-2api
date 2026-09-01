@@ -71,6 +71,13 @@ class TaskEventHub:
 
     async def publish(self, task_id: str, event: str, data: dict) -> None:
         """发布事件：写入该任务的历史缓冲 + 推给在订阅的所有队列。"""
+        # P3-2: SSE 指标采集（计数失败静默，不影响主链路）
+        try:
+            from .sse_stats import sse_stats
+
+            sse_stats.record_event(task_id, event)
+        except Exception:
+            pass
         async with self._lock:
             self._seq += 1
             sid = self._seq
@@ -150,6 +157,15 @@ async def task_events_generator(task_id: str, request) -> Any:
     raw = request.headers.get("Last-Event-ID")
     if raw and raw.isdigit():
         last_id = int(raw)
+    # P3-2: 记录补偿回放 + 订阅开始
+    try:
+        from .sse_stats import sse_stats
+
+        if last_id is not None:
+            sse_stats.record_retry(task_id)
+        sse_stats.record_subscription(task_id)
+    except Exception:
+        pass
     for ev in await hub.replay_after(task_id, last_id):
         yield _sse_encode(ev.event, ev.data, ev.id)
 
@@ -159,6 +175,13 @@ async def task_events_generator(task_id: str, request) -> Any:
         yield _sse_encode("ping", {"msg": "connected", "task_id": task_id}, -1)
         while True:
             if await request.is_disconnected():
+                # P3-2: 客户端主动断开 → 记录取消
+                try:
+                    from .sse_stats import sse_stats
+
+                    sse_stats.record_cancellation(task_id)
+                except Exception:
+                    pass
                 break
             try:
                 msg = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)

@@ -132,6 +132,9 @@ class RequestContextMiddleware:
                         try:
                             from .log_buffer import log_buffer
 
+                            # P3-6: 日志脱敏——query string 中 ?api_key=xxx 泄露完整 Key，
+                            # 落入 log_buffer 历史即泄露。这里仅记录 path（不含 query），
+                            # 如需调试可单独显式开启，默认不把 query 写入访问日志。
                             log_msg = f'{client_host} - "{method} {path} HTTP/1.1" {status} ({dur}ms)'
                             record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, log_msg, (), None)
                             log_buffer.emit(record)

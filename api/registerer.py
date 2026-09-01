@@ -551,7 +551,7 @@ class NanobananaRegisterer:
                     provider=self.provider,
                 )
             if r.status_code != 200:
-                await email_pool.async_record(email, self.provider, "error", "signup_fail")
+                await email_pool.record(email, self.provider, "error", "signup_fail")
                 resp_text = str(r.text)[:150]
                 # INVALID_EMAIL → 域名已被上游拉黑，记入 domain_risk，下次分配跳过该域名
                 if "invalid_email" in resp_text.lower() or "invalid email" in resp_text.lower():
@@ -625,7 +625,7 @@ class NanobananaRegisterer:
             # 而非仅 login 响应 cookies。
             cookie = "; ".join(f"{k}={v}" for k, v in self.client.cookies.items())
             if login.status_code == 400 or "__Secure-better-auth.session_token" not in self.client.cookies:
-                await email_pool.async_record(email, self.provider, "error", "login_fail")
+                await email_pool.record(email, self.provider, "error", "login_fail")
                 if login.status_code == 403:
                     self._ensure_client(email, force_rotate=True)
                     cat = RegistrationErrorCategory.IP_BLOCKED
@@ -642,7 +642,7 @@ class NanobananaRegisterer:
 
             session.advance_to(RegistrationStage.LOGGED_IN, session_cookie=cookie, credits=4)
             session_data = _session_data_from_cookies(self.client.cookies)
-            await email_pool.async_record(email, self.provider, "ok", note="no_verify" if not link else "verified")
+            await email_pool.record(email, self.provider, "ok", note="no_verify" if not link else "verified")
             adaptive_backoff.record_success(self.provider)
             session.advance_to(RegistrationStage.COMPLETED)
             log.info(

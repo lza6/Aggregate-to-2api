@@ -180,32 +180,32 @@ class NanobananaProvider(Provider):
             await sniffer.aclose()
 
     async def _async_load_accounts(self) -> list[dict]:
-        """_load_accounts 的 async 包装：to_thread 把同步 account_pool.get 丢入线程池。
+        """_load_accounts 的 async 入口：P2-3 后 account_pool.get 已 async，直接 await。
 
-        委托给 self._load_accounts（测试通过 monkeypatch 该方法注入 mock 号池，
-        to_thread 包装不影响 monkeypatch 语义）。
+        委托给 self._load_accounts（测试通过 monkeypatch 该方法注入 mock 号池）。
         """
-        return await asyncio.to_thread(self._load_accounts)
+        return await self._load_accounts()
 
-    def _load_accounts(self) -> list[dict]:
+    async def _load_accounts(self) -> list[dict]:
         from ..account_pool import account_pool
 
-        accs = account_pool.get("nanobanana")
+        # P2-3: account_pool.get 已 async（aiosqlite），直接 await
+        accs = await account_pool.get("nanobanana")
         # M1(审计修复): 生产进程过滤 mock 残留账号，防测试号泄漏上线
         if not MOCK_REGISTER:
             accs = [a for a in accs if a.get("cookie") != "mock-session" and "mock" not in (a.get("note") or "")]
         return accs
 
     async def _async_next_account(self) -> dict:
-        """_next_account 的 async 包装：号池加载走 to_thread 不阻塞 loop。
+        """_next_account 的 async 入口：号池加载走 await 不阻塞 loop。
 
         委托给 self._next_account（内部 self.accounts / self._acc_idx 突变在
-        线程池单调用内完成，generate 串行调用无并发竞争）。
+        单次 await 调用内完成，generate 串行调用无并发竞争）。
         """
-        return await asyncio.to_thread(self._next_account)
+        return await self._next_account()
 
-    def _next_account(self) -> dict:
-        self.accounts = self._load_accounts()
+    async def _next_account(self) -> dict:
+        self.accounts = await self._load_accounts()
         if not self.accounts:
             return {}
         for _ in range(len(self.accounts)):
@@ -218,8 +218,8 @@ class NanobananaProvider(Provider):
     async def credits(self) -> int | None:
         from ..account_pool import account_pool
 
-        # total_credits 是同步 sqlite3 读 → to_thread 不阻塞 loop（async 路径）
-        return await asyncio.to_thread(account_pool.total_credits, "nanobanana")
+        # P2-3: total_credits 已 async（aiosqlite），直接 await
+        return await account_pool.total_credits("nanobanana")
 
     async def health(self) -> dict:
         """健康摘要：额外暴露 Action Sniffer 缓存/嗅探状态（ISSUE-03）。"""

@@ -97,7 +97,25 @@ def _extract_key(request: Request) -> str:
     header_key = request.headers.get("x-api-key") or ""
     if header_key:
         return header_key.strip()
-    return (request.query_params.get("api_key") or "").strip()
+    # P3-6: ?api_key= query 传 Key 会进 access 日志/referer/浏览器历史，
+    # 属于弱安全通道。仍兼容支持，但记录 warning 提示站长该 Key 易泄露，
+    # 建议迁移到 Authorization/X-API-Key 头传递。Key 本身不打印。
+    query_key = (request.query_params.get("api_key") or "").strip()
+    if query_key:
+        log.warning("请求通过 ?api_key= query 传递 Key（弱安全通道，建议改用 Header）path=%s", request.url.path)
+    return query_key
+
+
+def mask_key(key: str) -> str:
+    """脱敏 Key 供日志/展示：保留前 4 + 后 4，中间 ***。
+
+    用于把可能落入日志的 Key 引用统一脱敏（如审计/调试输出）。
+    """
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return key[:2] + "***"
+    return key[:4] + "***" + key[-4:]
 
 
 def check_api_key(request: Request, *, scope: str = "chat") -> None:

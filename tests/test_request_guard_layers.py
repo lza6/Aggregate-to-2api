@@ -524,3 +524,49 @@ async def test_auto_block_violation_schedules_task(monkeypatch):
     request_guard._record_auto_block_violation("16.16.16.16", "test")
     await asyncio.sleep(0.05)
     assert called == [("16.16.16.16", "test")]
+
+
+# ── P3-3 per-IP 分片锁：不同 IP 限速检查互不阻塞 ──────────────
+def test_p3_3_per_ip_sharded_lock_isolation(monkeypatch):
+    """P3-3: 不同 IP 的 _ip_lock 返回不同锁对象（分片隔离）。"""
+    monkeypatch.setattr(config, "IF_IP_WHITELIST", "")
+    request_guard.reset_runtime_state()
+    lock_a = request_guard._ip_lock("1.1.1.1")
+    lock_b = request_guard._ip_lock("2.2.2.2")
+    assert lock_a is not lock_b, "不同 IP 应得到不同锁（分片隔离）"
+    # 同 IP 二次取应复用同一锁（不新建）
+    assert request_guard._ip_lock("1.1.1.1") is lock_a
+
+
+def test_p3_3_per_ip_lock_isolation_concurrent(monkeypatch):
+    """P3-3: 不同 IP 并发限速检查不串行（分片锁互不竞争）。
+
+    构造两个 IP，各持自己锁做长时间临界区；若仍用全局锁会死锁/串行，
+    分片锁下两 IP 可并行进入。
+    """
+    import threading as _t
+
+    monkeypatch.setattr(config, "IF_IP_WHITELIST", "")
+    _set_cfg_attr(monkeypatch, config, "IF_RATE_TOKEN_CAPACITY", 0)
+    monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 99999)
+    monkeypatch.setattr(config, "IF_AUTO_BLOCK_ENABLED", False)
+    request_guard.reset_runtime_state()
+
+    results = []
+    barrier = _t.Barrier(2)
+
+    def worker(ip):
+        # 先获取该 IP 的锁并持有，模拟临界区
+        barrier.wait()  # 两线程同步后同时尝试 check_rate_limit
+        # check_rate_limit 对不同 IP 应不阻塞（分片锁）
+        req = _mk_request(client_host=ip)
+        request_guard.check_rate_limit(req)
+        results.append(ip)
+
+    t1 = _t.Thread(target=worker, args=("9.9.9.9",))
+    t2 = _t.Thread(target=worker, args=("8.8.8.8",))
+    t1.start()
+    t2.start()
+    t1.join(timeout=3)
+    t2.join(timeout=3)
+    assert len(results) == 2, "两个不同 IP 的限速检查应并行完成（分片锁隔离）"

@@ -29,12 +29,11 @@ import json
 import logging
 import os
 import random
-import sqlite3
 import string
-import threading
 import time
 from dataclasses import dataclass, field
 
+import aiosqlite
 import httpx
 
 from . import config
@@ -1033,27 +1032,55 @@ class EmailPool:
                 TempMailIoSource(),
                 TempTfSource(),
             ]
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        # 极限性能调优参数（v5.2）：与主库一致的写读无锁并发 + 内存缓存
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.execute("PRAGMA busy_timeout=10000")
-        self._conn.execute("PRAGMA cache_size=-64000")  # 64MB
-        self._conn.execute("PRAGMA mmap_size=268435456")  # 256MB
-        self._conn.execute("PRAGMA temp_store=MEMORY")
-        # 保留 threading.Lock（非 asyncio.Lock）：临界区含同步 sqlite3 I/O（self._conn.execute/
-        # commit），但 record/_init_schema 被 registerer.register_one（async）→ email_pool.record
-        # （同步 sqlite3+threading.Lock，阻塞事件循环）直接调用。换 asyncio.Lock 无法解决根因
-        # （sqlite3 I/O 仍同步阻塞 loop），且会把所有调用处 with→async with 传染。真正的修复是
-        # 把 sqlite3 迁移到 aiosqlite（P1 专项，留批次2），本轮仅加注释标记反模式，不换锁。
-        self._lock = threading.Lock()
-        self._init_schema()
-        self._used: set[str] = self._load_used()
+        # P2-3（v7.2.0）：sqlite3 + threading.Lock → aiosqlite + asyncio.Lock，
+        # 与 db/core.py / account_pool.py 一致，消除 async 路径（registerer.register_one）
+        # 直接触发同步 sqlite3 I/O 阻塞事件循环的隐患。连接在 _ensure_conn 惰性创建。
+        self._db_path = db_path
+        self._conn: aiosqlite.Connection | None = None
+        self._lock = asyncio.Lock()
+        self._initialized = False
+        self._pool_loop: asyncio.AbstractEventLoop | None = None
+        self._used: set[str] = set()
 
-    def _init_schema(self) -> None:
-        with self._lock:
-            self._conn.executescript("""
+    async def _ensure_conn(self) -> aiosqlite.Connection:
+        """惰性创建/复用 aiosqlite 连接，绑定当前 loop（跨 loop 重建）。"""
+        cur_loop = asyncio.get_running_loop()
+        if self._conn is not None and self._pool_loop is cur_loop and not self._conn._connection:
+            self._conn = None
+            self._initialized = False
+        if self._conn is None or self._pool_loop is not cur_loop:
+            if self._pool_loop is not None and self._pool_loop is not cur_loop:
+                await self._close_conn_safe()
+            conn = await aiosqlite.connect(self._db_path, timeout=10, isolation_level=None)
+            conn.row_factory = aiosqlite.Row
+            await conn.execute("PRAGMA journal_mode=WAL")
+            await conn.execute("PRAGMA synchronous=NORMAL")
+            await conn.execute("PRAGMA busy_timeout=10000")
+            await conn.execute("PRAGMA cache_size=-64000")  # 64MB
+            await conn.execute("PRAGMA mmap_size=268435456")  # 256MB
+            await conn.execute("PRAGMA temp_store=MEMORY")
+            self._conn = conn
+            self._pool_loop = cur_loop
+            if not self._initialized:
+                await self._init_schema(conn)
+                self._used = await self._load_used(conn)
+                self._initialized = True
+        return self._conn
+
+    async def _close_conn_safe(self) -> None:
+        """安全关闭旧连接（loop 已死或漂移时）。"""
+        if self._conn is None:
+            return
+        try:
+            await self._conn.close()
+        except Exception:
+            pass
+        self._conn = None
+        self._initialized = False
+
+    async def _init_schema(self, conn: aiosqlite.Connection) -> None:
+        async with self._lock:
+            await conn.executescript("""
             CREATE TABLE IF NOT EXISTS email_registry (
                 email       TEXT PRIMARY KEY,
                 provider    TEXT NOT NULL,
@@ -1071,10 +1098,11 @@ class EmailPool:
                 last_updated REAL
             );
             """)
-            self._conn.commit()
+            await conn.commit()
 
-    def _load_used(self) -> set[str]:
-        rows = self._conn.execute("SELECT email FROM email_registry").fetchall()
+    async def _load_used(self, conn: aiosqlite.Connection) -> set[str]:
+        cur = await conn.execute("SELECT email FROM email_registry")
+        rows = await cur.fetchall()
         return {r["email"] for r in rows}
 
     def _find_source(self, name: str) -> BaseMailSource | None:
@@ -1084,12 +1112,15 @@ class EmailPool:
                 return src
         return None
 
-    def risky_domains(self, min_fails: int = 3) -> set[str]:
+    async def risky_domains(self, min_fails: int = 3) -> set[str]:
         """返回失败次数 >= min_fails 的拉黑域名集合（供 allocate 过滤）。"""
-        rows = self._conn.execute(
-            "SELECT domain FROM domain_risk WHERE fail_count >= ? AND status = 'risky'",
-            (min_fails,),
-        ).fetchall()
+        conn = await self._ensure_conn()
+        async with self._lock:
+            cur = await conn.execute(
+                "SELECT domain FROM domain_risk WHERE fail_count >= ? AND status = 'risky'",
+                (min_fails,),
+            )
+            rows = await cur.fetchall()
         return {r["domain"] for r in rows}
 
     def get_sources(self) -> list[BaseMailSource]:
@@ -1108,8 +1139,8 @@ class EmailPool:
 
         支持指定源（prefer_source）及按评分+退避状态动态轮换。
 
-        allocate 本身已是 async（内部 await src.new_address），唯一同步 sqlite3
-        I/O 是 risky_domains() 查询——已用 asyncio.to_thread 包装，不阻塞事件循环。
+        allocate 本身已是 async（内部 await src.new_address）；P2-3 后 risky_domains
+        也已 async，直接 await（aiosqlite 内部线程池处理 I/O，不阻塞 loop）。
         """
         # 1) 指定特定邮箱源
         if prefer_source:
@@ -1136,7 +1167,7 @@ class EmailPool:
             active_sources = [s for s in candidate_sources if s.priority > 0] or self._sources
 
         errors: list[str] = []
-        risky = await asyncio.to_thread(self.risky_domains)  # 已被上游拉黑的域名（连续失败 >=3）
+        risky = await self.risky_domains()  # 已被上游拉黑的域名（连续失败 >=3）
         for _ in range(15):
             src = active_sources[_ % len(active_sources)]
             try:
@@ -1205,9 +1236,11 @@ class EmailPool:
         return None
 
     # ── 记录与风控 ──────────────────────────────────
-    def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None:
-        with self._lock:
-            self._conn.execute(
+    async def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None:
+        """记录邮箱注册结果 + 域名风控（P2-3 后 async + aiosqlite）。"""
+        conn = await self._ensure_conn()
+        async with self._lock:
+            await conn.execute(
                 "INSERT OR REPLACE INTO email_registry (email, provider, registered_at, status, note)"
                 " VALUES (?, ?, ?, ?, ?)",
                 (email, provider, time.time(), status, note),
@@ -1215,7 +1248,7 @@ class EmailPool:
             domain = email.split("@")[-1] if "@" in email else ""
             if domain:
                 if status == "ok":
-                    self._conn.execute(
+                    await conn.execute(
                         """INSERT INTO domain_risk (domain, success_count, last_updated)
                            VALUES (?, 1, ?)
                            ON CONFLICT(domain) DO UPDATE SET
@@ -1224,7 +1257,7 @@ class EmailPool:
                         (domain, time.time()),
                     )
                 else:
-                    self._conn.execute(
+                    await conn.execute(
                         """INSERT INTO domain_risk (domain, fail_count, status, last_updated)
                            VALUES (?, 1, 'risky', ?)
                            ON CONFLICT(domain) DO UPDATE SET
@@ -1232,28 +1265,30 @@ class EmailPool:
                            last_updated = excluded.last_updated""",
                         (domain, time.time()),
                     )
-            self._conn.commit()
+            await conn.commit()
 
     async def async_record(
         self, email: str, provider: str, status: str = "ok", note: str = ""
     ) -> None:
-        """record 的 async 包装：to_thread 把同步 sqlite3 写丢入线程池，不阻塞事件循环。
+        """record 的 async 兼容别名（P2-3 后 record 已 async，直接 await）。"""
+        await self.record(email, provider, status, note)
 
-        供 async 路径（registerer.register_one）调用——原 email_pool.record 同步
-        sqlite3 + threading.Lock 直接在 async 链路里阻塞 loop。
-        """
-        return await asyncio.to_thread(self.record, email, provider, status, note)
-
-    def registered_providers(self, email: str) -> list[str]:
-        rows = self._conn.execute("SELECT provider FROM email_registry WHERE email=?", (email,)).fetchall()
+    async def registered_providers(self, email: str) -> list[str]:
+        conn = await self._ensure_conn()
+        async with self._lock:
+            cur = await conn.execute("SELECT provider FROM email_registry WHERE email=?", (email,))
+            rows = await cur.fetchall()
         return [r["provider"] for r in rows]
 
-    def stats(self) -> dict:
-        total = self._conn.execute("SELECT COUNT(*) FROM email_registry").fetchone()[0]
-        by_provider = dict(
-            self._conn.execute("SELECT provider, COUNT(*) FROM email_registry GROUP BY provider").fetchall()
-        )
-        by_status = dict(self._conn.execute("SELECT status, COUNT(*) FROM email_registry GROUP BY status").fetchall())
+    async def stats(self) -> dict:
+        conn = await self._ensure_conn()
+        async with self._lock:
+            cur = await conn.execute("SELECT COUNT(*) FROM email_registry")
+            total = (await cur.fetchone())[0]
+            cur = await conn.execute("SELECT provider, COUNT(*) FROM email_registry GROUP BY provider")
+            by_provider = dict(await cur.fetchall())
+            cur = await conn.execute("SELECT status, COUNT(*) FROM email_registry GROUP BY status")
+            by_status = dict(await cur.fetchall())
         sources_status = [
             {
                 "name": s.name,

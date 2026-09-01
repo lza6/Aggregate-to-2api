@@ -194,7 +194,6 @@ async def test_single_worker_hard_timeout_does_not_overwrite_completed(tmp_db, m
     except asyncio.TimeoutError。修复前该分支无条件 mark_finished("error") 覆盖 + 抹 image_url；
     修复后先 db.get 查终态，已是 completed 则不覆盖（image_url 保留）。
     """
-    from api.config import TASK_HARD_TIMEOUT
 
     monkeypatch.setattr(config, "TASK_HARD_TIMEOUT", 0.05)
     monkeypatch.setattr(config, "WORKERS", 1)

@@ -1,9 +1,10 @@
 <script setup>
 // vite define 全局注入（landing/vite.config.js build-time 注入）
 const appVersion = __APP_VERSION__
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useStats, useMeta, useProviders, useModels, useChatUsage } from './composables/useApi'
 import { fmtTokens, fmtInt, fmtFloat, fmtPct, orDash } from './lib/fmt'
+import { t, locale, setLocale, toggle } from './composables/useI18n'
 import SectionStatus from './components/SectionStatus.vue'
 import SectionProviders from './components/SectionProviders.vue'
 import SectionUsage from './components/SectionUsage.vue'
@@ -11,6 +12,7 @@ import SectionCode from './components/SectionCode.vue'
 import SectionFaq from './components/SectionFaq.vue'
 import SectionChangelog from './components/SectionChangelog.vue'
 import SectionCta from './components/SectionCta.vue'
+import Privacy from './components/Privacy.vue'
 
 const status = useStats()
 const meta = useMeta()
@@ -19,6 +21,13 @@ const models = useModels()
 const usage = useChatUsage()
 
 const stats = computed(() => status.data.value ?? {})
+
+// P3-7 hash 路由：#/privacy → 隐私页，其余 → 首页
+const route = ref(typeof window !== 'undefined' ? window.location.hash : '')
+function onHash() { route.value = window.location.hash }
+onMounted(() => window.addEventListener('hashchange', onHash))
+onBeforeUnmount(() => window.removeEventListener('hashchange', onHash))
+const isPrivacy = computed(() => route.value.startsWith('#/privacy'))
 
 // 由 /v1/stats 加工出的「实时状态胶囊」数字
 const statChips = computed(() => {
@@ -31,15 +40,15 @@ const statChips = computed(() => {
         ? (solver.solve_success_total / solver.solve_total) * 100
         : null)
   return [
-    { label: '总请求', value: fmtInt(s.total_requests), sub: '', tone: 'text' },
-    { label: '总出图', value: fmtInt(s.total_images), sub: '', tone: 'ok' },
-    { label: '失败', value: fmtInt(s.total_errors), sub: '', tone: 'warn' },
-    { label: '平均出图耗时', value: s.avg_duration_sec != null ? fmtFloat(s.avg_duration_sec, 1) + 's' : '—', sub: '', tone: 'text' },
-    { label: '当前并发', value: fmtInt(s.processing), sub: s.queue_capacity != null ? `队列 ${s.queue_capacity}` : '', tone: 'text' },
-    { label: 'Worker', value: fmtInt(s.workers), sub: '', tone: 'text' },
+    { label: t('chip.total_requests'), value: fmtInt(s.total_requests), sub: '', tone: 'text' },
+    { label: t('chip.total_images'), value: fmtInt(s.total_images), sub: '', tone: 'ok' },
+    { label: t('chip.total_errors'), value: fmtInt(s.total_errors), sub: '', tone: 'warn' },
+    { label: t('chip.avg_duration'), value: s.avg_duration_sec != null ? fmtFloat(s.avg_duration_sec, 1) + 's' : '—', sub: '', tone: 'text' },
+    { label: t('chip.processing'), value: fmtInt(s.processing), sub: s.queue_capacity != null ? `${t('chip.queue')} ${s.queue_capacity}` : '', tone: 'text' },
+    { label: t('chip.workers'), value: fmtInt(s.workers), sub: '', tone: 'text' },
     {
-      label: 'CF 求解',
-      value: cfOk ? '正常' : (solver.status ? orDash(solver.status) : '—'),
+      label: t('chip.cf_solver'),
+      value: cfOk ? (locale.value === 'en' ? 'OK' : '正常') : (solver.status ? orDash(solver.status) : '—'),
       sub: cfRate != null ? `${fmtPct(cfRate)}` : '',
       tone: cfOk ? 'ok' : (solver.status ? 'warn' : 'muted'),
       dot: cfOk ? 'ok' : (solver.status ? 'warn' : 'muted')
@@ -54,6 +63,9 @@ const modelList = computed(() => {
   if (!m || !Array.isArray(m.data)) return []
   return m.data
 })
+
+function goPrivacy() { window.location.hash = '#/privacy' }
+function goHome() { window.location.hash = '' }
 </script>
 
 <template>
@@ -66,26 +78,31 @@ const modelList = computed(() => {
         <div class="brand">
           <span class="logo" aria-hidden="true">听</span>
           <div class="brand-text">
-            <div class="brand-name">听风AI <span class="brand-tag">逆向号池</span></div>
-            <div class="brand-sub">多提供商 AI 生成网关 · 高并发异步队列</div>
+            <div class="brand-name">听风AI <span class="brand-tag">{{ t('hero.badge') }}</span></div>
+            <div class="brand-sub">{{ t('hero.sub') }}</div>
           </div>
         </div>
         <nav class="nav-actions">
-          <a class="btn btn-ghost" href="/docs" target="_blank" rel="noopener">API 文档</a>
-          <a class="btn btn-primary" href="/admin">进入管理台 <span aria-hidden="true">→</span></a>
+          <button class="btn btn-ghost lang-btn" @click="toggle" :aria-label="locale === 'zh' ? 'Switch to English' : '切换到中文'">{{ t('nav.lang') }}</button>
+          <a v-if="!isPrivacy" class="btn btn-ghost" href="/docs" target="_blank" rel="noopener">{{ t('nav.docs') }}</a>
+          <a v-if="!isPrivacy" class="btn btn-primary" href="/admin">{{ t('nav.admin') }} <span aria-hidden="true">→</span></a>
+          <a v-else class="btn btn-primary" href="/" @click.prevent="goHome">{{ t('privacy.back') }}</a>
         </nav>
       </div>
     </header>
 
-    <!-- Hero -->
-    <main class="main container">
+    <!-- 隐私声明页（hash 路由 #/privacy） -->
+    <Privacy v-if="isPrivacy" />
+
+    <!-- 首页 -->
+    <main v-else class="main container">
       <section class="hero">
         <div class="hero-badge">
           <span class="dot ok"></span>
-          <span>自动逆向 · 号池 / 邮箱池 / 代理池 · 自动过 Cloudflare Turnstile</span>
+          <span>{{ t('hero.badge') }}</span>
         </div>
-        <h1>多提供商 AI 生成网关</h1>
-        <p class="hero-sub">自动逆向 · 号池 / 邮箱池 / 代理池 · 高并发异步队列 · 自动过 Cloudflare Turnstile</p>
+        <h1>{{ t('hero.title') }}</h1>
+        <p class="hero-sub">{{ t('hero.sub') }}</p>
 
         <SectionStatus :stats="stats" :chips="statChips" :meta="metaInfo" :loading="status.loading.value" :error="status.error.value" />
       </section>
@@ -116,13 +133,15 @@ const modelList = computed(() => {
 
     <footer class="footer container">
       <div class="footer-inner">
-        <span>负责人：听风</span>
+        <span>{{ t('footer.owner') }}</span>
         <span class="sep">·</span>
         <a href="https://github.com/lza6/" target="_blank" rel="noopener">GitHub github.com/lza6</a>
         <span class="sep">·</span>
-        <a href="/v1/slow/view" target="_blank" rel="noopener">慢请求看板</a>
+        <a href="#" @click.prevent="goPrivacy">{{ t('nav.privacy') }}</a>
         <span class="sep">·</span>
-        <a href="/v1/honor" target="_blank" rel="noopener">请我喝咖啡</a>
+        <a href="/v1/slow/view" target="_blank" rel="noopener">{{ t('footer.slow') }}</a>
+        <span class="sep">·</span>
+        <a href="/v1/honor" target="_blank" rel="noopener">{{ t('footer.coffee') }}</a>
         <span class="sep">·</span>
         <span class="muted-2">v{{ appVersion }}</span>
       </div>
@@ -230,6 +249,7 @@ const modelList = computed(() => {
   color: var(--text);
   background: var(--brand-soft);
 }
+.lang-btn { cursor: pointer; font-family: var(--mono); min-width: 44px; }
 
 /* Hero */
 .main {

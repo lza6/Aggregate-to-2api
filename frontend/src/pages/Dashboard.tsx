@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, getStoredApiKey, fetchAccountPool, notify } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, getStoredApiKey, fetchAccountPool, fetchSseStats, notify } from '../api';
 import { StatCard } from '../components/StatCard';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus, AccountPoolResponse } from '../api';
+import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus, AccountPoolResponse, SseStatsSnapshot } from '../api';
 
 const PWD_KEY = 'galleryPwd';
 
@@ -37,6 +37,8 @@ export function Dashboard() {
   const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(getStoredApiKey() ? { adminKey: getStoredApiKey() } : undefined), { intervalMs: 30000 });
   // v6.6.0: 号池成本口径（累计消耗获取每张平均成本）——供「成本口径」主卡
   const { data: accountPool } = useApi<AccountPoolResponse>(() => fetchAccountPool({ page: 1, pageSize: 1 }), { intervalMs: 30000 });
+  // P3-2: SSE 事件流指标（事件推送量/补偿率/取消率）——需 admin key，无 key 时 401 不报错
+  const { data: sseStats } = useApi<SseStatsSnapshot>(() => fetchSseStats(), { intervalMs: 15000 });
   const [galleryPwd, setGalleryPwd] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -455,11 +457,102 @@ export function Dashboard() {
             </table>
           </div>
         </div>
+
+        {/* P3-2: SSE 事件流指标看板 */}
+        <div className="section-block tf-card">
+          <div className="section-header">
+            <h2 className="section-title">📡 SSE 事件流指标</h2>
+            <span className="section-desc">按任务事件推送量 / 补偿率 / 取消率（每 15s 轮询，需管理 Key）</span>
+          </div>
+          <div className="sse-stats-grid">
+            <div className="sse-stat">
+              <span className="sse-stat-label">事件推送总量</span>
+              <span className="sse-stat-val">{sseStats?.total_events ?? 0}</span>
+            </div>
+            <div className="sse-stat">
+              <span className="sse-stat-label">每任务平均</span>
+              <span className="sse-stat-val">{sseStats?.avg_events_per_task ?? 0}</span>
+            </div>
+            <div className="sse-stat">
+              <span className="sse-stat-label">补偿率（重连 replay）</span>
+              <span className="sse-stat-val">
+                {((sseStats?.compensation_rate ?? 0) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="sse-stat">
+              <span className="sse-stat-label">取消率（客户端断开）</span>
+              <span className="sse-stat-val">
+                {((sseStats?.cancellation_rate ?? 0) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="sse-stat">
+              <span className="sse-stat-label">订阅总数</span>
+              <span className="sse-stat-val">{sseStats?.total_subscriptions ?? 0}</span>
+            </div>
+            <div className="sse-stat">
+              <span className="sse-stat-label">已观测任务数</span>
+              <span className="sse-stat-val">{sseStats?.tasks_seen ?? 0}</span>
+            </div>
+          </div>
+          {sseStats?.events_by_type && Object.keys(sseStats.events_by_type).length > 0 && (
+            <div className="sse-by-type">
+              <span className="sse-by-type-label">按事件类型：</span>
+              {Object.entries(sseStats.events_by_type).map(([ev, cnt]) => (
+                <span key={ev} className="sse-type-chip">
+                  {ev} <b>{cnt}</b>
+                </span>
+              ))}
+            </div>
+          )}
+          {!sseStats && (
+            <div className="sse-empty">📭 暂无 SSE 指标 —— 需配置管理 Key 后加载（/v1/sse/stats 需 admin 鉴权）</div>
+          )}
+        </div>
       </div>
 
       <style>{`
         .chart-fallback { padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
         .gallery-fallback { padding: 32px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
+
+        /* P3-2: SSE 事件流指标看板 */
+        .sse-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+          gap: 12px;
+          margin-top: 14px;
+        }
+        .sse-stat {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 12px 14px;
+          background: var(--surface-2, rgba(0,0,0,0.03));
+          border-radius: 8px;
+          border: 1px solid var(--border, rgba(0,0,0,0.08));
+        }
+        .sse-stat-label { font-size: 11.5px; color: var(--text-muted); }
+        .sse-stat-val { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary, inherit); }
+        .sse-by-type {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          margin-top: 12px;
+          font-size: 12px;
+        }
+        .sse-by-type-label { color: var(--text-muted); }
+        .sse-type-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 10px;
+          border-radius: 12px;
+          background: var(--surface-2, rgba(0,0,0,0.04));
+          color: var(--text-secondary);
+        }
+        .sse-type-chip b { color: var(--text-primary, inherit); font-variant-numeric: tabular-nums; }
+        .sse-empty { padding: 24px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
+
         .dashboard-container {
           display: flex;
           flex-direction: column;

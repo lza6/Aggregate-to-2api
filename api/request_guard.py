@@ -25,15 +25,30 @@ from .errors import AppError, ErrorCodes
 
 log = logging.getLogger("request_guard")
 
-# 保留 threading.Lock（非 asyncio.Lock）：临界区为纯内存 dict/deque 操作（微秒级），
-# asyncio 单线程事件循环无竞争零阻塞；且 check_rate_limit 被同步调用链（routes/generate.
-# _prepare→check_generate_request→check_rate_limit）使用，换 asyncio.Lock 会传染成 async。
-# async 路径阻塞源是 ip_blocklist_store.list_all 的 sqlite3 I/O（见 _sync_blocklist_cache），
-# 该 I/O 已 await，非此锁。真正的 P1 是同步 sqlite3 混入 async（account_pool/email_pool）。
-_lock = threading.Lock()
+# P3-3: per-IP 分片锁（替代全局 _lock 保护 per-IP 滑窗）。
+# 旧设计全局 _lock 每请求持锁，高 RPS 下串行瓶颈；per-IP 分片锁让不同 IP 的限速
+# 检查互不竞争，仅同 IP 并发才串行（同 IP 本就应串行限流）。
+# - _cache_lock: 仅保护 _BLOCKLIST_CACHE + _LAST_CACHE_SYNC（共享状态）
+# - _ip_locks_guard: 仅保护 _ip_locks dict 分配（微秒级）
+# - _ip_locks[ip]: per-IP 独立锁，保护该 IP 的滑窗/令牌桶/违规计数
+# - _record_locks_guard + _record_locks[ip]: per-IP 滑窗记录锁（与令牌桶同 IP 可共用，
+#   但为隔离复杂度单独分片）
+_cache_lock = threading.Lock()
+_ip_locks_guard = threading.Lock()
+_ip_locks: dict[str, threading.Lock] = {}
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
 _DAY_SECONDS = 86400.0
+
+
+def _ip_lock(ip: str) -> threading.Lock:
+    """获取某 IP 专属锁（不存在则创建）。调用方用 `with _ip_lock(ip):` 包裹临界区。"""
+    with _ip_locks_guard:
+        lock = _ip_locks.get(ip)
+        if lock is None:
+            lock = threading.Lock()
+            _ip_locks[ip] = lock
+        return lock
 
 # 常见私网/保留前缀：XFF 段命中这些视为「不可信源」，不作为最终客户端身份
 _PRIVATE_PREFIX_HINTS = (
@@ -165,7 +180,7 @@ def _l1_check(key: str, now: float) -> bool:
     if capacity <= 0:
         return True  # L1 关闭，交由上层滑窗判定
     refill = _l1_refill_per_sec()
-    with _lock:
+    with _ip_lock(key):
         bucket = _l1_token_buckets.setdefault(key, [capacity, now])
         tokens, last = bucket[0], bucket[1]
         if refill > 0 and tokens < capacity:
@@ -219,7 +234,7 @@ def _client_ip(request: Request) -> str:
 # ── 缓存 / 规则管理 ─────────────────────────────────
 def invalidate_ip_cache(ip: str | None = None) -> None:
     global _LAST_CACHE_SYNC
-    with _lock:
+    with _cache_lock:
         if ip:
             _BLOCKLIST_CACHE.pop(ip, None)
         else:
@@ -229,7 +244,7 @@ def invalidate_ip_cache(ip: str | None = None) -> None:
 
 def apply_ip_rule(ip: str, rule: dict | None) -> None:
     """把一条规则立即写入内存高速缓存（封禁毫秒级生效；rule=None 表示移除）。"""
-    with _lock:
+    with _cache_lock:
         if rule is None:
             _BLOCKLIST_CACHE.pop(ip, None)
         else:
@@ -238,11 +253,14 @@ def apply_ip_rule(ip: str, rule: dict | None) -> None:
 
 def reset_runtime_state() -> None:
     global _LAST_CACHE_SYNC
-    with _lock:
+    with _cache_lock:
         _BLOCKLIST_CACHE.clear()
+    with _ip_locks_guard:
+        _ip_locks.clear()
         _ip_daily_records.clear()
         _rate_violations.clear()
         _l1_token_buckets.clear()
+    with _cache_lock:
         _LAST_CACHE_SYNC = 0.0
 
 
@@ -251,7 +269,7 @@ def _get_cached_ip_rule(ip: str) -> dict | None:
     global _LAST_CACHE_SYNC
     now = time.time()
 
-    with _lock:
+    with _cache_lock:
         rule = _BLOCKLIST_CACHE.get(ip)
         if rule:
             expire_at = rule.get("expire_at", 0)
@@ -289,7 +307,7 @@ async def _sync_blocklist_cache() -> None:
             if len(batch) < page_size:
                 break
         now = time.time()
-        with _lock:
+        with _cache_lock:
             _BLOCKLIST_CACHE.clear()
             _BLOCKLIST_CACHE.update(new_cache)
             _LAST_CACHE_SYNC = now
@@ -315,7 +333,7 @@ def _record_auto_block_violation(ip: str, reason: str) -> None:
     now = time.time()
     window = _auto_block_window()
     trigger = False
-    with _lock:
+    with _ip_lock(ip):
         bucket = _rate_violations.setdefault(ip, [])
         bucket[:] = [t for t in bucket if now - t < window]
         bucket.append(now)
@@ -365,7 +383,7 @@ def check_rate_limit(request: Request) -> None:
             raise AppError(ErrorCodes.FORBIDDEN, "该 IP 已被系统安全风控限制访问", 403)
         if b_type == "daily_limit":
             daily_limit = int(rule.get("daily_limit", 1))
-            with _lock:
+            with _ip_lock(key):
                 records = _ip_daily_records.setdefault(key, [])
                 records[:] = [t for t in records if now - t < _DAY_SECONDS]
                 if len(records) >= daily_limit:
@@ -389,20 +407,26 @@ def check_rate_limit(request: Request) -> None:
         return
 
     limited = False
-    with _lock:
+    with _ip_lock(key):
         bucket = _ip_daily_records.setdefault(f"rate:{key}", [])
         bucket[:] = [t for t in bucket if now - t < _WINDOW_SECONDS]
         if len(bucket) >= limit:
             limited = True
         else:
             bucket.append(now)
-        # 清理过期键（统一墙上时钟时间基）
-        if len(_ip_daily_records) > 10000:
-            expired = [
-                k for k, v in _ip_daily_records.items() if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS)
-            ]
-            for k in expired:
-                _ip_daily_records.pop(k, None)
+    # P3-3: 全局过期键清理移出 per-IP 锁（避免每请求扫全表 + 持 per-IP 锁过久）。
+    # 降频清理：仅当总记录数超过 10000 时扫一次全表清过期键，用 _cache_lock 保护跨 IP 操作。
+    if len(_ip_daily_records) > 10000:
+        with _cache_lock:
+            # 二次确认（可能在等锁期间被其他协程清掉）
+            if len(_ip_daily_records) > 10000:
+                expired = [
+                    k
+                    for k, v in _ip_daily_records.items()
+                    if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS)
+                ]
+                for k in expired:
+                    _ip_daily_records.pop(k, None)
 
     if limited:
         _record_auto_block_violation(key, "rate-limit-exceeded")

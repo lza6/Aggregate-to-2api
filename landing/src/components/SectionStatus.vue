@@ -1,6 +1,8 @@
 <script setup>
 // 实时状态胶囊条 —— 从 /v1/stats + /v1/meta 拉取
 // 数字用 tabular-nums（.tnum），单位/小字弱化
+import { t } from '../composables/useI18n'
+
 const props = defineProps({
   chips: { type: Array, default: () => [] },
   meta: { type: Object, default: () => ({}) },
@@ -22,11 +24,11 @@ const toneClass = (tone) => ({
     <div class="status-head">
       <div class="status-title">
         <span class="dot ok"></span>
-        <span>实时状态</span>
-        <span v-if="props.loading && !props.chips.length" class="muted-2">加载中…</span>
+        <span>{{ t('status.title') }}</span>
+        <span v-if="props.loading && !props.chips.length" class="muted-2">{{ t('status.loading') }}</span>
       </div>
       <div v-if="props.error" class="degraded">
-        ⚠ 数据暂不可用
+        {{ t('status.unavailable') }}
       </div>
     </div>
 
@@ -49,7 +51,7 @@ const toneClass = (tone) => ({
     </div>
 
     <div v-if="Object.keys(props.meta).length" class="meta-line degraded">
-      支持画幅：
+      {{ t('status.aspect') }}
       <span v-for="(res, ratio) in props.meta.aspect_ratios" :key="ratio" class="meta-item">{{ ratio }} · {{ res }}</span>
     </div>
   </section>

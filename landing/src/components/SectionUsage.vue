@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { fmtTokens, fmtInt, fmtFloat } from '../lib/fmt'
+import { t } from '../composables/useI18n'
 
 const props = defineProps({
   usage: { type: Object, default: null }, // {total_calls,ok_calls,fail_calls,prompt_tokens,completion_tokens,reasoning_tokens,tool_calls,avg_duration_ms,today_calls,today_tokens,by_model}
@@ -25,34 +26,34 @@ const callRate = computed(() => {
 })
 
 const rows = computed(() => [
-  { label: '调用次数', value: fmtInt(u.value.total_calls), sub: `成功 ${fmtInt(u.value.ok_calls)} / 失败 ${fmtInt(u.value.fail_calls)}` },
-  { label: '输入 tokens', value: fmtTokens(u.value.prompt_tokens), sub: 'prompt' },
-  { label: '输出 tokens', value: fmtTokens(u.value.completion_tokens), sub: 'completion' },
-  { label: '推理 tokens', value: fmtTokens(u.value.reasoning_tokens), sub: 'reasoning' },
-  { label: '平均耗时', value: u.value.avg_duration_ms != null ? fmtFloat(u.value.avg_duration_ms, 0) + 'ms' : '—', sub: '' },
-  { label: '工具调用', value: fmtInt(u.value.tool_calls), sub: '' }
+  { label: t('usage.col_calls'), value: fmtInt(u.value.total_calls), sub: `${t('usage.ok_calls_short')} ${fmtInt(u.value.ok_calls)} / ${t('usage.fail_calls_short')} ${fmtInt(u.value.fail_calls)}` },
+  { label: t('usage.col_prompt'), value: fmtTokens(u.value.prompt_tokens), sub: 'prompt' },
+  { label: t('usage.col_completion'), value: fmtTokens(u.value.completion_tokens), sub: 'completion' },
+  { label: t('usage.col_reasoning'), value: fmtTokens(u.value.reasoning_tokens), sub: 'reasoning' },
+  { label: t('usage.col_duration'), value: u.value.avg_duration_ms != null ? fmtFloat(u.value.avg_duration_ms, 0) + 'ms' : '—', sub: '' },
+  { label: t('usage.col_tools'), value: fmtInt(u.value.tool_calls), sub: '' }
 ])
 </script>
 
 <template>
   <section class="section">
     <div class="section-head">
-      <h2>对话 Token 用量 <span class="unit">24h</span></h2>
+      <h2>{{ t('usage.title') }} <span class="unit">{{ t('usage.unit') }}</span></h2>
       <div class="section-sub muted">
-        <span v-if="props.loading && !props.usage" class="muted-2">加载中…</span>
-        <span v-else-if="props.error" class="degraded">数据暂不可用</span>
-        <span v-else-if="props.usage" class="pill ok">正常</span>
+        <span v-if="props.loading && !props.usage" class="muted-2">{{ t('status.loading') }}</span>
+        <span v-else-if="props.error" class="degraded">{{ t('status.unavailable') }}</span>
+        <span v-else-if="props.usage" class="pill ok">{{ t('usage.normal') }}</span>
       </div>
     </div>
 
     <div class="use-card card">
       <div class="use-main">
-        <div class="use-label">总 Tokens（prompt + completion + reasoning）</div>
+        <div class="use-label">{{ t('usage.total_label') }}</div>
         <div class="use-total tnum">{{ fmtTokens(totalTokens) }}</div>
         <div class="use-meta muted-2">
-          <span v-if="u.today_calls != null">今日 {{ fmtInt(u.today_calls) }} 次</span>
-          <span v-if="u.today_tokens != null">/ {{ fmtTokens(u.today_tokens) }} tokens</span>
-          <span v-if="callRate != null">/ 成功率 {{ fmtFloat(callRate, 1) }}%</span>
+          <span v-if="u.today_calls != null">{{ t('usage.today') }} {{ fmtInt(u.today_calls) }}{{ t('usage.calls') }}</span>
+          <span v-if="u.today_tokens != null">/ {{ fmtTokens(u.today_tokens) }} {{ t('usage.tokens') }}</span>
+          <span v-if="callRate != null">/ {{ t('usage.success_rate') }} {{ fmtFloat(callRate, 1) }}%</span>
         </div>
       </div>
 
@@ -70,7 +71,7 @@ const rows = computed(() => [
     <!-- 分模型 -->
     <div v-if="Array.isArray(u.by_model) && u.by_model.length" class="models-table">
       <div class="table-head">
-        <span>模型</span><span>调用</span><span>输入</span><span>输出</span>
+        <span>{{ t('usage.col_model') }}</span><span>{{ t('usage.col_call') }}</span><span>{{ t('usage.col_input') }}</span><span>{{ t('usage.col_output') }}</span>
       </div>
       <div v-for="m in u.by_model" :key="m.model" class="table-row">
         <code class="t-model">{{ m.model }}</code>
@@ -81,7 +82,7 @@ const rows = computed(() => [
     </div>
 
     <div v-if="!props.usage && props.error" class="use-card card empty">
-      <span>数据暂不可用</span>
+      <span>{{ t('status.unavailable') }}</span>
     </div>
   </section>
 </template>

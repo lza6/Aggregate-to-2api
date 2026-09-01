@@ -6,7 +6,6 @@ slow/routing/metrics/diagnostics/cost。
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
 import inspect
@@ -121,10 +120,9 @@ async def cost_overview():
     image_credits_used = 0
     image_images = 0
     try:
-        # cost_summary 为同步方法；测试 monkeypatch 成 async，故对可等待对象做兼容。
-        # 生产路径用 to_thread 丢线程池（同步 sqlite3 不阻塞事件循环）；测试 monkeypatch 成
-        # async 时不走 to_thread（awaitable 直接 await），保持 test_cost 的兼容分支成立。
-        _raw_cs = await asyncio.to_thread(_account_pool.account_pool.cost_summary, "nanobanana")
+        # P2-3: cost_summary 已 async（aiosqlite），直接 await。test_cost monkeypatch 成 async 时
+        # 同样 await；若 monkeypatch 成同步返回 dict（旧测试），inspect.isawaitable 兜底。
+        _raw_cs = await _account_pool.account_pool.cost_summary("nanobanana")
         cs = await _raw_cs if inspect.isawaitable(_raw_cs) else _raw_cs
         image_credits_used = cs.get("total_credits_used", 0)
         image_images = cs.get("total_images_used", 0)
@@ -197,8 +195,7 @@ async def account_pool_dashboard(
     from ..email_pool import email_pool
     from ..registerer import STAGE_LABELS
 
-    page_data = await asyncio.to_thread(
-        account_pool.list_page,
+    page_data = await account_pool.list_page(
         "nanobanana",
         None,
         page,
@@ -223,8 +220,9 @@ async def account_pool_dashboard(
                 "stage_durations": snap.get("stage_durations"),
             }
     # v6.5.2: 补号速率画像（每天新增账号数 + 预计达标天数）与成本口径聚合
-    growth = await asyncio.to_thread(account_pool.growth_stats, "nanobanana")
-    cost = await asyncio.to_thread(account_pool.cost_summary, "nanobanana")
+    # P2-3: account_pool 方法已 async（aiosqlite），直接 await
+    growth = await account_pool.growth_stats("nanobanana")
+    cost = await account_pool.cost_summary("nanobanana")
     desensitized = []
     now_ts = time.time()
     for item in page_data["items"]:
@@ -253,10 +251,10 @@ async def account_pool_dashboard(
             }
         )
     return {
-        "accounts": await asyncio.to_thread(account_pool.dashboard),
+        "accounts": await account_pool.dashboard(),
         "growth_stats": growth,
         "cost_summary": cost,
-        "email_pool": await asyncio.to_thread(email_pool.stats),
+        "email_pool": await email_pool.stats(),
         "live_registration": live_stage,
         "items": desensitized,
         "items_total": page_data["total"],
@@ -483,14 +481,33 @@ async def metrics():
 
 
 @router.get("/v1/logs")
-async def get_logs(lines: int = Query(50, ge=1, le=200)):
-    """返回最近 N 行日志。"""
+async def get_logs(request: Request, lines: int = Query(50, ge=1, le=200)):
+    """返回最近 N 行日志（P3-6：需管理 Key 鉴权，防止公网匿名扫接口拉取内部日志）。
+
+    向后兼容：若未配置 IF_ADMIN_KEYS 且未配置 IF_API_KEYS 且 IF_ADMIN_KEY_OPEN=1
+    （本地运维开放模式）则放行；配置了任意 Key 则需 admin key。
+    """
+    check_admin_key(request, scope="admin-logs")
     return {"logs": log_buffer_handler.snapshot(lines)}
 
 
 @router.websocket("/v1/logs/ws")
 async def log_websocket(websocket: WebSocket):
-    """WebSocket 实时日志推送。"""
+    """WebSocket 实时日志推送（P3-6：与 /v1/logs 一致需管理 Key 鉴权）。
+
+    通过 query ?api_key= 或子协议头传递 admin key；鉴权失败直接关闭连接（code=4401）。
+    向后兼容：未配置任何 Key 且 IF_ADMIN_KEY_OPEN=1 时放行（本地运维开放模式）。
+    """
+    # 构造伪 Request 以复用 check_admin_key（ws 无 Request 对象）
+    from starlette.requests import Request as StarletteRequest
+
+    scope = websocket.scope
+    fake_request = StarletteRequest(scope, receive=lambda: None, send=lambda _: None)
+    try:
+        check_admin_key(fake_request, scope="admin-logs")
+    except Exception:
+        await websocket.close(code=4401)
+        return
     await register_ws(websocket)
     try:
         while True:
@@ -751,3 +768,16 @@ async def diagnostics():
         },
         "uptime_seconds": snap["uptime_seconds"],
     }
+
+
+@router.get("/v1/sse/stats", include_in_schema=False)
+async def sse_stats(request: Request):
+    """P3-2: SSE 事件流指标看板（只读，需 admin key）。
+
+    返回：事件推送总量、按类型分桶、补偿率（Last-Event-ID 重连 replay）、
+    订阅数、取消率、任务数、每任务平均推送量。
+    """
+    check_admin_key(request, scope="admin-sse")
+    from ..sse_stats import sse_stats as _sse_stats
+
+    return _sse_stats.snapshot()

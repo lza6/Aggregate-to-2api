@@ -92,12 +92,16 @@ def test_async_methods_no_bare_sync_sqlite(rel_path: str):
 # ── 用例 2：运行时行为（不阻塞事件循环）─────────────────────────────
 @pytest.mark.asyncio
 async def test_async_wrappers_keep_loop_responsive(tmp_path):
-    """并发 async 包装下，事件循环仍能调度 sleep(0) 协程（不阻塞证据）。"""
+    """并发 async 包装下，事件循环仍能调度 sleep(0) 协程（不阻塞证据）。
+
+    P2-3 后 account_pool 方法已 async（aiosqlite），_conn 惰性初始化；
+    旧 p.add 同步调用 + p._conn.close 需改为 await + _close_conn_safe。
+    """
     from api.account_pool import AccountPool
 
     p = AccountPool(str(tmp_path / "resp.db"))
     try:
-        p.add("nanobanana", "a@x.com", "cookie", credits=100, status="active")
+        await p.add("nanobanana", "a@x.com", "cookie", credits=100, status="active")
         flag = {"ticked": 0}
 
         async def _tick():
@@ -114,7 +118,7 @@ async def test_async_wrappers_keep_loop_responsive(tmp_path):
         assert flag["ticked"] == 5, "事件循环被同步 sqlite3 阻塞，sleep(0) 无法调度！"
     finally:
         try:
-            p._conn.close()
+            await p._close_conn_safe()
         except Exception:
             pass
 

@@ -48,7 +48,8 @@ class TestDBBenchmark:
         db = tmp_db
 
         def _create_and_query():
-            import asyncio, uuid
+            import asyncio
+            import uuid
 
             tid = str(uuid.uuid4())
 

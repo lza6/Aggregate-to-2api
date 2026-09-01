@@ -258,10 +258,10 @@ class TestEmailPoolStrategy:
         assert addr in pool._used
         assert state["source"] in [s.name for s in pool.get_sources()]
 
-        # 记录到 DB 并验证
-        pool.record(addr, "imagefree", status="ok")
-        assert pool.registered_providers(addr) == ["imagefree"]
-        stats = pool.stats()
+        # 记录到 DB 并验证（P2-3 后 record/registered_providers/stats 已 async）
+        await pool.record(addr, "imagefree", status="ok")
+        assert await pool.registered_providers(addr) == ["imagefree"]
+        stats = await pool.stats()
         assert stats["total_registered"] == 1
         assert stats["by_provider"]["imagefree"] == 1
 
@@ -467,9 +467,13 @@ class TestPoolNewSourcesRegistered:
         assert src_io.score() > src_gw.score()
 
 
-# ── 10. async_record / async_allocate（asyncio.to_thread 不阻塞 loop）──
+# ── 10. async_record / async_allocate（P2-3 后 record 已 async）──
 class TestEmailPoolAsyncWrappers:
-    """async_record / async_allocate：返回值与同步方法一致，且不阻塞 loop。"""
+    """async_record / async_allocate：返回值与同步方法一致，且不阻塞 loop。
+
+    P2-3 后 email_pool.record/registered_providers/stats 均已 async（aiosqlite），
+    async_record 保留为兼容别名（直接 await record）。
+    """
 
     @pytest.fixture
     def pool(self, tmp_path):
@@ -481,19 +485,26 @@ class TestEmailPoolAsyncWrappers:
         # async_record 应与 record 行为一致：写库 + 风控统计
         ret = await pool.async_record("user1@temp.tf", "nanobanana", "ok")
         assert ret is None
-        assert pool.registered_providers("user1@temp.tf") == ["nanobanana"]
-        stats = pool.stats()
+        assert await pool.registered_providers("user1@temp.tf") == ["nanobanana"]
+        stats = await pool.stats()
         assert stats["total_registered"] == 1
         assert stats["by_provider"]["nanobanana"] == 1
         # ok 状态 → domain_risk success_count 累加
-        assert "temp.tf" in {r["domain"] for r in pool._conn.execute("SELECT domain FROM domain_risk").fetchall()}
+        conn = await pool._ensure_conn()
+        async with pool._lock:
+            cur = await conn.execute("SELECT domain FROM domain_risk")
+            rows = await cur.fetchall()
+        assert "temp.tf" in {r["domain"] for r in rows}
 
     @pytest.mark.asyncio
     async def test_async_record_error_increments_fail_count(self, pool):
         await pool.async_record("bad@22.do", "nanobanana", "error", "signup_fail")
-        rows = pool._conn.execute(
-            "SELECT domain, fail_count, status FROM domain_risk WHERE domain=?", ("22.do",)
-        ).fetchall()
+        conn = await pool._ensure_conn()
+        async with pool._lock:
+            cur = await conn.execute(
+                "SELECT domain, fail_count, status FROM domain_risk WHERE domain=?", ("22.do",)
+            )
+            rows = await cur.fetchall()
         assert len(rows) == 1
         assert rows[0]["fail_count"] == 1
         assert rows[0]["status"] == "risky"
@@ -506,7 +517,7 @@ class TestEmailPoolAsyncWrappers:
         a2, _s2 = await pool.allocate("nanobanana")
         assert a1 != a2
         await pool.async_record(a1, "nanobanana", "ok")
-        assert pool.registered_providers(a1) == ["nanobanana"]
+        assert await pool.registered_providers(a1) == ["nanobanana"]
         # 已用邮箱不再分配
         a3, _s3 = await pool.allocate("nanobanana")
         assert a3 not in (a1, a2)
@@ -529,5 +540,5 @@ class TestEmailPoolAsyncWrappers:
 
         await asyncio.gather(_tick(), _work())
         assert flag["ticked"] == 5  # 事件循环未被同步 sqlite3 阻塞
-        stats = pool.stats()
+        stats = await pool.stats()
         assert stats["total_registered"] == 5

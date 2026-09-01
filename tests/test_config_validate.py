@@ -175,7 +175,6 @@ class TestEnvExampleSync:
     @staticmethod
     def _config_consumed() -> set[str]:
         import glob
-        import os
 
         import api.config as cfg
 

@@ -1,17 +1,18 @@
 <script setup>
 // CTA 区 —— 引导进入 /admin 管理台 + Swagger 文档
+import { t } from '../composables/useI18n'
 </script>
 
 <template>
   <section class="cta-section">
     <div class="cta card">
-      <h2>开始使用听风AI 生成网关</h2>
+      <h2>{{ t('cta.title') }}</h2>
       <p class="cta-sub muted">
-        进入管理台管理号池、任务与账单 · 或查看完整 Swagger 接口文档
+        {{ t('cta.sub') }}
       </p>
       <div class="cta-actions">
-        <a class="btn btn-primary btn-lg" href="/admin">进入管理台 <span aria-hidden="true">→</span></a>
-        <a class="btn btn-ghost btn-lg" href="/docs" target="_blank" rel="noopener">查看 Swagger /docs</a>
+        <a class="btn btn-primary btn-lg" href="/admin">{{ t('cta.admin') }} <span aria-hidden="true">→</span></a>
+        <a class="btn btn-ghost btn-lg" href="/docs" target="_blank" rel="noopener">{{ t('cta.swagger') }}</a>
       </div>
     </div>
   </section>

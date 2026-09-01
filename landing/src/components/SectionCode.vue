@@ -1,32 +1,36 @@
 <script setup>
 import { ref } from 'vue'
+import { t } from '../composables/useI18n'
 
 const HOST = 'https://imagefree.tingfengai.art'
 
 // curl 示例：同步/异步生成、聊天、健康检查
-const samples = [
-  {
-    title: '同步生成 /v1/generate',
-    desc: '等待出图，典型 20~45 秒',
-    code: `# 同步生成（等待出图）
+const samples = computed_samples()
+
+function computed_samples() {
+  return [
+    {
+      title: t('code.sync.title'),
+      desc: t('code.sync.desc'),
+      code: `# ${t('code.sync.desc')}
 curl -X POST ${HOST}/v1/generate \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $API_KEY" \\
   -d '{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'`
-  },
-  {
-    title: '异步生成 /v1/generate/async',
-    desc: '立即返回任务 ID，高并发推荐',
-    code: `# 异步生成（立即返回任务 ID）
+    },
+    {
+      title: t('code.async.title'),
+      desc: t('code.async.desc'),
+      code: `# ${t('code.async.desc')}
 curl -X POST ${HOST}/v1/generate/async \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $API_KEY" \\
   -d '{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'`
-  },
-  {
-    title: '聊天 /v1/chat/completions',
-    desc: 'OpenAI 标准协议，流式/非流式',
-    code: `# 聊天（OpenAI 兼容）
+    },
+    {
+      title: t('code.chat.title'),
+      desc: t('code.chat.desc'),
+      code: `# ${t('code.chat.desc')}
 curl -X POST ${HOST}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $API_KEY" \\
@@ -35,21 +39,25 @@ curl -X POST ${HOST}/v1/chat/completions \\
     "messages":[{"role":"user","content":"你好"}],
     "stream":false
   }'`
-  },
-  {
-    title: '健康检查 /v1/healthz',
-    desc: '含实时并发/排队',
-    code: `# 健康检查
+    },
+    {
+      title: t('code.health.title'),
+      desc: t('code.health.desc'),
+      code: `# ${t('code.health.desc')}
 curl ${HOST}/v1/healthz`
-  }
-]
+    }
+  ]
+}
+
+import { computed } from 'vue'
+const samplesReactive = computed(() => computed_samples())
 
 const active = ref(0)
 const copied = ref(false)
 let copyTimer = null
 
 async function copyCode() {
-  const text = samples[active.value].code
+  const text = samplesReactive.value[active.value].code
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text)
@@ -75,16 +83,16 @@ async function copyCode() {
 <template>
   <section class="section code-section">
     <div class="section-head">
-      <h2>API 快速开始</h2>
+      <h2>{{ t('code.title') }}</h2>
       <div class="section-sub muted">
-        写接口需 <code class="inline-code">API Key</code>（聊天 / 生成 / 图生图）· 请合理使用
+        {{ t('code.sub') }} <code class="inline-code">API Key</code>{{ t('code.sub2') }}
       </div>
     </div>
 
     <div class="code-card card">
       <div class="tabs">
         <button
-          v-for="(s, i) in samples"
+          v-for="(s, i) in samplesReactive"
           :key="s.title"
           class="tab"
           :class="{ on: i === active }"
@@ -96,13 +104,13 @@ async function copyCode() {
 
       <div class="code-body">
         <div class="code-head">
-          <span class="code-desc muted-2">{{ samples[active].desc }}</span>
+          <span class="code-desc muted-2">{{ samplesReactive[active].desc }}</span>
           <button class="copy-btn" @click="copyCode">
-            {{ copied ? '已复制 ✓' : '复制' }}
+            {{ copied ? t('code.copied') : t('code.copy') }}
           </button>
         </div>
         <div class="code-box">
-          <pre><code v-pre>{{ samples[active].code }}</code></pre>
+          <pre><code v-pre>{{ samplesReactive[active].code }}</code></pre>
         </div>
       </div>
     </div>

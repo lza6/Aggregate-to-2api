@@ -2,19 +2,21 @@
 // D4: 更新日志区 —— 读 /v1/healthz 实时状态 + 读静态 release notes 摘要
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { usePolling } from '../composables/usePolling'
+import { t, locale } from '../composables/useI18n'
 
 // /v1/healthz —— 实时状态胶囊（status/cf_solver/workers/queue）
 const health = usePolling('/v1/healthz', 15000)
 const healthChips = computed(() => {
   const h = health.data.value ?? {}
   const ok = h.status === 'ok'
+  const cfUp = locale.value === 'en' ? 'online' : '在线'
   return [
-    { label: '服务状态', value: ok ? '正常' : (h.status || '—'), tone: ok ? 'ok' : 'warn' },
-    { label: 'CF 求解', value: h.cf_solver === 'up' ? '在线' : (h.cf_solver || '—'), tone: h.cf_solver === 'up' ? 'ok' : 'warn' },
-    { label: 'Worker', value: h.workers ?? '—', tone: 'text' },
-    { label: '并发', value: h.processing ?? '—', tone: 'text' },
-    { label: '排队', value: h.queued ?? '—', tone: 'text' },
-    { label: 'DB 行数', value: h.db_rows ?? '—', tone: 'text' },
+    { label: t('changelog.service'), value: ok ? (locale.value === 'en' ? 'OK' : '正常') : (h.status || '—'), tone: ok ? 'ok' : 'warn' },
+    { label: t('changelog.cf'), value: h.cf_solver === 'up' ? cfUp : (h.cf_solver || '—'), tone: h.cf_solver === 'up' ? 'ok' : 'warn' },
+    { label: t('changelog.worker'), value: h.workers ?? '—', tone: 'text' },
+    { label: t('changelog.concurrent'), value: h.processing ?? '—', tone: 'text' },
+    { label: t('changelog.queue'), value: h.queued ?? '—', tone: 'text' },
+    { label: t('changelog.dbrows'), value: h.db_rows ?? '—', tone: 'text' },
   ]
 })
 
@@ -40,8 +42,8 @@ function toggle(i) { expanded.value = expanded.value === i ? -1 : i }
 <template>
   <section class="section changelog-section">
     <div class="section-head">
-      <h2>更新日志 · 实时状态</h2>
-      <div class="section-sub muted">读 <code class="inline-code">/v1/healthz</code> 与最近 release notes</div>
+      <h2>{{ t('changelog.title') }}</h2>
+      <div class="section-sub muted">{{ t('changelog.sub') }} <code class="inline-code">/v1/healthz</code> {{ t('changelog.sub2') }}</div>
     </div>
 
     <!-- 实时状态胶囊 -->
@@ -54,8 +56,8 @@ function toggle(i) { expanded.value = expanded.value === i ? -1 : i }
 
     <!-- 更新日志列表 -->
     <div class="notes-list card">
-      <div v-if="notes.length === 0 && !notesError" class="notes-empty muted">加载中…</div>
-      <div v-else-if="notesError" class="notes-empty muted">更新日志暂不可用（{{ notesError }}）</div>
+      <div v-if="notes.length === 0 && !notesError" class="notes-empty muted">{{ t('changelog.loading') }}</div>
+      <div v-else-if="notesError" class="notes-empty muted">{{ t('changelog.fail_prefix') }}{{ notesError }}）</div>
       <div v-else>
         <div v-for="(n, i) in notes" :key="n.version" class="note-item">
           <button class="note-head" @click="toggle(i)" :aria-expanded="expanded === i">
@@ -65,7 +67,7 @@ function toggle(i) { expanded.value = expanded.value === i ? -1 : i }
           </button>
           <div v-if="expanded === i" class="note-body">
             <pre class="note-pre"><code>{{ n.preview }}</code></pre>
-            <a class="note-link" :href="n.url" target="_blank" rel="noopener">查看完整 {{ n.version }} 说明 ↗</a>
+            <a class="note-link" :href="n.url" target="_blank" rel="noopener">{{ t('changelog.full') }} {{ n.version }} {{ t('changelog.notes') }}</a>
           </div>
         </div>
       </div>

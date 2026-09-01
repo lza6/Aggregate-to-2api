@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { orDash } from '../lib/fmt'
+import { t, locale } from '../composables/useI18n'
 
 const props = defineProps({
   providerItems: { type: Object, default: null }, // backend: {items:{<provider>:{display_name,capabilities,model_count,health_status,degraded,error_count}},count}
@@ -54,11 +55,11 @@ function displayName(p) {
 <template>
   <section class="section">
     <div class="section-head">
-      <h2>提供商与模型</h2>
+      <h2>{{ t('providers.title') }}</h2>
       <div class="section-sub muted">
-        <span v-if="props.loading && !providers.length" class="muted-2">加载中…</span>
-        <span v-else-if="props.error" class="degraded">数据暂不可用</span>
-        <span v-else-if="providers.length || modelList.length">实时同步</span>
+        <span v-if="props.loading && !providers.length" class="muted-2">{{ t('status.loading') }}</span>
+        <span v-else-if="props.error" class="degraded">{{ t('status.unavailable') }}</span>
+        <span v-else-if="providers.length || modelList.length">{{ t('providers.sync') }}</span>
       </div>
     </div>
 
@@ -79,8 +80,8 @@ function displayName(p) {
         </div>
 
         <div class="provider-meta muted-2">
-          <span>{{ p.model_count != null ? p.model_count : '—' }} 个模型</span>
-          <span v-if="p.error_count">· {{ p.error_count }} 次错误</span>
+          <span>{{ p.model_count != null ? p.model_count : '—' }}{{ t('providers.models_count') }}</span>
+          <span v-if="p.error_count">· {{ p.error_count }}{{ t('providers.errors') }}</span>
         </div>
 
         <div v-if="Array.isArray(p.capabilities) && p.capabilities.length" class="caps">
@@ -88,17 +89,17 @@ function displayName(p) {
         </div>
 
         <div class="models ov">
-          <span class="models-label muted-2">模型</span>
+          <span class="models-label muted-2">{{ t('providers.models_label') }}</span>
           <template v-if="(modelsByProvider[p.id] || []).length">
             <code v-for="m in modelsByProvider[p.id]" :key="m" class="model-id">#{{ m }}</code>
           </template>
-          <span v-else class="degraded">未返回模型</span>
+          <span v-else class="degraded">{{ t('providers.no_models') }}</span>
         </div>
       </article>
     </div>
 
     <div v-else class="empty card">
-      <span>{{ props.loading ? '加载中…' : (props.error ? '数据暂不可用' : '暂无提供商数据') }}</span>
+      <span>{{ props.loading ? t('status.loading') : (props.error ? t('status.unavailable') : t('providers.empty')) }}</span>
     </div>
   </section>
 </template>

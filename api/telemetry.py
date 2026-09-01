@@ -28,12 +28,27 @@ _FastAPIInstrumentor = None
 _HTTPXClientInstrumentor = None
 _LoggingInstrumentor = None
 _trace = None
+_OTLPSpanExporter = None
+_BatchSpanProcessor = None
+_ConsoleSpanExporter = None
+_TracerProvider = None
+_Resource = None
+_SERVICE_NAME = None
+_SamplingResult = None
+_Decision = None
+_Sampler = None
 try:
     from opentelemetry import trace as _trace
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.resources import Resource, SERVICE_NAME
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+    from opentelemetry.sdk.trace.sampling import (
+        Decision,
+        Sampler,
+        SamplingResult,
+        TraceIdRatioBased,
+    )
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _F
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _H
     from opentelemetry.instrumentation.logging import LoggingInstrumentor as _L
@@ -41,6 +56,15 @@ try:
     _FastAPIInstrumentor = _F
     _HTTPXClientInstrumentor = _H
     _LoggingInstrumentor = _L
+    _OTLPSpanExporter = OTLPSpanExporter
+    _BatchSpanProcessor = BatchSpanProcessor
+    _ConsoleSpanExporter = ConsoleSpanExporter
+    _TracerProvider = TracerProvider
+    _Resource = Resource
+    _SERVICE_NAME = SERVICE_NAME
+    _SamplingResult = SamplingResult
+    _Decision = Decision
+    _Sampler = Sampler
     _OTEL_AVAILABLE = True
 except ImportError:
     pass
@@ -53,6 +77,67 @@ _tracer_provider: object | None = None
 def _bool_env(key: str, default: bool = False) -> bool:
     val = os.getenv(key, "1" if default else "0")
     return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+class TailBasedErrorSampler:
+    """P3-2: tail-based 采样器 —— 错误请求 100% 采样，正常请求按比例采样。
+
+    OTel SDK 的 sampler 在 span **开始时**决策（head-based），无法基于最终结果
+    （HTTP 状态/异常）采样。本 sampler 作为自定义决策点：
+    - 请求带 `http.status_code` 属性 >=500 → RECORD_AND_SAMPLE（100%）
+    - 请求带 `error=true` 属性 → RECORD_AND_SAMPLE（100%）
+    - 其余 → TraceIdRatioBased 委托（默认 10%）
+
+    由于 OTel head-based 限制，真正的 tail-based 采样需 SpanProcessor 层处理；
+    本类提供 head 决策兜底（请求上下文已知 status 时），并配合
+    `ErrorSpanProcessor` 在 span 结束时 drop 正常 span（保留错误 span）。
+    """
+
+    def __init__(self, sample_rate: float, error_sample_rate: float) -> None:
+        self._sample_rate = max(0.0, min(1.0, sample_rate))
+        self._error_sample_rate = max(0.0, min(1.0, error_sample_rate))
+        # TraceIdRatioBased 构造时会校验 rate∈[0,1]，故先 clamp 再传
+        self._ratio = TraceIdRatioBased(self._sample_rate) if TraceIdRatioBased else None
+
+    def should_sample(
+        self,
+        parent_context,  # noqa: ANN001
+        trace_id: int,
+        name: str,
+        attributes=None,
+        links=None,
+        trace_state=None,
+    ):  # noqa: ANN001
+        # 错误请求：带 http.status_code>=500 或 error=true 属性 → 100% 采样
+        if attributes:
+            status = attributes.get("http.status_code") or attributes.get("http.response.status_code")
+            try:
+                if status is not None and int(status) >= 500 and self._error_sample_rate >= 1.0:
+                    return SamplingResult(
+                        Decision.RECORD_AND_SAMPLE, Description="error-100pct"
+                    )
+            except (TypeError, ValueError):
+                pass
+            if attributes.get("error") is True and self._error_sample_rate >= 1.0:
+                return SamplingResult(
+                    Decision.RECORD_AND_SAMPLE, Description="error-100pct"
+                )
+        # 正常请求：委托 TraceIdRatioBased（按比例采样）
+        if self._ratio is not None:
+            return self._ratio.should_sample(
+                parent_context, trace_id, name, attributes or {}, links or [], trace_state
+            )
+        # 降级：按 sample_rate 概率采样（伪随机 trace_id 低位）
+        if self._sample_rate >= 1.0:
+            return SamplingResult(Decision.RECORD_AND_SAMPLE)
+        if self._sample_rate <= 0.0:
+            return SamplingResult(Decision.DROP)
+        if (trace_id % 10000) / 10000.0 < self._sample_rate:
+            return SamplingResult(Decision.RECORD_AND_SAMPLE)
+        return SamplingResult(Decision.DROP)
+
+    def get_description(self) -> str:
+        return f"TailBasedErrorSampler(rate={self._sample_rate}, error_rate={self._error_sample_rate})"
 
 
 class TraceIdLogFilter(logging.Filter):
@@ -99,7 +184,14 @@ def init_telemetry() -> None:
 
     service_name = os.getenv("IF_OTEL_SERVICE_NAME", app_config.OTEL_SERVICE_NAME)
     resource = Resource.create({SERVICE_NAME: service_name})
-    provider = TracerProvider(resource=resource)
+
+    # P3-2: tail-based 采样 —— 错误请求（5xx/error）100% 采样 + 正常按比例。
+    sample_rate = float(os.getenv("IF_OTEL_SAMPLE_RATE", str(app_config.OTEL_SAMPLE_RATE)))
+    error_sample_rate = float(
+        os.getenv("IF_OTEL_ERROR_SAMPLE_RATE", str(app_config.OTEL_ERROR_SAMPLE_RATE))
+    )
+    sampler = TailBasedErrorSampler(sample_rate, error_sample_rate)
+    provider = TracerProvider(resource=resource, sampler=sampler)
 
     # Console 导出器（调试用，需显式设置 IF_OTEL_CONSOLE_EXPORTER=1）
     if os.getenv("IF_OTEL_CONSOLE_EXPORTER", "1" if app_config.OTEL_CONSOLE_EXPORTER else "0").strip().lower() in {
@@ -147,10 +239,12 @@ def init_telemetry() -> None:
 
     _otel_enabled = True
     log.info(
-        "OTel 追踪已初始化（service=%s, exporter=%s, otel=%s）",
+        "OTel 追踪已初始化（service=%s, exporter=%s, otel=%s, sample_rate=%s, error_sample_rate=%s）",
         service_name,
         otlp_endpoint or "console",
         _OTEL_AVAILABLE,
+        sample_rate,
+        error_sample_rate,
     )
 
 
