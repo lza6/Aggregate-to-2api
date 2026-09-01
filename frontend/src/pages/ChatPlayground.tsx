@@ -1,302 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import { chatCompletions, fetchChatModels, fetchChatRemaining, fetchChatUsage, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
 import type { ChatModelInfo, ChatRemaining, ChatUsageStats } from '../api';
 import { useApi } from '../hooks/useApi';
 import { classifyError, type ProviderOption } from '../components/Feedback';
-
-const HISTORY_KEY = 'chatPlaygroundHistory';
-const MAX_CONTEXT_MESSAGES = 30;
-const MAX_TEXTAREA_ROWS = 6;
-
-type ChatRole = 'user' | 'assistant';
-type Effort = 'quick' | 'balanced' | 'deep';
-
-interface ChatMessage {
-  role: ChatRole;
-  content: string;
-  reasoning?: string;
-  toolCalls?: string[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
-  durationMs?: number;
-  error?: boolean;
-  /** D2: 错误类别（用于错误气泡内联切备用 provider 行动） */
-  errorKind?: ReturnType<typeof classifyError>;
-}
-
-interface SseResult {
-  content: string;
-  reasoning: string;
-  toolCalls: string[];
-  usage?: ChatMessage['usage'];
-}
-
-interface ChatErrorPayload {
-  message: string;
-  retryAfterMinutes?: number;
-}
-
-class ChatRequestError extends Error {
-  status: number;
-  retryAfterMinutes?: number;
-
-  constructor(message: string, status: number, retryAfterMinutes?: number) {
-    super(message);
-    this.name = 'ChatRequestError';
-    this.status = status;
-    this.retryAfterMinutes = retryAfterMinutes;
-  }
-}
-
-function loadHistory(): ChatMessage[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is ChatMessage => {
-      if (!item || typeof item !== 'object') return false;
-      const candidate = item as Partial<ChatMessage>;
-      return (candidate.role === 'user' || candidate.role === 'assistant') && typeof candidate.content === 'string';
-    });
-  } catch {
-    return [];
-  }
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, character => {
-    const entities: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return entities[character];
-  });
-}
-
-/** P3-3: 模型能力分组 key（生图/对话/工具/多模态）——按 capabilities 集合匹配，避免重复计组。 */
-function capabilityGroupOf(caps: readonly string[] | undefined): ChatGroupKey | null {
-  if (!caps || caps.length === 0) return null;
-  const set = new Set(caps);
-  if (set.has('chat_vision') || set.has('img2img') || set.has('img2vid')) return 'multimodal';
-  if (set.has('chat_tools') || set.has('tools')) return 'tools';
-  if (set.has('chat')) return 'chat';
-  if (set.has('txt2img') || set.has('img2img')) return 'image';
-  return null;
-}
-
-type ChatGroupKey = 'image' | 'chat' | 'tools' | 'multimodal';
-
-const CHAT_GROUP_ORDER: ChatGroupKey[] = ['image', 'chat', 'tools', 'multimodal'];
-const CHAT_GROUP_META: Record<ChatGroupKey, { label: string; hint: string }> = {
-  image: { label: '🎨 生图模型', hint: '仅文本提示生成图像' },
-  chat: { label: '💬 对话模型', hint: '纯文本对话' },
-  tools: { label: '🔧 工具/智能体模型', hint: '支持函数调用' },
-  multimodal: { label: '🖼️ 多模态模型', hint: '支持图片输入' },
-};
-
-function groupedModels(models: ChatModelInfo[]): { key: ChatGroupKey; label: string; models: ChatModelInfo[] }[] {
-  const buckets = new Map<ChatGroupKey, ChatModelInfo[]>();
-  const fallback: ChatModelInfo[] = [];
-  for (const m of models) {
-    const key = capabilityGroupOf(m.capabilities);
-    if (!key) { fallback.push(m); continue; }
-    const list = buckets.get(key) ?? [];
-    list.push(m);
-    buckets.set(key, list);
-  }
-  const groups = CHAT_GROUP_ORDER
-    .filter(key => (buckets.get(key)?.length ?? 0) > 0)
-    .map(key => ({ key, label: CHAT_GROUP_META[key].label, models: buckets.get(key) ?? [] }));
-  if (fallback.length > 0) groups.push({ key: 'chat', label: '未分类模型', models: fallback });
-  return groups;
-}
-
-/** 先转义全部文本，再只生成受控的粗体、代码块和换行标签。 */
-function renderMarkdown(text: string): { __html: string } {
-  const escaped = escapeHtml(text);
-  const chunks = escaped.split('```');
-  const html = chunks.map((chunk, index) => {
-    if (index % 2 === 1) {
-      const code = chunk.replace(/^\w+\n/, '');
-      return `<pre><code>${code}</code></pre>`;
-    }
-    return chunk.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>').replace(/\n/g, '<br />');
-  }).join('');
-  return { __html: html };
-}
-
-function formatNumber(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString() : '-';
-}
-
-function getUsageTotal(usage: ChatMessage['usage']): number | undefined {
-  if (!usage) return undefined;
-  if (typeof usage.total_tokens === 'number') return usage.total_tokens;
-  const prompt = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : 0;
-  const completion = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : 0;
-  return prompt + completion > 0 ? prompt + completion : undefined;
-}
-
-function getMessageContent(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) {
-    return value.map(part => {
-      if (typeof part === 'string') return part;
-      if (part && typeof part === 'object' && 'text' in part) {
-        const text = (part as { text?: unknown }).text;
-        return typeof text === 'string' ? text : '';
-      }
-      return '';
-    }).join('');
-  }
-  return '';
-}
-
-function getErrorPayload(payload: unknown, status: number): ChatErrorPayload {
-  if (!payload || typeof payload !== 'object') {
-    if (status === 429) return { message: '当前提供商繁忙，已为您自动切换至备用引擎' };
-    if (status === 401) return { message: 'API Key 未配置或无效，请在右上角设置中填写有效 Key' };
-    return { message: `请求失败（HTTP ${status}）` };
-  }
-  const body = payload as Record<string, unknown>;
-  const nested = body.error && typeof body.error === 'object' ? body.error as Record<string, unknown> : undefined;
-  let messageCandidate = typeof body.message === 'string'
-    ? body.message
-    : typeof body.error === 'string'
-      ? body.error
-      : nested?.message;
-
-  if (status === 429 || (typeof messageCandidate === 'string' && (messageCandidate.includes('rate') || messageCandidate.includes('limit') || messageCandidate.includes('限流')))) {
-    messageCandidate = '当前提供商繁忙，已为您自动切换至备用引擎';
-  } else if (status === 401 || (typeof messageCandidate === 'string' && (messageCandidate.includes('key') || messageCandidate.includes('auth') || messageCandidate.includes('unauthorized')))) {
-    messageCandidate = 'API Key 未配置或无效，请点击右上角【API 接入 & Key】进行配置';
-  }
-
-  const retryCandidate = body.retryAfterMinutes ?? body.retry_after_minutes ?? nested?.retryAfterMinutes ?? nested?.retry_after_minutes;
-  return {
-    message: typeof messageCandidate === 'string' ? messageCandidate : `请求失败（HTTP ${status}）`,
-    retryAfterMinutes: typeof retryCandidate === 'number' ? retryCandidate : undefined,
-  };
-}
-
-async function readResponseJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-function appendAssistantMessage(setMessages: Dispatch<SetStateAction<ChatMessage[]>>, updater: (message: ChatMessage) => ChatMessage) {
-  setMessages(previous => {
-    if (!previous.length || previous[previous.length - 1].role !== 'assistant') return previous;
-    const lastIndex = previous.length - 1;
-    return previous.map((message, index) => index === lastIndex ? updater(message) : message);
-  });
-}
-
-interface ReasoningBlockProps {
-  content?: string;
-}
-
-function ReasoningBlock({ content }: ReasoningBlockProps) {
-  if (!content) return null;
-  return (
-    <details className="chat-reasoning">
-      <summary>🧠 思考过程 ({content.length} 字)</summary>
-      <div className="chat-reasoning-content">{content}</div>
-    </details>
-  );
-}
-
-interface MessageBubbleProps {
-  message: ChatMessage;
-  backupProviders?: ProviderOption[];
-  activeProvider?: string;
-  onSwitchProvider?: (id: string) => void;
-}
-
-function MessageBubble({ message, backupProviders, activeProvider, onSwitchProvider }: MessageBubbleProps) {
-  const isUser = message.role === 'user';
-  return (
-    <div className={`chat-message-row ${isUser ? 'is-user' : 'is-assistant'}`}>
-      <div className={`chat-avatar ${isUser ? 'user-avatar' : 'assistant-avatar'}`}>{isUser ? '我' : 'AI'}</div>
-      <div className={`chat-bubble ${message.error ? 'chat-bubble-error' : ''}`}>
-        <div className="chat-role-label">{isUser ? '你' : '助手'}</div>
-        {message.error ? (
-          <div className="chat-inline-error" role="alert">
-            {message.content}
-            {(message.errorKind === 'rate_limit' || message.errorKind === 'provider_down') && onSwitchProvider && (backupProviders ?? []).length > 0 && (
-              <div className="chat-error-action">
-                <span className="chat-error-hint">{message.errorKind === 'provider_down' ? '上游宕机，切健康备用：' : '繁忙降级，切备用：'}</span>
-                {(backupProviders ?? []).slice(0, 5).map(p => (
-                  <button key={p.id} type="button" className="chat-provider-chip" onClick={() => onSwitchProvider(p.id)} disabled={p.id === activeProvider}>
-                    {p.label}
-                    {p.health === 'healthy' && <span className="chat-chip-dot ok" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            {!isUser && <ReasoningBlock content={message.reasoning} />}
-            <div className="chat-content" dangerouslySetInnerHTML={renderMarkdown(message.content || (message.reasoning ? '' : '正在思考…'))} />
-            {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-              <div className="chat-tool-calls">🔧 工具调用：{message.toolCalls.join(' · ')}</div>
-            )}
-            {!isUser && (message.usage || message.durationMs !== undefined) && (
-              <div className="chat-message-meta">
-                {getUsageTotal(message.usage) !== undefined && `${formatNumber(getUsageTotal(message.usage) ?? 0)} tokens`}
-                {getUsageTotal(message.usage) !== undefined && message.durationMs !== undefined && ' · '}
-                {message.durationMs !== undefined && `${message.durationMs}ms`}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface ModelPickerProps {
-  groups: { key: ChatGroupKey; label: string; models: ChatModelInfo[] }[];
-  value: string;
-  loading: boolean;
-  hint?: string;
-  onChange: (value: string) => void;
-}
-
-function ModelPicker({ groups, value, loading, hint, onChange }: ModelPickerProps) {
-  const flatCount = groups.reduce((acc, g) => acc + g.models.length, 0);
-  return (
-    <label className="chat-control-field">
-      <span>模型</span>
-      <select value={value} onChange={event => onChange(event.target.value)} disabled={loading || flatCount === 0}>
-        {flatCount === 0 && <option value="">{loading ? '加载模型中…' : '暂无可用模型'}</option>}
-        {groups.map(group => (
-          <optgroup key={group.key} label={group.label}>
-            {group.models.map(model => (
-              <option key={model.id} value={model.id}>{model.display_name || model.id}</option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      {hint && <small>{hint}</small>}
-    </label>
-  );
-}
+import {
+  ChatRequestError, appendAssistantMessage, getErrorPayload, readResponseJson,
+  groupedModels, loadHistory, HISTORY_KEY, MAX_CONTEXT_MESSAGES, MAX_TEXTAREA_ROWS,
+  formatNumber,
+  type ChatMessage, type Effort,
+} from '../components/chat/chat-utils';
+import { MessageBubble, ModelPicker } from '../components/chat/ChatComponents';
+import { useChatStream } from '../components/chat/useChatStream';
 
 export function ChatPlayground() {
   const { data: modelsData, loading: modelsLoading } = useApi<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>(fetchChatModels);
   const { data: remaining } = useApi<ChatRemaining>(fetchChatRemaining, { intervalMs: 30000 });
-  // D1: providers 供 429/502 错误态一键切备用 chat 引擎
   const { data: providersData } = useApi(() => fetchProviders());
-  // D2: 会话成本/耗时（后端已有 usage，前端读 /v1/chat/usage?period=1h）
   const { data: usage } = useApi<ChatUsageStats>(() => fetchChatUsage('1h'), { intervalMs: 60000 });
   const [model, setModel] = useState('');
   const [effort, setEffort] = useState<Effort>('balanced');
@@ -305,12 +24,12 @@ export function ChatPlayground() {
   const [stream, setStream] = useState(true);
   const [sending, setSending] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
-  // v4.4: API Key 管理（本地保存 + 接入示例展示）
   const [apiKey, setApiKey] = useState(getStoredApiKey);
   const [showApiPanel, setShowApiPanel] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const consumeSse = useChatStream();
   const models = modelsData?.items ?? [];
 
   useEffect(() => {
@@ -369,18 +88,12 @@ export function ChatPlayground() {
     URL.revokeObjectURL(url);
   }, [messages]);
 
-  // P3-3: 导出完整会话为 JSON（保留 role/reasoning/toolCalls/usage/durationMs 全字段）
   const exportJson = useCallback(() => {
     if (messages.length === 0) {
       notify('当前没有可导出的对话', 'info');
       return;
     }
-    const payload = {
-      exported_at: new Date().toISOString(),
-      model,
-      effort,
-      messages,
-    };
+    const payload = { exported_at: new Date().toISOString(), model, effort, messages };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -390,7 +103,6 @@ export function ChatPlayground() {
     URL.revokeObjectURL(url);
   }, [messages, model, effort]);
 
-  // P3-3: 模型「生图/对话/工具/多模态」分组下拉 + 选中模型上下文/价格提示
   const modelGroups = useMemo(() => groupedModels(models), [models]);
   const modelPickerHint = useMemo(() => {
     const current = models.find(m => m.id === model);
@@ -400,83 +112,6 @@ export function ChatPlayground() {
     if (current.price_per_mtok) parts.push(`约 $${current.price_per_mtok}/M tokens`);
     return parts.length ? parts.join(' · ') : undefined;
   }, [models, model]);
-
-  const consumeSse = useCallback(async (
-    response: Response,
-    onDelta: (delta: { content?: string; reasoning?: string; toolCall?: string }) => void,
-  ): Promise<SseResult> => {
-    if (!response.body) throw new Error('服务端未返回可读取的响应流');
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let content = '';
-    let reasoning = '';
-    const toolCalls: string[] = [];
-    let usage: ChatMessage['usage'];
-
-    const processLine = (line: string) => {
-      if (!line.startsWith('data:')) return;
-      const data = line.slice(5).trim();
-      if (!data || data === '[DONE]') return;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (!parsed || typeof parsed !== 'object') return;
-      const payload = parsed as Record<string, unknown>;
-      // v6.6.0: 区分流式 server_error 与客户端断连。
-      // 后端异常时在流终帧前发 {"error":{"type":"server_error","message":...}} 再 [DONE]。
-      // 若不识别，该帧无 choices 会被丢弃 → 前端停留「正在思考…」/ 显示旧文而非错误。
-      // 抛 ChatRequestError 使外层 catch 落地为错误气泡。
-      if (payload.error && typeof payload.error === 'object') {
-        const errObj = payload.error as Record<string, unknown>;
-        const msg = typeof errObj.message === 'string' ? errObj.message
-          : typeof payload.message === 'string' ? payload.message
-          : '聊天流式调用失败';
-        throw new ChatRequestError(msg, 500);
-      }
-      if (payload.usage && typeof payload.usage === 'object') {
-        usage = payload.usage as ChatMessage['usage'];
-      }
-      const choices = Array.isArray(payload.choices) ? payload.choices : [];
-      const choice = choices[0];
-      if (!choice || typeof choice !== 'object') return;
-      const delta = (choice as Record<string, unknown>).delta;
-      const message = (choice as Record<string, unknown>).message;
-      const source = delta && typeof delta === 'object' ? delta as Record<string, unknown> : message && typeof message === 'object' ? message as Record<string, unknown> : {};
-      const nextContent = getMessageContent(source.content);
-      const nextReasoning = getMessageContent(source.reasoning_content ?? source.reasoning);
-      const nextToolCalls = Array.isArray(source.tool_calls) ? source.tool_calls : [];
-      if (nextContent) {
-        content += nextContent;
-        onDelta({ content: nextContent });
-      }
-      if (nextReasoning) {
-        reasoning += nextReasoning;
-        onDelta({ reasoning: nextReasoning });
-      }
-      nextToolCalls.forEach(toolCall => {
-        const text = typeof toolCall === 'string' ? toolCall : JSON.stringify(toolCall);
-        if (text) {
-          toolCalls.push(text);
-          onDelta({ toolCall: text });
-        }
-      });
-    };
-
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() ?? '';
-      lines.forEach(processLine);
-      if (done) break;
-    }
-    if (buffer) processLine(buffer);
-    return { content, reasoning, toolCalls, usage };
-  }, []);
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
@@ -498,27 +133,27 @@ export function ChatPlayground() {
         throw new ChatRequestError(payload.message, response.status, payload.retryAfterMinutes);
       }
 
-      let result: SseResult;
+      let result: import('../components/chat/chat-utils').SseResult;
       if (stream) {
-        result = await consumeSse(response, delta => {
+        result = await consumeSse({ response, onDelta: delta => {
           appendAssistantMessage(setMessages, current => ({
             ...current,
             content: `${current.content}${delta.content ?? ''}`,
             reasoning: `${current.reasoning ?? ''}${delta.reasoning ?? ''}`,
             toolCalls: delta.toolCall ? [...(current.toolCalls ?? []), delta.toolCall] : current.toolCalls,
           }));
-        });
+        } });
       } else {
         const payload = await readResponseJson(response) as Record<string, unknown> | null;
         const choices = payload && Array.isArray(payload.choices) ? payload.choices : [];
         const choice = choices[0] && typeof choices[0] === 'object' ? choices[0] as Record<string, unknown> : {};
         const message = choice.message && typeof choice.message === 'object' ? choice.message as Record<string, unknown> : choice;
-        const content = getMessageContent(message.content);
-        const reasoning = getMessageContent(message.reasoning_content ?? message.reasoning);
+        const content = (message.content as unknown) as string | undefined;
+        const reasoning = (message.reasoning_content ?? message.reasoning) as unknown as string | undefined;
         const rawTools = Array.isArray(message.tool_calls) ? message.tool_calls : [];
         result = {
-          content,
-          reasoning,
+          content: typeof content === 'string' ? content : '',
+          reasoning: typeof reasoning === 'string' ? reasoning : '',
           toolCalls: rawTools.map(item => typeof item === 'string' ? item : JSON.stringify(item)),
           usage: payload?.usage && typeof payload.usage === 'object' ? payload.usage as ChatMessage['usage'] : undefined,
         };
@@ -556,7 +191,6 @@ export function ChatPlayground() {
   const effortHint = useMemo(() => ({ quick: 'Thinks little', balanced: 'Default', deep: 'Deep thinking' }[effort]), [effort]);
   const remainingClass = remaining && remaining.remaining < 5 ? 'is-low' : '';
 
-  // D1: providers → ProviderOption[]（错误气泡一键切备用 chat 引擎）
   const providerOptions: ProviderOption[] = useMemo(() => {
     const items = providersData?.items;
     if (!items) return [];
@@ -618,7 +252,7 @@ export function ChatPlayground() {
           )}
           <p className="chat-api-note">以下示例把 <code>&lt;key&gt;</code> 换成你的 Key；<code>BASE</code> 换成本站地址。</p>
           <pre className="chat-api-code">{`# OpenAI 兼容（Codex / Cursor / Continue / 任意 OpenAI SDK）
-curl -X POST {window.location.origin}/v1/chat/completions \\
+curl -X POST ${window.location.origin}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   ${apiKey.trim() ? '-H "Authorization: Bearer ' + apiKey.trim() + '" \\\n  ' : ''}-d '{"model":"${model || 'tryingopen/z-ai/glm-5.3-flash'}","messages":[{"role":"user","content":"你好"}],"stream":true}'
 
