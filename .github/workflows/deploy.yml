@@ -126,10 +126,12 @@ jobs:
             tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # 热重启 API 容器。--no-deps：cfsolver 已在运行，完全不碰它（不 recreate、
-            # 不校验镜像、不 build）。cfsolver 镜像即便被宿主机清理也不阻断 api 部署
-            # （容器仍持有旧 image id 运行；真要重建 cfsolver 需手动 git clone 后 build）。
+            # 热重启 API 容器。先 rm -f 清掉同名残留容器（可能是旧 compose project 或手动
+            # docker run 起的，不被当前 compose 识别 → 直接 up 会 'container name conflict'），
+            # 再 compose up --no-deps --no-build api：只 recreate api，完全不碰 cfsolver
+            # （cfsolver 镜像即便被宿主机清理也不阻断 api 部署，容器持旧 image id 仍运行）。
             export DOCKER_BUILDKIT=0
+            sudo docker rm -f imagefree-api 2>/dev/null || true
             sudo docker compose up -d --force-recreate --no-build --no-deps api
 
             # 等待健康
