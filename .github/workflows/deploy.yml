@@ -120,6 +120,12 @@ jobs:
               export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
               { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
 
+            # cfsolver 镜像保险：compose 的 cfsolver 依赖 imagefree-cfsolver:6.8.0，
+            # 若宿主机该镜像被清理而 cfsolver 容器需 recreate（如 git reset 换了 compose），
+            # 会报 'No such image' 导致 compose up 失败。先本地 build 兜底（非 ghcr push）。
+            sudo docker build -f Dockerfile.cfsolver -t imagefree-cfsolver:6.8.0 .. 2>/dev/null || \
+              echo "cfsolver 镜像已存在或 build 失败（跳过，使用现有镜像）"
+
             # 部署前端 dist 产物
             mkdir -p ../frontend/dist ../landing/dist
             tar -xzf /tmp/frontend-dist.tgz -C ../frontend/dist
