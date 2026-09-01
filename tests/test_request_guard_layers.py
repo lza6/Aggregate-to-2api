@@ -392,7 +392,7 @@ def test_check_rate_limit_daily_limit_appends_record(monkeypatch):
 async def test_sync_blocklist_cache_updates_cache(monkeypatch):
     """_sync_blocklist_cache 从 store 拉取并更新缓存。"""
 
-    async def fake_list_all(limit=2000, offset=0, since_ts=None):
+    async def fake_list_all(limit=2000, offset=0, since_ts=None, updated_before=None):
         if offset == 0:
             return [{"ip": "1.1.1.1", "block_type": "block", "reason": "x", "expire_at": 0}]
         return []
@@ -424,7 +424,7 @@ async def test_sync_blocklist_cache_handles_store_error(monkeypatch):
 async def test_sync_blocklist_cache_cleanup_warns(monkeypatch):
     """cleanup 抛异常时记 warning 不崩溃。"""
 
-    async def fake_list_all(limit=2000, offset=0, since_ts=None):
+    async def fake_list_all(limit=2000, offset=0, since_ts=None, updated_before=None):
         return []
 
     async def boom():
@@ -465,7 +465,7 @@ async def test_auto_block_ip_handles_store_error(monkeypatch):
 async def test_sync_blocklist_cache_public_alias(monkeypatch):
     """sync_blocklist_cache 公共别名委托给 _sync_blocklist_cache。"""
 
-    async def fake_list_all(limit=2000, offset=0, since_ts=None):
+    async def fake_list_all(limit=2000, offset=0, since_ts=None, updated_before=None):
         if offset == 0:
             return [{"ip": "2.2.2.2", "block_type": "block", "reason": "y", "expire_at": 0}]
         return []
@@ -484,7 +484,7 @@ async def test_sync_blocklist_cache_public_alias(monkeypatch):
 async def test_get_cached_ip_rule_triggers_async_sync(monkeypatch):
     """缓存未命中且超 TTL → 调度 _sync_blocklist_cache（有运行 loop 时）。"""
 
-    async def fake_list_all(limit=2000, offset=0, since_ts=None):
+    async def fake_list_all(limit=2000, offset=0, since_ts=None, updated_before=None):
         return []
 
     async def fake_cleanup():

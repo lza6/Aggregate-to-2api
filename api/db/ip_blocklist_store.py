@@ -174,12 +174,14 @@ class IPBlocklistStore:
         limit: int = 100,
         offset: int = 0,
         since_ts: float | None = None,
+        updated_before: float | None = None,
     ) -> list[dict]:
         """列出有效封禁规则（P2-2 分页，防全量加载 OOM）。
 
         - limit：每页条数（钳到 [1, 10000]，默认 100）
         - offset：偏移量（游标分页，默认 0）
         - since_ts：仅返回 updated_at >= since_ts 的记录（可选时间游标）
+        - updated_before：仅返回 updated_at < 该值的记录（keyset 游标，防并发写分页跳行）
         旧调用方传 limit=2000/10000 仍兼容（被钳到上限 10000）。
         """
         await self.init_schema()
@@ -188,7 +190,15 @@ class IPBlocklistStore:
         offset = max(0, offset)
         conn = await self._get_conn()
         try:
-            if since_ts is not None:
+            if updated_before is not None:
+                # keyset 游标：下一批取 updated_at < 上页最小 updated_at，严格递减防重复/漏
+                cur = await conn.execute(
+                    "SELECT * FROM ip_blocklist"
+                    " WHERE (expire_at = 0 OR expire_at > ?) AND updated_at < ?"
+                    " ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    (now, float(updated_before), limit, offset),
+                )
+            elif since_ts is not None:
                 cur = await conn.execute(
                     "SELECT * FROM ip_blocklist"
                     " WHERE (expire_at = 0 OR expire_at > ?) AND updated_at >= ?"
@@ -204,6 +214,21 @@ class IPBlocklistStore:
                 )
             rows = await cur.fetchall()
             return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+
+    async def get_by_ip(self, ip: str) -> dict | None:
+        """按 IP 精确查询单条封禁规则（P3 cache-miss 单行回源，避免 30s 全量同步窗口内漏放行）。"""
+        await self.init_schema()
+        now = time.time()
+        conn = await self._get_conn()
+        try:
+            cur = await conn.execute(
+                "SELECT * FROM ip_blocklist WHERE ip = ? AND (expire_at = 0 OR expire_at > ?)",
+                (ip, now),
+            )
+            row = await cur.fetchone()
+            return dict(row) if row else None
         finally:
             await conn.close()
 
@@ -229,6 +254,25 @@ class IPBlocklistStore:
                 )
             row = await cur.fetchone()
             return int(row[0]) if row else 0
+        finally:
+            await conn.close()
+
+    async def count_by_type(self) -> dict[str, int]:
+        """按 block_type 统计有效封禁的精确分布（P3 审查：替代 list_all 样本估算）。
+
+        单 SELECT GROUP BY，不加载明细行；>1000 条时仍精确（样本估算会失真）。
+        """
+        await self.init_schema()
+        now = time.time()
+        conn = await self._get_conn()
+        try:
+            cur = await conn.execute(
+                "SELECT block_type, COUNT(*) AS n FROM ip_blocklist"
+                " WHERE expire_at = 0 OR expire_at > ? GROUP BY block_type",
+                (now,),
+            )
+            rows = await cur.fetchall()
+            return {r["block_type"]: int(r["n"]) for r in rows}
         finally:
             await conn.close()
 

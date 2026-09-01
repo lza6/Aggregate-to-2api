@@ -719,12 +719,13 @@ def reset_settings() -> Settings:
     用法：测试 fixture 在 monkeypatch.setenv 后调 reset_settings()，使后续
     get_settings()/settings 读取新 env。返回新实例便于直接断言。
 
-    注意：reset 后模块级向后兼容变量（BASE_URL/TOKEN_POOL_SIZE 等）**不会**自动刷新——
-    它们在 import 期已绑定旧值。需刷新的测试应直接读 settings.xxx 或 get_settings().xxx，
-    而非模块级常量。模块级常量保留只为向后兼容旧代码 import，不应在测试中依赖其刷新。
+    同步刷新模块级 `settings` 全局变量（`from api.config import settings` 拿到新实例）。
+    注意：模块级向后兼容常量（BASE_URL/TOKEN_POOL_SIZE 等）在 import 期已绑定旧值，
+    **不会**自动刷新——需读这些常量的测试应改走 get_settings().xxx 或 settings.xxx。
     """
-    global _settings_cache
+    global _settings_cache, settings
     _settings_cache = Settings()
+    settings = _settings_cache
     return _settings_cache
 
 

@@ -25,6 +25,7 @@ import enum
 import logging
 import os
 import random
+import sqlite3
 import time
 from typing import AsyncGenerator
 
@@ -129,8 +130,13 @@ class AccountPool:
         # 看板状态
         self.stats: dict[str, dict] = {}
 
-    async def _ensure_conn(self) -> aiosqlite.Connection:
-        """惰性创建/复用 aiosqlite 连接，绑定当前 loop（跨 loop 重建）。"""
+    async def _ensure_conn(self) -> aiosqlite.Connection | None:
+        """惰性创建/复用 aiosqlite 连接，绑定当前 loop（跨 loop 重建）。
+
+        异常安全（P3 审计修复）：connect 或 PRAGMA 失败（如损坏 DB）时 close 本地连接
+        并重置状态，避免非 daemon 线程泄漏 / 后续并发 connect 挂起；调用方（get 等）
+        在异常时可优雅降级为空结果，而非穿透 500。
+        """
         cur_loop = asyncio.get_running_loop()
         if self._conn is not None and self._pool_loop is cur_loop and not self._conn._connection:
             # 连接已关闭，重建
@@ -140,19 +146,45 @@ class AccountPool:
             if self._pool_loop is not None and self._pool_loop is not cur_loop:
                 # loop 漂移：关旧连接
                 await self._close_conn_safe()
-            conn = await aiosqlite.connect(self._db_path, timeout=10, isolation_level=None)
-            conn.row_factory = aiosqlite.Row
-            await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute("PRAGMA synchronous=NORMAL")
-            await conn.execute("PRAGMA busy_timeout=10000")
-            await conn.execute("PRAGMA cache_size=-64000")  # 64MB
-            await conn.execute("PRAGMA mmap_size=268435456")  # 256MB
-            await conn.execute("PRAGMA temp_store=MEMORY")
-            self._conn = conn
-            self._pool_loop = cur_loop
-            if not self._initialized:
-                await self._init_schema(conn)
-                self._initialized = True
+            conn = None
+            try:
+                conn = await aiosqlite.connect(self._db_path, timeout=10, isolation_level=None)
+                conn.row_factory = aiosqlite.Row
+                await conn.execute("PRAGMA journal_mode=WAL")
+                await conn.execute("PRAGMA synchronous=NORMAL")
+                await conn.execute("PRAGMA busy_timeout=10000")
+                await conn.execute("PRAGMA cache_size=-64000")  # 64MB
+                await conn.execute("PRAGMA mmap_size=268435456")  # 256MB
+                await conn.execute("PRAGMA temp_store=MEMORY")
+                self._conn = conn
+                self._pool_loop = cur_loop
+                if not self._initialized:
+                    await self._init_schema(conn)
+                    self._initialized = True
+            except sqlite3.DatabaseError as e:
+                # 损坏 DB 或 schema 建失败：关闭连接防泄漏，重置状态，降级重抛
+                log.warning("account_pool 打开 DB 失败（可能损坏）: %s", e)
+                if conn is not None:
+                    try:
+                        await conn.close()
+                    except Exception:
+                        pass
+                self._conn = None
+                self._pool_loop = None
+                self._initialized = False
+                raise
+            except Exception as e:
+                # 其余异常（权限/IO）同样关闭连接防泄漏
+                log.warning("account_pool 连接初始化异常: %s", e)
+                if conn is not None:
+                    try:
+                        await conn.close()
+                    except Exception:
+                        pass
+                self._conn = None
+                self._pool_loop = None
+                self._initialized = False
+                raise
         return self._conn
 
     async def _close_conn_safe(self) -> None:

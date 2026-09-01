@@ -171,8 +171,9 @@ async def security_stats(request: Request) -> dict[str, Any]:
     """
     _require_admin_key(request)
     total = await ip_blocklist_store.count()
-    # block/daily_limit 分布：取首页 1000 条样本做近似统计（总封禁数用精确 count）
-    sample = await ip_blocklist_store.list_all(limit=1000, offset=0)
-    blocks = sum(1 for r in sample if r.get("block_type") == "block")
-    daily = sum(1 for r in sample if r.get("block_type") == "daily_limit")
+    # P3-(v7.3): 用 GROUP BY 精确聚合分布，替代 list_all(1000) 样本估算
+    #（>1000 条时样本会失真——原 v6.9.1 的 list_all(10000) 精确统计被 P2-2 降级为近似）。
+    by_type = await ip_blocklist_store.count_by_type()
+    blocks = by_type.get("block", 0)
+    daily = by_type.get("daily_limit", 0)
     return {"total": total, "block": blocks, "daily_limit": daily}

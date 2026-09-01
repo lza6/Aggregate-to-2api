@@ -114,15 +114,16 @@ class TailBasedErrorSampler:
             status = attributes.get("http.status_code") or attributes.get("http.response.status_code")
             try:
                 if status is not None and int(status) >= 500 and self._error_sample_rate >= 1.0:
-                    return SamplingResult(
-                        Decision.RECORD_AND_SAMPLE, Description="error-100pct"
-                    )
+                    # OTel SDK 1.44 SamplingResult.__init__ 签名 (decision, attributes, trace_state)
+                    # 无 Description 参数——误用会抛 TypeError 使 5xx 静默降级到 10% 采样。
+                    return SamplingResult(Decision.RECORD_AND_SAMPLE)
             except (TypeError, ValueError):
                 pass
-            if attributes.get("error") is True and self._error_sample_rate >= 1.0:
-                return SamplingResult(
-                    Decision.RECORD_AND_SAMPLE, Description="error-100pct"
-                )
+            try:
+                if attributes.get("error") is True and self._error_sample_rate >= 1.0:
+                    return SamplingResult(Decision.RECORD_AND_SAMPLE)
+            except (TypeError, ValueError):
+                pass
         # 正常请求：委托 TraceIdRatioBased（按比例采样）
         if self._ratio is not None:
             return self._ratio.should_sample(

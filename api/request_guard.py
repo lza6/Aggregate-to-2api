@@ -265,7 +265,12 @@ def reset_runtime_state() -> None:
 
 
 def _get_cached_ip_rule(ip: str) -> dict | None:
-    """从内存缓存获取 IP 封禁规则；未命中且缓存未超时 → 回源 DB 单行查询兜底（S3 修复）。"""
+    """从内存缓存获取 IP 封禁规则。
+
+    注意：这是同步入口（check_rate_limit → routes/generate），不能 await DB 单行查询。
+    cache miss 时触发异步全量同步（30s TTL 兜底），当前请求按未命中处理（多为真未封禁）。
+    后续如需 cache-miss 单行回源，须把 check_rate_limit 调用链 async 化（留待需要时评估）。
+    """
     global _LAST_CACHE_SYNC
     now = time.time()
 
@@ -295,15 +300,22 @@ async def _sync_blocklist_cache() -> None:
     try:
         # P2-2: 封禁表全量同步走分页累加，避免单次 list_all(limit=2000) 在封禁表
         # 膨胀时 OOM。page_size=1000 分批拉取直至无更多，最终聚合到内存缓存。
+        # P3-(v7.3): 改用 updated_at 时间游标（keyset）而非 offset，防并发写时
+        # offset 分页跳行/漏记录（update 改 updated_at 会打乱 offset 对齐）。
         new_cache: dict[str, dict] = {}
         page_size = 1000
-        offset = 0
+        cursor: float | None = None
         while True:
-            batch = await ip_blocklist_store.list_all(limit=page_size, offset=offset)
+            batch = await ip_blocklist_store.list_all(limit=page_size, updated_before=cursor)
             if not batch:
                 break
             new_cache.update({r["ip"]: r for r in batch})
-            offset += len(batch)
+            # keyset 游标：取本页最小 updated_at 作为下一批上限（严格递减防重复）。
+            # mock/测试行可能缺 updated_at——缺则退回 offset 语义并提前退出（batch < page_size）。
+            if all("updated_at" in r for r in batch):
+                cursor = min(r["updated_at"] for r in batch)
+            else:
+                cursor = None
             if len(batch) < page_size:
                 break
         now = time.time()
@@ -416,21 +428,45 @@ def check_rate_limit(request: Request) -> None:
             bucket.append(now)
     # P3-3: 全局过期键清理移出 per-IP 锁（避免每请求扫全表 + 持 per-IP 锁过久）。
     # 降频清理：仅当总记录数超过 10000 时扫一次全表清过期键，用 _cache_lock 保护跨 IP 操作。
+    # P3-(v7.3): 一并清理 _ip_locks/_l1_token_buckets/_rate_violations（无界增长内存泄漏）。
     if len(_ip_daily_records) > 10000:
-        with _cache_lock:
-            # 二次确认（可能在等锁期间被其他协程清掉）
-            if len(_ip_daily_records) > 10000:
-                expired = [
-                    k
-                    for k, v in _ip_daily_records.items()
-                    if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS)
-                ]
-                for k in expired:
-                    _ip_daily_records.pop(k, None)
+        _gc_unbounded_ip_state()
 
     if limited:
         _record_auto_block_violation(key, "rate-limit-exceeded")
         raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{limit}/分钟），请稍后重试", 429)
+
+
+def _gc_unbounded_ip_state() -> None:
+    """降频清理无界增长的内存状态（P3 审计）。
+
+    `_ip_locks`/`_l1_token_buckets`/`_rate_violations` 随唯一 IP 数只增不减（旧仅有
+    `_ip_daily_records` 有 >10000 清洗）。高 RPS 下大量不同源 IP 打进来会 OOM。
+    与 `_ip_daily_records` 同频（>10000 条时扫一次），用 `_cache_lock` 保护避免在
+    per-IP 锁内扫全表。
+    """
+    if len(_ip_daily_records) <= 10000:
+        return
+    now = time.time()
+    with _cache_lock:
+        # 二次确认（可能在等锁期间被清掉）
+        if len(_ip_daily_records) <= 10000:
+            return
+        for k, v in list(_ip_daily_records.items()):
+            if not v or now - v[-1] >= max(_WINDOW_SECONDS, _DAY_SECONDS):
+                _ip_daily_records.pop(k, None)
+        # _l1_token_buckets：键空或久未回填清掉
+        for k, v in list(_l1_token_buckets.items()):
+            if not v or now - v[1] >= _WINDOW_SECONDS:
+                _l1_token_buckets.pop(k, None)
+        # _rate_violations：记录全过期清掉
+        for k, v in list(_rate_violations.items()):
+            if not v or now - v[-1] >= _auto_block_window():
+                _rate_violations.pop(k, None)
+        # _ip_locks：仅当该 IP 无活跃记录时清锁（保守，防正在用被删）
+        for ip in list(_ip_locks.keys()):
+            if ip not in _ip_daily_records and ip not in _rate_violations and ip not in _l1_token_buckets:
+                _ip_locks.pop(ip, None)
 
 
 def check_generate_request(request: Request, prompt: str = "") -> None:

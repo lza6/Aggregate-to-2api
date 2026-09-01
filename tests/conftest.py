@@ -255,7 +255,9 @@ def pytest_sessionfinish(session, exitstatus):
         pass
     # 测试结果已全部写入后，teardown 永不返回时兜底退出（CI 不触发，仅 Windows 本地）。
     # 必须传真实 exitstatus：否则 os._exit(0) 会把失败的测试强改为成功（掩盖回归）。
-    os._exit(exitstatus)
+    # P3-(v7.3): 用 PYTEST_NO_FORCE_EXIT=1 禁用（定位 flaky 需看完整 traceback 时）。
+    if os.environ.get('PYTEST_NO_FORCE_EXIT') != '1':
+        os._exit(exitstatus)
 
 
 @pytest_asyncio.fixture
