@@ -30,6 +30,16 @@ _root_logger.setLevel(logging.INFO)
 if log_buffer not in _root_logger.handlers:
     _root_logger.addHandler(log_buffer)
 
+# P3-6: 禁止 uvicorn.access 原生日志冒泡到 root（其 AccessFormatter 会输出完整
+# URL 含 query string，?api_key=xxx 传入时完整 Key 泄露进 log_buffer）。
+# 访问日志由 context.py 中间件自定义写入（只记 path 不含 query），uvicorn.access
+# 原生日志对本服务无增量信息，禁用冒泡即彻底断绝 query 泄露通道。
+logging.getLogger("uvicorn.access").propagate = False
+# 同理：httpx 客户端日志也会记录完整请求 URL（含 query 的 api_key）。本服务的
+# 出站请求 URL 不含敏感 Key，但入站 TestClient/httpx 日志统一收敛，防 query 泄露。
+# httpx 访问日志无运维增量（上游调用日志由 providers 层自行记录），禁用冒泡。
+logging.getLogger("httpx").propagate = False
+
 # ── P3-3: 生产安全响应头中间件 ──────────────────────────
 # 仅当 config.IF_SECURITY_HEADERS_ENABLED 为 True 时注入；关闭=不注入任何安全头（最小回滚）。
 # CSP 独立开关 config.IF_CSP_ENABLED（默认关闭），经许可后才注入宽松 CSP，避免误杀面板/画廊。
