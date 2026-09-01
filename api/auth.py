@@ -106,18 +106,6 @@ def _extract_key(request: Request) -> str:
     return query_key
 
 
-def mask_key(key: str) -> str:
-    """脱敏 Key 供日志/展示：保留前 4 + 后 4，中间 ***。
-
-    用于把可能落入日志的 Key 引用统一脱敏（如审计/调试输出）。
-    """
-    if not key:
-        return ""
-    if len(key) <= 8:
-        return key[:2] + "***"
-    return key[:4] + "***" + key[-4:]
-
-
 def check_api_key(request: Request, *, scope: str = "chat") -> None:
     """校验请求携带的 API Key。未启用时直接放行（零破坏）。"""
     keys = _keys()

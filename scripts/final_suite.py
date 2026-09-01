@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 ARGS = ["python", "-m", "pytest", "tests/", "-q", "--no-header", "-p", "no:cacheprovider"]
-ARGS += ["--cov=api", "--cov-report=term", "--cov-fail-under=70"]
+ARGS += ["--cov=api", "--cov-report=term", "--cov-fail-under=80"]
 if "--integration" not in sys.argv:
     ARGS += ["--ignore=tests/integration", "--ignore=tests/chaos", "--ignore=tests/performance"]
 

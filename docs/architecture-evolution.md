@@ -28,6 +28,8 @@
 - Redis 触发条件：需要跨实例共享缓存 / 缓存量超内存 / 令牌桶限流迁集中式
 - 引入成本：+30MB 内存常驻、新依赖、故障面。**单机形态不建议**。
 
+> **P0-3 (v7.3) 标注——`api/storage/` 已实现未接入**：RedisStorageAdapter（分布式锁 SET NX EX + token 校验释放 + ZSET Lua 滑动窗口限流）**代码完整且质量合格**（单测兜底 `tests/test_redis_adapter.py`），但主链路零消费——`get_storage_adapter()` 无调用方。属"造好未接线"的前瞻能力，**不是死代码，勿删**。触发条件（CPU 持续 >80% 需双实例 / 需集中式限流）出现时，在 `lifespan` startup 挂 `get_storage_adapter()` + `IF_STORAGE_BACKEND=redis` 即可启用，无需重写。
+
 ### CDN（静态内容加速）
 **✅ 立即可做（免费）**：Cloudflare 免费层套域名，landing/admin 静态资源全球边缘缓存，源站带宽压力骤降，还附赠 DDoS 防护 + WAF 免费规则。
 最小落地：域名 NS 托管 CF → 开代理（橙云）→ Cache Rules：`/assets/*` cache everything。

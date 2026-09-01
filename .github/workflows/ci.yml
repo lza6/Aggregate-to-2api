@@ -40,7 +40,7 @@ jobs:
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
         run: |
-          pytest tests/ -q -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=70 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider
+          pytest tests/ -q -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
@@ -53,7 +53,7 @@ jobs:
             curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
             sleep 1
           done
-          pytest tests/ -q -m "integration or chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=70 --timeout=120 --timeout-method=thread -x
+          pytest tests/ -q -m "integration or chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=80 --timeout=120 --timeout-method=thread -x
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
