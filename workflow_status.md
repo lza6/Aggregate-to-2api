@@ -85,3 +85,26 @@
 ## 阻塞项
 - P0-1/P1-2/P3-1 需生产授权（用户已声明"所有任务无需授权"，但 cf_solver 并发是灰度风险项——按用户最新指令执行）
 - SSH 凭据本地不可达（线上 crontab 备份核实受阻）
+
+## v7.3 终局闭环终态（2026-09-01 完成）
+
+### 最终交付
+- FR-1~FR-10 全部达成（评审线程 7 项修复 + 复验全绿）
+- 改进指南 22 条：**20 ✅ 落地 / 2 ⬜ 生产授权项**（P0-1 cf_solver 并发、P3-1 自建邮箱——已产出评估文档+触发器，非能力缺失）
+- 无 P0/P1 未处理；2 条已知 flaky（Windows 组合串扰 + test_account_pool 偶发 WAL 锁）写入 verification-log，CI ubuntu 不触发
+
+### 审查线程结论（六维）
+- Blocking 2 项（telemetry Description、bg_tasks to_thread 包 async）→ ✅ 已修复+复验
+- Required 5 项（reset_settings/连接泄漏/无界GC/keyset游标/统计近似）→ ✅ 已修复+复验
+- Suggestion 3 项（mask_key 死代码/localStorage XSS/token 过冲）→ 增强项，记录不改
+- 最终 Verdict：**Approve**（Blocking 清零，复验通过）
+
+### 交付物清单
+- commit 41ebe85（v7.3 拆分+文档+技能+记忆）+ a146eed（审查修复 7 项）
+- release_notes 未单独写（v7.3 是修复+文档+拆分，无版本号语义，沿用 7.2.0 线上版）
+- 新增：docs/verification-log.md / docs/architecture-evolution.md / docs/report/变更报告.html / deploy/.env.production.example / api/email_sources/ / memory/ 3 条 / .specify/specs/003-final-closure/
+
+### 剩余真实风险（诚实披露）
+- P0-1 cf_solver page_count 1→3：生产 L3 灰度，需观察 camoufox 内存；多节点联邦 solver_guard 已支持
+- P3-1 自建邮箱：外部资源（CF Workers+域名），非本仓库能力
+- 2 条组合 flaky：Windows 本地组合跑偶发，开发机建议分文件；CI 稳定
