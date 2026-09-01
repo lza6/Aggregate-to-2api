@@ -169,18 +169,66 @@ class IPBlocklistStore:
         finally:
             await conn.close()
 
-    async def list_all(self, limit: int = 200) -> list[dict]:
-        """列出所有有效封禁规则。"""
+    async def list_all(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        since_ts: float | None = None,
+    ) -> list[dict]:
+        """列出有效封禁规则（P2-2 分页，防全量加载 OOM）。
+
+        - limit：每页条数（钳到 [1, 10000]，默认 100）
+        - offset：偏移量（游标分页，默认 0）
+        - since_ts：仅返回 updated_at >= since_ts 的记录（可选时间游标）
+        旧调用方传 limit=2000/10000 仍兼容（被钳到上限 10000）。
+        """
+        await self.init_schema()
+        now = time.time()
+        limit = max(1, min(limit, 10000))
+        offset = max(0, offset)
+        conn = await self._get_conn()
+        try:
+            if since_ts is not None:
+                cur = await conn.execute(
+                    "SELECT * FROM ip_blocklist"
+                    " WHERE (expire_at = 0 OR expire_at > ?) AND updated_at >= ?"
+                    " ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    (now, float(since_ts), limit, offset),
+                )
+            else:
+                cur = await conn.execute(
+                    "SELECT * FROM ip_blocklist"
+                    " WHERE expire_at = 0 OR expire_at > ?"
+                    " ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    (now, limit, offset),
+                )
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+
+    async def count(self, since_ts: float | None = None) -> int:
+        """有效封禁规则总数（P2-2，不加载全部数据，单 SELECT COUNT）。
+
+        供分页页码与 stats 端点使用，避免 list_all(limit=10000) 全量加载进内存。
+        """
         await self.init_schema()
         now = time.time()
         conn = await self._get_conn()
         try:
-            cur = await conn.execute(
-                "SELECT * FROM ip_blocklist WHERE expire_at = 0 OR expire_at > ? ORDER BY updated_at DESC LIMIT ?",
-                (now, limit),
-            )
-            rows = await cur.fetchall()
-            return [dict(r) for r in rows]
+            if since_ts is not None:
+                cur = await conn.execute(
+                    "SELECT COUNT(*) FROM ip_blocklist"
+                    " WHERE (expire_at = 0 OR expire_at > ?) AND updated_at >= ?",
+                    (now, float(since_ts)),
+                )
+            else:
+                cur = await conn.execute(
+                    "SELECT COUNT(*) FROM ip_blocklist WHERE expire_at = 0 OR expire_at > ?",
+                    (now,),
+                )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
         finally:
             await conn.close()
 

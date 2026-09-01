@@ -695,7 +695,41 @@ class Settings(BaseSettings):
 
 
 # ── 模块级单例 ──────────────────────────────────────────
+# P2-5: 模块级实例化改为工厂 + 测试钩子，缓解跨文件单例污染（v6.9.0 P0-1 根因）。
+# 保留 `settings = Settings()` 模块级变量向后兼容（`from api.config import settings` 仍可用），
+# 但新增 `get_settings()`（lru_cache 单例）+ `reset_settings()`（测试重置钩子）。
+# 测试隔离改为调 reset_settings() 重建，而非 monkeypatch 字段重置（污染残留风险低）。
+_settings_cache: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """获取全局 Settings 单例（lru_cache 风格，首次调用时实例化）。
+
+    生产与模块级 `settings` 等价；测试可用 reset_settings() 重建以隔离 env。
+    """
+    global _settings_cache
+    if _settings_cache is None:
+        _settings_cache = Settings()
+    return _settings_cache
+
+
+def reset_settings() -> Settings:
+    """重置全局 Settings 单例（测试钩子）：丢弃缓存并重建。
+
+    用法：测试 fixture 在 monkeypatch.setenv 后调 reset_settings()，使后续
+    get_settings()/settings 读取新 env。返回新实例便于直接断言。
+
+    注意：reset 后模块级向后兼容变量（BASE_URL/TOKEN_POOL_SIZE 等）**不会**自动刷新——
+    它们在 import 期已绑定旧值。需刷新的测试应直接读 settings.xxx 或 get_settings().xxx，
+    而非模块级常量。模块级常量保留只为向后兼容旧代码 import，不应在测试中依赖其刷新。
+    """
+    global _settings_cache
+    _settings_cache = Settings()
+    return _settings_cache
+
+
 settings = Settings()
+_settings_cache = settings  # 工厂与模块级变量共享同一实例
 
 
 # ── 模块级变量（保持向后兼容）───────────────────────────────

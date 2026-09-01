@@ -9,6 +9,8 @@ const BLOCK_TYPE_META: Record<string, { label: string; tone: 'danger' | 'warning
   daily_limit: { label: '每日限流', tone: 'warning' },
 };
 
+const PAGE_SIZE = 100;
+
 function formatExpires(rule: BlockRule | null | undefined): string {
   if (!rule) return '—';
   const exp = rule.expire_at;
@@ -21,7 +23,11 @@ function formatExpires(rule: BlockRule | null | undefined): string {
 }
 
 export function SecurityPage() {
-  const { data, loading, error, reload } = useApi(() => fetchBlocklist(200), { intervalMs: 0 });
+  const [page, setPage] = useState(1);
+  const { data, loading, error, reload } = useApi(
+    () => fetchBlocklist({ page, pageSize: PAGE_SIZE }),
+    { intervalMs: 0 },
+  );
   const [adminKey, setAdminKey] = useState(getStoredAdminKey);
   const [ipInput, setIpInput] = useState('');
   const [blockType, setBlockType] = useState<'block' | 'daily_limit'>('block');
@@ -36,6 +42,7 @@ export function SecurityPage() {
   const saveKey = () => {
     setStoredAdminKey(adminKey);
     notify(adminKey.trim() ? '管理 Key 已保存到本地' : '管理 Key 已清除（只读模式）', 'success');
+    setPage(1);
     reload();
   };
 
@@ -86,7 +93,17 @@ export function SecurityPage() {
     }
   };
 
+  // 切页：回顶 + 重拉
+  const goPage = (p: number) => {
+    setPage(Math.max(1, p));
+    reload();
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const items: BlockRule[] = data?.items ?? [];
+  const total: number = data?.total ?? 0;
+  const hasMore: boolean = data?.has_more ?? false;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (error && !data) {
     return (
@@ -103,7 +120,7 @@ export function SecurityPage() {
         <div>
           <h1 className="page-title">
             安全风控
-            {items.length > 0 && <span className="title-badge">{items.length} 条生效规则</span>}
+            {total > 0 && <span className="title-badge">{total} 条生效规则</span>}
           </h1>
           <p className="page-desc">IP 动态封禁 / 解封 / 列表与状态查询（写操作需管理 Key 鉴权）</p>
         </div>
@@ -215,7 +232,7 @@ export function SecurityPage() {
       <div className="sec-list-section tf-card">
         <div className="sec-list-header">
           <h3 className="sec-list-title">📋 当前生效封禁规则</h3>
-          <span className="tf-badge tf-badge-info">{items.length} 条</span>
+          <span className="tf-badge tf-badge-info">{total} 条</span>
         </div>
 
         {loading && !data ? (
@@ -223,6 +240,7 @@ export function SecurityPage() {
         ) : !items.length && !error ? (
           <Empty text="封禁表为空" hint="未配置任何 IP 封禁规则，所有请求正常通行" />
         ) : (
+          <>
           <div style={{ overflowX: 'auto' }}>
             <table className="tf-table">
               <thead>
@@ -265,6 +283,20 @@ export function SecurityPage() {
               </tbody>
             </table>
           </div>
+          {/* P2-2 分页 */}
+          {totalPages > 1 && (
+            <div className="sec-pager">
+              <button onClick={() => goPage(1)} disabled={page <= 1 || loading} className="tf-btn tf-btn-secondary tf-btn-sm">«</button>
+              <button onClick={() => goPage(page - 1)} disabled={page <= 1 || loading} className="tf-btn tf-btn-secondary tf-btn-sm">‹ 上页</button>
+              <span className="sec-pager-info">第 {page} / {totalPages} 页 · {items.length} / {total}</span>
+              <button onClick={() => goPage(page + 1)} disabled={!hasMore || loading} className="tf-btn tf-btn-secondary tf-btn-sm">下页 ›</button>
+              <button onClick={() => goPage(totalPages)} disabled={!hasMore || loading} className="tf-btn tf-btn-secondary tf-btn-sm">»</button>
+            </div>
+          )}
+          {totalPages <= 1 && total > 0 && (
+            <div className="sec-pager sec-pager-single">共 {total} 条</div>
+          )}
+          </>
         )}
       </div>
 
@@ -299,6 +331,10 @@ export function SecurityPage() {
         .sec-list-section { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
         .sec-list-header { display: flex; align-items: center; justify-content: space-between; }
         .sec-list-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+
+        .sec-pager { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; padding-top: 6px; }
+        .sec-pager-info { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .sec-pager-single { justify-content: flex-start; }
 
         @media (max-width: 768px) {
           .akb-input-wrap { flex-direction: column; align-items: stretch; }

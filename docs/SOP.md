@@ -344,6 +344,81 @@ npm run build
 
 ---
 
+## 9. DB 备份与恢复（P2-1）
+
+> v7.0.0 起内置 `scripts/backup_db.py`（在线热备）与 `scripts/restore_db.py`（恢复）。
+> 用 SQLite `VACUUM INTO` 实现 WAL 模式下的在线热备（不锁写、安全），备份后立即 `PRAGMA integrity_check` 校验。
+
+### 9.1 备份策略
+
+- **方式**：`VACUUM INTO` 在线热备（WAL 模式下安全，不阻塞写，生成紧凑全量副本）
+- **频率**：每日 03:00 全量备份（宿主机 crontab 调度）
+- **保留**：7 天滚动清理（`--keep-days 7`）
+- **目录**：`data/backups/`（compose 已挂载 `./data/backups:/app/data/backups` 持久化）
+- **文件名**：`<dbname>-YYYYMMDD-HHMMSS.db`（时间戳排序）
+
+### 9.2 备份命令
+
+```bash
+# 单 DB 备份（主库）
+python scripts/backup_db.py --db data/imagefree.db --out-dir data/backups --keep-days 7
+
+# 批量备份 data/ 下所有 .db（imagefree/account_pool/email_registry/queue/edit_leases/routing）
+python scripts/backup_db.py --all --out-dir data/backups --keep-days 7
+
+# crontab 调度（每日 03:00）— 编辑宿主机 crontab：crontab -e
+0 3 * * * cd /home/ubuntu/imagefree-api && python scripts/backup_db.py --db data/imagefree.db --out-dir data/backups --keep-days 7
+```
+
+输出示例：`[OK] 备份成功: data/backups/imagefree-20260901-030000.db (12.34MB requests=16947)`
+
+### 9.3 恢复命令
+
+```bash
+# 从备份恢复到主库（自动备份当前 target 到 .pre-restore-<ts>.db 防覆盖）
+python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db --target data/imagefree.db
+```
+
+恢复流程：备份完整性预检 → 自动 pre-restore 当前 target → 复制备份到 target → 清理残留 WAL/SHM → 恢复后 integrity_check 校验 → 行数对照。
+
+恢复后需重启 api 容器使新 DB 生效：`sudo docker compose restart api`
+
+### 9.4 恢复演练步骤
+
+1. **选一个最近备份**：`ls -lt data/backups/ | head`
+2. **演练恢复到临时 target**（不覆盖生产）：
+   ```bash
+   python scripts/restore_db.py --backup data/backups/imagefree-<最新>.db --target data/restore-drill.db
+   ```
+3. **校验行数一致**：
+   ```bash
+   sqlite3 data/restore-drill.db "SELECT count(*) FROM requests"
+   sqlite3 data/imagefree.db "SELECT count(*) FROM requests"   # 生产库行数应与备份一致
+   ```
+4. **清理演练文件**：`rm -f data/restore-drill.db data/restore-drill.db.pre-restore-*`
+5. **定期演练**：建议每月一次，确保备份可恢复（避免「有备份但恢复不了」的隐性故障）
+
+### 9.5 异地副本（可选）
+
+备份文件在 `data/backups/` 本地持久化，单机损坏仍会丢失。建议定期异地副本：
+
+- **rsync 到对象存储**：每日 03:30 把最新备份 rsync 到 R2/S3（cron 串联）
+  ```bash
+  # 0 3 * * * 备份完成后，3:30 上传最新备份
+  30 3 * * * cd /home/ubuntu/imagefree-api && rclone copy data/backups/imagefree-$(date +\%Y\%m\%d)-*.db r2:imagefree-backups/ --rclone-args
+  ```
+- **scp 到另一台服务器**：`scp data/backups/*.db backup-host:/backups/`
+- 保留策略：异地 30 天，本地 7 天
+
+### 9.6 注意事项
+
+- `VACUUM INTO` 在 WAL 模式下先 `wal_checkpoint(TRUNCATE)` 合并 WAL，保证备份是最新快照
+- 恢复是**覆盖操作**：脚本自动 pre-restore 备份当前 target，但生产恢复仍建议手动二次确认
+- `data/backups/` 已通过 compose 卷挂载持久化，容器重建不丢失
+- 备份脚本退出码：0=成功，非 0=失败（cron 可捕获并告警）
+
+---
+
 ## 9. 重要端点参考
 
 | 端点 | 用途 | 频次 |

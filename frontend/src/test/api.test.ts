@@ -481,7 +481,8 @@ describe('只读 fetcher 参数拼装', () => {
 
   it('fetchBlocklist 带 limit', async () => {
     const spy = mockFetch(async () => jsonRes({ items: [], count: 0 }));
-    await fetchBlocklist(50);
+    // P2-2: fetchBlocklist 改为 page/pageSize 分页（向后兼容 limit 参数仍拼 limit=N）
+    await fetchBlocklist({ limit: 50 });
     expect(String(spy.mock.calls[0][0])).toContain('limit=50');
     spy.mockRestore();
   });

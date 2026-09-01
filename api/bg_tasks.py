@@ -95,8 +95,9 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                     "auth_error_count": _auth_delta,  # 近窗口增量（防累计值永真）
                 }
                 # IP 批量封禁/限流计数（异步读 DB，失败静默保持 0）
+                # P2-2: 用 count() 替代 list_all(limit=2000) len()，避免全量加载进内存
                 try:
-                    ctx["blocked_ip_count"] = len(await ip_blocklist_store.list_all(limit=2000))
+                    ctx["blocked_ip_count"] = await ip_blocklist_store.count()
                 except Exception:
                     ctx["blocked_ip_count"] = 0
                 # M6-F3：成本告警上下文注入（cost_over_budget / cost_burn_rate_warning）

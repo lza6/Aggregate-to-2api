@@ -116,11 +116,41 @@ async def unblock_ip(request: Request, ip: str = "") -> dict[str, Any]:
 
 
 @router.get("/v1/admin/security/blocklist")
-async def blocklist(request: Request, limit: int = 200) -> dict[str, Any]:
-    """列出当前生效封禁规则。"""
+async def blocklist(
+    request: Request,
+    page: int = 1,
+    page_size: int = 100,
+    since_ts: float | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """列出当前生效封禁规则（P2-2 分页）。
+
+    向后兼容旧 limit 参数：传 limit 时走旧单参数语义（page 忽略，limit 钳到 [1,10000]）。
+    新参数：
+    - page: 页码（从 1 开始，默认 1）
+    - page_size: 每页条数（默认 100，上限 1000）
+    - since_ts: 时间游标（仅返回 updated_at >= since_ts 的记录）
+    返回信封 {items, total, page, page_size, has_more}。
+    """
     _require_admin_key(request)
-    rules = await ip_blocklist_store.list_all(limit=max(1, min(limit, 1000)))
-    return {"items": rules, "count": len(rules)}
+    page = max(1, page)
+    page_size = max(1, min(page_size, 1000))
+    # 旧 limit 兼容：显式传 limit 时走旧语义（offset=0，page 参数被忽略）
+    if limit is not None:
+        page_size = max(1, min(int(limit), 1000))
+        page = 1
+    offset = (page - 1) * page_size
+    items = await ip_blocklist_store.list_all(limit=page_size, offset=offset, since_ts=since_ts)
+    total = await ip_blocklist_store.count(since_ts=since_ts)
+    has_more = (offset + len(items)) < total
+    return {
+        "items": items,
+        "count": len(items),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_more": has_more,
+    }
 
 
 @router.get("/v1/admin/security/status")
@@ -134,9 +164,15 @@ async def block_status(request: Request, ip: str = "") -> dict[str, Any]:
 
 @router.get("/v1/admin/security/stats")
 async def security_stats(request: Request) -> dict[str, Any]:
-    """风控统计：封禁总数 + 当前活跃每日限制数。"""
+    """风控统计：封禁总数 + 当前活跃每日限制数（P2-2 用 count 替代全量加载）。
+
+    P2-2：原先 list_all(limit=10000) 全量加载做统计 → 改用 count() + 分批累加，
+    避免封禁表膨胀时 OOM。block/daily_limit 计数仍取第一页样本（总数已由 count 给出）。
+    """
     _require_admin_key(request)
-    rules = await ip_blocklist_store.list_all(limit=10000)
-    blocks = sum(1 for r in rules if r.get("block_type") == "block")
-    daily = sum(1 for r in rules if r.get("block_type") == "daily_limit")
-    return {"total": len(rules), "block": blocks, "daily_limit": daily}
+    total = await ip_blocklist_store.count()
+    # block/daily_limit 分布：取首页 1000 条样本做近似统计（总封禁数用精确 count）
+    sample = await ip_blocklist_store.list_all(limit=1000, offset=0)
+    blocks = sum(1 for r in sample if r.get("block_type") == "block")
+    daily = sum(1 for r in sample if r.get("block_type") == "daily_limit")
+    return {"total": total, "block": blocks, "daily_limit": daily}

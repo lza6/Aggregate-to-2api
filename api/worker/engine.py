@@ -523,7 +523,13 @@ class Engine:
                 log.warning("自动伸缩异常: %s", e)
 
     async def _auto_scale_once(self) -> None:
-        """单次伸缩检查（可被测试直接调用）。"""
+        """单次伸缩检查（可被测试直接调用）。
+
+        P2-6：用早返回（guard clause）简化缩容判定，消除嵌套冗余。
+        行为等价于旧版（缩容阈值/触发条件不变）：
+        - 扩容：排队 > 阈值 且 未达上限 → 增 2 个（最多增 2 / 30s）
+        - 缩容：已过最小值 且（排队 < 阈值 或 至少 1 个 worker 空闲超阈值）→ 缩 1 个
+        """
         qsize = self.queue.qsize()
         current = len(self._workers)
 
@@ -535,25 +541,24 @@ class Engine:
                 next_idx = max((w.id for w in self._workers), default=-1) + 1
                 self._workers.append(self._create_worker(next_idx))
             log.info("自动扩容: %d → %d（排队 %d > %d）", current, target, qsize, config.IF_WORKER_SCALE_UP_THRESHOLD)
+            return
 
-        # 缩容：排队 < 阈值 或 空闲超阈值 → 缩 1 个（最多缩 1 / 30s）
-        elif current > config.IF_WORKERS_MIN:
-            should_shrink = False
-            reason = ""
-            if qsize < config.IF_WORKER_SCALE_DOWN_THRESHOLD:
-                should_shrink = True
-                reason = f"排队 {qsize} < {config.IF_WORKER_SCALE_DOWN_THRESHOLD}"
-            elif self._idle_workers_count() >= 1:
-                # 至少有 1 个空闲 worker
-                idle_count = self._idle_workers_count()
-                if idle_count >= 1:
-                    should_shrink = True
-                    reason = f"{idle_count} 个 worker 空闲超过 {config.IF_WORKER_IDLE_SECONDS}s"
+        # 缩容：已过最小值才考虑（未过最小值无需缩容）
+        if current <= config.IF_WORKERS_MIN:
+            return
 
-            if should_shrink:
-                self._shrink_one_worker()
-                worker_health.register([w.id for w in self._workers])
-                log.info("自动缩容: %d → %d（%s）", current, len(self._workers), reason)
+        # 缩容触发条件：排队 < 阈值，或至少 1 个 worker 空闲超阈值
+        idle_count = self._idle_workers_count()
+        if qsize < config.IF_WORKER_SCALE_DOWN_THRESHOLD:
+            reason = f"排队 {qsize} < {config.IF_WORKER_SCALE_DOWN_THRESHOLD}"
+        elif idle_count >= 1:
+            reason = f"{idle_count} 个 worker 空闲超过 {config.IF_WORKER_IDLE_SECONDS}s"
+        else:
+            return  # 既不扩容也不满足缩容条件 → 本轮不动作
+
+        self._shrink_one_worker()
+        worker_health.register([w.id for w in self._workers])
+        log.info("自动缩容: %d → %d（%s）", current, len(self._workers), reason)
 
     def _idle_workers_count(self) -> int:
         """统计空闲超过 IF_WORKER_IDLE_SECONDS 的 worker 数。"""

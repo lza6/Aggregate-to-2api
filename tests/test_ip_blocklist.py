@@ -153,6 +153,85 @@ class TestIPBlocklistStore:
         assert await blocklist_store.get_many([]) == {}
 
 
+# ── P2-2 分页 + count + since_ts ─────────────────────────────
+
+
+class TestPaginationAndCount:
+    async def test_list_all_pagination_offset(self, blocklist_store):
+        """list_all(limit, offset) 返回正确的页切片（按 updated_at DESC）。"""
+        for i in range(25):
+            await blocklist_store.add_or_update(
+                ip=f"203.0.114.{i}",
+                block_type="block",
+                reason=f"r{i}",
+                ttl_seconds=0,
+            )
+        page1 = await blocklist_store.list_all(limit=10, offset=0)
+        page2 = await blocklist_store.list_all(limit=10, offset=10)
+        page3 = await blocklist_store.list_all(limit=10, offset=20)
+        assert len(page1) == 10
+        assert len(page2) == 10
+        assert len(page3) == 5  # 25 - 20 = 5
+        # 三页互不重叠
+        ips_all = {item["ip"] for item in page1 + page2 + page3}
+        assert len(ips_all) == 25
+        # 按 updated_at DESC：page1 的 updated_at 都 >= page2 的
+        assert page1[-1]["updated_at"] >= page2[0]["updated_at"]
+
+    async def test_list_all_limit_clamped(self, blocklist_store):
+        """limit 钳制到 [1, 10000]：0 → 1，100000 → 10000。"""
+        await blocklist_store.add_or_update(ip="203.0.114.50", block_type="block", ttl_seconds=0)
+        # limit=0 → 钳到 1，至少返回 1 条
+        res = await blocklist_store.list_all(limit=0)
+        assert len(res) == 1
+        # limit 巨大 → 钳到 10000，不会崩
+        res_big = await blocklist_store.list_all(limit=100000)
+        assert len(res_big) == 1
+
+    async def test_count_returns_total(self, blocklist_store):
+        """count() 返回有效记录总数（不加载全部数据）。"""
+        for i in range(5):
+            await blocklist_store.add_or_update(
+                ip=f"203.0.115.{i}",
+                block_type="block",
+                ttl_seconds=0,
+            )
+        assert await blocklist_store.count() == 5
+
+    async def test_count_excludes_expired(self, blocklist_store):
+        """count() 排除已过期记录（与 list_all 一致）。"""
+        await blocklist_store.add_or_update(ip="203.0.116.1", block_type="block", ttl_seconds=0)
+        await blocklist_store.add_or_update(ip="203.0.116.2", block_type="block", ttl_seconds=0.05)
+        await asyncio.sleep(0.1)
+        assert await blocklist_store.count() == 1  # 过期的不计
+
+    async def test_list_all_since_ts_filter(self, blocklist_store):
+        """list_all(since_ts=) 只返回 updated_at >= since_ts 的记录。"""
+        t0 = time.time()
+        await blocklist_store.add_or_update(ip="203.0.117.1", block_type="block", ttl_seconds=0)
+        await asyncio.sleep(0.05)
+        t_mid = time.time()
+        await blocklist_store.add_or_update(ip="203.0.117.2", block_type="block", ttl_seconds=0)
+
+        recent = await blocklist_store.list_all(limit=100, offset=0, since_ts=t_mid)
+        ips = {item["ip"] for item in recent}
+        assert "203.0.117.2" in ips
+        assert "203.0.117.1" not in ips  # t0~t_mid 之间，被过滤
+
+        all_recent = await blocklist_store.list_all(limit=100, offset=0, since_ts=t0)
+        assert len(all_recent) == 2
+
+    async def test_count_since_ts_filter(self, blocklist_store):
+        """count(since_ts=) 只计 updated_at >= since_ts 的记录。"""
+        t0 = time.time()
+        await blocklist_store.add_or_update(ip="203.0.118.1", block_type="block", ttl_seconds=0)
+        await asyncio.sleep(0.05)
+        t_mid = time.time()
+        await blocklist_store.add_or_update(ip="203.0.118.2", block_type="block", ttl_seconds=0)
+        assert await blocklist_store.count(since_ts=t_mid) == 1
+        assert await blocklist_store.count(since_ts=t0) == 2
+
+
 # ── request_guard：风控闭环 ─────────────────────────────────────
 
 

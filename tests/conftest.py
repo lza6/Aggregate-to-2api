@@ -46,6 +46,22 @@ async def tmp_db():
         pass
 
 
+@pytest.fixture(autouse=True)
+def _reset_settings_singleton():
+    """P2-5: 每个用例前重置 config 全局单例，防跨文件单例污染。
+
+    v6.9.0 P0-1 根因：模块级 `settings = Settings()` 在某些用例 monkeypatch env 后
+    残留旧值，导致后续用例读到污染的 config。autouse fixture 在每用例前调
+    reset_settings() 重建单例（读当前 env），用例间隔离。
+    """
+    from api.config import reset_settings
+
+    reset_settings()
+    yield
+    # 用例后再重置一次，清掉用例内的 monkeypatch env 残留
+    reset_settings()
+
+
 @pytest.fixture
 def no_proxy_env():
     """测试期间清空代理环境变量。"""

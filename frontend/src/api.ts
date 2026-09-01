@@ -311,7 +311,8 @@ export function setStoredAdminKey(key: string): void {
 }
 
 /** 管理面写操作头：仅当本地保存了管理 Key 才附带 Authorization；无 Key 时由后端决定（401/403/开放模式）。 */
-function adminHeaders(): Record<string, string> {
+// P2-4 barrel：导出供 api/admin.ts | api/tasks.ts 等拆分子模块复用（函数体内引用，运行时 live binding 安全）。
+export function adminHeaders(): Record<string, string> {
   const key = getStoredAdminKey();
   return key ? { 'Authorization': `Bearer ${key}` } : {};
 }
@@ -350,8 +351,26 @@ export async function unblockIp(ip: string): Promise<{ ok: boolean; removed: boo
   });
 }
 
-export async function fetchBlocklist(limit = 200): Promise<{ items: BlockRule[]; count: number }> {
-  return apiFetch<{ items: BlockRule[]; count: number }>(`/v1/admin/security/blocklist?limit=${limit}`, { headers: adminHeaders(), caller: '封禁列表获取失败' });
+export interface BlocklistPage {
+  items: BlockRule[];
+  count: number;
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export async function fetchBlocklist(
+  opts: { page?: number; pageSize?: number; limit?: number } = {},
+): Promise<BlocklistPage> {
+  const { page = 1, pageSize = 100, limit } = opts;
+  const params = limit != null
+    ? `limit=${limit}`
+    : `page=${page}&page_size=${pageSize}`;
+  return apiFetch<BlocklistPage>(`/v1/admin/security/blocklist?${params}`, {
+    headers: adminHeaders(),
+    caller: '封禁列表获取失败',
+  });
 }
 
 export async function fetchBlockStatus(ip: string): Promise<{ ip: string; rule: BlockRule | null; blocked: boolean }> {
@@ -693,7 +712,8 @@ export function setStoredApiKey(key: string): void {
   } catch { /* ignore */ }
 }
 
-function authHeaders(): Record<string, string> {
+// P2-4 barrel：导出供 api/chat.ts 拆分子模块复用（函数体内引用，运行时 live binding 安全）。
+export function authHeaders(): Record<string, string> {
   const key = getStoredApiKey();
   return key ? { 'Authorization': `Bearer ${key}` } : {};
 }

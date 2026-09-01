@@ -275,9 +275,20 @@ def _get_cached_ip_rule(ip: str) -> dict | None:
 async def _sync_blocklist_cache() -> None:
     global _LAST_CACHE_SYNC
     try:
-        rules = await ip_blocklist_store.list_all(limit=2000)
+        # P2-2: 封禁表全量同步走分页累加，避免单次 list_all(limit=2000) 在封禁表
+        # 膨胀时 OOM。page_size=1000 分批拉取直至无更多，最终聚合到内存缓存。
+        new_cache: dict[str, dict] = {}
+        page_size = 1000
+        offset = 0
+        while True:
+            batch = await ip_blocklist_store.list_all(limit=page_size, offset=offset)
+            if not batch:
+                break
+            new_cache.update({r["ip"]: r for r in batch})
+            offset += len(batch)
+            if len(batch) < page_size:
+                break
         now = time.time()
-        new_cache = {r["ip"]: r for r in rules}
         with _lock:
             _BLOCKLIST_CACHE.clear()
             _BLOCKLIST_CACHE.update(new_cache)
