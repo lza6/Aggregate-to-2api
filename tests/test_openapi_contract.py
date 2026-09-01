@@ -249,13 +249,19 @@ class TestSecurityResponseContract:
         assert rec["expire_at"] and rec["expire_at"] > 0
 
     def test_blocklist_response_shape(self, client):
-        """GET /v1/admin/security/blocklist → {items: [...], count: int}。"""
+        """GET /v1/admin/security/blocklist → {items: [...], count: int} + P2-2 分页信封扩展字段。"""
         r = client.get("/v1/admin/security/blocklist?limit=10")
         assert r.status_code == 200
         body = r.json()
-        assert set(body.keys()) == {"items", "count"}
+        # P2-2: 端点改分页信封 {items, count, total, page, page_size, has_more}；
+        # 核心字段 items+count 必须存在，扩展字段允许存在（向后兼容契约放宽为 superset）。
+        assert "items" in body
+        assert "count" in body
         assert isinstance(body["items"], list)
         assert isinstance(body["count"], int)
+        # 分页扩展字段（P2-2 新增）
+        assert "total" in body
+        assert "has_more" in body
 
 
 # ── F. 统一错误响应信封契约（P1-4：防 error 信封结构漂移）─────────────
