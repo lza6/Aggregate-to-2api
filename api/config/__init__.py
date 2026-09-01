@@ -172,9 +172,26 @@ class Settings(BaseSettings):
     if_cost_budget_usd: float = Field(0.0, validation_alias="IF_COST_BUDGET_USD")
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
+    # P3-3: 生产安全响应头注入开关（默认开启；关闭=最小回滚，不注入任何安全头）。
+    # 仅当 True 时 SecurityHeadersMiddleware 注入 X-Content-Type-Options / X-Frame-Options /
+    # Referrer-Policy / Strict-Transport-Security（仅 HTTPS）。默认 true 不破坏现状：
+    # 本 API 为 JSON 接口+管理面板，这些头对现有 JS 前端无破坏（JSON 响应无 inline HTML）。
+    if_security_headers_enabled: bool = Field(True, validation_alias="IF_SECURITY_HEADERS_ENABLED")
+    # P3-3: 宽松 CSP 响应头开关（默认关闭，避免误杀管理面板 inline script / 画廊 CDN 图片）。
+    if_csp_enabled: bool = Field(False, validation_alias="IF_CSP_ENABLED")
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
     if_api_keys: str = Field("", validation_alias="IF_API_KEYS")
     if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
+
+    # ── tryingopen.com 匿名网关（v4.4 聊天）──────────────────
+    # 开关：字符串 '1'/'true'/'on' → True（走 _bool_str_coerce）。原先 os.getenv 直读，现纳入模型。
+    if_tryingopen_enabled: bool = Field(True, validation_alias="IF_TRYINGOPEN_ENABLED")
+    # 每出口每小时额度（remaining_credits 估算用；0 = 不计配额）
+    if_tryingopen_hourly_per_ip: int = Field(20, validation_alias="IF_TRYINGOPEN_HOURLY_PER_IP")
+    # 代理轮换最大尝试次数（之后追加一次直连兜底）；钳到 >=1，防误配 0/负数导致聊天静默无输出
+    if_tryingopen_max_attempts: int = Field(3, ge=1, validation_alias="IF_TRYINGOPEN_MAX_ATTEMPTS")
+    # 模型目录同步间隔（分钟）
+    if_tryingopen_sync_minutes: int = Field(30, validation_alias="IF_TRYINGOPEN_SYNC_MINUTES")
 
     # ── 缓存 ──
     if_lru_cache_size: int = Field(512, validation_alias="IF_LRU_CACHE_SIZE")
@@ -198,6 +215,8 @@ class Settings(BaseSettings):
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")
     db_file: str = Field("data/imagefree.db", validation_alias="IF_DB_FILE")
+    # P3-1: 路由决策持久化（独立轻量 sqlite，不侵入主 DB schema）；空 = 关闭（默认）
+    routing_db_file: str = Field("", validation_alias="IF_ROUTING_DB")
     if_base64_dir: str = Field("data/imgs", validation_alias="IF_BASE64_DIR")
     if_base64_file_ttl: int = Field(86400, validation_alias="IF_BASE64_FILE_TTL")
     # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80%
@@ -324,6 +343,9 @@ class Settings(BaseSettings):
         "if_proxy_trace_enabled",
         "if_falai_enabled",
         "if_falai_browser_headful",
+        "if_security_headers_enabled",
+        "if_csp_enabled",
+        "if_tryingopen_enabled",
         mode="before",
     )
     @classmethod
@@ -432,6 +454,7 @@ class Settings(BaseSettings):
             base64_file_ttl=self.if_base64_file_ttl,
             idempotency_enabled=self.if_idempotency_enabled,
             idempotency_ttl=self.if_idempotency_ttl,
+            routing_db_file=self.routing_db_file,
         )
         self._http = HTTPSettings(
             host=self.host,
@@ -552,7 +575,15 @@ class Settings(BaseSettings):
         )
         self._security = SecuritySettings(
             gallery_password=self.if_gallery_password,
+            ip_whitelist=self.if_ip_whitelist,
+            trusted_proxies=self.if_trusted_proxies,
+            auto_block_enabled=self.if_auto_block_enabled,
+            auto_block_threshold=self.if_auto_block_threshold,
+            auto_block_window_seconds=self.if_auto_block_window_seconds,
+            auto_block_ttl_seconds=self.if_auto_block_ttl_seconds,
             cors_origins=self.if_cors_origins,
+            security_headers_enabled=self.if_security_headers_enabled,
+            csp_enabled=self.if_csp_enabled,
             api_keys=[k.strip() for k in (self.if_api_keys or "").split(",") if k.strip()],
             chat_requests_per_minute=self.if_chat_rate_limit,
         )
@@ -623,7 +654,13 @@ class Settings(BaseSettings):
             "queue": self.queue.model_dump(),
             "observability": self.observability.model_dump(),
             "edit": self.edit.model_dump(),
-            "security": self.security.model_dump(),
+            "security": self.security.to_env(),
+            "chat": {
+                "tryingopen_enabled": self.if_tryingopen_enabled,
+                "tryingopen_hourly_per_ip": self.if_tryingopen_hourly_per_ip,
+                "tryingopen_max_attempts": self.if_tryingopen_max_attempts,
+                "tryingopen_sync_minutes": self.if_tryingopen_sync_minutes,
+            },
         }
 
     def validate(self) -> list[str]:
@@ -737,10 +774,6 @@ IF_GALLERY_SIGNING_TTL = settings.if_gallery_signing_ttl
 IF_USD_PER_CREDIT = settings.if_usd_per_credit
 IF_COST_BUDGET_USD = settings.if_cost_budget_usd
 
-# 成本 / 预算（M6-F3）
-IF_USD_PER_CREDIT = settings.if_usd_per_credit
-IF_COST_BUDGET_USD = settings.if_cost_budget_usd
-
 # 缓存
 IF_LRU_CACHE_SIZE = settings.if_lru_cache_size
 IF_LRU_CACHE_TTL = settings.if_lru_cache_ttl
@@ -770,6 +803,7 @@ OTEL_CONSOLE_EXPORTER = os.getenv("IF_OTEL_CONSOLE_EXPORTER", "0").strip().lower
 # DB
 STATS_FILE = settings.stats_file
 DB_FILE = settings.db_file
+IF_ROUTING_DB = settings.routing_db_file
 IF_BASE64_DIR = settings.if_base64_dir
 IF_BASE64_FILE_TTL = settings.if_base64_file_ttl
 IF_IMG_MAX_GB = settings.if_img_max_gb
@@ -851,6 +885,16 @@ IF_ADMIN_KEY_OPEN = settings.if_admin_key_open
 
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
+
+# ── tryingopen.com 匿名网关（模块级便捷引用）────────────────
+IF_TRYINGOPEN_ENABLED = settings.if_tryingopen_enabled
+IF_TRYINGOPEN_HOURLY_PER_IP = settings.if_tryingopen_hourly_per_ip
+IF_TRYINGOPEN_MAX_ATTEMPTS = settings.if_tryingopen_max_attempts
+IF_TRYINGOPEN_SYNC_MINUTES = settings.if_tryingopen_sync_minutes
+
+# ── P3-3 安全头开关（模块级便捷引用）────────────────
+IF_SECURITY_HEADERS_ENABLED = settings.if_security_headers_enabled
+IF_CSP_ENABLED = settings.if_csp_enabled
 
 
 # ── 纯常量（无环境变量映射）────────────────────────────────
@@ -1014,6 +1058,7 @@ __all__ = [
     "OTEL_CONSOLE_EXPORTER",
     "STATS_FILE",
     "DB_FILE",
+    "IF_ROUTING_DB",
     "IF_BASE64_DIR",
     "IF_BASE64_FILE_TTL",
     "IF_IMG_MAX_GB",
@@ -1074,6 +1119,12 @@ __all__ = [
     "IF_AUTO_BLOCK_WINDOW_SECONDS",
     "IF_AUTO_BLOCK_TTL_SECONDS",
     "CORS_ORIGINS",
+    "IF_SECURITY_HEADERS_ENABLED",
+    "IF_CSP_ENABLED",
+    "IF_TRYINGOPEN_ENABLED",
+    "IF_TRYINGOPEN_HOURLY_PER_IP",
+    "IF_TRYINGOPEN_MAX_ATTEMPTS",
+    "IF_TRYINGOPEN_SYNC_MINUTES",
     "MAX_IMAGE_BYTES",
     "MAX_PROMPT_LEN",
     "ASPECT_RATIOS",

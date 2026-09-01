@@ -515,7 +515,7 @@ async def test_chat_collect_provider_exception_503(app, fake_provider, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_record_swallows_chat_usage_exception(app, monkeypatch):
+async def test_record_swallows_chat_usage_exception(app, fake_provider, monkeypatch):
     """_record 内部 chat_usage.record 抛异常时被吞（不外泄到响应）。"""
 
     async def boom_record(**kwargs):

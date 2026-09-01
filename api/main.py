@@ -30,10 +30,73 @@ _root_logger.setLevel(logging.INFO)
 if log_buffer not in _root_logger.handlers:
     _root_logger.addHandler(log_buffer)
 
+# ── P3-3: 生产安全响应头中间件 ──────────────────────────
+# 仅当 config.IF_SECURITY_HEADERS_ENABLED 为 True 时注入；关闭=不注入任何安全头（最小回滚）。
+# CSP 独立开关 config.IF_CSP_ENABLED（默认关闭），经许可后才注入宽松 CSP，避免误杀面板/画廊。
+class SecurityHeadersMiddleware:
+    """纯 ASGI 中间件：向每个 HTTP 响应注入生产安全响应头。
+
+    注入头（IF_SECURITY_HEADERS_ENABLED=True 时）：
+      - Strict-Transport-Security: max-age=31536000; includeSubDomains（仅 HTTPS 请求）
+      - X-Content-Type-Options: nosniff
+      - X-Frame-Options: DENY
+      - Referrer-Policy: strict-origin-when-cross-origin
+    当 IF_CSP_ENABLED=True 时额外注入宽松 CSP：
+      default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';
+      script-src 'self' 'unsafe-inline'; connect-src 'self'
+    说明：X-Frame-Options: DENY 仅禁止他人页面对本服务的 iframe 嵌入，不破坏本服务自身的
+    管理面板/落地页渲染；JSON API 响应不含 inline HTML/脚本，不受 header 注入影响。
+    """
+
+    # 常量头（只在需要时按请求注入，避免无条件设置导致 head/错误响应膨胀）
+    _HSTS = b"max-age=31536000; includeSubDomains"
+    _XCTO = b"nosniff"
+    _XFO = b"DENY"
+    _RRP = b"strict-origin-when-cross-origin"
+    _CSP = (
+        b"default-src 'self'; "
+        b"img-src 'self' data: https:; "
+        b"style-src 'self' 'unsafe-inline'; "
+        b"script-src 'self' 'unsafe-inline'; "
+        b"connect-src 'self'"
+    )
+
+    def __init__(self, app):
+        self.app = app
+        self._enabled = bool(getattr(config, "IF_SECURITY_HEADERS_ENABLED", False))
+        self._csp_enabled = bool(getattr(config, "IF_CSP_ENABLED", False))
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not self._enabled:
+            await self.app(scope, receive, send)
+            return
+
+        is_https = scope.get("scheme") == "https"
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                existing = {k.lower() for k, _ in headers}
+                if b"x-content-type-options" not in existing:
+                    headers.append((b"X-Content-Type-Options", self._XCTO))
+                if b"x-frame-options" not in existing:
+                    headers.append((b"X-Frame-Options", self._XFO))
+                if b"referrer-policy" not in existing:
+                    headers.append((b"Referrer-Policy", self._RRP))
+                if is_https and b"strict-transport-security" not in existing:
+                    headers.append((b"Strict-Transport-Security", self._HSTS))
+                if self._csp_enabled and b"content-security-policy" not in existing:
+                    headers.append((b"Content-Security-Policy", self._CSP))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="6.8.1",
+    version="6.9.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
     "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
@@ -44,6 +107,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── P3-3: 生产安全响应头注入（默认开启；关闭=最小回滚）──
+# 注入 X-Content-Type-Options / X-Frame-Options / Referrer-Policy / Strict-Transport-Security(仅HTTPS)。
+# 默认 true 不破坏现状：本 API 为 JSON 接口+管理面板，JSON 响应无 inline HTML，这些头对现有
+# JS 前端无破坏（X-Frame-Options:DENY 仅影响他页 iframe 嵌本服务，管理面板自身不受影响）。
+# CSP 默认关闭（config.IF_CSP_ENABLED），避免误杀面板 inline script / 画廊 CDN 图片。
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ── 全局异常处理器 ──
 register_exception_handlers(app)

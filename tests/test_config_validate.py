@@ -4,10 +4,19 @@
 - validate() 各错误分支（port 越界 / max_queue<1 / workers<1 / token_pool_size<1 /
   workers_max<workers_min / base_url 空 / sitekey 空 / cf_solver_url 空）
 - _resolve_proxy_and_init_groups 的代理 fallback（HTTPS_PROXY/HTTP_PROXY 环境变量）
-- settings_json 十个分组结构完整
+- settings_json 分组结构完整（含 security env 风格键与 chat 组）
+- env.example 与 config 的 IF_* 双向一致（P1-1 漂移闭环）
 """
 
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
 from api.config import Settings
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ENV_EXAMPLE = _REPO_ROOT / "deploy" / ".env.example"
 
 
 def _mk(**overrides) -> Settings:
@@ -118,9 +127,76 @@ class TestSettingsJson:
             "observability",
             "edit",
             "security",
+            "chat",
         }
         # 抽查关键字段
         assert "file" in js["db"]
         assert "host" in js["http"]
         assert "cf_solver_url" in js["solver"]
         assert "log_dir" in js.get("observability", {}) or True  # P13 若并入分组则断言
+
+    def test_security_uses_env_style_keys(self):
+        """P1-2: security 分组输出 env 风格大写键（IF_ 前缀剥离）。"""
+        s = Settings(_env_file=None)
+        s._resolve_proxy_and_init_groups()
+        sec = s.settings_json()["security"]
+        assert "IP_WHITELIST" in sec
+        assert "TRUSTED_PROXIES" in sec
+        assert "AUTO_BLOCK_ENABLED" in sec
+        assert "CORS_ORIGINS" in sec
+        assert "API_KEYS" in sec
+        assert "CHAT_RATE_LIMIT" in sec
+        # 不再输出 pydantic 下划线小写字段名
+        assert "cors_origins" not in sec
+
+    def test_settings_json_exposes_tryingopen_chat(self):
+        """P1-1: settings_json 透传 tryingopen 调度参数（chat 分组）。"""
+        s = Settings(_env_file=None)
+        s._resolve_proxy_and_init_groups()
+        chat = s.settings_json()["chat"]
+        assert chat["tryingopen_enabled"] is True
+        assert chat["tryingopen_hourly_per_ip"] == 20
+        assert chat["tryingopen_max_attempts"] == 3
+        assert chat["tryingopen_sync_minutes"] == 30
+
+    def test_tryingopen_config_constants_match_fields(self):
+        """P1-1: 模块级 IF_TRYINGOPEN_* 常量与 Settings 字段同步。"""
+        import api.config as cfg
+
+        assert cfg.IF_TRYINGOPEN_ENABLED == cfg.settings.if_tryingopen_enabled
+        assert cfg.IF_TRYINGOPEN_HOURLY_PER_IP == cfg.settings.if_tryingopen_hourly_per_ip
+        assert cfg.IF_TRYINGOPEN_MAX_ATTEMPTS == cfg.settings.if_tryingopen_max_attempts
+        assert cfg.IF_TRYINGOPEN_SYNC_MINUTES == cfg.settings.if_tryingopen_sync_minutes
+
+
+class TestEnvExampleSync:
+    """P1-1: deploy/.env.example 与 config 的 IF_* 双向一致（漂移闭环）。"""
+
+    @staticmethod
+    def _config_consumed() -> set[str]:
+        import glob
+        import os
+
+        import api.config as cfg
+
+        pkg = Path(cfg.__file__).parent
+        aliases: set[str] = set()
+        for fp in glob.glob(str(pkg / "*.py")):
+            src = Path(fp).read_text(encoding="utf-8")
+            aliases |= set(re.findall(r'validation_alias\s*=\s*"(IF_[A-Z0-9_]+)"', src))
+            aliases |= set(re.findall(r'os\.getenv\("(IF_[A-Z0-9_]+)"', src))
+        return aliases
+
+    def test_every_config_alias_has_env_example(self):
+        """config 每个 alias 都能在 env.example 找到（缺失即 fail）。"""
+        env_text = _ENV_EXAMPLE.read_text(encoding="utf-8")
+        env_vars = set(re.findall(r"^(IF_[A-Z0-9_]+)\s*=", env_text, re.M))
+        missing = sorted(self._config_consumed() - env_vars)
+        assert not missing, f"config 存在但 env.example 缺失: {missing}"
+
+    def test_every_env_example_var_is_consumed(self):
+        """env.example 每个 IF_* 都能在 config 找到 alias（孤儿即 fail）。"""
+        env_text = _ENV_EXAMPLE.read_text(encoding="utf-8")
+        env_vars = set(re.findall(r"^(IF_[A-Z0-9_]+)\s*=", env_text, re.M))
+        orphan = sorted(env_vars - self._config_consumed())
+        assert not orphan, f"env.example 存在但 config 未消费: {orphan}"

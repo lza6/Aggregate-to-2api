@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { fetchDiagnostics, fetchAccountPool, fetchProxyPool } from '../api';
 import { StatCard } from '../components/StatCard';
+import { ProxyPoolGeo } from '../components/ProxyPoolGeo';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 
@@ -30,6 +31,12 @@ export function HealthPage() {
   );
   const { data: proxyData, error: proxyError, reload: reloadProxy } = useApi(
     () => fetchProxyPool({ page: 1, pageSize: 1 }),
+    { intervalMs: 15000 },
+  );
+
+  // P3-4: 需要地理明细 → 用更大页拉取代理池条目（供 ProxyPoolGeo 聚合）。
+  const { data: proxyDetail, error: proxyDetailError, reload: reloadProxyDetail } = useApi(
+    () => fetchProxyPool({ page: 1, pageSize: 500 }),
     { intervalMs: 15000 },
   );
 
@@ -125,7 +132,7 @@ export function HealthPage() {
   }, [diag, poolScores]);
 
   const capabilityLevel = capability == null ? 'bad' : capability >= 70 ? 'good' : capability >= 40 ? 'warn' : 'bad';
-  const errors = [diagError, accountError, proxyError].filter(Boolean) as Error[];
+  const errors = [diagError, accountError, proxyError, proxyDetailError].filter(Boolean) as Error[];
 
   if (diagError && !diag) return <ErrorRetry message={diagError.message} onRetry={reloadDiag} />;
 
@@ -136,7 +143,7 @@ export function HealthPage() {
           <h1 className="page-title">系统健康体检</h1>
           <p className="page-desc">聚合诊断、号池与代理池状态，实时评估「可立即出图能力」</p>
         </div>
-        <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadAccount(); reloadProxy(); }}>
+        <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadAccount(); reloadProxy(); reloadProxyDetail(); }}>
           <span>🔄</span> 重新体检
         </button>
       </div>
@@ -187,6 +194,11 @@ export function HealthPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* P3-4: 出口代理地理分布卡片（国家 emoji 分布 + 延迟/状态健康热力图） */}
+      {proxyDetail && proxyDetail.items?.length > 0 && (
+        <ProxyPoolGeo items={proxyDetail.items} />
       )}
 
       {/* 队列 / DB / 慢日志速览 */}

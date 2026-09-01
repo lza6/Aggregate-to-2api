@@ -7,7 +7,6 @@ import inspect
 import json
 import logging
 import mimetypes
-import os
 import re
 import time
 import uuid
@@ -79,13 +78,6 @@ class _TryingopenRateLimited(Exception):
     def __init__(self, message: str = "tryingopen 请求被限流") -> None:
         super().__init__(message)
         self.message = message
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
 
 
 async def _resolve(value: Any) -> Any:
@@ -402,7 +394,7 @@ class TryingopenChatProvider(ChatProvider):
     ) -> AsyncIterator[dict]:
         converted = self._convert_messages(messages, tools, tool_choice)
         payload = self._payload(model, converted, effort)
-        attempts = _env_int("IF_TRYINGOPEN_MAX_ATTEMPTS", 3)
+        attempts = config.IF_TRYINGOPEN_MAX_ATTEMPTS
         # v4.4.1: N 轮代理轮换全部失败后，追加一次直连兜底（本机 IP 常比随机免费代理更稳）
         total_rounds = attempts + 1
         # 带工具调用时走聚合路径（工具是纯文本 JSON，需完整上下文才能剥离）；
@@ -762,7 +754,7 @@ class TryingopenChatProvider(ChatProvider):
 
     async def _sync_loop(self) -> None:
         while True:
-            await asyncio.sleep(_env_int("IF_TRYINGOPEN_SYNC_MINUTES", 30) * 60)
+            await asyncio.sleep(config.IF_TRYINGOPEN_SYNC_MINUTES * 60)
             await self.refresh_models()
 
     async def startup(self) -> None:

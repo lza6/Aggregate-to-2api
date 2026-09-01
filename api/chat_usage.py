@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import time
 from datetime import datetime
 from typing import Any
 
+from . import config
 from .proxy_pool import proxy_pool
 
 
@@ -277,7 +277,7 @@ class ChatUsageTracker:
         now = time.time()
         available = sum(1 for entry in proxy_pool.entries if entry.available(now))
         effective_proxies = max(available, 1)
-        per_proxy = max(0, int(os.getenv("IF_TRYINGOPEN_HOURLY_PER_IP", "20") or 20))
+        per_proxy = max(0, int(config.IF_TRYINGOPEN_HOURLY_PER_IP))
         used_row = await self._query_one(
             "SELECT COUNT(*) FROM chat_usage " "WHERE created_at > ? AND success = 1",
             (now - 3600,),

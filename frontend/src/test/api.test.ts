@@ -121,6 +121,9 @@ import {
   fetchChatModels,
   fetchImageModels,
   chatCompletions,
+  signGallery,
+  apiFetch,
+  ApiError,
 } from '../api';
 
 function mockFetch(impl: typeof globalThis.fetch) {
@@ -564,6 +567,162 @@ describe('generateImage 透传 AbortSignal', () => {
   });
 
   it('传入 signal 时 fetch 收到同一 signal', async () => {
+    const ctrl = new AbortController();
+    const spy = mockFetch(async () => jsonRes({ id: 't1', status: 'queued', prompt: 'x', image_url: null, error: null, duration_sec: null, created_at: 0, model: 'm' }));
+    await generateImage({ prompt: 'x' }, ctrl.signal);
+    const [, init] = spy.mock.calls[0];
+    expect(init?.signal).toBe(ctrl.signal);
+    spy.mockRestore();
+  });
+});
+
+// ── P1-4 统一错误处理中间件（apiFetch / ApiError）─────────────────────
+describe('apiFetch 统一错误处理（P1-4）', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('200 JSON → 返回解析后数据', async () => {
+    const spy = mockFetch(async () => jsonRes({ ok: 1 }));
+    const r = await apiFetch<{ ok: number }>('/v1/stats');
+    expect(r.ok).toBe(1);
+    expect(spy.mock.calls[0][0]).toBe('/v1/stats');
+    spy.mockRestore();
+  });
+
+  it('401 → 抛 ApiError 且 status=401、message 为中文可读', async () => {
+    const spy = mockFetch(async () => jsonRes('denied', { status: 401, text: 'Unauthorized' }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(401);
+    expect((err as ApiError).message).toMatch(/未授权/);
+    spy.mockRestore();
+  });
+
+  it('403 → status=403、message 含「禁止访问」', async () => {
+    const spy = mockFetch(async () => jsonRes('forbidden', { status: 403, text: 'forbidden' }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(403);
+    expect((err as ApiError).message).toMatch(/禁止访问/);
+    spy.mockRestore();
+  });
+
+  it('422 → status=422、message 含「参数校验失败」', async () => {
+    const spy = mockFetch(async () => jsonRes('bad', { status: 422, text: 'bad request' }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(422);
+    expect((err as ApiError).message).toMatch(/参数校验失败/);
+    spy.mockRestore();
+  });
+
+  it('429 → status=429、message 含「过于频繁」', async () => {
+    const spy = mockFetch(async () => jsonRes('rate', { status: 429, text: 'rate limited' }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(429);
+    expect((err as ApiError).message).toMatch(/过于频繁/);
+    spy.mockRestore();
+  });
+
+  it('500 → status=500、message 含「服务器内部错误」', async () => {
+    const spy = mockFetch(async () => jsonRes('boom', { status: 500, text: 'boom' }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(500);
+    expect((err as ApiError).message).toMatch(/服务器内部错误/);
+    spy.mockRestore();
+  });
+
+  it('空 body / text 不可解析 → 兜底状态文案', async () => {
+    const spy = mockFetch(async () => new Response('', { status: 503 }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).status).toBe(503);
+    expect((err as ApiError).message).toMatch(/服务暂时不可用/);
+    spy.mockRestore();
+  });
+
+  it('网络 reject → status=0、code=NETWORK_ERROR、message 含「网络错误」', async () => {
+    const spy = mockFetch(async () => { throw new TypeError('Failed to fetch'); });
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(0);
+    expect((err as ApiError).code).toBe('NETWORK_ERROR');
+    expect((err as ApiError).message).toMatch(/网络错误/);
+    spy.mockRestore();
+  });
+
+  it('超时 → status=0、code=TIMEOUT、message 含「超时」', async () => {
+    vi.useFakeTimers();
+    try {
+      // fetch 永不 resolve；靠 apiFetch 内置超时中止（用极小超时加速测试）
+      const spy = mockFetch(async (_u, init) => {
+        return await new Promise<Response>((_res, reject) => {
+          (init?.signal as AbortSignal | undefined)?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      });
+      const p = apiFetch('/v1/x', { timeoutMs: 50 });
+      // 先挂接拒绝处理器，避免推进定时器瞬间产生未处理拒绝
+      const errP = p.then(() => null, (e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(100);
+      const err = await errP;
+      expect((err as ApiError).status).toBe(0);
+      expect((err as ApiError).code).toBe('TIMEOUT');
+      expect((err as ApiError).message).toMatch(/超时/);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('caller 前缀拼进错误消息（如「封禁失败 HTTP 403: <detail>」）', async () => {
+    const spy = mockFetch(async () => jsonRes('nope', { status: 403, text: 'you shall not pass' }));
+    const err = await apiFetch('/v1/admin/security/block-ip', { method: 'POST', caller: '封禁失败' })
+      .catch((e: unknown) => e);
+    expect((err as ApiError).message).toMatch(/封禁失败 HTTP 403/);
+    expect((err as ApiError).message).toContain('you shall not pass');
+    spy.mockRestore();
+  });
+
+  it('错误体含 code/error.code 时映射进 ApiError.code', async () => {
+    const spy = mockFetch(async () => jsonRes({ code: 'RATE_LIMIT_EXCEEDED', message: 'limit hit' }, { status: 429 }));
+    const err = await apiFetch('/v1/x').catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('RATE_LIMIT_EXCEEDED');
+    expect((err as ApiError).message).toContain('limit hit');
+    spy.mockRestore();
+  });
+
+  it('signGallery 薄封装：成功返回 url/expires_in', async () => {
+    const spy = mockFetch(async () => jsonRes({ url: 'https://x/y?sig=1', expires_in: 60 }));
+    const r = await signGallery(20, 'sk-admin');
+    expect(r.url).toBe('https://x/y?sig=1');
+    expect(r.expires_in).toBe(60);
+    const [url, init] = spy.mock.calls[0];
+    const s = String(url);
+    expect(s).toContain('/v1/gallery/sign?');
+    expect(s).toContain('limit=20');
+    expect((init?.headers as Record<string, string>)?.Authorization).toBe('Bearer sk-admin');
+    spy.mockRestore();
+  });
+
+  it('signGallery 非 2xx → 抛 ApiError（不再抛普通对象），status 保留', async () => {
+    const spy = mockFetch(async () => jsonRes('no', { status: 403, text: 'forbidden' }));
+    const err = await signGallery(5, 'sk').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(403);
+    spy.mockRestore();
+  });
+
+  it('fetchTasks 薄封装请求路径拼接正确', async () => {
+    const spy = mockFetch(async () => jsonRes({ items: [], total: 0 }));
+    await fetchTasks({ limit: 10, offset: 20, status: 'done' });
+    expect(String(spy.mock.calls[0][0])).toContain('limit=10');
+    expect(String(spy.mock.calls[0][0])).toContain('offset=20');
+    expect(String(spy.mock.calls[0][0])).toContain('status=done');
+    spy.mockRestore();
+  });
+
+  it('外部 signal 透传：generateImage 请求带同一 signal（不自造新 controller）', async () => {
     const ctrl = new AbortController();
     const spy = mockFetch(async () => jsonRes({ id: 't1', status: 'queued', prompt: 'x', image_url: null, error: null, duration_sec: null, created_at: 0, model: 'm' }));
     await generateImage({ prompt: 'x' }, ctrl.signal);

@@ -741,8 +741,9 @@ class AccountPool:
             try:
                 await asyncio.sleep(300)
                 for prov in ("nanobanana",):
-                    self._reclaim_lease_timeout(prov)
-                    self.wake_cooling_accounts(prov)
+                    # 同步 sqlite3 + threading.Lock，丢线程池避免阻塞事件循环
+                    await asyncio.to_thread(self._reclaim_lease_timeout, prov)
+                    await asyncio.to_thread(self.wake_cooling_accounts, prov)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -753,7 +754,7 @@ class AccountPool:
         target = TARGET_NANOBANANA
         while True:
             try:
-                usable = len(self.get(provider))
+                usable = len(await asyncio.to_thread(self.get, provider))
                 if usable >= target:
                     await asyncio.sleep(60)
                     continue
@@ -774,7 +775,8 @@ class AccountPool:
                     reg.proxy = await proxy_pool.acquire()
                     acc = await reg.register_one()
                     if acc:
-                        self.add(
+                        await asyncio.to_thread(
+                            self.add,
                             provider,
                             acc["email"],
                             acc["cookie"],
@@ -782,8 +784,8 @@ class AccountPool:
                             credits=acc.get("credits", 0),
                             register_ip=acc.get("register_ip", ""),
                         )
-                        self.mark(provider, acc["email"], "ok")
-                        log.info("号池补号成功 %s: %s（现有 %d）", provider, acc["email"], len(self.get(provider)))
+                        await asyncio.to_thread(self.mark, provider, acc["email"], "ok")
+                        log.info("号池补号成功 %s: %s（现有 %d）", provider, acc["email"], len(await asyncio.to_thread(self.get, provider)))
                         await asyncio.sleep(REGISTER_COOLDOWN)
                     else:
                         await asyncio.sleep(REGISTER_COOLDOWN)
@@ -795,6 +797,21 @@ class AccountPool:
             except Exception as e:
                 log.warning("号池补号循环异常 %s: %s", provider, e)
                 await asyncio.sleep(30)
+
+    def _load_checkin_batch(self, provider: str, cutoff: float, size: int) -> list[dict]:
+        """SQL 层过滤签到账号（锁保护），供 _daily_checkin_loop 经 to_thread 调用。
+
+        裸 self._conn.execute 未持锁，若直接在事件循环线程跑，会和 to_thread 进的
+        set_checkin/update_credits/mark 等写方法（各自持 self._lock）并发操作同一连接，
+        违背 check_same_thread=False + WAL 的连接串行假设。用同步壳 + self._lock 隔离。
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM accounts WHERE provider=? AND status IN ('ok', 'active') "
+                "AND (checkin_at IS NULL OR checkin_at < ?) ORDER BY checkin_at ASC LIMIT ?",
+                (provider, cutoff, size),
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     async def _daily_checkin_loop(self, provider: str) -> None:
         """nanobanana：定时检查签到（按时区与间隔），按批次处理避免 O(n)。"""
@@ -810,12 +827,8 @@ class AccountPool:
                     continue
                 now = time.time()
                 cutoff = now - 20 * 3600  # 距上次签到 >20h → 补签
-                # SQL 层过滤：只加载需要签到的账号，避免 O(n) 全表扫描
-                rows = self._conn.execute(
-                    "SELECT * FROM accounts WHERE provider=? AND status IN ('ok', 'active') "
-                    "AND (checkin_at IS NULL OR checkin_at < ?) ORDER BY checkin_at ASC LIMIT ?",
-                    (provider, cutoff, BATCH_SIZE),
-                ).fetchall()
+                # SQL 层过滤：只加载需要签到的账号，避免 O(n) 全表扫描（to_thread 跑同步壳）
+                rows = await asyncio.to_thread(self._load_checkin_batch, provider, cutoff, BATCH_SIZE)
                 if not rows:
                     continue
                 for row in rows:
@@ -827,7 +840,8 @@ class AccountPool:
                             # 兼容旧的 int 返回（仅余额）
                             if isinstance(ok, dict):
                                 credits = int(ok.get("credits") or 0)
-                                self.set_checkin_profile(
+                                await asyncio.to_thread(
+                                    self.set_checkin_profile,
                                     provider,
                                     acc["email"],
                                     time.time(),
@@ -837,10 +851,10 @@ class AccountPool:
                                 )
                             else:
                                 credits = int(ok or 0)
-                                self.set_checkin(provider, acc["email"], time.time())
+                                await asyncio.to_thread(self.set_checkin, provider, acc["email"], time.time())
                             if credits:
-                                self.update_credits(provider, acc["email"], credits)
-                            self.mark(provider, acc["email"], "active")
+                                await asyncio.to_thread(self.update_credits, provider, acc["email"], credits)
+                            await asyncio.to_thread(self.mark, provider, acc["email"], "active")
                             continue
                         # checkin 返回 None（cookie 失效）→ 尝试用保存的密码重新登录续期
                         # 注意：checkin 失败不一定是 cookie 过期（也可能是网络/求解临时故障），
@@ -848,7 +862,8 @@ class AccountPool:
                         if acc.get("password") and hasattr(reg, "re_login"):
                             re = await reg.re_login(acc["email"], acc["password"])
                             if re and re.get("cookie"):
-                                self.add(
+                                await asyncio.to_thread(
+                                    self.add,
                                     provider,
                                     acc["email"],
                                     re["cookie"],
@@ -864,12 +879,16 @@ class AccountPool:
                                 prev_note = acc.get("note") or ""
                                 fail_n = int(prev_note.split("fail:")[1]) if "fail:" in prev_note else 1
                                 if fail_n >= 3:
-                                    self.mark(provider, acc["email"], "dead", note=f"cookie 续期连续 {fail_n} 次失败")
+                                    await asyncio.to_thread(
+                                        self.mark, provider, acc["email"], "dead", note=f"cookie 续期连续 {fail_n} 次失败"
+                                    )
                                 else:
-                                    self.mark(provider, acc["email"], "active", note=f"fail:{fail_n + 1}")
+                                    await asyncio.to_thread(
+                                        self.mark, provider, acc["email"], "active", note=f"fail:{fail_n + 1}"
+                                    )
                                     log.warning("nanobanana %s checkin+re_login 失败 (第 %d 次)", acc["email"], fail_n)
                         else:
-                            self.mark(provider, acc["email"], "dead", note="cookie 失效（无密码可续期）")
+                            await asyncio.to_thread(self.mark, provider, acc["email"], "dead", note="cookie 失效（无密码可续期）")
                     except Exception as e:
                         log.warning("nanobanana 签到失败 %s: %s", acc["email"], e)
             except asyncio.CancelledError:

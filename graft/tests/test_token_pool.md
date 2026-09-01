@@ -1,22 +1,23 @@
 # tests/test_token_pool.py
 
-- _EngineStub · class · L16-L21 — class _EngineStub
-- __init__ · method · L19-L21 — def __init__(self) -> None
-- fake_solve · function · L25-L35 — def fake_solve(monkeypatch)
-- _fake · function · L29-L32 — async def _fake(cf_solver_url, url, sitekey, timeout, proxy=None)
-- test_direct_pool_prefetch_and_acquire · function · L39-L51 — async def test_direct_pool_prefetch_and_acquire(fake_solve)
-- test_proxy_pool_lazy_create_and_proxy_passthrough · function · L55-L70 — async def test_proxy_pool_lazy_create_and_proxy_passthrough(fake_solve)
-- test_dynamic_watermark_direct · function · L74-L83 — async def test_dynamic_watermark_direct(fake_solve)
-- test_circuit_open_fast_fail · function · L87-L99 — async def test_circuit_open_fast_fail(fake_solve, monkeypatch)
-- test_circuit_open_still_uses_existing_token · function · L103-L121 — async def test_circuit_open_still_uses_existing_token(fake_solve, monkeypatch)
-- test_event_driven_refill_is_fast · function · L125-L137 — async def test_event_driven_refill_is_fast(fake_solve)
-- test_proxy_pool_idle_flag · function · L141-L151 — async def test_proxy_pool_idle_flag(fake_solve)
-- test_acquire_timeout_counts_wait_timeout · function · L155-L168 — async def test_acquire_timeout_counts_wait_timeout(monkeypatch)
-- _fail · function · L157-L159 — async def _fail(*args, **kwargs)
-- TestMainObservability · class · L172-L209 — class TestMainObservability
-- test_healthz_has_solver_fields · method · L174-L183 — async def test_healthz_has_solver_fields(self)
-- test_metrics_has_solver_lines · method · L186-L201 — async def test_metrics_has_solver_lines(self)
-- test_metrics_keeps_legacy_lines · method · L204-L209 — async def test_metrics_keeps_legacy_lines(self)
-- test_worker_records_rejected_token · function · L214-L243 — async def test_worker_records_rejected_token(tmp_db, monkeypatch)
-- _solve · function · L220-L221 — async def _solve(*a, **k)
-- _submit · function · L223-L224 — async def _submit(*a, **k)
+- _EngineStub · class · L17-L22 — class _EngineStub
+- __init__ · method · L20-L22 — def __init__(self) -> None
+- fake_solve · function · L26-L36 — def fake_solve(monkeypatch)
+- _fake · function · L30-L33 — async def _fake(cf_solver_url, url, sitekey, timeout, proxy=None)
+- test_direct_pool_prefetch_and_acquire · function · L40-L52 — async def test_direct_pool_prefetch_and_acquire(fake_solve)
+- test_proxy_pool_lazy_create_and_proxy_passthrough · function · L56-L71 — async def test_proxy_pool_lazy_create_and_proxy_passthrough(fake_solve)
+- test_dynamic_watermark_direct · function · L75-L84 — async def test_dynamic_watermark_direct(fake_solve)
+- test_circuit_open_fast_fail · function · L88-L101 — async def test_circuit_open_fast_fail(fake_solve, monkeypatch)
+- test_circuit_open_still_uses_existing_token · function · L105-L124 — async def test_circuit_open_still_uses_existing_token(fake_solve, monkeypatch)
+- test_event_driven_refill_is_fast · function · L128-L140 — async def test_event_driven_refill_is_fast(fake_solve)
+- test_proxy_pool_idle_flag · function · L144-L154 — async def test_proxy_pool_idle_flag(fake_solve)
+- test_acquire_timeout_counts_wait_timeout · function · L158-L173 — async def test_acquire_timeout_counts_wait_timeout(monkeypatch)
+- _fail · function · L161-L163 — async def _fail(*args, **kwargs)
+- TestMainObservability · class · L177-L260 — class TestMainObservability
+- test_healthz_has_solver_fields · method · L179-L198 — async def test_healthz_has_solver_fields(self)
+- test_metrics_has_solver_lines · method · L201-L251 — async def test_metrics_has_solver_lines(self, monkeypatch)
+- _stats · function · L206-L207 — async def _stats()
+- test_metrics_keeps_legacy_lines · method · L254-L260 — async def test_metrics_keeps_legacy_lines(self)
+- test_worker_records_rejected_token · function · L265-L294 — async def test_worker_records_rejected_token(tmp_db, monkeypatch)
+- _solve · function · L270-L271 — async def _solve(*a, **k)
+- _submit · function · L273-L274 — async def _submit(*a, **k)

@@ -2,34 +2,34 @@
 
 - _make_db · function · L18-L38 — async def _make_db(pool_size: int = 3, timeout: int = 5, batch_enabled: bool = True)
 - _cleanup · function · L41-L53 — async def _cleanup(db, path: str)
-- TestConnectionPool · class · L56-L155 — class TestConnectionPool
+- TestConnectionPool · class · L56-L153 — class TestConnectionPool
 - test_pool_creates_correct_number_of_connections · method · L60-L68 — async def test_pool_creates_correct_number_of_connections(self)
 - test_pool_size_1_single_conn · method · L71-L79 — async def test_pool_size_1_single_conn(self)
 - test_read_conn_separate_from_write_conns · method · L82-L93 — async def test_read_conn_separate_from_write_conns(self)
 - test_round_robin_distributes_writes · method · L96-L107 — async def test_round_robin_distributes_writes(self)
-- test_read_uses_read_conn_not_pool · method · L110-L125 — async def test_read_uses_read_conn_not_pool(self)
-- test_write_uses_pool_connections · method · L128-L143 — async def test_write_uses_pool_connections(self)
-- test_close_cleans_all_connections · method · L146-L155 — async def test_close_cleans_all_connections(self)
-- TestConcurrentReadWrite · class · L158-L239 — class TestConcurrentReadWrite
-- test_concurrent_writes_from_multiple_tasks · method · L162-L185 — async def test_concurrent_writes_from_multiple_tasks(self)
-- writer · function · L168-L176 — async def writer(n: int)
-- test_concurrent_read_write_no_deadlock · method · L188-L220 — async def test_concurrent_read_write_no_deadlock(self)
-- writer · function · L194-L200 — async def writer()
-- reader · function · L202-L209 — async def reader()
-- test_round_robin_under_concurrent_writes · method · L223-L239 — async def test_round_robin_under_concurrent_writes(self)
-- record_conn · function · L229-L231 — async def record_conn()
-- TestHealthCheck · class · L242-L309 — class TestHealthCheck
-- test_health_check_returns_true_for_healthy_conn · method · L246-L253 — async def test_health_check_returns_true_for_healthy_conn(self)
-- test_health_check_returns_false_for_closed_conn · method · L256-L264 — async def test_health_check_returns_false_for_closed_conn(self)
-- test_auto_reconnect_on_stale_connection · method · L267-L291 — async def test_auto_reconnect_on_stale_connection(self)
-- test_auto_reconnect_still_works · method · L294-L309 — async def test_auto_reconnect_still_works(self)
-- TestPoolSizeOne · class · L312-L350 — class TestPoolSizeOne
-- test_single_conn_behaves_like_original · method · L316-L330 — async def test_single_conn_behaves_like_original(self)
-- test_pool_size_1_no_round_robin · method · L333-L341 — async def test_pool_size_1_no_round_robin(self)
-- test_pool_size_1_backward_compat_conn · method · L344-L350 — async def test_pool_size_1_backward_compat_conn(self)
-- TestConnectionLeak · class · L353-L403 — class TestConnectionLeak
-- test_no_connection_leak_after_close · method · L357-L373 — async def test_no_connection_leak_after_close(self)
-- test_close_then_create_does_not_leak · method · L376-L403 — async def test_close_then_create_does_not_leak(self)
-- TestBatchWriteWithPool · class · L406-L444 — class TestBatchWriteWithPool
-- test_batch_write_with_pool · method · L410-L426 — async def test_batch_write_with_pool(self)
-- test_non_batch_write_with_pool · method · L429-L444 — async def test_non_batch_write_with_pool(self)
+- test_read_uses_read_conn_not_pool · method · L110-L122 — async def test_read_uses_read_conn_not_pool(self)
+- test_write_uses_pool_connections · method · L125-L141 — async def test_write_uses_pool_connections(self)
+- test_close_cleans_all_connections · method · L144-L153 — async def test_close_cleans_all_connections(self)
+- TestConcurrentReadWrite · class · L156-L237 — class TestConcurrentReadWrite
+- test_concurrent_writes_from_multiple_tasks · method · L160-L183 — async def test_concurrent_writes_from_multiple_tasks(self)
+- writer · function · L166-L174 — async def writer(n: int)
+- test_concurrent_read_write_no_deadlock · method · L186-L218 — async def test_concurrent_read_write_no_deadlock(self)
+- writer · function · L192-L198 — async def writer()
+- reader · function · L200-L207 — async def reader()
+- test_round_robin_under_concurrent_writes · method · L221-L237 — async def test_round_robin_under_concurrent_writes(self)
+- record_conn · function · L227-L229 — async def record_conn()
+- TestHealthCheck · class · L240-L307 — class TestHealthCheck
+- test_health_check_returns_true_for_healthy_conn · method · L244-L251 — async def test_health_check_returns_true_for_healthy_conn(self)
+- test_health_check_returns_false_for_closed_conn · method · L254-L262 — async def test_health_check_returns_false_for_closed_conn(self)
+- test_auto_reconnect_on_stale_connection · method · L265-L289 — async def test_auto_reconnect_on_stale_connection(self)
+- test_auto_reconnect_still_works · method · L292-L307 — async def test_auto_reconnect_still_works(self)
+- TestPoolSizeOne · class · L310-L348 — class TestPoolSizeOne
+- test_single_conn_behaves_like_original · method · L314-L328 — async def test_single_conn_behaves_like_original(self)
+- test_pool_size_1_no_round_robin · method · L331-L339 — async def test_pool_size_1_no_round_robin(self)
+- test_pool_size_1_backward_compat_conn · method · L342-L348 — async def test_pool_size_1_backward_compat_conn(self)
+- TestConnectionLeak · class · L351-L401 — class TestConnectionLeak
+- test_no_connection_leak_after_close · method · L355-L371 — async def test_no_connection_leak_after_close(self)
+- test_close_then_create_does_not_leak · method · L374-L401 — async def test_close_then_create_does_not_leak(self)
+- TestBatchWriteWithPool · class · L404-L442 — class TestBatchWriteWithPool
+- test_batch_write_with_pool · method · L408-L424 — async def test_batch_write_with_pool(self)
+- test_non_batch_write_with_pool · method · L427-L442 — async def test_non_batch_write_with_pool(self)

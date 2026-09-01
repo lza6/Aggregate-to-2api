@@ -10,6 +10,7 @@ class DBSettings(BaseModel):
 
     file: str = "data/imagefree.db"
     stats_file: str = "data/stats.json"
+    routing_db_file: str = ""  # P3-1: 路由决策持久化独立 sqlite；空 = 关闭
     retention_days: int = 365
     cleanup_interval: int = 21600
     batch_enabled: bool = True

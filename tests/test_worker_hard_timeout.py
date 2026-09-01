@@ -85,6 +85,8 @@ async def test_hard_timeout_marks_error(monkeypatch):
         assert "硬超时" in (str(row.get("error") or ""))
     finally:
         await e.stop()
+        try: await db.close()
+        except Exception: pass
         _clean_db(path)
 
 
@@ -114,6 +116,8 @@ async def test_hard_timeout_processing_decremented(monkeypatch):
         assert e.processing == 0, f"processing 应减回 0，实际 {e.processing}"
     finally:
         await e.stop()
+        try: await db.close()
+        except Exception: pass
         _clean_db(path)
 
 
@@ -149,6 +153,8 @@ async def test_hard_timeout_upstream_task_id_preserved(monkeypatch):
         ), f"upstream_task_id 应保留，实际 {row.get('upstream_task_id')}"
     finally:
         await e.stop()
+        try: await db.close()
+        except Exception: pass
         _clean_db(path)
 
 
@@ -176,6 +182,8 @@ async def test_fast_task_not_timed_out(monkeypatch):
         assert row["status"] == "completed", f"预期 completed，实际 {row['status']}"
     finally:
         await e.stop()
+        try: await db.close()
+        except Exception: pass
         _clean_db(path)
 
 
@@ -205,4 +213,6 @@ async def test_img_task_not_affected(monkeypatch):
         assert e.processing == 0
     finally:
         await e.stop()
+        try: await db.close()
+        except Exception: pass
         _clean_db(path)

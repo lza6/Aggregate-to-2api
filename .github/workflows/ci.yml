@@ -78,6 +78,46 @@ jobs:
       - name: deploy/api 同步校验（已废弃，仅提示）
         run: python scripts/sync_deploy.py check
 
+  # ── P0-2：前端版本一致性门禁（防 landing dist 版本漂移）──────────────
+  # 背景：landing/dist 被 .gitignore 忽略（第 65-69 行），本地版本 bump 若只改 package.json
+  # 不重跑 npm run build，产物就落后于源码版本；而 ci.yml 的 test job 从未构建 landing，
+  # 导致 TestFrontendVersionConsistency::test_landing_built_dist_version_matches_source 在 CI 中
+  # 永远走 pytest.skip，无法拦截漂移。
+  # 本 job 强制从源码重跑构建并断言 __APP_VERSION__ 注入 = 三处版本一致，失败即 CI 变红。
+  frontend-version-gate:
+    name: 前端版本一致性门禁（构建 landing + 断言版本）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 先用 Node 从源码强制构建 landing（每次落地最新 package.json 的版本号）
+      - name: 设置 Node.js（构建 landing）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: landing/package-lock.json
+      - name: npm ci && npm run build (landing)
+        run: |
+          cd landing && npm ci && npm run build
+
+      # 再装 Python 依赖并跑版本一致性契约（此 job 里构建过 dist，故 dist 断言不会 skip）
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安装依赖
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout
+      - name: 版本一致性断言（失败则 CI 失败）
+        run: |
+          pytest tests/test_openapi_contract.py::TestFrontendVersionConsistency -v
+        env:
+          IF_ACCOUNT_AUTO: "0"
+          IF_MOCK_REGISTER: "1"
+          IF_DB_FILE: "data/test-ci.db"
+
   docker:
     name: Docker 构建验证
     runs-on: ubuntu-latest

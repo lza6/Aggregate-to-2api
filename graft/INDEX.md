@@ -11,11 +11,15 @@ graph, not in these files: `graft callers <symbol>` is the only way to read them
 
 ## Concepts
 
+- [kc_local](kc_local.md) — kc_local
+- [kp_local](kp_local.md) — kp_local
 - [probe_claim](probe_claim.md) — probe_claim
 - [probe_free_proxy](probe_free_proxy.md) — probe_free_proxy
 - [probe_tryingopen](probe_tryingopen.md) — probe_tryingopen
+- [scan_async_sync](scan_async_sync.md) — scan_async_sync
+- [scan_validate](scan_validate.md) — scan_validate
 
 ## Files
 
-331 per-file wiring cards mirror the source tree under `graft/` (300 carry extracted symbols). They are deliberately not enumerated here —
+279 per-file wiring cards mirror the source tree under `graft/` (255 carry extracted symbols). They are deliberately not enumerated here —
 `grep` a symbol or `find`/`ls` a filename under `graft/` to land on the card for that file.

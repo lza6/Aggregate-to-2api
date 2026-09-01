@@ -77,6 +77,13 @@ jobs:
       - name: 构建 landing（落地页）
         run: |
           cd landing && npm ci && npm run build
+      # P0-2：tag 发版是版本一致性的最后一道闸。build 后立即断言 dist 里注入的
+      # __APP_VERSION__ 与源码三处版本一致（防 build 产物漂移被静默带上线）。
+      - name: 断言 landing dist 版本与源码一致
+        run: |
+          VERSION=$(node -p "require('./landing/package.json').version")
+          echo "landing package.json version: $VERSION"
+          grep -rl "$VERSION" landing/dist/assets/*.js >/dev/null && echo "OK: dist 已含版本 $VERSION" || { echo "FAIL: landing/dist/assets/*.js 未含版本 $VERSION（npm run build 未跑或 __APP_VERSION__ 注入失效）"; exit 1; }
       - name: 打包 dist 产物
         run: |
           tar -czf frontend-dist.tgz -C frontend/dist .

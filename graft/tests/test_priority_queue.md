@@ -1,21 +1,21 @@
 # tests/test_priority_queue.py
 
-- _DBStub · class · L17-L46 — class _DBStub
-- __init__ · method · L20-L23 — def __init__(self) -> None
-- create_request · method · L25-L31 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None)
-- mark_finished · method · L33-L36 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
-- mark_started · method · L38-L40 — async def mark_started(self, task_id)
-- get · method · L42-L43 — async def get(self, task_id)
-- recover_stale_tasks · method · L45-L46 — async def recover_stale_tasks(self, **kw) -> int
-- engine · function · L50-L54 — def engine()
-- test_priority_order · function · L58-L88 — async def test_priority_order(engine)
-- test_normal_queue_full · function · L92-L101 — async def test_normal_queue_full(engine)
-- test_admin_queue_full · function · L105-L113 — async def test_admin_queue_full(engine)
-- test_high_queue_full · function · L117-L125 — async def test_high_queue_full(engine)
-- test_qsize_correct · function · L129-L140 — async def test_qsize_correct(engine)
-- test_submit_priority_passthrough · function · L144-L151 — async def test_submit_priority_passthrough(engine)
+- _DBStub · class · L16-L49 — class _DBStub
+- __init__ · method · L19-L22 — def __init__(self) -> None
+- create_request · method · L24-L34 — async def create_request( self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None )
+- mark_finished · method · L36-L39 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
+- mark_started · method · L41-L43 — async def mark_started(self, task_id)
+- get · method · L45-L46 — async def get(self, task_id)
+- recover_stale_tasks · method · L48-L49 — async def recover_stale_tasks(self, **kw) -> int
+- engine · function · L53-L57 — def engine()
+- test_priority_order · function · L61-L91 — async def test_priority_order(engine)
+- test_normal_queue_full · function · L95-L104 — async def test_normal_queue_full(engine)
+- test_admin_queue_full · function · L108-L116 — async def test_admin_queue_full(engine)
+- test_high_queue_full · function · L120-L128 — async def test_high_queue_full(engine)
+- test_qsize_correct · function · L132-L143 — async def test_qsize_correct(engine)
+- test_submit_priority_passthrough · function · L147-L153 — async def test_submit_priority_passthrough(engine)
 - test_submit_default_priority · function · L155-L160 — async def test_submit_default_priority(engine)
-- test_worker_decrements_count · function · L164-L194 — async def test_worker_decrements_count(engine)
-- _single_consume · function · L170-L175 — async def _single_consume(idx)
-- test_priority_queue_type · function · L198-L201 — async def test_priority_queue_type(engine)
+- test_worker_decrements_count · function · L164-L193 — async def test_worker_decrements_count(engine)
+- _single_consume · function · L169-L174 — async def _single_consume(idx)
+- test_priority_queue_type · function · L197-L201 — async def test_priority_queue_type(engine)
 - test_element_format · function · L205-L214 — async def test_element_format(engine)

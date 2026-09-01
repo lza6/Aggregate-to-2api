@@ -13,11 +13,24 @@
 
 路由决策记录（环形缓冲，内存，最多 1000 条）供前端"路由记录"展示，
 让开发者知道自己的请求被哪个 provider 处理、为什么。
+
+P3-1 可观测/可恢复（v6.8.x）：
+ - 新增可选 SQLite 持久化（IF_ROUTING_DB / routing_db_file 指向独立轻量 sqlite 文件，
+   默认空 = 关闭，完全向后兼容）。持久化不侵入主 DB 的 schema 语义（requests/chat_usage），
+   用独立 db 文件 + 独立连接。
+ - record() 写入路由决策历史；record_result() 额外落 per-provider 时延/成败观测
+   （routing_outcomes 表），供重启后 warm 冷启动 EWMA。
+ - restore() 在初始化时加载最近 _MAX_RECORDS 条到内存环形缓冲；冷启动且 nodes 为空时，
+   用持久化的 per-provider min/max 时延经验值初始化 EWMA 参数（warm），避免全零冷启动首路由乱选。
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import math
+import os
+import sqlite3
 import threading
 import time
 from dataclasses import dataclass
@@ -29,6 +42,24 @@ _OPEN_MIN_SAMPLES = 5  # 触发熔断的最少样本数
 _LATENCY_FLOOR = 100.0  # 时延下限（平滑 log，防除零/负值）
 _INIT_EWMA = 2000.0  # 初始预估时延（2s，冷启动公平）
 _ALPHA = 0.2  # EWMA 平滑系数
+_OUTCOME_RETENTION_DAYS = 14  # routing_outcomes 观测保留天数（warm 数据源）
+_OUTCOME_PRUNE_EVERY = 200  # 每 N 次观测触发一次陈旧数据清理
+
+
+def _run_async(func, *args):
+    """在运行中的事件循环里用线程池执行同步阻塞调用；无 running loop 则同步降级。
+
+    P3-1 R1：record_direct/record_fallback/record_result 可能被 async 调用链
+    （dispatch._dispatch_generate）或同步调用链（registry.provider_for 的同步分支）
+    触发。async 上下文里把 sqlite3 同步写丢线程池防阻塞 loop；纯同步上下文（无 loop）
+    直接执行即可（本就没有事件循环可阻塞）。
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        func(*args)
+        return
+    loop.run_in_executor(None, func, *args)
 
 
 @dataclass
@@ -62,6 +93,166 @@ class RoutingRecord:
     reason: str = "best_score"
 
 
+class RoutingRecordStore:
+    """路由决策 / 观测历史的独立轻量 SQLite 归档（P3-1 可恢复）。
+
+    设计取向（对齐 account_pool/email_pool 已验证的模式）：
+    - 独立 sqlite 文件 + 独立连接（check_same_thread=False + WAL + busy_timeout），
+      绝不侵入主 DB 的 requests/chat_usage 等业务表，schema 语义完全隔离。
+    - 单连接 + threading.Lock 串行化所有读写：路由记录是「每请求一条」，单行 WAL
+      插入为微秒级轻量写，不会显著阻塞事件循环（与 account_pool 同源反模式治理注释）。
+    - 两表：
+        routing_records  路由决策历史（ts/request/model/provider/score/scores/latency/success/reason）
+        routing_outcomes per-provider 时延/成败观测（warm 冷启动 EWMA 的 min/max 数据源）
+
+    显式 close() 关闭连接；进程回收由 sqlite3 自动完成。
+    """
+
+    def __init__(self, db_path: str) -> None:
+        self._path = db_path
+        parent = os.path.dirname(os.path.abspath(db_path))
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=10000")
+        self._conn.execute("PRAGMA temp_store=MEMORY")
+        self._lock = threading.Lock()
+        self._outcome_writes = 0
+        self._init_schema()
+
+    def _init_schema(self) -> None:
+        with self._lock:
+            self._conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS routing_records (
+                    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts                REAL NOT NULL,
+                    request_id        TEXT DEFAULT '',
+                    model             TEXT DEFAULT '',
+                    selected_provider TEXT NOT NULL,
+                    requested_provider TEXT DEFAULT '',
+                    score             REAL DEFAULT 0,
+                    scores            TEXT DEFAULT '{}',
+                    latency_ms        REAL DEFAULT 0,
+                    success           INTEGER,
+                    reason            TEXT DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_routing_records_ts ON routing_records(ts);
+                CREATE TABLE IF NOT EXISTS routing_outcomes (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    provider_id TEXT NOT NULL,
+                    ts          REAL NOT NULL,
+                    latency_ms  REAL NOT NULL,
+                    success     INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_routing_outcomes_provider ON routing_outcomes(provider_id, ts);
+                """
+            )
+            self._conn.commit()
+
+    # ── 写 ──
+    def append(self, rec: RoutingRecord) -> None:
+        """追加一条路由决策历史（同步轻量写；调用处已持 self._lock，此处仅取本锁）。"""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO routing_records"
+                " (ts, request_id, model, selected_provider, requested_provider, score,"
+                "  scores, latency_ms, success, reason)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    rec.ts,
+                    rec.request_id,
+                    rec.model,
+                    rec.selected_provider,
+                    rec.requested_provider,
+                    rec.score,
+                    json.dumps(rec.scores if rec.scores else {}),
+                    rec.latency_ms,
+                    None if rec.success is None else int(bool(rec.success)),
+                    rec.reason,
+                ),
+            )
+            self._conn.commit()
+
+    def record_outcome(self, provider_id: str, latency_ms: float, is_success: bool) -> None:
+        """记录一次 per-provider 调用时延/成败观测（warm 数据源）。"""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO routing_outcomes (provider_id, ts, latency_ms, success)"
+                " VALUES (?, ?, ?, ?)",
+                (provider_id, time.time(), float(latency_ms), int(bool(is_success))),
+            )
+            self._outcome_writes += 1
+            if self._outcome_writes >= _OUTCOME_PRUNE_EVERY:
+                self._outcome_writes = 0
+                cutoff = time.time() - _OUTCOME_RETENTION_DAYS * 86400
+                self._conn.execute("DELETE FROM routing_outcomes WHERE ts < ?", (cutoff,))
+            self._conn.commit()
+
+    # ── 读 ──
+    def history(self, limit: int = 50, from_ts: float | None = None) -> list[dict]:
+        """持久化路由历史（时间升序，最新在尾）。可带 from_ts 过滤。"""
+        with self._lock:
+            if from_ts is not None:
+                cur = self._conn.execute(
+                    "SELECT * FROM ("
+                    "  SELECT * FROM routing_records WHERE ts >= ? ORDER BY ts DESC LIMIT ?"
+                    ") ORDER BY ts ASC",
+                    (float(from_ts), limit),
+                )
+            else:
+                cur = self._conn.execute(
+                    "SELECT * FROM (SELECT * FROM routing_records ORDER BY ts DESC LIMIT ?)"
+                    " ORDER BY ts ASC",
+                    (limit,),
+                )
+            rows = cur.fetchall()
+        return [self._row_to_dict(r) for r in rows]
+
+    def warm_params(self) -> dict[str, dict]:
+        """per-provider 时延经验值（min/max，来自真实调用观测），供冷启动 EWMA warm。"""
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT provider_id, MIN(latency_ms), MAX(latency_ms)"
+                " FROM routing_outcomes WHERE latency_ms > 0 GROUP BY provider_id"
+            )
+            rows = cur.fetchall()
+        return {
+            r[0]: {"min_latency": float(r[1] or 0), "max_latency": float(r[2] or 0)}
+            for r in rows
+        }
+
+    @staticmethod
+    def _row_to_dict(row: sqlite3.Row) -> dict:
+        scores = row["scores"] or "{}"
+        try:
+            scores_dict = json.loads(scores)
+        except (ValueError, TypeError):
+            scores_dict = {}
+        return {
+            "ts": float(row["ts"]),
+            "request_id": row["request_id"] or "",
+            "model": row["model"] or "",
+            "requested_provider": row["requested_provider"] or "",
+            "selected_provider": row["selected_provider"],
+            "score": round(float(row["score"] or 0), 4),
+            "scores": {k: round(float(v), 4) for k, v in scores_dict.items()} if scores_dict else {},
+            "latency_ms": row["latency_ms"],
+            "success": None if row["success"] is None else bool(row["success"]),
+            "reason": row["reason"] or "",
+        }
+
+    def close(self) -> None:
+        with self._lock:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+
 class AdaptiveRouter:
     """多提供商自适应路由引擎。
 
@@ -71,45 +262,129 @@ class AdaptiveRouter:
     换 asyncio.Lock 会把 record_result/select_best/node_snapshot 全部传染成 async，污染
     provider_for（同步）等调用链。asyncio 单线程事件循环无竞争零阻塞，此锁非阻塞源。
     真正的 async 阻塞源是 sqlite3 I/O（见 account_pool/email_pool 的同步 sqlite3 混入）。
+
+    P3-1 可恢复：传 db_path 时启用 SQLite 持久化（独立轻量文件），__init__ 内自动
+    restore() 加载最近历史并 warm EWMA；不传则完全保持旧的内存态行为（向后兼容）。
     """
 
-    def __init__(self, alpha: float = _ALPHA, initial_explore_rate: float = 0.10) -> None:
+    def __init__(
+        self,
+        alpha: float = _ALPHA,
+        initial_explore_rate: float = 0.10,
+        db_path: str = "",
+    ) -> None:
         self.alpha = alpha
         self.base_explore_rate = initial_explore_rate
         self._lock = threading.Lock()
         self.nodes: dict[str, ProviderNodeStats] = {}
         self._records: list[RoutingRecord] = []
+        self._store: RoutingRecordStore | None = None
+        if db_path:
+            try:
+                self._store = RoutingRecordStore(db_path)
+            except Exception:
+                # 持久化失败不影响路由主路径（降级为纯内存）
+                self._store = None
+        self.restore()
 
     # ── 内部工具 ──
+    @staticmethod
+    def _record_to_dict(r: RoutingRecord) -> dict:
+        return {
+            "ts": r.ts,
+            "request_id": r.request_id,
+            "model": r.model,
+            "requested_provider": r.requested_provider,
+            "selected_provider": r.selected_provider,
+            "score": round(r.score, 4),
+            "scores": {k: round(v, 4) for k, v in r.scores.items()},
+            "latency_ms": r.latency_ms,
+            "success": r.success,
+            "reason": r.reason,
+        }
+
     def _record(self, rec: RoutingRecord) -> None:
-        """环形缓冲写入（容量封顶，保留最新）。"""
+        """环形缓冲写入（容量封顶，保留最新）+ 可选持久化。
+
+        P3-1 R1 修复：持久化写（sqlite3 同步 I/O）经 asyncio.to_thread 丢入线程池，
+        不阻塞事件循环（record_direct/record_fallback 是每个生图请求的必经链路）。
+        内存 buf 写保持在事件循环内（微秒级），仅 sqlite 部分走线程池。
+        注意 from api.providers.registry.provider_for 可能经同步路径触发本方法，
+        该处无 running loop → 降级同步执行（持久化仍生效，只是可能阻塞，但该路径
+        本身是同步调用链，无事件循环可阻塞）。
+        """
         self._records.append(rec)
         if len(self._records) > _MAX_RECORDS:
             self._records = self._records[-_MAX_RECORDS:]
+        if self._store is not None:
+            try:
+                _run_async(self._store.append, rec)
+            except Exception:
+                pass
 
-    def records(self, limit: int = 50) -> list[dict]:
-        """返回最近 limit 条路由记录（时间戳倒序）。"""
+    def records(self, limit: int = 50, from_ts: float | None = None) -> list[dict]:
+        """返回最近 limit 条路由记录（时间戳倒序；from_ts 提供时按持久化历史过滤）。"""
+        if from_ts is not None:
+            if self._store is not None:
+                return self._store.history(limit=limit, from_ts=from_ts)
+            with self._lock:
+                rows = [r for r in self._records if r.ts >= from_ts][-limit:]
+            return [self._record_to_dict(r) for r in rows]
         with self._lock:
             rows = self._records[-limit:]
-        return [
-            {
-                "ts": r.ts,
-                "request_id": r.request_id,
-                "model": r.model,
-                "requested_provider": r.requested_provider,
-                "selected_provider": r.selected_provider,
-                "score": round(r.score, 4),
-                "scores": {k: round(v, 4) for k, v in r.scores.items()},
-                "latency_ms": r.latency_ms,
-                "success": r.success,
-                "reason": r.reason,
-            }
-            for r in rows
-        ]
+        return [self._record_to_dict(r) for r in rows]
+
+    # ── 可恢复（P3-1）──
+    def restore(self, limit: int = _MAX_RECORDS) -> int:
+        """启动时从 SQLite 恢复最近 limit 条决策历史到内存，并 warm 冷启动 EWMA。
+
+        返回恢复条数。无存储时为空操作（0）。
+        """
+        if self._store is None:
+            return 0
+        recs = self._store.history(limit=limit)
+        restored = len(recs)
+        with self._lock:
+            self._records = [RoutingRecord(
+                ts=r["ts"],
+                request_id=r["request_id"],
+                model=r["model"],
+                selected_provider=r["selected_provider"],
+                requested_provider=r["requested_provider"],
+                score=r["score"],
+                scores=r["scores"],
+                latency_ms=r["latency_ms"],
+                success=r["success"],
+                reason=r["reason"],
+            ) for r in recs]
+            if not self.nodes:
+                self._warm_from_store()
+        return restored
+
+    def _warm_from_store(self) -> None:
+        """冷启动：nodes 为空时用持久化 per-provider min/max 时延经验值初始化 EWMA。
+
+        取经验区间中点作为 EWMA 种子（不低于 _LATENCY_FLOOR），避免首路由全用
+        _INIT_EWMA=2000ms 的同质初值导致分数拉平、乱选。
+        """
+        if self._store is None:
+            return
+        try:
+            params = self._store.warm_params()
+        except Exception:
+            return
+        for pid, p in params.items():
+            lo = float(p.get("min_latency") or 0)
+            hi = float(p.get("max_latency") or 0)
+            if hi <= 0:
+                continue
+            warm = max(_LATENCY_FLOOR, (lo + hi) / 2.0)
+            st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
+            st.ewma_latency_ms = warm
 
     # ── 统计更新 ──
     def record_result(self, provider_id: str, latency_ms: float, is_success: bool) -> None:
-        """记录一次调用结果（时延 + 成败），更新 EWMA 与熔断状态。"""
+        """记录一次调用结果（时延 + 成败），更新 EWMA、熔断状态与持久化观测。"""
         with self._lock:
             stats = self.nodes.setdefault(provider_id, ProviderNodeStats(provider_id=provider_id))
             stats.in_flight_requests = max(0, stats.in_flight_requests - 1)
@@ -131,6 +406,13 @@ class AdaptiveRouter:
                 if total >= _OPEN_MIN_SAMPLES and (stats.failure_count / total) > _OPEN_FAIL_RATIO:
                     stats.circuit_state = "OPEN"
                     stats.circuit_open_until = time.time() + _OPEN_COOLDOWN
+        # 释放 self._lock 后再做持久化（避免嵌套锁；低频率轻量写，不影响路由主路径）
+        if self._store is not None:
+            try:
+                # R1：record_outcome 内部 sqlite3 同步写 → 线程池防阻塞（无 loop 则同步降级）
+                _run_async(self._store.record_outcome, provider_id, float(latency_ms), bool(is_success))
+            except Exception:
+                pass
 
     def record_inflight(self, provider_id: str, delta: int = 1) -> None:
         """在途请求计数（调用前 +1，结果回来时由 record_result -1）。"""
@@ -321,6 +603,22 @@ class AdaptiveRouter:
             self.nodes = {}
             self._records = []
 
+    def close(self) -> None:
+        """关闭持久化连接（进程退出 / 测试收尾用）。"""
+        if self._store is not None:
+            self._store.close()
+            self._store = None
 
-# 模块级单例（registry 启动时挂载）
-adaptive_router = AdaptiveRouter()
+
+def _default_routing_db_path() -> str:
+    """读取配置的路由持久化文件路径；未配置/读取失败返回空串（关闭）。"""
+    try:
+        from . import config
+
+        return getattr(config, "IF_ROUTING_DB", "") or ""
+    except Exception:
+        return ""
+
+
+# 模块级单例（registry 启动时挂载；IF_ROUTING_DB 配置时启用持久化）
+adaptive_router = AdaptiveRouter(db_path=_default_routing_db_path())

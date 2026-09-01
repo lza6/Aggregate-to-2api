@@ -173,6 +173,15 @@ export function Dashboard() {
           icon="🩺"
         />
         <StatCard
+          label="慢请求(窗口内)"
+          value={diag?.slow_log ? `${diag.slow_log.count} 个` : '-'}
+          sub={diag?.slow_log?.count
+            ? `平均 ${diag.slow_log.avg_total_ms}ms · 最慢 ${diag.slow_log.max_total_ms}ms · ${diag.slow_log.slowest_stage ?? '—'}`
+            : '无慢请求'}
+          color={diag?.slow_log?.count && diag.slow_log.count > 20 ? 'var(--warning)' : undefined}
+          icon="🐌"
+        />
+        <StatCard
           label="出图成本口径"
           value={accountPool?.cost_summary ? `${accountPool.cost_summary.total_credits_used} 分` : '-'}
           sub={accountPool?.cost_summary

@@ -6,6 +6,7 @@ slow/routing/metrics/diagnostics/cost。
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import inspect
@@ -120,8 +121,10 @@ async def cost_overview():
     image_credits_used = 0
     image_images = 0
     try:
-        # cost_summary 为同步方法；测试 monkeypatch 成 async，故对可等待对象做兼容
-        _raw_cs = _account_pool.account_pool.cost_summary("nanobanana")
+        # cost_summary 为同步方法；测试 monkeypatch 成 async，故对可等待对象做兼容。
+        # 生产路径用 to_thread 丢线程池（同步 sqlite3 不阻塞事件循环）；测试 monkeypatch 成
+        # async 时不走 to_thread（awaitable 直接 await），保持 test_cost 的兼容分支成立。
+        _raw_cs = await asyncio.to_thread(_account_pool.account_pool.cost_summary, "nanobanana")
         cs = await _raw_cs if inspect.isawaitable(_raw_cs) else _raw_cs
         image_credits_used = cs.get("total_credits_used", 0)
         image_images = cs.get("total_images_used", 0)
@@ -194,11 +197,13 @@ async def account_pool_dashboard(
     from ..email_pool import email_pool
     from ..registerer import STAGE_LABELS
 
-    page_data = account_pool.list_page(
-        provider="nanobanana",
-        page=page,
-        page_size=page_size,
-        search=search,
+    page_data = await asyncio.to_thread(
+        account_pool.list_page,
+        "nanobanana",
+        None,
+        page,
+        page_size,
+        search,
     )
     # v6.5.0: 最近一次注册会话的阶段画像 + 各阶段耗时（供「注册在哪个阶段/每阶段耗时」渲染）
     reg = account_pool.registerers.get("nanobanana")
@@ -218,8 +223,8 @@ async def account_pool_dashboard(
                 "stage_durations": snap.get("stage_durations"),
             }
     # v6.5.2: 补号速率画像（每天新增账号数 + 预计达标天数）与成本口径聚合
-    growth = account_pool.growth_stats("nanobanana")
-    cost = account_pool.cost_summary("nanobanana")
+    growth = await asyncio.to_thread(account_pool.growth_stats, "nanobanana")
+    cost = await asyncio.to_thread(account_pool.cost_summary, "nanobanana")
     desensitized = []
     now_ts = time.time()
     for item in page_data["items"]:
@@ -248,10 +253,10 @@ async def account_pool_dashboard(
             }
         )
     return {
-        "accounts": account_pool.dashboard(),
+        "accounts": await asyncio.to_thread(account_pool.dashboard),
         "growth_stats": growth,
         "cost_summary": cost,
-        "email_pool": email_pool.stats(),
+        "email_pool": await asyncio.to_thread(email_pool.stats),
         "live_registration": live_stage,
         "items": desensitized,
         "items_total": page_data["total"],
@@ -557,10 +562,18 @@ async def get_proxy_subscription(format: str = Query("base64", description="订�
 
 
 @router.get("/v1/routing/records", include_in_schema=False)
-async def get_routing_records(limit: int = Query(50, ge=1, le=200)):
-    """自适应路由记录。"""
+async def get_routing_records(
+    limit: int = Query(50, ge=1, le=200),
+    from_ts: float | None = Query(None, description="只返回 ts >= from_ts 的历史路由决策（P3-1，持久化追溯）"),
+):
+    """自适应路由记录。
+
+    from_ts 提供时返回持久化 SQLite 历史（重启后仍可追溯）；未提供则返回内存环形缓冲
+    （时间戳倒序）。空数组属正常——主路径（healthy/degraded 直连）的 provider_for 不走
+    registry 交叉路由，仅 down/degraded 回退或 select_best 候选才会写入记录。
+    """
     return {
-        "records": registry.get_routing_records(limit=limit),
+        "records": registry.get_routing_records(limit=limit, from_ts=from_ts),
         "nodes": registry.adaptive_router.node_snapshot(),
     }
 

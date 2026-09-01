@@ -66,6 +66,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">死信队列</span>
             <span className="nav-pip" />
           </NavLink>
+          <NavLink to="/slow" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
+            <span className="nav-icon">🐌</span>
+            <span className="nav-text">慢请求画像</span>
+            <span className="nav-pip" />
+          </NavLink>
           <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon">💬</span>
             <span className="nav-text">在线聊天</span>

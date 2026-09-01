@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchAccountPool } from '../api';
 import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
+import { useVirtualList } from '../hooks/useVirtualList';
 
 interface ProviderPoolStats {
   total: number;
@@ -174,6 +175,16 @@ export function AccountsPage() {
     void reload();
   }, [page, filter, pageSize, reload]);
 
+  // P2-2: 账号明细表虚拟滚动（单页最多 100 行，固定行高切片渲染，减少 DOM 节点）
+  // 关键：useVirtualList 必须在任何条件 return 之前调用（hooks 顺序恒定），
+  // 否则首帧 loading 返回 skeleton 时少了该 hook，数据到达后多出 → React #310。
+  const ACCOUNT_ROW_H = 48;
+  const ACCOUNT_CONTAINER_H = 560;
+  const pagedItems = data?.items ?? [];
+  const vlist = useVirtualList(pagedItems, { itemHeight: ACCOUNT_ROW_H, containerHeight: ACCOUNT_CONTAINER_H, overscan: 10 });
+  const topPad = vlist.startIndex * ACCOUNT_ROW_H;
+  const bottomPad = (pagedItems.length - vlist.endIndex) * ACCOUNT_ROW_H;
+
   if (error && !data) return <ErrorRetry message={error.message} onRetry={reload} />;
   if (loading && !data) {
     return (
@@ -192,7 +203,6 @@ export function AccountsPage() {
   const totalItems = data?.items_total ?? 0;
   const totalPages = Math.max(1, data?.total_pages ?? 1);
   const safePage = Math.min(page, totalPages);
-  const pagedItems = data?.items ?? [];
 
   return (
     <div className="accounts-page-container">
@@ -356,7 +366,12 @@ export function AccountsPage() {
           </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        {/* P2-2: 虚拟滚动外层容器 —— 竖直方向滚动，只渲染可见行（spacer <tr> 撑高） */}
+        <div
+          ref={vlist.containerRef}
+          onScroll={vlist.onScroll}
+          style={{ overflow: 'auto', maxHeight: ACCOUNT_CONTAINER_H, position: 'relative' }}
+        >
           <table className="tf-table">
             <thead>
               <tr>
@@ -383,81 +398,85 @@ export function AccountsPage() {
                   </td>
                 </tr>
               ) : (
-                pagedItems.map((it) => {
-                  const cTime = it.created_at
-                    ? new Date(it.created_at * 1000).toLocaleString('zh-CN', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : '—';
-                  const chkTime = it.checkin_at
-                    ? new Date(it.checkin_at * 1000).toLocaleString('zh-CN', {
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : '尚未签到';
+                <>
+                  {topPad > 0 && <tr aria-hidden="true" style={{ height: topPad, padding: 0 }}><td colSpan={13} style={{ padding: 0, border: 'none' }} /></tr>}
+                  {vlist.visible.map((it) => {
+                    const cTime = it.created_at
+                      ? new Date(it.created_at * 1000).toLocaleString('zh-CN', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : '—';
+                    const chkTime = it.checkin_at
+                      ? new Date(it.checkin_at * 1000).toLocaleString('zh-CN', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : '尚未签到';
 
-                  let nextChk = '今日已签';
-                  const isPendingCheckin = !it.checkin_at || (Date.now() - (it.checkin_at ?? 0) * 1000 > 20 * 3600 * 1000);
-                  if (isPendingCheckin) {
-                    nextChk = '⚡ 待签到 (30分钟内自动触发)';
-                  } else if (it.checkin_at) {
-                    const nextDate = new Date(it.checkin_at * 1000 + 24 * 3600 * 1000);
-                    nextChk = nextDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + ' 之后';
-                  }
+                    let nextChk = '今日已签';
+                    const isPendingCheckin = !it.checkin_at || (Date.now() - (it.checkin_at ?? 0) * 1000 > 20 * 3600 * 1000);
+                    if (isPendingCheckin) {
+                      nextChk = '⚡ 待签到 (30分钟内自动触发)';
+                    } else if (it.checkin_at) {
+                      const nextDate = new Date(it.checkin_at * 1000 + 24 * 3600 * 1000);
+                      nextChk = nextDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + ' 之后';
+                    }
 
-                  return (
-                    <tr key={it.email}>
-                      <td>
-                        <code style={{ fontSize: 12, color: 'var(--primary-600)' }}>{it.email}</code>
-                      </td>
-                      <td>
-                        <span style={{ color: 'var(--success)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          {it.credits} 分
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`tf-badge ${it.status === 'ok' ? 'tf-badge-success' : 'tf-badge-danger'}`}>
-                          {it.status === 'ok' ? '正常运行' : it.status}
-                        </span>
-                      </td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{it.checkin_total ?? 0} 次</td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
-                        {it.checkin_total && it.checkin_total > 0 ? `${it.checkin_cycle_day ?? 0} / 7` : '—'}
-                      </td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)', fontWeight: 500 }}>
-                        {it.credits_earned_total ?? 0} 分
-                      </td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--danger)', fontWeight: 500 }}>
-                        {it.credits_used_total ?? 0} 分
-                      </td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
-                        {it.images_used ?? 0} 次
-                      </td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
-                        {it.age_days != null ? `${it.age_days} 天` : '—'}
-                      </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{cTime}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{chkTime}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
-                        {it.register_ip ? it.register_ip : '—'}
-                      </td>
-                      <td>
-                        <span style={{
-                          color: isPendingCheckin ? 'var(--warning-text)' : 'var(--text-secondary)',
-                          fontWeight: isPendingCheckin ? 600 : 400,
-                          fontSize: 12
-                        }}>
-                          {nextChk}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
+                    return (
+                      <tr key={it.email}>
+                        <td>
+                          <code style={{ fontSize: 12, color: 'var(--primary-600)' }}>{it.email}</code>
+                        </td>
+                        <td>
+                          <span style={{ color: 'var(--success)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                            {it.credits} 分
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`tf-badge ${it.status === 'ok' ? 'tf-badge-success' : 'tf-badge-danger'}`}>
+                            {it.status === 'ok' ? '正常运行' : it.status}
+                          </span>
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{it.checkin_total ?? 0} 次</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
+                          {it.checkin_total && it.checkin_total > 0 ? `${it.checkin_cycle_day ?? 0} / 7` : '—'}
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)', fontWeight: 500 }}>
+                          {it.credits_earned_total ?? 0} 分
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--danger)', fontWeight: 500 }}>
+                          {it.credits_used_total ?? 0} 分
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+                          {it.images_used ?? 0} 次
+                        </td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>
+                          {it.age_days != null ? `${it.age_days} 天` : '—'}
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{cTime}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>{chkTime}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
+                          {it.register_ip ? it.register_ip : '—'}
+                        </td>
+                        <td>
+                          <span style={{
+                            color: isPendingCheckin ? 'var(--warning-text)' : 'var(--text-secondary)',
+                            fontWeight: isPendingCheckin ? 600 : 400,
+                            fontSize: 12
+                          }}>
+                            {nextChk}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {bottomPad > 0 && <tr aria-hidden="true" style={{ height: bottomPad, padding: 0 }}><td colSpan={13} style={{ padding: 0, border: 'none' }} /></tr>}
+                </>
               )}
             </tbody>
           </table>

@@ -27,9 +27,9 @@
 - get_result · method · L1043-L1071 — async def get_result(self, task_id: str = Query(..., alias="id"))
 - create_app · function · L1074-L1079 — def create_app(headless, thread, page_count, proxy_support, proxy_file="proxies.txt", cleanup_interval_minutes=10) -> FastAPI
 - _print_banner · function · L1085-L1100 — def _print_banner()
-- _auto_install · function · L1105-L1136 — def _auto_install()
-- _camoufox_data_exists · function · L1139-L1151 — def _camoufox_data_exists(): # Linux/macOS 旧路径
-- _check_xvfb · function · L1154-L1177 — def _check_xvfb(headless: bool)
+- _auto_install · function · L1105-L1135 — def _auto_install()
+- _camoufox_data_exists · function · L1138-L1150 — def _camoufox_data_exists(): # Linux/macOS 旧路径
+- _check_xvfb · function · L1153-L1177 — def _check_xvfb(headless: bool)
 - _load_config · function · L1197-L1206 — def _load_config() -> dict
 - _save_config · function · L1209-L1212 — def _save_config(cfg: dict)
 - _parse_value · function · L1215-L1226 — def _parse_value(key, raw, current)

@@ -177,3 +177,74 @@ class TestRegistryIntegration:
         assert provider is not None
         # 至少生成一条路由记录
         assert len(reg.get_routing_records(limit=10)) >= 1
+
+
+class TestPersistence:
+    """P3-1 可观测/可恢复：SQLite 持久化、restore、历史查询。"""
+
+    def _router(self, tmp_path) -> AdaptiveRouter:
+        return AdaptiveRouter(db_path=str(tmp_path / "routing.db"))
+
+    def test_record_snapshot_contains_record(self, tmp_path):
+        """记录后 snapshot 含该记录（持久化路由决策历史）。"""
+        r = self._router(tmp_path)
+        r.select_best(["a", "b"], request_id="req-persist", model="m1", explore=False)
+        recs = r.records()
+        assert any(x["request_id"] == "req-persist" for x in recs)
+
+    def test_restore_reads_back_old_records(self, tmp_path):
+        """新建实例 restore 后能读回旧记录（持久化生效）。"""
+        db_path = str(tmp_path / "routing.db")
+        r1 = self._router(tmp_path)
+        r1.select_best(["a", "b"], request_id="req-restore", model="m1", explore=False)
+        r1.close()  # 关闭旧连接，让新实例重新打开同一 db 文件
+
+        r2 = AdaptiveRouter(db_path=db_path)
+        recs = r2.records()
+        assert any(x["request_id"] == "req-restore" for x in recs)
+        assert len(recs) >= 1
+
+    def test_warm_params_init_ewma(self, tmp_path):
+        """warm 参数生效：历史 min/max 被用于冷启动初始化 EWMA。"""
+        db_path = str(tmp_path / "routing.db")
+        r1 = self._router(tmp_path)
+        # 两次真实调用观测：latency 500 / 1500 → warm 用 midpoint=1000
+        r1.record_result("p", 500.0, True)
+        r1.record_result("p", 1500.0, True)
+        r1.close()
+
+        r2 = AdaptiveRouter(db_path=db_path)
+        # 冷启动 nodes 为空，用持久化观测 warm：min=500, max=1500 → (500+1500)/2 = 1000
+        assert r2.nodes["p"].ewma_latency_ms == 1000.0
+
+    async def test_routing_records_from_ts_endpoint(self, tmp_path, monkeypatch):
+        """`/v1/routing/records?from_ts=` 返回持久化历史。"""
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from api.routes import admin
+        from api.errors import AppError, ErrorCodes
+        from api.handlers import app_error_handler
+
+        db_path = str(tmp_path / "rt.db")
+        ar = AdaptiveRouter(db_path=db_path)
+        ar.select_best(["a", "b"], request_id="req-ts", model="m1", explore=False)
+
+        class FakeRegistry:
+            adaptive_router = ar
+
+            def get_routing_records(self, limit=50, from_ts=None):
+                return ar.records(limit=limit, from_ts=from_ts)
+
+        monkeypatch.setattr(admin, "registry", FakeRegistry())
+
+        application = FastAPI()
+        application.add_exception_handler(AppError, app_error_handler)
+        application.include_router(admin.router)
+
+        async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as client:
+            resp = await client.get("/v1/routing/records?from_ts=0")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert any(x["request_id"] == "req-ts" for x in body["records"])
+        assert "nodes" in body

@@ -1,37 +1,37 @@
 # tests/test_persistent_queue.py
 
-- TestQueueDB · class · L23-L144 — class TestQueueDB
-- _make_qdb · method · L26-L30 — def _make_qdb(self) -> tuple[QueueDB, str]
-- _cleanup · method · L32-L39 — def _cleanup(self, path: str) -> None
-- test_enqueue_and_list_pending · method · L41-L54 — def test_enqueue_and_list_pending(self)
-- test_mark_processing_and_completed · method · L56-L68 — def test_mark_processing_and_completed(self)
-- test_list_pending_order · method · L70-L85 — def test_list_pending_order(self)
-- test_concurrent_enqueue · method · L87-L109 — def test_concurrent_enqueue(self)
-- writer · function · L93-L98 — def writer(n: int)
-- test_restore_pending_after_reopen · method · L111-L129 — def test_restore_pending_after_reopen(self)
-- test_mark_completed_removes_from_pending · method · L131-L144 — def test_mark_completed_removes_from_pending(self)
-- TestQueueStore · class · L147-L237 — class TestQueueStore
-- _make_store · method · L150-L156 — def _make_store(self) -> tuple["QueueStore", str]
-- _cleanup · method · L158-L165 — def _cleanup(self, path: str) -> None
-- test_enqueue_and_list_pending · method · L168-L180 — async def test_enqueue_and_list_pending(self)
-- test_mark_processing_and_completed · method · L183-L195 — async def test_mark_processing_and_completed(self)
-- test_restore_pending_after_reopen · method · L198-L215 — async def test_restore_pending_after_reopen(self)
-- test_cleanup_deletes_expired_pending · method · L218-L237 — async def test_cleanup_deletes_expired_pending(self)
-- _DBStub · class · L240-L269 — class _DBStub
-- __init__ · method · L243-L246 — def __init__(self) -> None
-- create_request · method · L248-L254 — async def create_request(self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None)
-- mark_finished · method · L256-L259 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
-- mark_started · method · L261-L263 — async def mark_started(self, task_id)
-- get · method · L265-L266 — async def get(self, task_id)
-- recover_stale_tasks · method · L268-L269 — async def recover_stale_tasks(self) -> int
-- TestEnginePersistentQueueIntegration · class · L272-L444 — class TestEnginePersistentQueueIntegration
-- engine_with_persistent · method · L276-L301 — def engine_with_persistent(self)
-- engine_without_persistent · method · L304-L316 — def engine_without_persistent(self)
-- test_submit_writes_queue_db · method · L319-L326 — async def test_submit_writes_queue_db(self, engine_with_persistent)
-- test_submit_priority_writes_queue_db · method · L329-L336 — async def test_submit_priority_writes_queue_db(self, engine_with_persistent)
-- test_no_write_when_disabled · method · L339-L343 — async def test_no_write_when_disabled(self, engine_without_persistent)
-- test_finish_marks_completed · method · L346-L353 — async def test_finish_marks_completed(self, engine_with_persistent)
-- test_resume_from_queue · method · L356-L371 — async def test_resume_from_queue(self, engine_with_persistent)
-- test_persistent_queue_restart_recovery · method · L374-L405 — async def test_persistent_queue_restart_recovery(self, engine_with_persistent)
-- test_restore_preserves_order · method · L408-L432 — async def test_restore_preserves_order(self, engine_with_persistent)
-- test_persistent_queue_marks_processing_in_process · method · L435-L444 — async def test_persistent_queue_marks_processing_in_process(self, engine_with_persistent)
+- TestQueueDB · class · L24-L149 — class TestQueueDB
+- _make_qdb · method · L27-L31 — def _make_qdb(self) -> tuple[QueueDB, str]
+- _cleanup · method · L33-L40 — def _cleanup(self, path: str) -> None
+- test_enqueue_and_list_pending · method · L42-L55 — def test_enqueue_and_list_pending(self)
+- test_mark_processing_and_completed · method · L57-L69 — def test_mark_processing_and_completed(self)
+- test_list_pending_order · method · L71-L90 — def test_list_pending_order(self)
+- test_concurrent_enqueue · method · L92-L114 — def test_concurrent_enqueue(self)
+- writer · function · L98-L103 — def writer(n: int)
+- test_restore_pending_after_reopen · method · L116-L134 — def test_restore_pending_after_reopen(self)
+- test_mark_completed_removes_from_pending · method · L136-L149 — def test_mark_completed_removes_from_pending(self)
+- TestQueueStore · class · L152-L239 — class TestQueueStore
+- _make_store · method · L155-L159 — def _make_store(self) -> tuple["QueueStore", str]
+- _cleanup · method · L161-L168 — def _cleanup(self, path: str) -> None
+- test_enqueue_and_list_pending · method · L171-L183 — async def test_enqueue_and_list_pending(self)
+- test_mark_processing_and_completed · method · L186-L198 — async def test_mark_processing_and_completed(self)
+- test_restore_pending_after_reopen · method · L201-L218 — async def test_restore_pending_after_reopen(self)
+- test_cleanup_deletes_expired_pending · method · L221-L239 — async def test_cleanup_deletes_expired_pending(self)
+- _DBStub · class · L242-L275 — class _DBStub
+- __init__ · method · L245-L248 — def __init__(self) -> None
+- create_request · method · L250-L260 — async def create_request( self, task_id, prompt, aspect_ratio, download, request_type, model, client_ip=None, user_agent=None )
+- mark_finished · method · L262-L265 — async def mark_finished(self, task_id, status, image_url, error, duration, image_base64=None, image_mime=None)
+- mark_started · method · L267-L269 — async def mark_started(self, task_id)
+- get · method · L271-L272 — async def get(self, task_id)
+- recover_stale_tasks · method · L274-L275 — async def recover_stale_tasks(self) -> int
+- TestEnginePersistentQueueIntegration · class · L278-L454 — class TestEnginePersistentQueueIntegration
+- engine_with_persistent · method · L282-L307 — def engine_with_persistent(self)
+- engine_without_persistent · method · L310-L322 — def engine_without_persistent(self)
+- test_submit_writes_queue_db · method · L325-L332 — async def test_submit_writes_queue_db(self, engine_with_persistent)
+- test_submit_priority_writes_queue_db · method · L335-L342 — async def test_submit_priority_writes_queue_db(self, engine_with_persistent)
+- test_no_write_when_disabled · method · L345-L349 — async def test_no_write_when_disabled(self, engine_without_persistent)
+- test_finish_marks_completed · method · L352-L359 — async def test_finish_marks_completed(self, engine_with_persistent)
+- test_resume_from_queue · method · L362-L377 — async def test_resume_from_queue(self, engine_with_persistent)
+- test_persistent_queue_restart_recovery · method · L380-L411 — async def test_persistent_queue_restart_recovery(self, engine_with_persistent)
+- test_restore_preserves_order · method · L414-L442 — async def test_restore_preserves_order(self, engine_with_persistent)
+- test_persistent_queue_marks_processing_in_process · method · L445-L454 — async def test_persistent_queue_marks_processing_in_process(self, engine_with_persistent)

@@ -1,24 +1,24 @@
 # tests/test_db_batch_write.py
 
-- _make_db · function · L16-L33 — async def _make_db(enabled: bool = True, window: float = 0.2)
-- _cleanup · function · L36-L47 — async def _cleanup(db, path: str)
-- TestBatchWriteEnabled · class · L50-L204 — class TestBatchWriteEnabled
-- test_batch_merges_multiple_writes_into_one_commit · method · L54-L79 — async def test_batch_merges_multiple_writes_into_one_commit(self)
-- test_mark_started_and_finished_also_batched · method · L82-L100 — async def test_mark_started_and_finished_also_batched(self)
-- test_update_upstream_task_batched · method · L103-L119 — async def test_update_upstream_task_batched(self)
-- test_flush_after_stop_empties_buffer · method · L122-L135 — async def test_flush_after_stop_empties_buffer(self)
-- test_flush_is_idempotent · method · L138-L148 — async def test_flush_is_idempotent(self)
-- test_reads_wait_for_inflight_flush_lock_even_when_buffer_empty · method · L151-L170 — async def test_reads_wait_for_inflight_flush_lock_even_when_buffer_empty(self)
-- test_concurrent_append_and_flush · method · L173-L204 — async def test_concurrent_append_and_flush(self)
-- writer · function · L179-L184 — async def writer(n: int, wid: int)
-- flusher · function · L186-L192 — async def flusher(count: int)
-- TestBatchWriteDisabled · class · L207-L252 — class TestBatchWriteDisabled
-- test_each_write_commits_immediately · method · L211-L227 — async def test_each_write_commits_immediately(self)
-- test_batch_controls_off_no_buffer_usage · method · L230-L241 — async def test_batch_controls_off_no_buffer_usage(self)
-- test_flush_noop_when_disabled · method · L244-L252 — async def test_flush_noop_when_disabled(self)
-- TestBatchTimer · class · L255-L309 — class TestBatchTimer
-- test_timer_flushes_after_window · method · L259-L284 — async def test_timer_flushes_after_window(self)
-- test_cancelled_timer_flushes_remaining · method · L287-L309 — async def test_cancelled_timer_flushes_remaining(self)
-- TestIdempotentRecovery · class · L312-L346 — class TestIdempotentRecovery
-- test_flushed_data_is_queryable · method · L316-L331 — async def test_flushed_data_is_queryable(self)
-- test_repeated_flush_does_not_duplicate · method · L334-L346 — async def test_repeated_flush_does_not_duplicate(self)
+- _make_db · function · L17-L34 — async def _make_db(enabled: bool = True, window: float = 0.2)
+- _cleanup · function · L37-L48 — async def _cleanup(db, path: str)
+- TestBatchWriteEnabled · class · L51-L205 — class TestBatchWriteEnabled
+- test_batch_merges_multiple_writes_into_one_commit · method · L55-L80 — async def test_batch_merges_multiple_writes_into_one_commit(self)
+- test_mark_started_and_finished_also_batched · method · L83-L101 — async def test_mark_started_and_finished_also_batched(self)
+- test_update_upstream_task_batched · method · L104-L120 — async def test_update_upstream_task_batched(self)
+- test_flush_after_stop_empties_buffer · method · L123-L136 — async def test_flush_after_stop_empties_buffer(self)
+- test_flush_is_idempotent · method · L139-L149 — async def test_flush_is_idempotent(self)
+- test_reads_wait_for_inflight_flush_lock_even_when_buffer_empty · method · L152-L171 — async def test_reads_wait_for_inflight_flush_lock_even_when_buffer_empty(self)
+- test_concurrent_append_and_flush · method · L174-L205 — async def test_concurrent_append_and_flush(self)
+- writer · function · L180-L185 — async def writer(n: int, wid: int)
+- flusher · function · L187-L193 — async def flusher(count: int)
+- TestBatchWriteDisabled · class · L208-L253 — class TestBatchWriteDisabled
+- test_each_write_commits_immediately · method · L212-L228 — async def test_each_write_commits_immediately(self)
+- test_batch_controls_off_no_buffer_usage · method · L231-L242 — async def test_batch_controls_off_no_buffer_usage(self)
+- test_flush_noop_when_disabled · method · L245-L253 — async def test_flush_noop_when_disabled(self)
+- TestBatchTimer · class · L256-L310 — class TestBatchTimer
+- test_timer_flushes_after_window · method · L260-L285 — async def test_timer_flushes_after_window(self)
+- test_cancelled_timer_flushes_remaining · method · L288-L310 — async def test_cancelled_timer_flushes_remaining(self)
+- TestIdempotentRecovery · class · L313-L347 — class TestIdempotentRecovery
+- test_flushed_data_is_queryable · method · L317-L332 — async def test_flushed_data_is_queryable(self)
+- test_repeated_flush_does_not_duplicate · method · L335-L347 — async def test_repeated_flush_does_not_duplicate(self)

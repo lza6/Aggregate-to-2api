@@ -21,10 +21,10 @@
 - test_try_recover_restores_health · method · L132-L137 — def test_try_recover_restores_health(self)
 - test_try_recover_all_only_recover_after_interval · method · L139-L150 — def test_try_recover_all_only_recover_after_interval(self, monkeypatch)
 - test_try_recover_all_skips_healthy · method · L152-L161 — def test_try_recover_all_skips_healthy(self, monkeypatch)
-- TestRouteIntegration · class · L165-L185 — class TestRouteIntegration
-- test_provider_for_returns_429_when_down · method · L166-L174 — def test_provider_for_returns_429_when_down(self)
-- test_healthy_provider_dispatch_ok · method · L176-L179 — def test_healthy_provider_dispatch_ok(self)
-- test_degraded_provider_dispatch_ok · method · L181-L185 — def test_degraded_provider_dispatch_ok(self)
-- TestConfig · class · L189-L194 — class TestConfig
-- test_degrade_threshold_config · method · L190-L191 — def test_degrade_threshold_config(self)
-- test_recover_interval_config · method · L193-L194 — def test_recover_interval_config(self)
+- TestRouteIntegration · class · L165-L184 — class TestRouteIntegration
+- test_provider_for_returns_429_when_down · method · L166-L173 — def test_provider_for_returns_429_when_down(self)
+- test_healthy_provider_dispatch_ok · method · L175-L178 — def test_healthy_provider_dispatch_ok(self)
+- test_degraded_provider_dispatch_ok · method · L180-L184 — def test_degraded_provider_dispatch_ok(self)
+- TestConfig · class · L188-L193 — class TestConfig
+- test_degrade_threshold_config · method · L189-L190 — def test_degrade_threshold_config(self)
+- test_recover_interval_config · method · L192-L193 — def test_recover_interval_config(self)

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useVirtualList } from '../hooks/useVirtualList';
 
 interface LogEntry {
   timestamp: string;
@@ -91,15 +92,24 @@ export function LogsPage() {
     };
   }, [connectWs]);
 
-  useEffect(() => {
-    if (autoScroll) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs, autoScroll]);
-
   const filtered = filter
     ? logs.filter(l => l.message.toLowerCase().includes(filter.toLowerCase()) || l.logger.toLowerCase().includes(filter.toLowerCase()))
     : logs;
+
+  // P2-2: 日志流虚拟滚动 —— terminal-body 作为滚动容器，只渲染可见行（最多 500 行，固定行高切片）。
+  const LOG_ROW_H = 22;
+  const LOG_CONTAINER_H = 620;
+  const vlist = useVirtualList(filtered, { itemHeight: LOG_ROW_H, containerHeight: LOG_CONTAINER_H, overscan: 12 });
+  const topPad = vlist.startIndex * LOG_ROW_H;
+  const bottomPad = (filtered.length - vlist.endIndex) * LOG_ROW_H;
+
+  // 自动滚屏：新日志到达且 autoScroll 开启时，把滚动容器推到最底（虚拟化后用容器 scrollTop 而非 scrollIntoView）
+  useEffect(() => {
+    if (autoScroll && vlist.containerRef.current) {
+      const el = vlist.containerRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [filtered.length, autoScroll, vlist.containerRef]);
 
   const getLevelBadgeClass = (lvl: string) => {
     switch (lvl?.toUpperCase()) {
@@ -193,20 +203,24 @@ export function LogsPage() {
           <div className="terminal-badge">{filtered.length} lines</div>
         </div>
 
-        <div className="terminal-body">
+        <div className="terminal-body" ref={vlist.containerRef} onScroll={vlist.onScroll}>
           {filtered.length === 0 ? (
             <div className="terminal-empty">
               <span>⚡ {connStatus === 'reconnecting' ? '正在尝试恢复 WebSocket 连接…' : '等待服务端日志流推入中…'}</span>
             </div>
           ) : (
-            filtered.map((l) => (
-              <div key={l.timestamp || l.logger || l.message.slice(0, 20)} className="terminal-line">
-                <span className="t-ts">{l.timestamp}</span>
-                <span className={`t-lvl ${getLevelBadgeClass(l.level)}`}>{l.level}</span>
-                <span className="t-logger">[{l.logger}]</span>
-                <span className="t-msg">{l.message}</span>
-              </div>
-            ))
+            <>
+              {topPad > 0 && <div style={{ height: topPad }} aria-hidden="true" />}
+              {vlist.visible.map((l) => (
+                <div key={l.timestamp || l.logger || l.message.slice(0, 20)} className="terminal-line">
+                  <span className="t-ts">{l.timestamp}</span>
+                  <span className={`t-lvl ${getLevelBadgeClass(l.level)}`}>{l.level}</span>
+                  <span className="t-logger">[{l.logger}]</span>
+                  <span className="t-msg">{l.message}</span>
+                </div>
+              ))}
+              {bottomPad > 0 && <div style={{ height: bottomPad }} aria-hidden="true" />}
+            </>
           )}
           <div ref={bottomRef} />
         </div>

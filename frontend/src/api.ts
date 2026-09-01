@@ -1,5 +1,139 @@
 const API_BASE = '';
 
+// ── 统一错误处理（P1-4）──────────────────────────────────────────────
+// 所有经 apiFetch 的请求：统一超时、统一错误规范化（非 2xx 抛 ApiError，
+// 映射 {status, code, message}；网络错误/超时 status=0，code 为 NETWORK_ERROR / TIMEOUT）。
+
+/** 统一 API 错误对象。status=0 表示非 HTTP 错误（网络错误/超时/取消）。 */
+export class ApiError extends Error {
+  status: number;
+  code: string | null;
+  constructor(status: number, message: string, code: string | null = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/** apiFetch 专有配置（在 RequestInit 基础上追加）。 */
+export interface ApiFetchOptions extends RequestInit {
+  /** 请求超时（ms），默认 30000；超时抛 ApiError(status=0, code='TIMEOUT')。 */
+  timeoutMs?: number;
+  /** 追踪/动作名：非 2xx 时拼进错误消息前缀（如「封禁失败 HTTP 401: ...」）；缺省用状态中文文案。 */
+  caller?: string;
+}
+
+/** 常见 HTTP 状态的中文可读文案（响应体无可解析 detail 时兜底）。 */
+const STATUS_TEXT: Record<number, string> = {
+  400: '请求参数有误',
+  401: '未授权或凭证缺失',
+  403: '禁止访问或凭证无效',
+  404: '资源不存在',
+  405: '请求方法不支持',
+  408: '请求超时',
+  409: '资源冲突',
+  410: '资源已失效',
+  413: '请求体过大',
+  415: '不支持的媒体类型',
+  422: '请求参数校验失败',
+  429: '请求过于频繁，请稍后再试',
+  500: '服务器内部错误',
+  501: '未实现的功能',
+  502: '网关错误',
+  503: '服务暂时不可用',
+  504: '网关超时',
+};
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** 解析错误响应体 → { code, message }。code 优先取 body.code / body.error.code。 */
+async function readErrorBody(res: Response): Promise<{ code: string | null; message: string }> {
+  let text = '';
+  try { text = await res.text(); } catch { text = ''; }
+  let body: unknown = null;
+  if (text) {
+    try { body = JSON.parse(text); } catch { body = null; }
+  }
+  if (body && typeof body === 'object') {
+    const obj = body as Record<string, unknown>;
+    const errObj = obj.error && typeof obj.error === 'object' ? obj.error as Record<string, unknown> : undefined;
+    const code = typeof obj.code === 'string' ? obj.code
+      : errObj && typeof errObj.code === 'string' ? errObj.code as string : null;
+    const detail = obj.detail ?? obj.message ?? errObj?.message ?? obj.error;
+    const message = typeof detail === 'string' ? detail.slice(0, 200)
+      : typeof detail === 'number' ? String(detail)
+      : detail && typeof detail === 'object' ? JSON.stringify(detail).slice(0, 200)
+      : text.slice(0, 200);
+    return { code, message };
+  }
+  return { code: null, message: text.slice(0, 200) };
+}
+
+/**
+ * 统一 fetch 封装：
+ * - 30s 超时（AbortController + race）
+ * - 非 2xx 抛 ApiError（带 status/code/message）；网络错误 status=0 code=NETWORK_ERROR；超时 status=0 code=TIMEOUT
+ * - 调用方传外部 signal 时透传给 fetch（与调用方取消联动）
+ */
+export async function apiFetch<T>(path: string, opts: ApiFetchOptions = {}): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, caller = '', ...init } = opts;
+  const controller = new AbortController();
+  const externalSignal = init.signal ?? undefined;
+  // 调用方传外部 signal 时优先透传（保持 AbortSignal 同一性，供测试与调用方取消联动）；
+  // 否则用内部 controller.signal 让超时能真实中止底层请求。
+  const fetchSignal = externalSignal ?? controller.signal;
+  if (externalSignal?.aborted) controller.abort();
+  else if (externalSignal) externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timerId = setTimeout(() => {
+      controller.abort();
+      reject(new ApiError(0, caller ? `${caller} 超时，请稍后重试` : '请求超时，请稍后重试', 'TIMEOUT'));
+    }, timeoutMs);
+  });
+  // 防未处理拒绝：timeout / fetchPromise 任一先 settle 后另一方的 rejection 需被吞掉
+  void timeout.catch(() => { /* noop */ });
+  const fetchPromise = fetch(`${API_BASE}${path}`, { ...init, signal: fetchSignal });
+  void fetchPromise.catch(() => { /* noop */ });
+
+  let res: Response;
+  try {
+    res = await Promise.race([fetchPromise, timeout]);
+  } catch (e) {
+    clearTimeout(timerId);
+    if (e instanceof ApiError) throw e;
+    const name = (e as Error)?.name;
+    if (name === 'AbortError') {
+      if (externalSignal?.aborted) {
+        throw new ApiError(0, caller ? `${caller} 已取消` : '请求已被取消', 'ABORTED');
+      }
+      throw new ApiError(0, caller ? `${caller} 超时，请稍后重试` : '请求超时，请稍后重试', 'TIMEOUT');
+    }
+    throw new ApiError(0, caller ? `${caller} 网络错误，请检查网络连接` : '网络错误，请检查网络连接', 'NETWORK_ERROR');
+  }
+  clearTimeout(timerId);
+
+  if (!res.ok) {
+    const { code, message: detail } = await readErrorBody(res);
+    const statusText = STATUS_TEXT[res.status] ?? `HTTP ${res.status}`;
+    // caller 给定时用「caller HTTP <status>: <detail>」；否则用状态中文文案（可带 detail）
+    const message = caller
+      ? (detail ? `${caller} HTTP ${res.status}: ${detail}` : `${caller} HTTP ${res.status}`)
+      : `${statusText}${code ? `（${code}）` : ''}${detail ? `：${detail}` : ''}`;
+    throw new ApiError(res.status, message, code);
+  }
+  // 200 空 body（如某些 DELETE 返回 204/空串）→ 返回 null，而非抛裸 SyntaxError
+  const text = await res.text().catch(() => '');
+  if (!text) return null as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as unknown as T;
+  }
+}
+
 export interface Stats {
   total_requests: number;
   total_images: number;
@@ -96,8 +230,7 @@ export function notify(message: string, type: ToastType = 'info') {
 }
 
 export async function fetchStats(): Promise<Stats> {
-  const res = await fetch(`${API_BASE}/v1/stats`);
-  return res.json();
+  return apiFetch<Stats>('/v1/stats');
 }
 
 export async function fetchTasks(params?: { limit?: number; offset?: number; status?: string }): Promise<{ items: Task[]; total: number }> {
@@ -105,20 +238,17 @@ export async function fetchTasks(params?: { limit?: number; offset?: number; sta
   if (params?.limit) q.set('limit', String(params.limit));
   if (params?.offset) q.set('offset', String(params.offset));
   if (params?.status) q.set('status', params.status);
-  const res = await fetch(`${API_BASE}/v1/tasks?${q}`);
-  return res.json();
+  return apiFetch<{ items: Task[]; total: number }>(`/v1/tasks?${q}`);
 }
 
 export async function fetchProviders(): Promise<{ items: Record<string, ProviderSummary>; count: number }> {
-  const res = await fetch(`${API_BASE}/v1/providers`);
-  return res.json();
+  return apiFetch<{ items: Record<string, ProviderSummary>; count: number }>('/v1/providers');
 }
 
 export async function fetchGallery(limit = 20, password?: string): Promise<{ items: GalleryItem[]; count: number }> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (password) q.set('password', password);
-  const res = await fetch(`${API_BASE}/v1/gallery?${q}`);
-  return res.json();
+  return apiFetch<{ items: GalleryItem[]; count: number }>(`/v1/gallery?${q}`);
 }
 
 /** P1-1 画廊签名 URL：站长签发有限期访问链接（管理 Key 鉴权，后端返回带 exp+sig 的 URL）。 */
@@ -126,12 +256,7 @@ export async function signGallery(limit = 20, adminKey?: string): Promise<{ url:
   const q = new URLSearchParams({ limit: String(limit) });
   const headers: Record<string, string> = {};
   if (adminKey) headers['Authorization'] = `Bearer ${adminKey}`;
-  const res = await fetch(`${API_BASE}/v1/gallery/sign?${q}`, { headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw { status: res.status, ...(body?.detail ?? body) };
-  }
-  return res.json();
+  return apiFetch<{ url: string; expires_in: number }>('/v1/gallery/sign?' + q.toString(), { headers, caller: '签名失败' });
 }
 
 export interface LogEntry {
@@ -142,13 +267,11 @@ export interface LogEntry {
 }
 
 export async function fetchLogs(lines = 100): Promise<{ logs: LogEntry[] }> {
-  const res = await fetch(`${API_BASE}/v1/logs?lines=${lines}`);
-  return res.json();
+  return apiFetch<{ logs: LogEntry[] }>(`/v1/logs?lines=${lines}`);
 }
 
 export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue`);
-  return res.json();
+  return apiFetch<{ items: DLQItem[]; count: number }>('/v1/dead-letter-queue');
 }
 
 // ── v6.7.0: 管理 Key（仅浏览器 localStorage，仅用于管理面写操作；永不注入匿名只读请求）──
@@ -191,46 +314,28 @@ export async function blockIp(body: {
   reason?: string;
   ttl_seconds?: number;
 }): Promise<{ ok: boolean; record: BlockRule }> {
-  const res = await fetch(`${API_BASE}/v1/admin/security/block-ip`, {
+  return apiFetch<{ ok: boolean; record: BlockRule }>('/v1/admin/security/block-ip', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...adminHeaders() },
     body: JSON.stringify(body),
+    caller: '封禁失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`封禁失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 export async function unblockIp(ip: string): Promise<{ ok: boolean; removed: boolean; note?: string }> {
-  const res = await fetch(`${API_BASE}/v1/admin/security/unblock-ip?ip=${encodeURIComponent(ip)}`, {
+  return apiFetch<{ ok: boolean; removed: boolean; note?: string }>(`/v1/admin/security/unblock-ip?ip=${encodeURIComponent(ip)}`, {
     method: 'DELETE',
     headers: adminHeaders(),
+    caller: '解封失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`解封失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 export async function fetchBlocklist(limit = 200): Promise<{ items: BlockRule[]; count: number }> {
-  const res = await fetch(`${API_BASE}/v1/admin/security/blocklist?limit=${limit}`, { headers: adminHeaders() });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`封禁列表获取失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
+  return apiFetch<{ items: BlockRule[]; count: number }>(`/v1/admin/security/blocklist?limit=${limit}`, { headers: adminHeaders(), caller: '封禁列表获取失败' });
 }
 
 export async function fetchBlockStatus(ip: string): Promise<{ ip: string; rule: BlockRule | null; blocked: boolean }> {
-  const res = await fetch(`${API_BASE}/v1/admin/security/status?ip=${encodeURIComponent(ip)}`, { headers: adminHeaders() });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`封禁状态查询失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
+  return apiFetch<{ ip: string; rule: BlockRule | null; blocked: boolean }>(`/v1/admin/security/status?ip=${encodeURIComponent(ip)}`, { headers: adminHeaders(), caller: '封禁状态查询失败' });
 }
 
 // ── v3.1.0 S-6/S-7: 只读诊断 + worker 健康 ──
@@ -258,8 +363,7 @@ export interface Diagnostics {
 }
 
 export async function fetchDiagnostics(): Promise<Diagnostics> {
-  const res = await fetch(`${API_BASE}/v1/diagnostics`);
-  return res.json();
+  return apiFetch<Diagnostics>('/v1/diagnostics');
 }
 
 // ── v6.8.0: 成本可视化（M6-F3，对应后端 /v1/cost）──
@@ -301,8 +405,7 @@ export interface CostOverview {
 }
 
 export async function fetchCost(): Promise<CostOverview> {
-  const res = await fetch(`${API_BASE}/v1/cost`);
-  return res.json();
+  return apiFetch<CostOverview>('/v1/cost');
 }
 
 export interface AccountPoolProviderStats {
@@ -396,32 +499,23 @@ export async function fetchAccountPool(params: { page?: number; pageSize?: numbe
     page_size: String(params.pageSize ?? 20),
   });
   if (params.search?.trim()) q.set('search', params.search.trim());
-  const res = await fetch(`${API_BASE}/v1/account-pool?${q}`);
-  return res.json();
+  return apiFetch<AccountPoolResponse>(`/v1/account-pool?${q}`);
 }
 
 export async function retryDLQTask(taskId: string): Promise<{ detail?: string; message?: string }> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue/${taskId}/retry`, {
+  return apiFetch<{ detail?: string; message?: string }>(`/v1/dead-letter-queue/${taskId}/retry`, {
     method: 'POST',
     headers: adminHeaders(),
+    caller: '重试失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`重试失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 export async function clearDLQ(): Promise<{ detail?: string; message?: string; success?: boolean }> {
-  const res = await fetch(`${API_BASE}/v1/dead-letter-queue`, {
+  return apiFetch<{ detail?: string; message?: string; success?: boolean }>('/v1/dead-letter-queue', {
     method: 'DELETE',
     headers: adminHeaders(),
+    caller: '清空失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`清空失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 // ── v3.2: 自适应路由记录 ──
@@ -449,8 +543,7 @@ export interface RoutingNode {
 }
 
 export async function fetchRoutingRecords(limit = 50): Promise<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }> {
-  const res = await fetch(`${API_BASE}/v1/routing/records?limit=${limit}`);
-  return res.json();
+  return apiFetch<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }>(`/v1/routing/records?limit=${limit}`);
 }
 
 // ── 代理池（P3-4 健康体检复用） ──
@@ -488,8 +581,7 @@ export async function fetchProxyPool(params: { page?: number; pageSize?: number 
     page: String(params.page ?? 1),
     page_size: String(params.pageSize ?? 20),
   });
-  const res = await fetch(`${API_BASE}/v1/proxy-pool?${q}`);
-  return res.json();
+  return apiFetch<ProxyPoolSnapshot>(`/v1/proxy-pool?${q}`);
 }
 
 // ── 服务器规格 ──
@@ -506,8 +598,7 @@ export interface SystemSpec {
 }
 
 export async function fetchSystemSpec(): Promise<SystemSpec> {
-  const res = await fetch(`${API_BASE}/v1/system`);
-  return res.json();
+  return apiFetch<SystemSpec>('/v1/system');
 }
 
 // ── v4.4 AI 聊天 ──
@@ -546,13 +637,11 @@ export interface ChatModelInfo {
 }
 
 export async function fetchChatUsage(period = '24h'): Promise<ChatUsageStats> {
-  const res = await fetch(`${API_BASE}/v1/chat/usage?period=${period}`);
-  return res.json();
+  return apiFetch<ChatUsageStats>(`/v1/chat/usage?period=${period}`);
 }
 
 export async function fetchChatRemaining(): Promise<ChatRemaining> {
-  const res = await fetch(`${API_BASE}/v1/chat/remaining`);
-  return res.json();
+  return apiFetch<ChatRemaining>('/v1/chat/remaining');
 }
 
 export interface ChatAuthStatus {
@@ -567,8 +656,7 @@ export interface ChatAuthStatus {
 export async function fetchChatAuthStatus(options?: { adminKey?: string }): Promise<ChatAuthStatus> {
   const headers: Record<string, string> = {};
   if (options?.adminKey) headers['Authorization'] = `Bearer ${options.adminKey}`;
-  const res = await fetch(`${API_BASE}/v1/chat/auth/status`, { headers });
-  return res.json();
+  return apiFetch<ChatAuthStatus>('/v1/chat/auth/status', { headers });
 }
 
 // ── 本地保存的 API Key（仅浏览器 localStorage，永不上传） ──
@@ -604,8 +692,7 @@ export interface ImageModelInfo {
 
 /** 全量模型目录（/v1/models），按 provider 分组；含生图模型 capability */
 export async function fetchImageModels(): Promise<{ items: Record<string, ImageModelInfo[]>; count: number }> {
-  const res = await fetch(`${API_BASE}/v1/models`);
-  return res.json();
+  return apiFetch<{ items: Record<string, ImageModelInfo[]>; count: number }>('/v1/models');
 }
 
 /** 文生图/图生图同步生成（自动携带本地保存 API Key）；需 Key，无 Key 后端返回 401 */
@@ -616,17 +703,13 @@ export async function generateImage(body: {
   resolution?: string;
   download?: boolean;
 }, signal?: AbortSignal): Promise<Task> {
-  const res = await fetch(`${API_BASE}/v1/generate`, {
+  return apiFetch<Task>('/v1/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
     signal,
+    caller: '生成失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`生成失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 /** 图生图（AI 照片编辑，异步提交） */
@@ -637,35 +720,26 @@ export async function editImage(body: {
   model?: string;
   download?: boolean;
 }, signal?: AbortSignal): Promise<Task> {
-  const res = await fetch(`${API_BASE}/v1/edit`, {
+  return apiFetch<Task>('/v1/edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
     signal,
+    caller: '图生图提交失败',
   });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`图生图提交失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 /** 轮询异步任务结果（/v1/tasks/{id} 或 /v1/edit/tasks/{id}） */
 export async function fetchTask(id: string): Promise<Task> {
-  const res = await fetch(`${API_BASE}/v1/tasks/${id}`);
-  if (!res.ok) throw new Error(`任务查询失败 HTTP ${res.status}`);
-  return res.json();
+  return apiFetch<Task>(`/v1/tasks/${id}`, { caller: '任务查询失败' });
 }
 
 export async function fetchEditTask(id: string): Promise<Task> {
-  const res = await fetch(`${API_BASE}/v1/edit/tasks/${id}`);
-  if (!res.ok) throw new Error(`图生图任务查询失败 HTTP ${res.status}`);
-  return res.json();
+  return apiFetch<Task>(`/v1/edit/tasks/${id}`, { caller: '图生图任务查询失败' });
 }
 
 export async function fetchChatModels(): Promise<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }> {
-  const res = await fetch(`${API_BASE}/v1/chat/models`);
-  return res.json();
+  return apiFetch<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>('/v1/chat/models');
 }
 
 // ── v6.7.0: TensorFeed AI 生态展示 ──
@@ -729,12 +803,7 @@ export interface AiEcosystemResponse {
 }
 
 export async function fetchAiEcosystem(): Promise<AiEcosystemResponse> {
-  const res = await fetch(`${API_BASE}/v1/ai-ecosystem`);
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`AI 生态数据获取失败 HTTP ${res.status}: ${detail.slice(0, 200)}`);
-  }
-  return res.json();
+  return apiFetch<AiEcosystemResponse>('/v1/ai-ecosystem', { caller: 'AI 生态数据获取失败' });
 }
 
 /** 聊天补全（供 playground 用）；流式 SSE 响应体由页面自行 reader 解析；自动携带本地保存的 Key */

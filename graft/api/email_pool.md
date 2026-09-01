@@ -1,53 +1,63 @@
 # api/email_pool.py
 
-- BaseMailSource · class · L50-L102 — class BaseMailSource
-- new_address · method · L61-L63 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L65-L67 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- is_available · method · L69-L71 — def is_available(self) -> bool
-- mark_success · method · L73-L77 — def mark_success(self) -> None
-- mark_failure · method · L79-L93 — def mark_failure(self, error: str = "", backoff_seconds: float = 30.0) -> None
-- score · method · L95-L102 — def score(self) -> float
-- LinshiMailSource · class · L110-L170 — class LinshiMailSource(BaseMailSource)
-- __init__ · method · L123-L134 — def __init__(self) -> None: # 默认域名被上游拉黑 → 权重降到 10 使其极少被选中；可用域名补齐后靠环境变量覆盖
-- new_address · method · L136-L141 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L143-L170 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- MailTmSource · class · L178-L301 — class MailTmSource(BaseMailSource)
-- __init__ · method · L187-L197 — def __init__(self) -> None
-- _get_domains · method · L199-L216 — async def _get_domains(self) -> list[str]
-- new_address · method · L218-L256 — async def new_address(self) -> tuple[str, dict]: # 仅使用实时拉取的域名；过期默认域名（sharklasers 等）已被 mail.tm 拒绝（422）， # 故不再回退到硬编码旧域名。
-- fetch_mails · method · L258-L301 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- GuerrillaMailSource · class · L305-L380 — class GuerrillaMailSource(BaseMailSource)
-- __init__ · method · L311-L319 — def __init__(self) -> None
-- new_address · method · L321-L341 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L343-L380 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- CustomImapSource · class · L384-L521 — class CustomImapSource(BaseMailSource)
-- __init__ · method · L394-L413 — def __init__( self, host: str | None = None, port: int | None = None, username: str | None = None, password: str | None = None, domain: str | None = None, use_ssl: bool = True, ) -> None
-- is_configured · method · L415-L416 — def is_configured(self) -> bool
-- is_available · method · L418-L419 — def is_available(self) -> bool
-- new_address · method · L421-L426 — async def new_address(self) -> tuple[str, dict]
-- _sync_fetch_mails · method · L428-L516 — def _sync_fetch_mails(self, address: str) -> list[dict]
-- fetch_mails · method · L518-L521 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- Do22Source · class · L525-L614 — class Do22Source(BaseMailSource)
-- __init__ · method · L531-L542 — def __init__(self) -> None
-- new_address · method · L544-L569 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L571-L614 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- TempMailSource · class · L618-L709 — class TempMailSource(BaseMailSource)
-- __init__ · method · L629-L640 — def __init__(self) -> None
-- new_address · method · L642-L663 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L665-L709 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- TempTfSource · class · L713-L738 — class TempTfSource(BaseMailSource)
-- __init__ · method · L719-L724 — def __init__(self) -> None
-- new_address · method · L726-L729 — async def new_address(self) -> tuple[str, dict]
-- fetch_mails · method · L731-L738 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
-- EmailPool · class · L742-L1000 — class EmailPool
-- __init__ · method · L764-L788 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
-- _init_schema · method · L790-L810 — def _init_schema(self) -> None
-- _load_used · method · L812-L814 — def _load_used(self) -> set[str]
-- _find_source · method · L816-L821 — def _find_source(self, name: str) -> BaseMailSource | None
-- risky_domains · method · L823-L829 — def risky_domains(self, min_fails: int = 3) -> set[str]
-- get_sources · method · L831-L833 — def get_sources(self) -> list[BaseMailSource]
-- allocate · method · L836-L904 — async def allocate( self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None, ) -> tuple[str, dict]
-- wait_for_mail · method · L907-L933 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
-- record · method · L936-L963 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
-- registered_providers · method · L965-L967 — def registered_providers(self, email: str) -> list[str]
-- stats · method · L969-L1000 — def stats(self) -> dict
+- BaseMailSource · class · L53-L105 — class BaseMailSource
+- new_address · method · L64-L66 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L68-L70 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- is_available · method · L72-L74 — def is_available(self) -> bool
+- mark_success · method · L76-L80 — def mark_success(self) -> None
+- mark_failure · method · L82-L96 — def mark_failure(self, error: str = "", backoff_seconds: float = 30.0) -> None
+- score · method · L98-L105 — def score(self) -> float
+- LinshiMailSource · class · L113-L178 — class LinshiMailSource(BaseMailSource)
+- __init__ · method · L129-L140 — def __init__(self) -> None: # 默认域名被上游拉黑 → 权重降到 10 使其极少被选中；可用域名补齐后靠环境变量覆盖
+- new_address · method · L142-L147 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L149-L178 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- MailTmSource · class · L186-L322 — class MailTmSource(BaseMailSource)
+- __init__ · method · L195-L205 — def __init__(self) -> None
+- _get_domains · method · L207-L233 — async def _get_domains(self) -> list[str]
+- new_address · method · L235-L273 — async def new_address(self) -> tuple[str, dict]: # 仅使用实时拉取的域名；过期默认域名（sharklasers 等）已被 mail.tm 拒绝（422）， # 故不再回退到硬编码旧域名。
+- fetch_mails · method · L275-L322 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- GuerrillaMailSource · class · L326-L403 — class GuerrillaMailSource(BaseMailSource)
+- __init__ · method · L332-L340 — def __init__(self) -> None
+- new_address · method · L342-L362 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L364-L403 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- CustomImapSource · class · L407-L551 — class CustomImapSource(BaseMailSource)
+- __init__ · method · L417-L438 — def __init__( self, host: str | None = None, port: int | None = None, username: str | None = None, password: str | None = None, domain: str | None = None, use_ssl: bool = True, ) -> None
+- is_configured · method · L440-L441 — def is_configured(self) -> bool
+- is_available · method · L443-L444 — def is_available(self) -> bool
+- new_address · method · L446-L451 — async def new_address(self) -> tuple[str, dict]
+- _sync_fetch_mails · method · L453-L546 — def _sync_fetch_mails(self, address: str) -> list[dict]
+- fetch_mails · method · L548-L551 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- Do22Source · class · L555-L646 — class Do22Source(BaseMailSource)
+- __init__ · method · L561-L572 — def __init__(self) -> None
+- new_address · method · L574-L599 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L601-L646 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempMailSource · class · L650-L743 — class TempMailSource(BaseMailSource)
+- __init__ · method · L661-L672 — def __init__(self) -> None
+- new_address · method · L674-L695 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L697-L743 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempMailIoSource · class · L747-L829 — class TempMailIoSource(BaseMailSource)
+- __init__ · method · L761-L772 — def __init__(self) -> None
+- new_address · method · L774-L795 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L797-L829 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- MailGwSource · class · L833-L961 — class MailGwSource(BaseMailSource)
+- __init__ · method · L849-L861 — def __init__(self) -> None
+- _get_domains · method · L863-L883 — async def _get_domains(self) -> list[str]
+- new_address · method · L885-L919 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L921-L961 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- TempTfSource · class · L965-L990 — class TempTfSource(BaseMailSource)
+- __init__ · method · L971-L976 — def __init__(self) -> None
+- new_address · method · L978-L981 — async def new_address(self) -> tuple[str, dict]
+- fetch_mails · method · L983-L990 — async def fetch_mails(self, address: str, state: dict | None = None) -> list[dict]
+- EmailPool · class · L994-L1276 — class EmailPool
+- __init__ · method · L1021-L1052 — def __init__(self, db_path: str = DB_FILE, custom_sources: list[BaseMailSource] | None = None) -> None
+- _init_schema · method · L1054-L1074 — def _init_schema(self) -> None
+- _load_used · method · L1076-L1078 — def _load_used(self) -> set[str]
+- _find_source · method · L1080-L1085 — def _find_source(self, name: str) -> BaseMailSource | None
+- risky_domains · method · L1087-L1093 — def risky_domains(self, min_fails: int = 3) -> set[str]
+- get_sources · method · L1095-L1097 — def get_sources(self) -> list[BaseMailSource]
+- allocate · method · L1100-L1171 — async def allocate( self, provider: str, want_fresh: bool = True, prefer_source: str | None = None, prefer_domain: str | None = None, ) -> tuple[str, dict]
+- wait_for_mail · method · L1174-L1205 — async def wait_for_mail( self, address: str, source_state: dict | None, timeout: float = 90.0, contains: str | None = None, ) -> dict | None
+- record · method · L1208-L1235 — def record(self, email: str, provider: str, status: str = "ok", note: str = "") -> None
+- async_record · method · L1237-L1245 — async def async_record( self, email: str, provider: str, status: str = "ok", note: str = "" ) -> None
+- registered_providers · method · L1247-L1249 — def registered_providers(self, email: str) -> list[str]
+- stats · method · L1251-L1276 — def stats(self) -> dict

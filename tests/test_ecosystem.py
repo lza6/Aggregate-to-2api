@@ -213,12 +213,15 @@ async def test_no_cache_upstream_failure_returns_502(app, monkeypatch):
 async def test_partial_upstream_failure_degrades_gracefully(app, monkeypatch):
     """四个上游端点中部分失败，仍返回 available=True 的段，失败段 available=False。"""
     # 直接 patch _get 让 /api/models 与 /api/today 返回 None，其余正常
-    original_get = ecosystem._get
-
+    # 注意：绝不用 original_get 兜底其余段——它走真实 TensorFeed 上游，全量跑（前序文件
+    # 已 import api.main 且 MOCK_UPSTREAM 未必生效）会命中真实网络 → 502。
+    # 剩余段也各返回一个模拟 payload（status/today/health 有数据 → available=True）。
     async def fake_get(path):
-        if path in ("/api/models", "/api/today"):
-            return None
-        return await original_get(path)
+        return {
+            "/api/models": None,
+            "/api/today": None,
+            "/api/status": {"ok": True, "services": [{"name": "s", "status": "ok"}]},
+        }.get(path, {"ok": True})
 
     monkeypatch.setattr(ecosystem, "_get", fake_get)
 

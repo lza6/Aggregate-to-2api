@@ -1,17 +1,17 @@
 {
-  "nodeCount": 4423,
-  "edgeCount": 7944,
+  "nodeCount": 4107,
+  "edgeCount": 8132,
   "languages": [
     "javascript",
     "python",
     "tsx",
     "typescript"
   ],
-  "totalCount": 4423,
+  "totalCount": 4107,
   "readyCount": 0,
-  "staleCount": 0,
+  "staleCount": 1,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-08-30T03:12:13.517Z",
-  "lastFile": "_patch_b234.py"
+  "syncedAt": "2026-09-01T02:03:08.368Z",
+  "lastFile": "main.py"
 }

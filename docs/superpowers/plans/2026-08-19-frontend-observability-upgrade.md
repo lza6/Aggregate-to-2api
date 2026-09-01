@@ -770,19 +770,19 @@ with tracer.start_as_current_span("worker.process") as span:
     span.set_attribute("task.id", task_id)
     span.set_attribute("task.prompt_preview", (row.get("prompt") or "")[:60])
     span.set_attribute("task.model", row.get("model", "default"))
-    
+
     # 子 span: token 获取
     with tracer.start_as_current_span("worker.acquire_token"):
         token = await self._acquire_token(config.TOKEN_WAIT_TIMEOUT)
-    
+
     if token is None:
         break
-    
+
     try:
         # 子 span: 上游提交
         with tracer.start_as_current_span("provider.submit"):
             result = await self._generate_once(row, token)
-        
+
         # 子 span: 结果处理
         with tracer.start_as_current_span("provider.result"):
             self._finish(...)

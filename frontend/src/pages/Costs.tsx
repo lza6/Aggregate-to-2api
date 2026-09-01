@@ -44,6 +44,22 @@ export function CostsPage() {
   const overBudget = cost?.over_budget ?? false;
   const burnRate = cost?.burn_rate_warning ?? false;
 
+  // P3-2: 日/月累积 vs 预算 —— 用月度趋势做「累积瀑布」：每月柱 = 该月成本，覆盖层 = 预算累计线。
+  // 数据仅 month_to_date（月度累积口径），此处用 monthly 数组做逐月累积对比预算。
+  const cumulative = (() => {
+    const arr = (cost?.monthly ?? []).map(m => m.cost_usd);
+    let acc = 0;
+    return arr.map(v => (acc += v));
+  })();
+  const cumMax = Math.max(1, ...cumulative, budget);
+
+  // 全屏预警（P3-2）：over_budget 时置顶红条；是否超 80% 燃烧率给出次级提示
+  const warningText = overBudget
+    ? `已超出本月预算 $${budget.toFixed(2)}（当前 ${formatUsd(cost?.month_to_date_usd)}）`
+    : burnRate
+      ? `本月已消耗预算 ${cost?.budget_remaining_pct != null ? (100 - cost.budget_remaining_pct).toFixed(1) : '?'}%，建议关注燃烧率`
+      : null;
+
   return (
     <div className="costs-container">
       <div className="page-header">
@@ -58,6 +74,18 @@ export function CostsPage() {
           <span>🔄</span> 刷新
         </button>
       </div>
+
+      {/* P3-2: 全屏预算预警横幅（over_budget / burn_rate_warning） */}
+      {warningText && (
+        <div className="cost-budget-alert" role="alert">
+          <span className="cba-icon">🚨</span>
+          <div className="cba-body">
+            <div className="cba-title">{overBudget ? '本月预算已超支' : '预算燃烧率告警'}</div>
+            <div className="cba-msg">{warningText}</div>
+          </div>
+          <span className="cba-pct">{cost?.budget_remaining_pct != null ? `${cost.budget_remaining_pct.toFixed(0)}% 余量` : ''}</span>
+        </div>
+      )}
 
       {/* 顶部 4 张 StatCard */}
       <div className="stats-grid">
@@ -102,6 +130,56 @@ export function CostsPage() {
             <p className="empty-text">暂无成本趋势数据</p>
             <span className="empty-hint">产生调用后，月度成本趋势将在此展示</span>
           </div>
+        </div>
+      )}
+
+      {/* P3-2: 日/月累积 vs 预算 —— 瀑布对比（纯 CSS bar，无重依赖） */}
+      {budget > 0 && cumulative.length > 0 && (
+        <div className="section-block tf-card cost-cumulative-card">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">⛰️ 累积成本 vs 预算</h2>
+              <span className="section-sub">逐月累积（USD）与预算线对比 — 超出即触发全屏预警</span>
+            </div>
+            <span className="tf-badge tf-badge-info">预算 ${budget.toFixed(2)}</span>
+          </div>
+          <div className="cum-rows">
+            {cumulative.map((v, i) => {
+              const pct = Math.min(100, (v / cumMax) * 100);
+              const budgetPct = budget > 0 ? Math.min(100, (budget / cumMax) * 100) : 0;
+              const over = budget > 0 && v > budget;
+              return (
+                <div className="cum-row" key={i}>
+                  <span className="cum-label">{cost?.monthly?.[i]?.month ?? `M${i + 1}`}</span>
+                  <div className="cum-track">
+                    <div
+                      className={`cum-fill ${over ? 'cum-over' : ''}`}
+                      style={{ width: `${pct}%`, position: 'relative' }}
+                    >
+                      {budget > 0 && v > budget && <span className="cum-budget-cut" style={{ left: `${Math.min(100, budgetPct * (cumMax / v))}%` }} title="预算线" />}
+                    </div>
+                  </div>
+                  <span className="cum-val">${v.toFixed(2)}{over ? ' ⚠' : ''}</span>
+                </div>
+              );
+            })}
+            {/* 预算参考线 */}
+            <div className="cum-budget-line" style={{ width: `${Math.min(100, (budget / cumMax) * 100)}%` }}>
+              <span className="cum-budget-label">预算 ${budget.toFixed(2)}</span>
+            </div>
+          </div>
+          <style>{`
+            .cost-cumulative-card { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+            .cum-rows { display: flex; flex-direction: column; gap: 8px; position: relative; }
+            .cum-row { display: grid; grid-template-columns: 64px 1fr 84px; align-items: center; gap: 10px; }
+            .cum-label { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+            .cum-track { height: 14px; background: var(--bg-subtle); border-radius: var(--radius-full); overflow: hidden; position: relative; }
+            .cum-fill { height: 100%; background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%); border-radius: var(--radius-full); transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+            .cum-fill.cum-over { background: linear-gradient(90deg, #ef4444 0%, #f59e0b 100%); }
+            .cum-val { font-size: 11.5px; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+            .cum-budget-line { position: relative; height: 1px; background: var(--warning); margin-top: 4px; pointer-events: none; }
+            .cum-budget-label { position: absolute; right: 0; top: -16px; font-size: 10.5px; color: var(--warning-text); font-weight: 600; white-space: nowrap; }
+          `}</style>
         </div>
       )}
 
@@ -167,6 +245,12 @@ export function CostsPage() {
         .section-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; display: block; }
         .chart-fallback { padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
         .cost-note { padding: 10px 16px; font-size: 12.5px; color: var(--warning-text); background: var(--warning-bg); border-color: var(--warning-border); display: flex; align-items: center; gap: 8px; }
+        .cost-budget-alert { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-lg); color: var(--danger-text); }
+        .cba-icon { font-size: 22px; flex-shrink: 0; }
+        .cba-body { flex: 1; min-width: 0; }
+        .cba-title { font-size: 14px; font-weight: 700; }
+        .cba-msg { font-size: 12.5px; opacity: 0.92; margin-top: 2px; }
+        .cba-pct { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
       `}</style>
     </div>
   );

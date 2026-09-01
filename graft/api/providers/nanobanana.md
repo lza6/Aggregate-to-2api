@@ -1,22 +1,24 @@
 # api/providers/nanobanana.py
 
-- image_credit_cost · function · L83-L110 — def image_credit_cost(upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None) -> int
-- NanobananaProvider · class · L113-L341 — class NanobananaProvider(Provider)
-- __init__ · method · L119-L126 — def __init__(self) -> None
-- _build_models · method · L128-L136 — def _build_models(self) -> None
-- needs_account · method · L138-L139 — def needs_account(self) -> bool
-- startup · method · L141-L147 — async def startup(self) -> None
-- shutdown · method · L149-L156 — async def shutdown(self) -> None
-- _load_accounts · method · L158-L164 — def _load_accounts(self) -> list[dict]
-- _next_account · method · L166-L175 — def _next_account(self) -> dict
-- credits · method · L177-L179 — async def credits(self) -> int | None
-- health · method · L181-L186 — async def health(self) -> dict
-- _rsc_encode · method · L189-L192 — def _rsc_encode(self, obj: dict) -> str
-- generate · method · L194-L234 — async def generate(self, model: str, prompt: str, aspect_ratio: str, images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw) -> GenerationResult
-- _action_headers · method · L236-L242 — def _action_headers(self, cookie: str, action_id: str) -> dict
-- _submit_image · method · L244-L249 — async def _submit_image(self, cookie, upstream, prompt, aspect_ratio, resolution) -> str
-- _submit_edit · method · L251-L267 — async def _submit_edit(self, cookie, upstream, prompt, aspect_ratio, images) -> str: # 图生图：先上传（multipart file + model）→ 拿 /api/assets/{id}/preview → 作为 imageUrls
-- _get_action · method · L269-L272 — async def _get_action(self, kind: str, *, force_refresh: bool = False) -> str
-- _post_with_self_heal · method · L274-L287 — async def _post_with_self_heal(self, kind: str, cookie: str, body: list) -> httpx.Response
-- _parse_action_response · method · L289-L318 — async def _parse_action_response(self, r: httpx.Response) -> str
-- _poll_task · method · L320-L341 — async def _poll_task(self, cookie, task_id, timeout) -> str
+- image_credit_cost · function · L93-L128 — def image_credit_cost( upstream: str, resolution: str = "1K", task_type: str | None = None, quality_mode: str | None = None ) -> int
+- NanobananaProvider · class · L131-L412 — class NanobananaProvider(Provider)
+- __init__ · method · L137-L144 — def __init__(self) -> None
+- _build_models · method · L146-L159 — def _build_models(self) -> None
+- needs_account · method · L161-L162 — def needs_account(self) -> bool
+- startup · method · L164-L171 — async def startup(self) -> None
+- shutdown · method · L173-L180 — async def shutdown(self) -> None
+- _async_load_accounts · method · L182-L188 — async def _async_load_accounts(self) -> list[dict]
+- _load_accounts · method · L190-L197 — def _load_accounts(self) -> list[dict]
+- _async_next_account · method · L199-L205 — async def _async_next_account(self) -> dict
+- _next_account · method · L207-L216 — def _next_account(self) -> dict
+- credits · method · L218-L222 — async def credits(self) -> int | None
+- health · method · L224-L229 — async def health(self) -> dict
+- _rsc_encode · method · L232-L235 — def _rsc_encode(self, obj: dict) -> str
+- generate · method · L237-L285 — async def generate( self, model: str, prompt: str, aspect_ratio: str, images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
+- _action_headers · method · L287-L294 — def _action_headers(self, cookie: str, action_id: str) -> dict
+- _submit_image · method · L296-L309 — async def _submit_image(self, cookie, upstream, prompt, aspect_ratio, resolution) -> str
+- _submit_edit · method · L311-L337 — async def _submit_edit(self, cookie, upstream, prompt, aspect_ratio, images) -> str: # 图生图：先上传（multipart file + model）→ 拿 /api/assets/{id}/preview → 作为 imageUrls
+- _get_action · method · L339-L342 — async def _get_action(self, kind: str, *, force_refresh: bool = False) -> str
+- _post_with_self_heal · method · L344-L359 — async def _post_with_self_heal(self, kind: str, cookie: str, body: list) -> httpx.Response
+- _parse_action_response · method · L361-L390 — async def _parse_action_response(self, r: httpx.Response) -> str
+- _poll_task · method · L392-L412 — async def _poll_task(self, cookie, task_id, timeout) -> str

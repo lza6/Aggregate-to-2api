@@ -5,6 +5,8 @@ from __future__ import annotations
 from . import (  # noqa: F401
     BASE_URL,
     CORS_ORIGINS,
+    IF_SECURITY_HEADERS_ENABLED,
+    IF_CSP_ENABLED,
     SITEKEY,
     CF_SOLVER_URL,
     HOST,
@@ -82,6 +84,7 @@ from . import (  # noqa: F401
     OTEL_CONSOLE_EXPORTER,
     STATS_FILE,
     DB_FILE,
+    IF_ROUTING_DB,
     IF_BASE64_DIR,
     IF_BASE64_FILE_TTL,
     IF_IMG_MAX_GB,

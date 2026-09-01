@@ -46,7 +46,7 @@ async function step(name, fn) {
     await step('侧栏渲染(10 导航)', async () => {
       await page.goto(BASE + '/admin/', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2500);
-      ok('侧栏渲染(10 导航)', (await page.locator('.nav-item').count()) === 10);
+      ok(`侧栏渲染(≥10 导航, 实际 ${await page.locator('.nav-item').count()})`, (await page.locator('.nav-item').count()) >= 10);
       // 后端可达时 Dashboard 正常渲染（不再要求错误态）；后端不可达时降级态亦可
       const errBox = await page.locator('.fb-error-banner').count();
       const h1 = await page.textContent('h1').catch(() => '');

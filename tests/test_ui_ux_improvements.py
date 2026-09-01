@@ -57,7 +57,7 @@ def test_frontend_components_enhancements():
     assert fb_file.exists()
     fb_content = fb_file.read_text(encoding="utf-8")
     assert "当前提供商繁忙，已为您自动切换至备用引擎" in fb_content
-    assert "一键复制命令示例" in fb_content
+    assert "一键复制调用命令示例" in fb_content
 
     # 3. 检查 ChatPlayground.tsx 中的错误智能改写
     chat_file = Path("frontend/src/pages/ChatPlayground.tsx")

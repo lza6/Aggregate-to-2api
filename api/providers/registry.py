@@ -94,9 +94,12 @@ class Registry:
         self._ensure_booted()
         return self._models.get(model_id)
 
-    def get_routing_records(self, limit: int = 50) -> list[dict]:
-        """返回最近 limit 条自适应路由决策记录（供 /v1/routing/records 端点）。"""
-        return self.adaptive_router.records(limit=limit)
+    def get_routing_records(self, limit: int = 50, from_ts: float | None = None) -> list[dict]:
+        """返回最近 limit 条自适应路由决策记录（供 /v1/routing/records 端点）。
+
+        from_ts 提供时按持久化历史时间戳过滤（P3-1 历史查询）。
+        """
+        return self.adaptive_router.records(limit=limit, from_ts=from_ts)
 
     def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None:
         """返回 model_id 对应的提供商。
@@ -386,9 +389,9 @@ def bootstrap() -> None:
         except Exception as e:
             log.warning("提供商 falai 注册失败（降级跳过）: %s", e)
     # v4.4: 文本对话提供商（导入失败/开关关闭时静默跳过，不影响图像主链路）
-    import os
+    from .. import config  # noqa: PLC0415
 
-    if os.getenv("IF_TRYINGOPEN_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+    if config.IF_TRYINGOPEN_ENABLED:
         try:
             from .tryingopen import TryingopenChatProvider
 

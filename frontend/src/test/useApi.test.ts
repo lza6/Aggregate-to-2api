@@ -211,4 +211,95 @@ describe('useApi', () => {
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+
+  // ── P2-4 防抖 + 竞态防护 ───────────────────────────────────────────
+  it('debounceMs>0：连续 reload 只在静默期后发一次请求', async () => {
+    const fetcher = vi.fn().mockResolvedValue('v');
+    const { result } = renderHook(() => useApi(fetcher, { debounceMs: 250 }));
+    // immediate 首次已发起（debounce 250ms 延迟执行）
+    expect(fetcher).not.toHaveBeenCalled();
+    act(() => { result.current.reload(); });
+    act(() => { result.current.reload(); });
+    act(() => { result.current.reload(); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    // 静默期后只执行一次（合并了中间多次 reload）
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('debounceMs>0：静默期前最后一次 reload 生效，期间调用被取消', async () => {
+    const fetcher = vi.fn().mockResolvedValue('final');
+    const { result } = renderHook(() => useApi(fetcher, { debounceMs: 250 }));
+    act(() => { result.current.reload(); });
+    // 静默期内 reload 会重置定时器；推进到首个 250ms 前不执行
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+    // 再触发一次 reload，推进完剩余静默期
+    act(() => { result.current.reload(); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.data).toBe('final');
+  });
+
+  it('移除卸载后残留的 debounce 定时器（unmount 不 setState/不抛）', async () => {
+    const fetcher = vi.fn().mockResolvedValue('x');
+    const { unmount } = renderHook(() => useApi(fetcher, { debounceMs: 250 }));
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    // 卸载后不应触发请求
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('竞态防护：先发慢请求 300ms / 后发快请求 50ms，最终保留快结果、取消慢结果', async () => {
+    let slowResolve: (v: string) => void = () => {};
+    const slow = new Promise<string>((resolve) => { slowResolve = resolve; });
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(async () => { return await slow; }) // 第一次慢
+      .mockImplementationOnce(async () => { return await Promise.resolve('fast'); }); // 第二次快
+    const { result } = renderHook(() => useApi(fetcher));
+    // immediate 已发起第一次（慢）
+    expect(result.current.loading).toBe(true);
+    // 立即触发第二次（快）
+    act(() => { result.current.reload(); });
+    // 快请求先落地
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.data).toBe('fast');
+    // 慢请求此刻才 resolve=1，因 seq 不匹配被丢弃
+    await act(async () => {
+      slowResolve('slow');
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.data).toBe('fast');
+  });
+
+  it('fetcher 收到 AbortController.signal：后发请求会中止先发在途请求', async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    const fetcher = vi.fn<[AbortSignal | undefined], Promise<string>>()
+      .mockImplementationOnce(async (_sig) => {
+        return new Promise<string>((_res, reject) => {
+          _sig?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        });
+      })
+      .mockImplementationOnce(async () => { return await Promise.resolve('fast'); });
+    const { result } = renderHook(() => useApi(fetcher as unknown as (signal?: AbortSignal) => Promise<string>));
+    act(() => { result.current.reload(); });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.data).toBe('fast');
+    expect(result.current.error).toBe(null);
+  });
 });

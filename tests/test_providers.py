@@ -20,7 +20,13 @@ def _bootstrap(monkeypatch):
     # 不因前序(集成)测试把全局 registry 单例的 engine 注入而污染 needsengine 分支。
     _img = registry.providers.get("imagefree")
     if _img is not None:
-        monkeypatch.setattr(_img, "engine", None)
+        # 预检 + raising=False：registry 单例可能因 collection 期前序文件（如 test_chat_stream_frames、
+        # test_ui_ux_improvements 在 import 期触发 registry 模块分叉/旧实例）而不含 engine 属性。
+        # getattr 预检识别分叉旧实例（无 engine 属性），monkeypatch raising=False 兜底，保证不抛
+        # AttributeError（P0-1 12 个 ERROR 根因）；无论有无该属性都强制置 None，满足「隔离测试
+        # 确保 engine 未注入」意图——有属性则清 None，无属性（旧实例）则补上 None 供
+        # test_imagefree_provider_needsengine 走「引擎未注入」分支。
+        monkeypatch.setattr(_img, "engine", None, raising=False)
     yield
 
 

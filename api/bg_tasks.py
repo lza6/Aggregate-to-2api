@@ -111,7 +111,8 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                     image_mtd = 0.0
                     for _prov in ("nanobanana", "imagefree", "aifreeforever"):
                         try:
-                            _cs = _ap.cost_summary(_prov)
+                            # 同步 sqlite3 读号池积分，丢线程池避免阻塞告警巡检循环
+                            _cs = await asyncio.to_thread(_ap.cost_summary, _prov)
                             if _cs:
                                 image_mtd += int(_cs.get("total_credits_used") or 0) * float(
                                     config.IF_USD_PER_CREDIT or 0.0

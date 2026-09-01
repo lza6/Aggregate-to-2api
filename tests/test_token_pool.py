@@ -198,10 +198,44 @@ class TestMainObservability:
         assert "direct" in (h["token_pools"] or {})
 
     @pytest.mark.asyncio
-    async def test_metrics_has_solver_lines(self):
-        from api.routes.admin import metrics
+    async def test_metrics_has_solver_lines(self, monkeypatch):
+        from api.routes import admin
 
-        text = (await metrics()).body.decode()
+        # 观测面依赖（engine/db/solver_guard）monkeypatch 成确定返回，避免依赖
+        # 真实全局单例 DB/engine（无 pytest session fixture、loop 漂移、0 值缺序列）。
+        async def _stats():
+            return {"total_requests": 0, "total_images": 0, "total_errors": 0, "avg_duration_sec": None}
+
+        snap = {
+            "processing": 0,
+            "queued": 0,
+            "queue_capacity": 100,
+            "workers": 2,
+            "uptime_seconds": 1,
+            "token_pools": {"direct": {"key": "direct", "size": 0}},
+            "edit_inflight": 0,
+            "token_wait_timeout_total": 0,
+        }
+        ssnap = {
+            "solve_total": 10,
+            "solve_success_total": 7,
+            "solve_failure_total": 3,
+            "solve_avg_seconds": 1.0,
+            "solve_total_duration": 7.0,
+            "window_success_rate": 0.7,
+            "window_solve_count": 10,
+            "window_avg_seconds": 1.0,
+            "consecutive_failures": 0,
+            "circuit_open": False,
+            "rejected_total": 0,
+            "solver_status": "ok",
+            "nodes": [],
+        }
+        monkeypatch.setattr(admin.engine, "snapshot", lambda: snap)
+        monkeypatch.setattr(admin.db, "stats_overview", _stats)
+        monkeypatch.setattr(admin.solver_guard, "snapshot", lambda: ssnap)
+
+        text = (await admin.metrics()).body.decode()
         for line in (
             'imagefree_solve_total{result="success"}',
             'imagefree_solve_total{result="failure"}',

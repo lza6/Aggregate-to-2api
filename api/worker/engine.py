@@ -407,22 +407,33 @@ class Engine:
                     timeout=config.TASK_HARD_TIMEOUT,
                 )
                 worker_health.add_processed(idx, len(done))
-                # 已完成任务：_process 内部已落库，此处仅记录意外异常
+                # 已完成任务：_process 返回受控终态码（"completed"/"error"）表示已在 DB 落库，
+                # 此处不再二次 mark_finished，从根上消除「done 分支二次覆盖真实结果」竞态（P1-3）。
                 for fut in done:
                     _, _, tid = fut_map[fut]
                     if fut.cancelled():
                         continue
                     try:
-                        fut.result()
+                        status = fut.result()
+                        if status in ("completed", "error"):
+                            continue  # _process 已写终态：不覆盖
+                        # status is None（task_id 不存在）：nothing to finalize
+                        continue
                     except asyncio.CancelledError:
                         pass
                     except BaseException as exc:
+                        # 异常可能发生在 _finish 落库【之前】或【之后】（如 DLQ 推送失败）。
+                        # 为防覆盖已落库的真实结果，先查 DB：已是终态则不覆盖，仅记录。
                         log.exception("batch 任务执行异常 %s: %s", tid, exc)
+                        row = await self.db.get(tid)
+                        if row and row["status"] in ("completed", "error"):
+                            continue  # 真实终态已在 DB：不覆盖
                         await self.db.mark_finished(tid, "error", None, f"{exc}", None)
                         if self._persistent_queue and self._queue_db:
                             await self._queue_db.mark_completed(tid)
                 # 未完成任务：cancel 后先检查 DB（_process 可能在 cancel 前已落库），
-                # 避免将已完成任务误标超时（P1-C）
+                # 避免将已完成任务误标超时（P1-C）。pending 协程未正常返回，无受控返回码可用，
+                # 故仅保留 DB 检查作为正确性护栏：已是终态则跳过，不覆盖。
                 for fut in pending:
                     _, _, tid = fut_map[fut]
                     fut.cancel()
@@ -474,7 +485,11 @@ class Engine:
                 worker_health.add_processed(idx)
             except asyncio.TimeoutError:
                 log.error("task %s 硬超时（%ss），强制回收", task_id, config.TASK_HARD_TIMEOUT)
-                await self.db.mark_finished(task_id, "error", None, f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
+                # P1-3 终态护栏：_finish 已落库 completed/error 后（broadcast 阶段才超时），
+                # 不得把真实结果二次覆盖成 error 并抹掉 image_url。先查终态，已是则不覆盖。
+                _row = await self.db.get(task_id)
+                if not (_row and _row["status"] in ("completed", "error")):
+                    await self.db.mark_finished(task_id, "error", None, f"生成硬超时（>{config.TASK_HARD_TIMEOUT}s）", None)
                 if self._persistent_queue and self._queue_db:
                     await self._queue_db.mark_completed(task_id)
             except asyncio.CancelledError:
@@ -482,7 +497,12 @@ class Engine:
                 raise
             except Exception as e:
                 log.exception("任务执行异常 %s", task_id)
-                await self.db.mark_finished(task_id, "error", None, f"{e}", None)
+                # 防覆盖已落库的真实终态（_finish 后抛 DLQ 推送异常）：已是终态则仅记录
+                row = await self.db.get(task_id)
+                if row and row["status"] in ("completed", "error"):
+                    pass  # 仍记录完毕，不覆盖
+                else:
+                    await self.db.mark_finished(task_id, "error", None, f"{e}", None)
                 if self._persistent_queue and self._queue_db:
                     await self._queue_db.mark_completed(task_id)
             finally:
@@ -553,10 +573,18 @@ class Engine:
         self._workers = [w for w in self._workers if w.id != target.id]
         log.info("缩容 worker[%d]", target.id)
 
-    async def _process(self, task_id: str) -> None:
+    async def _process(self, task_id: str) -> str | None:
+        """处理单个任务，返回终态状态字符串。
+
+        受控返回码契约（供 _worker_batch_loop 决定是否二次 mark_finished）：
+        - 返回 "completed" / "error"：本函数已在 DB 写入终态（先落库再返回）。
+        - 返回 None：未写终态（如 task_id 不存在）。
+        - 抛出异常：未写任何终态（异常发生在 _finish 前），调用方据此兜底标记 error。
+        由此从根上消除「二次 mark_finished 覆盖真实结果」的竞态。
+        """
         row = await self.db.get(task_id)
         if not row:
-            return
+            return None
         await self.db.mark_started(task_id)
         # B2: worker 后台协程脱离入口请求 contextvars——从 DB row 恢复 trace_id
         # 重建请求上下文并 set，使本任务全链路日志/审计/慢日志带同一 trace_id
@@ -684,7 +712,7 @@ class Engine:
                         _slow["poll_ms"] = result.get("poll_ms", 0.0)
                         log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
                         self._record_slow(task_id, row, _slow, t0, "completed")
-                        return
+                        return "completed"
                 # 重试耗尽 → DLQ 标记
             dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
             dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
@@ -702,6 +730,7 @@ class Engine:
                     last_error,
                     config.IF_TXT_RETRY_MAX,
                 )
+            return "error"
         finally:
             # B2: 退出本任务上下文（无论完成/异常都恢复）
             request_context_var.reset(_ctx_token)

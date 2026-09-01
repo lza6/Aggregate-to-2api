@@ -1,6 +1,6 @@
 # tests/test_cache_persist.py
 
-- tmp_db_path · function · L22-L40 — async def tmp_db_path()
+- tmp_db_path · function · L21-L40 — async def tmp_db_path()
 - test_set_persists_to_db · function · L44-L52 — async def test_set_persists_to_db(tmp_db_path)
 - test_restore_from_db · function · L56-L71 — async def test_restore_from_db(tmp_db_path)
 - test_invalidate_removes_from_db · function · L75-L83 — async def test_invalidate_removes_from_db(tmp_db_path)

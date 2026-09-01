@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Skeleton } from './components/Feedback';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
 
 // P-UI-5: 非首屏路由懒加载（首屏只打包 Dashboard；recharts 等重依赖随懒加载页拆出）
@@ -16,6 +17,7 @@ const HealthPage = lazy(() => import('./pages/Health').then(m => ({ default: m.H
 const SecurityPage = lazy(() => import('./pages/Security').then(m => ({ default: m.SecurityPage })));
 const EcosystemPage = lazy(() => import('./pages/Ecosystem').then(m => ({ default: m.EcosystemPage })));
 const CostsPage = lazy(() => import('./pages/Costs').then(m => ({ default: m.CostsPage })));
+const SlowPage = lazy(() => import('./pages/Slow').then(m => ({ default: m.SlowPage })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -25,24 +27,29 @@ export default function App() {
   // basename 与 vite base 一致：生产挂载于 /admin，路由需剥离该前缀才能匹配 path="/"
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <Layout>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/providers" element={<ProvidersPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/logs" element={<LogsPage />} />
-            <Route path="/dlq" element={<DLQPage />} />
-            <Route path="/chat" element={<ChatPlayground />} />
-            <Route path="/generate" element={<GeneratePage />} />
-            <Route path="/health" element={<HealthPage />} />
-            <Route path="/security" element={<SecurityPage />} />
-            <Route path="/ecosystem" element={<EcosystemPage />} />
-            <Route path="/costs" element={<CostsPage />} />
-          </Routes>
-        </Suspense>
-      </Layout>
+      {/* P1-5: 根错误边界 —— 包住 <Layout> 与整棵路由树；任一页面崩坏时仍保持侧栏/Topbar 存活 */}
+      <ErrorBoundary>
+        <Layout>
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              {/* P1-5: 每个懒加载页面再包一层嵌套边界 —— 单页渲染异常只降级该页，不连坐整站 */}
+              <Route path="/providers" element={<ErrorBoundary><ProvidersPage /></ErrorBoundary>} />
+              <Route path="/tasks" element={<ErrorBoundary><TasksPage /></ErrorBoundary>} />
+              <Route path="/accounts" element={<ErrorBoundary><AccountsPage /></ErrorBoundary>} />
+              <Route path="/logs" element={<ErrorBoundary><LogsPage /></ErrorBoundary>} />
+              <Route path="/dlq" element={<ErrorBoundary><DLQPage /></ErrorBoundary>} />
+              <Route path="/chat" element={<ErrorBoundary><ChatPlayground /></ErrorBoundary>} />
+              <Route path="/generate" element={<ErrorBoundary><GeneratePage /></ErrorBoundary>} />
+              <Route path="/health" element={<ErrorBoundary><HealthPage /></ErrorBoundary>} />
+              <Route path="/security" element={<ErrorBoundary><SecurityPage /></ErrorBoundary>} />
+              <Route path="/ecosystem" element={<ErrorBoundary><EcosystemPage /></ErrorBoundary>} />
+              <Route path="/costs" element={<ErrorBoundary><CostsPage /></ErrorBoundary>} />
+              <Route path="/slow" element={<ErrorBoundary><SlowPage /></ErrorBoundary>} />
+            </Routes>
+          </Suspense>
+        </Layout>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
