@@ -54,8 +54,8 @@ jobs:
           file: deploy/Dockerfile.api
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/imagefree-api:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}/imagefree-api:latest
+            ghcr.io/${{ github.repository_owner }}/aggregate-to-2api/imagefree-api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/aggregate-to-2api/imagefree-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
