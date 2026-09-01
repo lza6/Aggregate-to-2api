@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-6.9.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-7.2.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -77,7 +77,9 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
                                │    ├─ api/sse_events.py  （每任务 SSE 事件流）      │
                                │    ├─ api/adaptive_router.py（MAB-EWMA 路由引擎）  │
                                │    ├─ api/lifespan.py    （9 阶段优雅关闭）         │
-                               │    └─ api/worker.py      （引擎/队列/token 池）     │
+                               │    ├─ api/worker/        （引擎/队列/token 池/健康）    │
+                               │    ├─ api/account_pool.py（号池 aiosqlite）       │
+                               │    ├─ api/email_pool.py  （邮箱池+email_sources/）│
                                └──────────────────────────────────────────────────┘
 ```
 
@@ -90,6 +92,10 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | **SSE 事件流** | 每任务 subscribe/publish/replay，Last-Event-ID 断线补偿 |
 | **DB 批量写** | 0.2s 窗口合并 commit |
 | **防护** | SSRF IP 绑定、CORS 白名单可配、画廊密码不硬编码 |
+| **数据安全 (v7.1)** | SQLite 在线热备（VACUUM INTO）+ 恢复脚本 + 备份演练 SOP |
+| **全链路可观测 (v7.2)** | OTel tail-based 采样（错误 100%+正常 10%）+ SSE 事件流指标看板 + per-IP 分片锁限流 |
+| **生产收紧模板 (v7.3)** | deploy/.env.production.example：CORS 白名单/独立管理 Key/CSP/防滥用限流一键收紧 |
+| **公开合规 (v7.2)** | landing 中英双语 + 隐私声明/DPA 页（#/privacy） |
 
 ---
 
@@ -180,7 +186,7 @@ export ANTHROPIC_API_KEY=$TFAI_KEY
 | `IF_GALLERY_PASSWORD` | 空 | 画廊密码（前端不硬编码） |
 | `IF_KOOKEEY_*` | 空 | Kookeey 住宅代理凭据（从环境注入，不入库） |
 
-> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（109 项模板）与 [`api/config.py`](api/config.py)（98+ 项，全部 IF_ 前缀）。
+> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（110+ 项模板）、[`api/config/`](api/config/)（分组配置包，全部 IF_ 前缀）与 [`deploy/.env.production.example`](deploy/.env.production.example)（生产收紧模板，v7.3）。
 
 ---
 

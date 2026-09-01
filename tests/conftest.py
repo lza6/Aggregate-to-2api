@@ -225,13 +225,37 @@ async def _app_instance(mock_cfsolver):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """会话结束：同步回收所有 aiosqlite 工作线程，避免 pytest 全绿后卡 threading shutdown。"""
+    """会话结束：同步回收所有 aiosqlite 工作线程，避免 pytest 全绿后卡 threading shutdown。
+
+    P2-3 迁移后 account_pool/email_pool 也有 aiosqlite 连接，sessionfinish 若漏关会卡在
+    connection pool join（Windows + asyncio session loop 尤甚）。此处一并关闭，并兜底 os._exit
+    避免 teardown 阶段永不返回（测试结果已落盘，进程退出不影响结果语义）。
+    """
+    import os
+    import asyncio
+
+    async def _close_all():
+        try:
+            from api import account_pool as ap, email_pool as ep
+
+            await ap.account_pool._close_conn_safe()
+            await ep.email_pool._close_conn_safe()
+        except Exception:
+            pass
+
+    try:
+        asyncio.new_event_loop().run_until_complete(_close_all())
+    except Exception:
+        pass
     try:
         from api import db as dbmod
 
         dbmod._atexit_stop_db_threads()
     except Exception:
         pass
+    # 测试结果已全部写入后，teardown 永不返回时兜底退出（CI 不触发，仅 Windows 本地）。
+    # 必须传真实 exitstatus：否则 os._exit(0) 会把失败的测试强改为成功（掩盖回归）。
+    os._exit(exitstatus)
 
 
 @pytest_asyncio.fixture

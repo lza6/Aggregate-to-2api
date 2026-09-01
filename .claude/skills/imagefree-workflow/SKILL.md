@@ -17,7 +17,8 @@ description: 听风AI imagefree_api 项目开发工作流指南。涉及本仓�
 - **高并发架构** — 有界优先级队列 + Worker 池（4-16 自适应）+ Turnstile token 预取，扛 270+ RPS
 - **零鉴权部署** — 开箱即用；Docker Compose 一键部署
 
-技术栈：Python 3.11+ / FastAPI / uvicorn / SQLite / httpx / pydantic-v2 / React 18 + Vite + TS。
+技术栈：Python 3.11+ / FastAPI / uvicorn / SQLite(aiosqlite) / httpx / pydantic-v2 / React 19 + Vite 6 + TS / Vue3 landing。
+当前版本 v7.2.0（改动前先核对 pyproject.toml 实际版本）。
 
 线上演示：https://imagefree.tingfengai.art （腾讯云东京，公益开放）
 
@@ -27,23 +28,22 @@ description: 听风AI imagefree_api 项目开发工作流指南。涉及本仓�
 imagefree-2ai/
 ├── api/                        # 后端源码（核心）
 │   ├── main.py                 # FastAPI 入口 + 全部端点（/v1/*）
-│   ├── config.py               # Settings（pydantic-settings，IF_* 环境变量前缀）
-│   ├── worker.py               # 高并发引擎：优先级队列 + worker 池 + token 预取
-│   ├── db.py                   # SQLite 持久化 + 0.2s 批量写合并 + 连接池
+│   ├── config/                 # 分组配置包（pydantic-settings，IF_* 前缀；settings=Settings()+get_settings()/reset_settings() 工厂）
+│   ├── worker/                 # 高并发引擎：优先级队列 + worker 池 + token 预取 + 健康探测
+│   ├── db/                     # SQLite 持久化（aiosqlite）+ 0.2s 批量写合并 + 连接池 + ip_blocklist_store
 │   ├── errors.py               # 分层错误码（CATEGORY.NNN）+ AppError
 │   ├── providers/              # 多提供商适配器
 │   │   ├── base.py             # Provider 抽象基类 + ModelSpec + GenerationResult
 │   │   ├── registry.py         # 提供商注册、路由、健康检查
 │   │   ├── imagefree.py        # imagefree.net（Turnstile token 认证）
 │   │   ├── aifreeforever.py    # 每 IP 每日限额 → 每请求轮换代理
-│   │   ├── minimaxh3.py        # Auth.js cookie + 号池，用完即弃
 │   │   └── nanobanana.py       # better-auth cookie + 号池，每日签到
 │   ├── turnstile_client.py     # cf_solver 客户端（:8001）
 │   ├── solver_guard.py         # 熔断器 + 求解质量统计
 │   ├── proxy_pool.py           # 住宅代理池 + 冷却策略
 │   ├── free_proxy_fetcher.py   # 免费代理池抓取
 │   ├── account_pool.py         # 号池管理（账号多路复用）
-│   ├── registerer.py           # 自动注册（minimaxh3 / nanobanana）
+│   ├── registerer.py           # 自动注册（nanobanana；邮箱池 9 源已拆 api/email_sources/）
 │   ├── email_pool.py           # 邮箱池
 │   ├── cache.py                # LRU 缓存
 │   ├── retry_policy.py         # 重试策略（指数退避 + jitter）
@@ -78,7 +78,7 @@ imagefree-2ai/
 ### 代码流关键路径
 
 1. **请求入口**：`POST /v1/generate` → `main.py:generate_sync` → 校验模型/比例 → SQLite 入库 → 入优先级队列 → 立即返回 task_id
-2. **后台执行**：`worker.py:Engine`（worker 池 4-16 自适应）→ 取队列 → 从 `TokenPoolManager` 取 token → 路由 provider → 上游调用 → `db.mark_finished`
+2. **后台执行**：`api/worker/engine.py:Engine`（worker 池 4-16 自适应）→ 取队列 → 从 `TokenPoolManager` 取 token → 路由 provider → 上游调用 → `db.mark_finished`
 3. **异步任务**：`/v1/generate/async` 立即返回 task_id，客户端轮询 `/v1/tasks/{id}`
 
 ## 3. 开发工作流
@@ -104,7 +104,7 @@ imagefree-2ai/
 
 - **新增提供商**：新建 `api/providers/<name>.py` 继承 `Provider` 基类 → 在 `registry.py` `bootstrap()` 注册 → 加模型规格 → 写 `tests/test_providers.py` 用例 → 同步到 `deploy/api/`。
 - **新增端点**：在 `api/main.py` 添加 handler + `GenerateRequest`/`EditRequest` 模型 → 校验走 `errors.py` 的 `AppError`/`error_response` → 补测试。
-- **新增配置项**：在 `api/config.py` 对应 Settings 分组加字段（`IF_*` 前缀）→ `.env.example` 同步 → `config.py:validate()` 校验。
+- **新增配置项**：在 `api/config/__init__.py` Settings 类（或对应分组子模块）加字段（`IF_*` 前缀 validation_alias）→ `deploy/.env.example` 同步（test_config_validate 会拦截缺失！）→ `Settings.validate()` 校验。
 - **前端改动**：改 `frontend/src/` → `npm run build` 产出 `frontend/dist/` → 让后端 `docs.html` 载入（静态资源走 `api/static/`）。
 
 ## 4. 测试指南
@@ -186,9 +186,9 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | 关注点 | 文件 |
 |--------|------|
 | 全部 HTTP 端点 | `api/main.py` |
-| 配置项（环境变量） | `api/config.py` + `.env.example` |
-| 队列/worker/token 池 | `api/worker.py` |
-| SQLite/批量写/查询 | `api/db.py` |
+| 配置项（环境变量） | `api/config/__init__.py` + `deploy/.env.example` + `deploy/.env.production.example`（生产收紧） |
+| 队列/worker/token 池 | `api/worker/engine.py` / `api/worker/token_pool.py` |
+| SQLite/批量写/查询 | `api/db/core.py` |
 | 错误码/异常 | `api/errors.py` |
 | 提供商抽象与注册 | `api/providers/base.py`、`api/providers/registry.py` |
 | 上游客户端（imagefree） | `api/imagefree_client.py`、`api/providers/imagefree.py` |
@@ -215,7 +215,7 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 
 ## Do-Not-Repeat（v3.1.0 已验证，勿再盲目优化）
 
-1. **SQLite WAL + 多读连接必须 `isolation_level=None`（autocommit）**。默认延迟事务会让 SELECT 钉死旧快照，round-robin 读池表现为「刚写入的任务随机 pending」。已在 `api/db.py:_create_conn`。
+1. **SQLite WAL + 多读连接必须 `isolation_level=None`（autocommit）**。默认延迟事务会让 SELECT 钉死旧快照，round-robin 读池表现为「刚写入的任务随机 pending」。已在 `api/db/core.py:_create_conn`。
 2. **批量写 flush 与 worker 读必须同一把锁**。`_ensure_flushed` 即使 buffer 为空也要 `async with lock`，否则 swap 后未 commit 的窗口会被 worker 读穿。
 3. **禁止 `DB.__init__` 里 `asyncio.run`**。会把 aiosqlite 线程焊死在临时 loop，pytest 全绿后卡 shutdown。连接只在首次 `_ensure_initialized` 创建。
 4. **测试污染三源**：全局单例直接赋值、`from x import CONST` 值拷贝、`os.environ.setdefault`。一律 monkeypatch 使用方模块。conftest 不得无条件 `del sys.modules['api*']`。
@@ -224,3 +224,33 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 新增运维端点：`GET /v1/diagnostics`、`GET /v1/slow`、`GET /v1/slow/view`、`GET /v1/honor`、`GET /v1/terms/{sub}`。
 
 last_verified: 2026-08-23 / 仓库版本 v3.1.0
+
+## 12. 新增提供商接入 SOP（v7.3）
+
+按 `docs/PROVIDER_INTEGRATION_GUIDE.md` 全流程执行，速查版：
+
+1. **实现**：`api/providers/` 新建 `<name>.py`，继承 `Provider`（base.py），必实现 `generate`（async，返回 GenerationResult）+ `credits`（积分制）或健康检查；模型目录用 `ModelSpec` 声明。
+2. **注册**：`api/providers/registry.py` `bootstrap()` 加实例 + 模型前缀映射（`<name>/`）。
+3. **配置**：`api/config/__init__.py` 加 `IF_<NAME>_*` 字段 + `deploy/.env.example` 同步。
+4. **免密型**（如 imagefree）不需要号池；**积分型**（needs_account=True）：`api/account_pool.py` 加 registerer 分支 + `api/registerer.py` 注册逻辑 + 邮箱源选择。
+5. **测试**：`tests/test_providers_contract.py` 加契约用例（mock 上游，禁真实调用）；`test_providers_branches.py` 加分支用例。
+6. **前端**：`frontend/src/api/providers.ts` 无需改（读 /v1/providers 自动展示）；needs_account 排序自动生效。
+7. **文档**：`docs/PROVIDER_INTEGRATION_GUIDE.md` 若有新契约模式则补充。
+
+## 13. 验证记录优先读取协议（防重复测验，v7.3）
+
+**任何验证/测试/审计任务开始前，先读 `docs/verification-log.md`**：
+
+1. 目标模块若近期已验证且代码未改 → **跳过重复验证**，引用记录即可。
+2. 改动了某模块 → 在 verification-log 追加一行（日期/范围/结果/失效条件），使旧记录失效。
+3. 「已知勿重跑结论」节长期有效（如 threading.Lock 审计、硬编码评估）——除非相关代码被改。
+4. 本协议配合全局 memory/（跨会话）与 workflow_status.md（当前任务）使用。
+
+## 14. 会话收尾协议（v7.3）
+
+重要改动落地后：
+
+1. **workflow_status.md** 更新任务状态（事实+证据，不写推理）。
+2. **docs/verification-log.md** 追加验证记录。
+3. **docs/planning/下一步改进指南.md** 版本回写区追加（发版时）。
+4. **持久记忆**：用户偏好/项目约定/踩坑写入全局 memory/（人读不到没关系，AI 下次会话优先读）。

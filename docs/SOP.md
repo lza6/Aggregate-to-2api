@@ -457,3 +457,52 @@ python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db 
 | `IF_DB_RETENTION_DAYS` | — | 按需 | DB 记录保留天数 |
 
 完整开关与说明见 `api/config.py`、`.env.example`、`deploy/.env.example`。
+
+---
+
+## 10. 新版本发布 Checklist（v7.3+）
+
+发版前逐项打勾，全绿才可 commit + tag：
+
+- [ ] **版本号全链对齐**（6 处）：`pyproject.toml:4` / `api/main.py:99` / `frontend/package.json:4` / `landing/package.json:4` / `deploy/docker-compose.yml:3,19` → 统一新版本号
+- [ ] **landing build 版本注入**：`cd landing && npm run build` → `grep -l "<新版本>" landing/dist/assets/*.js` 有命中
+- [ ] **后端测试**：CI 测试 job 绿（本地跑核心子集：`pytest tests/test_config_validate.py tests/test_ip_blocklist.py tests/test_request_guard_layers.py tests/test_providers.py::TestProviderGenerate -q -m "not slow" -p no:cacheprovider --no-header -o addopts=""`）
+- [ ] **前端测试**：`cd frontend && npx vitest run && npx tsc --noEmit && npm run build` 全绿
+- [ ] **全量 lint**：`.venv/Scripts/python.exe -m ruff check api/ tests/ scripts/` → 0 error
+- [ ] **release_notes_<新版本>.md** 已写（概述/落地项/验证/已知限制）
+- [ ] **改进指南版本回写区**（docs/planning/下一步改进指南.md 第 9 节）追加一行
+- [ ] **verification-log**（docs/verification-log.md）追加本次验证记录
+- [ ] commit message 遵循约定式（feat/fix/docs），push main，打 tag `v<版本>` push 触发部署
+- [ ] **部署后线上验证**（5 分钟内）：
+  - `curl https://imagefree.tingfengai.art/v1/healthz` → status=ok 且 uptime 归零（新容器）
+  - `/v1/models` count 正常、`/` 200、`/admin` 307
+  - GitHub Deploy run 4 job 全绿（测试/镜像/SSH 热更新/发行版）
+
+## 11. 故障排查速查（常见症状 → 动作）
+
+| 症状 | 首查 | 动作 |
+|------|------|------|
+| `/v1/healthz` status=degraded | `solver_status` 字段 | cfsolver 容器挂 → `docker compose restart cfsolver`；solve_consecutive_failures>5 → 看 solver_guard 熔断日志 |
+| 生成请求全 429 | IF_RATE_TOKEN_CAPACITY/滑窗 | 单 IP 超限是预期；全部 IP 429 → 查 `_l1_token_buckets` 是否污染、代理池是否枯竭 |
+| 任务卡 queued 不动 | workers 数 + token_pools | worker 全忙 → 看 IF_WORKERS_AUTO；token 池空 → `solve_avg_seconds` 飙升说明 cf_solver 慢 |
+| 502/504 网关错 | api 容器 OOM | `docker inspect imagefree-api \| grep OOMKilled`；mem_limit 512m 不够则查内存泄漏 |
+| nanobanana 号池枯竭 | /admin 号池页 | registerer 是否在跑（`/v1/account-pool` growth_stats）；邮箱源全 429 → 看 email-sources last_error |
+| 部署后接口 500 | 版本不齐/迁移漏 | `docker logs imagefree-api --tail 50`；常见是 package.json 版本与 app.version 不一致（CI 测试会拦） |
+| 线上日志含敏感 Key | P3-6 泄露通道 | httpx/uvicorn.access propagate 已禁；新泄露源 → 检查是否有 logger 未收敛 |
+| DB 文件损坏 | data/*.db | 用 `scripts/restore_db.py --backup data/backups/<最新> --target data/imagefree.db` 恢复（先停 api 容器） |
+
+## 12. 备份验证演练（月度，P2-1 配套）
+
+```bash
+# 1. 生成备份（或取最近一次 crontab 产物）
+python scripts/backup_db.py --db data/imagefree.db --out-dir data/backups
+# 2. 校验完整性
+python -c "import sqlite3,glob; f=sorted(glob.glob('data/backups/imagefree-*.db'))[-1]; c=sqlite3.connect(f); print(c.execute('PRAGMA integrity_check').fetchone()[0])"
+# 期望输出: ok
+# 3. 恢复到临时目标（不动生产 DB）
+python scripts/restore_db.py --backup data/backups/<最新文件> --target data/restore_drill.db
+# 4. 行数对照
+python -c "import sqlite3; a=sqlite3.connect('data/restore_drill.db'); print('requests:', a.execute('SELECT count(*) FROM requests').fetchone()[0])"
+# 5. 清理演练产物
+rm data/restore_drill.db*
+```

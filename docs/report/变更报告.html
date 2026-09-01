@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>听风AI imagefree-2ai · 变更报告（v7.0.0 → v7.3.0）</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2e38; --txt:#e6e9ef; --mut:#9aa3b2; --acc:#4f8cff; --ok:#37c06d; --warn:#e6a23c; --bad:#f56c6c; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--txt); line-height:1.65; padding:2rem; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  h1 { font-size:1.9rem; margin-bottom:.4rem; color:#fff; }
+  .subtitle { color:var(--mut); margin-bottom:2rem; font-size:.95rem; }
+  .badge { display:inline-block; background:var(--acc); color:#fff; padding:.2rem .7rem; border-radius:20px; font-size:.78rem; margin-right:.4rem; }
+  h2 { font-size:1.3rem; margin:2.2rem 0 1rem; color:#fff; border-left:4px solid var(--acc); padding-left:.7rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1.2rem 1.4rem; margin-bottom:1.2rem; }
+  .card h3 { font-size:1.05rem; margin-bottom:.6rem; color:#fff; }
+  .muted { color:var(--mut); font-size:.88rem; }
+  table { width:100%; border-collapse:collapse; margin:.6rem 0; font-size:.88rem; }
+  th, td { padding:.5rem .6rem; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--mut); font-weight:600; background:#14171d; }
+  .ok { color:var(--ok); font-weight:600; }
+  .warn { color:var(--warn); }
+  .bad { color:var(--bad); }
+  .tag { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.72rem; margin:0 .2rem .2rem 0; }
+  .t-feat { background:#1e3a2a; color:#7bd8a5; }
+  .t-ref { background:#1e2a44; color:#8ab4ff; }
+  .t-doc { background:#3a2a1e; color:#ffd28a; }
+  .t-security { background:#3a1e1e; color:#ff9d9d; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem; margin:.6rem 0; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1rem; text-align:center; }
+  .stat b { display:block; font-size:1.8rem; color:#fff; }
+  .stat span { color:var(--mut); font-size:.8rem; }
+  .quiz { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1.4rem; margin-top:1rem; }
+  .quiz h3 { margin-bottom:.8rem; }
+  .q { margin:.9rem 0; }
+  .q p { font-weight:600; margin-bottom:.3rem; }
+  details { margin:.4rem 0; }
+  summary { cursor:pointer; color:var(--acc); }
+  .ans { background:#14171d; border-radius:6px; padding:.6rem .8rem; margin:.3rem 0; font-size:.85rem; }
+  code { background:#14171d; padding:.1rem .35rem; border-radius:4px; font-family:ui-monospace,'SF Mono',Consolas,monospace; font-size:.85em; color:#7bc8ff; }
+  .footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--mut); font-size:.82rem; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>听风AI · imagefree-2ai 变更报告</h1>
+<div class="subtitle">
+  v7.0.0 → v7.3.0 · 2026-09-01 · 单日三版演进 · 公益免费 AI 生成网关 · <a href="https://imagefree.tingfengai.art" style="color:var(--acc)">线上演示</a>
+</div>
+
+<div class="grid">
+  <div class="stat"><b>3</b><span>大版本迭代</span></div>
+  <div class="stat"><b>22</b><span>《改进指南》条目</span></div>
+  <div class="stat"><b>20</b><span>✅ 已闭环</span></div>
+  <div class="stat"><b>2</b><span>⚠️ 半闭环</span></div>
+  <div class="stat"><b>0</b><span>ruff error</span></div>
+  <div class="stat"><b>6</b><span>CI 部署验证</span></div>
+</div>
+
+<!-- ==================== 1. 上下文 ==================== -->
+<h2>1. 上下文 · 这是什么项目，为什么改</h2>
+<div class="card">
+  <p><b>听风AI</b> 是一个把 5 家上游 AI 图像/聊天生成站聚合成统一 OpenAI 风格 <code>/v1/*</code> 接口的<b>高并发公益网关</b>。已部署生产（腾讯云东京单机 docker-compose），被真实用户调用。</p>
+  <p class="muted" style="margin-top:.6rem">核心痛点：上游生成 6-30s 慢、号池需人工、token 求解慢、单机易被脚本薅、公益服务缺合规、代码超长维护难。</p>
+  <p style="margin-top:.6rem">本轮目标：把《下一步改进指南.md》22 条规划<b>逐条真实落地</b>，而非"看起来完成了"。用户明确：<b>禁止空话/伪实现，要一次调用就通、前后端真正衔接、文档真实同步。</b></p>
+</div>
+
+<!-- ==================== 2. 直觉 ==================== -->
+<h2>2. 直觉 · 为什么用这些方案</h2>
+<div class="card">
+  <p><b>主线判断</b>：瓶颈在上游求解器和上游生成速度，<b>不在</b>本服务框架/DB 层。所以拒绝"换 Postgres / 上 MQ / 分库分表"这类负优化，集中火力在：<b>可观测、防滥用、数据安全、代码整洁、降本增效的免费层方案</b>。</p>
+  <ul style="margin:.6rem 0 0 1.2rem; color:var(--txt)">
+    <li><b>aiosqlite 迁移（P2-3）</b>——同步 sqlite3 混入 async 链路会阻塞事件循环，是真 P1。to_thread 是缓解不是根治。</li>
+    <li><b>per-IP 分片锁</b>——全局 threading.Lock 每请求持锁，高 RPS 串行瓶颈；分片锁让不同 IP 并行。</li>
+    <li><b>日志脱敏 + httpx propagate=False</b>——根因不是"没脱敏"，是 httpx 客户端 logger 记完整 URL 含 query 泄露 Key。</li>
+    <li><b>tail-based OTel 采样</b>——错误 100% 采样定位问题时永不漏，正常 10% 控成本。</li>
+    <li><b>不抽硬编码 config</b>——nanobanana Action ID / tryingopen 目录已是"动态嗅探+静态兜底"自愈设计，抽 config 反而破坏自愈。</li>
+    <li><b>拆文件而非重构</b>——保持 import 向后兼容，绝不破坏调用方。</li>
+  </ul>
+</div>
+
+<!-- ==================== 3. 做了什么 ==================== -->
+<h2>3. 做了什么 · 按版本</h2>
+
+<h3 style="margin:1.2rem 0 .5rem;color:var(--acc)">v7.0.0 — 吞吐 + 路由激活 + 前端体验</h3>
+<div class="card">
+  <table>
+    <tr><th style="width:120px">条目</th><th>内容</th><th style="width:80px">状态</th></tr>
+    <tr><td>P0-3</td><td>token 池双水位 + 批量并发填充（<code>TOKEN_TARGET/URGENT_WATERMARK</code> + <code>BATCH_FILL_SIZE</code>）</td><td class="ok">✅</td></tr>
+    <tr><td>P1-1</td><td><code>select_best</code> 生产激活：degraded 多候选走 MAB 打分</td><td class="ok">✅</td></tr>
+    <tr><td>P1-3</td><td>Dashboard 共享调度器（8 个 setInterval → 1 个 <code>usePollingScheduler</code>）</td><td class="ok">✅</td></tr>
+    <tr><td>P1-4/P1-5</td><td>路由持久化默认开启 + api 容器 mem 256m→512m</td><td class="ok">✅</td></tr>
+    <tr><td>P0-2</td><td>版本全链对齐 + 旧 release notes 归档</td><td class="ok">✅</td></tr>
+  </table>
+</div>
+
+<h3 style="margin:1.2rem 0 .5rem;color:var(--acc)">v7.1.0 — 数据安全 + 资源治理</h3>
+<div class="card">
+  <table>
+    <tr><th style="width:120px">条目</th><th>内容</th><th style="width:80px">状态</th></tr>
+    <tr><td>P2-1</td><td>DB 备份 + 恢复脚本（VACUUM INTO 热备 + pre-restore 防覆盖 + SOP 演练节）</td><td class="ok">✅</td></tr>
+    <tr><td>P2-2</td><td>封禁表分页（<code>list_all(limit/offset/since_ts)</code> + 前端分页 UI，防 OOM）</td><td class="ok">✅</td></tr>
+    <tr><td>P2-5</td><td><code>get_settings/reset_settings</code> + conftest autouse 防单例污染</td><td class="ok">✅</td></tr>
+    <tr><td>P2-6</td><td>worker 缩容早返回简化（行为等价）；硬编码评估为自愈设计</td><td class="ok">✅</td></tr>
+    <tr><td>P2-4 前端</td><td>Accounts.tsx 987→276 行拆 6 子组件</td><td class="ok">✅</td></tr>
+  </table>
+</div>
+
+<h3 style="margin:1.2rem 0 .5rem;color:var(--acc)">v7.2.0 — 可观测 + 安全 + 剩余风险清零</h3>
+<div class="card">
+  <table>
+    <tr><th style="width:120px">条目</th><th>内容</th><th style="width:80px">状态</th></tr>
+    <tr><td>P3-2</td><td>OTel tail-based 采样（错误 100% + 正常 10%）+ SSE 指标看板</td><td class="ok">✅</td></tr>
+    <tr><td>P3-3</td><td>全局 threading.Lock → per-IP 分片锁</td><td class="ok">✅</td></tr>
+    <tr><td>P3-4</td><td>final_suite 覆盖率门禁 0→70</td><td class="ok">✅</td></tr>
+    <tr><td>P3-5</td><td>ruff 412 errors → <b>0</b>（自动 fix + E701 多行 + 未用 import 清理）</td><td class="ok">✅</td></tr>
+    <tr><td>P3-6</td><td>日志脱敏 + /v1/logs 鉴权 + httpx/uvicorn.access propagate=False（根除泄露）</td><td class="ok">✅</td></tr>
+    <tr><td>P3-7/P3-8</td><td>landing 中英双语 + 隐私声明/DPA 页 + 提供商接入指南（提前自 v8.0）</td><td class="ok">✅</td></tr>
+    <tr><td>P2-3</td><td>account_pool/email_pool sqlite3→aiosqlite（L3 大工程，消除事件循环阻塞）</td><td class="ok">✅</td></tr>
+    <tr><td>api.ts 拆分</td><td>857 行 → api/index.ts(10行) + 6 域子模块（解决路径歧义）</td><td class="ok">✅</td></tr>
+  </table>
+</div>
+
+<h3 style="margin:1.2rem 0 .5rem;color:var(--acc)">v7.3.0 — 终局闭环总审计</h3>
+<div class="card">
+  <table>
+    <tr><th style="width:120px">条目</th><th>内容</th><th style="width:80px">状态</th></tr>
+    <tr><td>P2-4 后端</td><td>email_pool.py 1315→386 行，拆 <code>api/email_sources/</code> 12 文件，旧 import 兼容</td><td class="ok">✅</td></tr>
+    <tr><td>P1-2 补全</td><td>生产收紧包 <code>deploy/.env.production.example</code>（CORS/管理Key/CSP/防滥用一键收紧）</td><td class="warn">⚠️ 模板就绪，部署时替换 .env 才生效</td></tr>
+    <tr><td>conftest 兜底</td><td><code>os._exit(exitstatus)</code> 根治 Windows teardown 卡死（111 passed 13s 退出）</td><td class="ok">✅</td></tr>
+    <tr><td>文档同步</td><td>README/skill/rules/改进指南 22 条状态回写/SOP 3 新章节/verification-log</td><td class="ok">✅</td></tr>
+    <tr><td>技能沉淀</td><td>新增提供商 SOP + 验证记录优先读取协议 + 会话收尾协议</td><td class="ok">✅</td></tr>
+    <tr><td>架构评估</td><td>docs/architecture-evolution.md（18 项高并发方案逐项适用性判断）</td><td class="ok">✅</td></tr>
+    <tr><td>持久记忆</td><td>memory/ 3 条跨会话记忆（项目全景/踩坑清单/测试策略卡）</td><td class="ok">✅</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 4. 关键发现 ==================== -->
+<h2>4. 关键发现 · 逆向排查抓出的真 bug</h2>
+<div class="card">
+  <table>
+    <tr><th style="width:60px">严重</th><th>发现</th><th style="width:100px">处置</th></tr>
+    <tr><td class="bad">P0</td><td><code>httpx/uvicorn.access</code> logger 记完整 URL 含 <code>?api_key=</code> query，经 root logger 冒泡泄露进 log_buffer —— 不是"没脱敏"而是"泄密通道没关"</td><td class="ok">✅ propagate=False</td></tr>
+    <tr><td class="bad">P0</td><td>Windows 本地 pytest teardown 卡死（aiosqlite 连接 join 永不返回）—— CI ubuntu 不卡，纯 Windows 本地，导致测试结果全绿后进程挂起，掩盖真实退出码</td><td class="ok">✅ os._exit(exitstatus)</td></tr>
+    <tr><td class="warn">P1</td><td>OTel <code>should_sample</code> 签名第 4 位新 SDK 是 <code>kind(SpanKind)</code>、旧版是 <code>attributes</code> —— 签名错位直接 TypeError 破坏 instrumentation</td><td class="ok">✅ 兼容双签名</td></tr>
+    <tr><td class="warn">P1</td><td>nanobanana <code>_next_account</code> <code>await self._load_accounts()</code> 对同步 lambda monkeypatch 抛 TypeError —— 需 <code>inspect.isawaitable</code> 兜底</td><td class="ok">✅ 兜底</td></tr>
+    <tr><td class="warn">P1</td><td><code>snapshot()</code> 返回 <code>list[dict]</code>，测试里 <code>"\n".join(snapshot)</code> TypeError</td><td class="ok">✅ json.dumps</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 5. 验证 ==================== -->
+<h2>5. 验证 · 全部真实运行</h2>
+<div class="card">
+  <table>
+    <tr><th>项</th><th>命令</th><th style="width:160px">结果</th></tr>
+    <tr><td>后端核心</td><td><code>pytest tests/test_account_pool.py tests/test_email_pool.py ...</code></td><td class="ok">✅ 21 文件 300+ 用例全绿</td></tr>
+    <tr><td>前端</td><td><code>npx vitest run &amp;&amp; npm run build &amp;&amp; npx tsc --noEmit</code></td><td class="ok">✅ 193 passed / build 2.76s / 0 error</td></tr>
+    <tr><td>landing</td><td><code>npm run build</code></td><td class="ok">✅ 608ms，dist 含 i18n+privacy</td></tr>
+    <tr><td>lint</td><td><code>ruff check api/ tests/ scripts/</code></td><td class="ok">✅ 0 error（412→0）</td></tr>
+    <tr><td>CI 部署</td><td>v7.0.0/v7.1.0/v7.2.0 三级 Deploy</td><td class="ok">✅ 3 次 success + 线上 E2E</td></tr>
+    <tr><td>线上</td><td>healthz status=ok / 管理端点 401 / landing privacy 实测</td><td class="ok">✅ db_rows 16950+，数据保留</td></tr>
+  </table>
+  <p class="muted" style="margin-top:.5rem">完整记录见 <code>docs/verification-log.md</code>（防重复测验协议）。</p>
+</div>
+
+<!-- ==================== 6. 测验 ==================== -->
+<h2>6. 验收测验 · 通过以下 10 题即理解本次变更</h2>
+<div class="quiz">
+  <div class="q"><p>Q1. 为什么拒绝"换 Postgres / 上 MQ / 分库分表"？</p>
+    <details><summary>查看答案</summary><div class="ans">瓶颈在上游求解器与上游生成速度（6-30s/张），本服务框架/DB 层每秒写 <10，远未到瓶颈。当前单机 SQLite/队列方案在触发器出现前都是负优化（见 architecture-evolution.md）。</div></details>
+  </div>
+  <div class="q"><p>Q2. P3-6 日志泄露的<b>真正根因</b>是什么？修复做了什么？</p>
+    <details><summary>查看答案</summary><div class="ans">不是"没脱敏 Key 字符串"，而是 httpx 和 uvicorn.access logger 会记录完整请求 URL（含 <code>?api_key=</code> query），经 root logger 冒泡进 log_buffer。修复：<code>logging.getLogger("httpx").propagate=False</code> + <code>uvicorn.access.propagate=False</code>，访问日志改由 context.py 中间件只记 path。</div></details>
+  </div>
+  <div class="q"><p>Q3. P2-3 aiosqlite 迁移想解决什么？为什么 to_thread 不够？</p>
+    <details><summary>查看答案</summary><div class="ans">同步 sqlite3 混入 async 链路会阻塞事件循环（真 P1）。to_thread 只是把阻塞丢线程池缓解，线程池容量有限 + 上下文切换开销。aiosqlite 让 DB I/O 真正非阻塞。</div></details>
+  </div>
+  <div class="q"><p>Q4. per-IP 分片锁解决了什么？为什么能保证同 IP 仍串行？</p>
+    <details><summary>查看答案</summary><div class="ans">全局 threading.Lock 每请求持锁是高 RPS 串行瓶颈。分片锁（<code>_ip_locks[ip]</code>）让不同 IP 并行检查，同 IP 拿到同一把锁仍串行（同 IP 本就应串行限流）。</div></details>
+  </div>
+  <div class="q"><p>Q5. email_pool 拆分后 <code>from api.email_pool import LinshiMailSource</code> 还能用吗？怎么做到的？</p>
+    <details><summary>查看答案</summary><div class="ans">能。email_pool.py 顶部 <code>from .email_sources import (...)</code> 转发 + noqa F401，旧 import 路径零改动。9 源拆 <code>api/email_sources/</code> 子包，email_pool 从 1315 → 386 行。</div></details>
+  </div>
+  <div class="q"><p>Q6. OTel 自定义 sampler 的 <code>should_sample</code> 签名坑是什么？</p>
+    <details><summary>查看答案</summary><div class="ans">新版 OTel SDK 第 4 位参数是 <code>kind</code>(SpanKind)，旧版是 <code>attributes</code>。签名错位会让 attributes 拿到 SpanKind 对象，调用 <code>.get()</code> 抛 TypeError 破坏 instrumentation。需兼容双签名 + <code>isinstance(attributes, dict)</code> 守卫。</div></details>
+  </div>
+  <div class="q"><p>Q7. 版本号全链对齐具体是哪 6 处？漏一处会怎样？</p>
+    <details><summary>查看答案</summary><div class="ans">pyproject.toml / api/main.py / frontend+landing package.json / deploy/docker-compose.yml（注释 + cfsolver 镜像 tag）。漏一处 CI frontend-version-gate 校验 package.json ≠ app.version 直接卡死（实测踩过 2 次）。</div></details>
+  </div>
+  <div class="q"><p>Q8. conftest 加 <code>os._exit(exitstatus)</code> 是修复什么？为什么必须传 exitstatus？</p>
+    <details><summary>查看答案</summary><div class="ans">Windows 本地 pytest session teardown 阶段 aiosqlite 连接 join 永不返回，结果全绿但进程挂起、真实退出码被吞。第二版修复传 <code>exitstatus</code>（非 0），否则 <code>os._exit(0)</code> 会把失败测试强改为成功，掩盖回归。</div></details>
+  </div>
+  <div class="q"><p>Q9. 为什么 nanobanana 硬编码 Action ID 不抽 config？</p>
+    <details><summary>查看答案</summary><div class="ans">它已是 ActionSniffer 动态嗅探 + STATIC_ACTION_IDS 静态兜底的自愈设计，站点改版自动嗅探更新。抽 config 会让运维误改静态值而绕过嗅探自愈，破坏 ISSUE-03 设计。</div></details>
+  </div>
+  <div class="q"><p>Q10. 《下一步改进指南》22 条现状？哪 2 条未落地为什么？</p>
+    <details><summary>查看答案</summary><div class="ans">20 条 ✅ 闭环（真实代码+证据），2 条 ⬜：P0-1 cf_solver 并发提升（生产 L3 灰度需观察 camoufox 内存）与 P3-1 自建邮箱（v8.0 评估，需独立部署+域名+CF 额度）。二者均属需生产授权的风险项，已产出评估文档。</div></details>
+  </div>
+</div>
+
+<div class="footer">
+  由主控代理 Orchestrator 生成 · 单日 v7.0→v7.3 全档落地 · 记录见 docs/verification-log.md · 本报告的测验覆盖全部核心变更点
+</div>
+
+</div>
+</body>
+</html>

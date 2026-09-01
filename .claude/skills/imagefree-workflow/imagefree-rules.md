@@ -16,13 +16,13 @@
 ### Python 后端
 
 - 异步优先：IO 密集用 `async def` / `asyncio`；全局单例（engine、db、settings）模块级实例化，运行时 `await xxx.start()`。
-- SQLite 写统一走 `api/db.py` 的批量写合并（`DB._enqueue_write` + 0.2s flush），不要直接裸 `sqlite3` 高频 commit。
+- SQLite 写统一走 `api/db/core.py` 的批量写合并（`DB._enqueue_write` + 0.2s flush），不要直接裸 `sqlite3` 高频 commit。
 - 上游网络调用统一走 `httpx`，超时与重试用 `retry_policy.py`（指数退避 + jitter），不自己手写重试循环。
-- 并发控制用 `semaphore_manager.py` / `asyncio.Lock`，不在业务代码里散落裸锁。
+- 并发控制用 `api/concurrency.py`(若存在) / `asyncio.Lock`；号池/邮箱池已迁 aiosqlite(见 api/account_pool.py / api/email_pool.py)，不在业务代码里散落裸锁。
 
 ### 前端（React + TS）
 
-- 组件按 `frontend/src/pages/`（页面）与 `components/`（复用 UI）划分；数据请求集中在 `api.ts`，不在组件内散落 fetch。
+- 组件按 `frontend/src/pages/`（页面）与 `components/`（复用 UI）划分；数据请求集中在 `frontend/src/api/` 包（barrel index.ts + 域子模块），不在组件内散落 fetch。
 - 组件命名 `PascalCase`，钩子 `use` 前缀 camelCase，常量 `UPPER_SNAKE_CASE`，CSS class 用 kebab-case。
 - 状态管理保持最小：服务端状态只做请求缓存，派生值不冗余存储。
 
