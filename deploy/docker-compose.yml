@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v6.8.1
+# 版本: v7.0.0
 # 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
 #       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
 #       须从 deploy/ 目录运行：cd deploy && docker compose up -d
@@ -13,7 +13,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cfsolver
-    image: imagefree-cfsolver:6.8.0
+    image: imagefree-cfsolver:7.0.0
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -44,9 +44,11 @@ services:
     #   dockerfile: deploy/Dockerfile.api
     container_name: imagefree-api
     restart: unless-stopped
-    mem_limit: 256m
-    mem_reservation: 128m
-    cpus: '1'
+    # P1-5: api 跑 FastAPI + aiosqlite + 8 后台任务 + worker 池 + LRU 画廊缓存，
+    # 256m 高负载 OOM kill 风险；上调到 512m 与 cfsolver 资源档对齐。
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: '2'
     depends_on:
       cfsolver:
         condition: service_healthy
@@ -64,6 +66,8 @@ services:
       # solver_guard 自动加权最少在途调度+熔断 failover；配 IF_SOLVER_NODE_WEIGHTS 调权重
       - IF_CF_SOLVER_URLS=http://cfsolver:8001
       - IF_SOLVER_IDLE_TIMEOUT_SECONDS=0
+      # P1-4 路由持久化：独立轻量 sqlite，重启保留路由历史 + warm 冷启动 EWMA
+      - IF_ROUTING_DB=data/routing.db
       - IF_HOST=0.0.0.0
       - IF_PORT=8100
       - IF_BASE_URL=https://imagefree.net

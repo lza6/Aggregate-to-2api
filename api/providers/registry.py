@@ -134,9 +134,23 @@ class Registry:
 
         # 首选 degraded → 能力匹配的健康备用优先（P0-2 方案 A：跨商降级）
         # 仅「能力匹配」的备用才接管，避免给用户换错能力；无匹配则直连首选保底。
+        # P1-1：多个能力匹配备用时，用 adaptive_router.select_best 在备选间 MAB 打分
+        # 选最优（MAB 投资变现），而非旧 find_alternative 返回首个匹配。单候选不调
+        # select_best（单候选无打分意义，直接返回避免无谓观测写）。
         if health == "degraded":
-            alt_provider, alt_model_id = self.find_alternative(model_id)
-            if alt_provider is not None:
+            alts = self.find_alternatives(model_id)
+            if alts:
+                if len(alts) > 1:
+                    # 多候选 → select_best 在备选间打分选最优
+                    alt_prefix = self.adaptive_router.select_best(
+                        [p.prefix for p, _ in alts],
+                        model=model_id,
+                        requested_provider=spec.provider,
+                    )
+                    alt_provider, alt_model_id = next((p, m) for p, m in alts if p.prefix == alt_prefix)
+                else:
+                    # 单候选 → 不调 select_best，直接返回该备用
+                    alt_provider, alt_model_id = alts[0]
                 self.adaptive_router.record_inflight(alt_provider.prefix)
                 self.adaptive_router.record_fallback(alt_provider.prefix, model_id, spec.provider)
                 log.info("提供商 %s degraded，降级到 %s 处理 %s", spec.provider, alt_provider.prefix, model_id)
@@ -159,15 +173,28 @@ class Registry:
         return provider
 
     def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]:
-        """查找 model_id 的备用提供商。
+        """查找 model_id 的备用提供商（首个能力匹配的健康备用）。
 
         返回 (备用 Provider, 备用模型 ID)。如果找不到能力匹配的健康 provider 则返回 (None, None)。
+        内部委托 find_alternatives 取首个，保持旧调用方兼容。
+        """
+        alts = self.find_alternatives(model_id)
+        if not alts:
+            return None, None
+        return alts[0]
+
+    def find_alternatives(self, model_id: str) -> list[tuple[Provider, str]]:
+        """查找 model_id 的全部能力匹配的健康备用（P1-1 多候选）。
+
+        返回 [(Provider, 备用模型 ID), ...]，按能力重叠数降序排列（重叠越多越优先），
+        全部为非 down 状态且非自身。供 provider_for degraded 分支用 select_best 打分选最优。
+        空列表表示无能力匹配的健康备用。
         """
         spec = self._models.get(model_id)
         if not spec:
-            return None, None
-        # 确定当前模型需要的能力
+            return []
         needed_capabilities = set(spec.capabilities)
+        alts: list[tuple[int, Provider, str]] = []
         for prefix, p in self.providers.items():
             if p.health_status == "down":
                 continue
@@ -175,12 +202,12 @@ class Registry:
                 continue  # 跳过自身
             # 检查该 provider 是否有能覆盖所需能力的模型
             for mid, ms in p.models.items():
-                # 检查是否有至少一个能力匹配（交集非空）
-                # 降级时优先找能力重叠最多的，但至少有一个匹配
                 common = needed_capabilities & set(ms.capabilities)
                 if common:
-                    return p, mid
-        return None, None
+                    alts.append((len(common), p, mid))
+        # 能力重叠数降序（重叠越多越优先），稳定排序保序
+        alts.sort(key=lambda x: x[0], reverse=True)
+        return [(p, mid) for _, p, mid in alts]
 
     # ── Provider 降级/熔断（IMP-18）────────────────────
     def degrade(self, provider: str, reason: str) -> None:

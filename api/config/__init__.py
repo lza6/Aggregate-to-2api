@@ -156,6 +156,15 @@ class Settings(BaseSettings):
     # ── Token 池 ──
     token_pool_size: int = Field(6, validation_alias="IF_TOKEN_POOL_SIZE")
     token_ttl: int = Field(90, validation_alias="IF_TOKEN_TTL")
+    # P0-3 双水位 + 批量并发填充（吞吐工程化，参考 free-api/nvidia-playgourd-go）。
+    # direct 池无排队时维持的目标水位（预热数，提升零延迟命中率）；默认 1 = 旧逻辑（维持1个）。
+    # 生产建议配 5：池始终保持 5 个新鲜 token，零延迟命中率高，请求不阻塞在求解。
+    token_target_watermark: int = Field(1, ge=0, validation_alias="IF_TOKEN_TARGET_WATERMARK")
+    # 紧急水位：total 低于此值时触发批量并发填充（防池空干等）；默认 0 = 关闭批量（单次填充）。
+    token_urgent_watermark: int = Field(0, ge=0, validation_alias="IF_TOKEN_URGENT_WATERMARK")
+    # 批量并发填充数：urgent 时一次并发 N 个 solve（gather）；默认 1 = 单次（向后兼容）。
+    # 真并发需 cf_solver 支持多槽（P0-1 page_count>1）+ TOKEN_PREFETCH_CONCURRENCY >= N。
+    token_batch_fill_size: int = Field(1, ge=1, validation_alias="IF_TOKEN_BATCH_FILL_SIZE")
 
     # ── 画廊 ──
     gallery_limit: int = Field(50, validation_alias="IF_GALLERY_LIMIT")
@@ -763,6 +772,10 @@ IF_WORKER_BATCH_SIZE = settings.if_worker_batch_size
 # Token 池
 TOKEN_POOL_SIZE = settings.token_pool_size
 TOKEN_TTL = settings.token_ttl
+# P0-3 双水位 + 批量并发填充
+TOKEN_TARGET_WATERMARK = settings.token_target_watermark
+TOKEN_URGENT_WATERMARK = settings.token_urgent_watermark
+TOKEN_BATCH_FILL_SIZE = settings.token_batch_fill_size
 
 # 画廊
 GALLERY_LIMIT = settings.gallery_limit

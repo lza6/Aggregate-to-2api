@@ -84,6 +84,94 @@ async def test_dynamic_watermark_direct(fake_solve):
         await m.stop()
 
 
+# ── P0-3 双水位 + 批量并发填充 ─────────────────────
+@pytest.mark.asyncio
+async def test_target_watermark_configurable(fake_solve, monkeypatch):
+    """TOKEN_TARGET_WATERMARK>1 时 direct 池无排队也维持 N 个预热 token（提升零延迟命中率）。"""
+    monkeypatch.setattr(config, "TOKEN_TARGET_WATERMARK", 3)
+    m = TokenPoolManager(_EngineStub())
+    await m.start()
+    try:
+        # 等预热填到 target=3（或 maxsize 取小）
+        for _ in range(100):
+            if m.pools_snapshot()["direct"]["size"] >= 3:
+                break
+            await asyncio.sleep(0.05)
+        assert m.pools_snapshot()["direct"]["size"] >= 3
+        assert m.pools_snapshot()["direct"]["target"] == 3
+    finally:
+        await m.stop()
+
+
+@pytest.mark.asyncio
+async def test_batch_fill_on_urgent(fake_solve, monkeypatch):
+    """TOKEN_URGENT_WATERMARK>0 + BATCH_FILL_SIZE>1 → urgent 时一次并发填 N 个 token。"""
+    monkeypatch.setattr(config, "TOKEN_URGENT_WATERMARK", 2)
+    monkeypatch.setattr(config, "TOKEN_BATCH_FILL_SIZE", 4)
+    # 串行池 maxsize=2 太小，扩大以观察批量填充效果
+    monkeypatch.setattr(config, "TOKEN_POOL_SIZE", 8)
+    m = TokenPoolManager(_EngineStub())
+    await m.start()
+    try:
+        # 等 prefetch_loop 检测到 urgent（total<2）→ 批量并发填 4 个
+        for _ in range(200):
+            if m.pools_snapshot()["direct"]["size"] >= 4:
+                break
+            await asyncio.sleep(0.05)
+        # 批量填充后 total 应 >= batch_size（4 个全成功，fake_solve 不失败）
+        assert m.pools_snapshot()["direct"]["size"] >= 4
+    finally:
+        await m.stop()
+
+
+@pytest.mark.asyncio
+async def test_batch_fill_disabled_by_default(fake_solve):
+    """默认 urgent=0/batch=1 → 不走批量分支，保持旧单次填充（向后兼容）。"""
+    assert config.TOKEN_URGENT_WATERMARK == 0
+    assert config.TOKEN_BATCH_FILL_SIZE == 1
+    m = TokenPoolManager(_EngineStub())
+    await m.start()
+    try:
+        # 池不应被一次性填满（单次填充 + 节流）
+        await asyncio.sleep(0.3)
+        snap = m.pools_snapshot()["direct"]
+        # 旧逻辑：无排队 target=1，单次填充维持 1 个
+        assert snap["size"] <= 2  # 单次填充 + 可能的 standby 残留，不会批量填 4
+    finally:
+        await m.stop()
+
+
+@pytest.mark.asyncio
+async def test_batch_fill_swallows_solve_failures(fake_solve, monkeypatch):
+    """批量填充时部分 solve 失败 → 不影响其他成功结果（gather return_exceptions）。"""
+    monkeypatch.setattr(config, "TOKEN_URGENT_WATERMARK", 2)
+    monkeypatch.setattr(config, "TOKEN_BATCH_FILL_SIZE", 3)
+    monkeypatch.setattr(config, "TOKEN_POOL_SIZE", 8)
+
+    call_count = {"n": 0}
+
+    async def _mixed(cf_solver_url, url, sitekey, timeout, proxy=None):
+        call_count["n"] += 1
+        await asyncio.sleep(0.03)
+        # 第 1、3 次失败，第 2 次成功 → gather return_exceptions 保留成功
+        if call_count["n"] % 2 == 1:
+            raise RuntimeError("solve fail")
+        return (f"tok-{call_count['n']}", 0.03)
+
+    monkeypatch.setattr("api.turnstile_client.solve_turnstile", _mixed)
+    m = TokenPoolManager(_EngineStub())
+    await m.start()
+    try:
+        for _ in range(200):
+            if m.pools_snapshot()["direct"]["size"] >= 1:
+                break
+            await asyncio.sleep(0.05)
+        # 即使部分失败，成功的 token 仍入池（不整体崩溃）
+        assert m.pools_snapshot()["direct"]["size"] >= 1
+    finally:
+        await m.stop()
+
+
 @pytest.mark.asyncio
 async def test_circuit_open_fast_fail(fake_solve, monkeypatch):
     from api.solver_guard import solver_guard

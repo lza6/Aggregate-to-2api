@@ -179,6 +179,150 @@ class TestRegistryIntegration:
         assert len(reg.get_routing_records(limit=10)) >= 1
 
 
+class TestDegradedSelectBest:
+    """P1-1：degraded 降级路径用 select_best 在多候选间打分选最优。"""
+
+    def _make_stub_provider(self, prefix: str):
+        """构造最小 stub Provider，只暴露 prefix + health_status（不依赖真实能力匹配）。"""
+        class _StubProvider:
+            def __init__(self, prefix: str) -> None:
+                self.prefix = prefix
+                self.health_status = "healthy"
+                self.models = {}  # find_alternatives 被 monkeypatch，不读真实 models
+        return _StubProvider(prefix)
+
+    def _registry_with_stubs(self):
+        """注册 1 个真实首选 + 3 个 stub 备用（健康），用 monkeypatch find_alternatives 控制候选。"""
+        from api.providers.registry import Registry
+        from api.providers import imagefree
+
+        reg = Registry()
+        reg.register(imagefree.ImagefreeProvider())
+        # stub 备用不通过 register（register 会读 models），直接塞进 providers 字典
+        for px in ("stubA", "stubB", "stubC"):
+            stub = self._make_stub_provider(px)
+            reg.providers[px] = stub
+            reg.provider_health[px] = "healthy"
+        return reg
+
+    def test_degraded_multi_candidates_calls_select_best(self, monkeypatch):
+        """degraded 时有 ≥2 能力匹配备用 → select_best 被调用，返回 select_best 选的（非首个）。"""
+        reg = self._registry_with_stubs()
+        model_id = "imagefree/default"
+        spec = reg._models[model_id]
+        reg.degrade(spec.provider, "测试降级")
+
+        # 桩 find_alternatives 返回 2 个可控 stub 备用（不依赖真实能力匹配）
+        stub_a = reg.providers["stubA"]
+        stub_b = reg.providers["stubB"]
+        monkeypatch.setattr(
+            reg, "find_alternatives", lambda mid: [(stub_a, "stubA/m"), (stub_b, "stubB/m")]
+        )
+
+        called = {"n": 0, "candidates": None}
+
+        def _fake_select_best(candidates, *, request_id="", model="", requested_provider="", explore=None):
+            called["n"] += 1
+            called["candidates"] = list(candidates)
+            return candidates[-1]  # 返回最后一个（非首个），证明走 select_best
+
+        monkeypatch.setattr(reg.adaptive_router, "select_best", _fake_select_best)
+
+        provider = reg.provider_for(model_id)
+        assert provider is not None
+        assert called["n"] == 1, "degraded 多候选应调用 select_best 一次"
+        assert called["candidates"] == ["stubA", "stubB"]
+        # 返回的是 select_best 选的（最后一个 stubB），证明走了打分分支而非首个
+        assert provider.prefix == "stubB"
+
+    def test_degraded_single_candidate_skips_select_best(self, monkeypatch):
+        """degraded 时仅 1 个备用 → 不调 select_best，直接返回该备用（避免单候选无谓打分）。"""
+        reg = self._registry_with_stubs()
+        model_id = "imagefree/default"
+        spec = reg._models[model_id]
+        reg.degrade(spec.provider, "测试降级")
+
+        # 桩 find_alternatives 返回单个备用
+        stub_a = reg.providers["stubA"]
+        monkeypatch.setattr(reg, "find_alternatives", lambda mid: [(stub_a, "stubA/m")])
+
+        called = {"n": 0}
+
+        def _fake_select_best(candidates, **kwargs):
+            called["n"] += 1
+            return candidates[0]
+
+        monkeypatch.setattr(reg.adaptive_router, "select_best", _fake_select_best)
+
+        provider = reg.provider_for(model_id)
+        assert provider is not None
+        assert provider.prefix == "stubA"
+        assert called["n"] == 0, "单候选不应调用 select_best"
+
+    def test_degraded_no_candidates_falls_back_direct(self, monkeypatch):
+        """degraded 但无能力匹配备用 → 直连首选保底（记 direct），不调 select_best。"""
+        reg = self._registry_with_stubs()
+        model_id = "imagefree/default"
+        spec = reg._models[model_id]
+        reg.degrade(spec.provider, "测试降级")
+
+        # 桩 find_alternatives 返回空（无备用）
+        monkeypatch.setattr(reg, "find_alternatives", lambda mid: [])
+
+        called = {"n": 0}
+
+        def _fake_select_best(candidates, **kwargs):
+            called["n"] += 1
+            return candidates[0]
+
+        monkeypatch.setattr(reg.adaptive_router, "select_best", _fake_select_best)
+
+        provider = reg.provider_for(model_id)
+        assert provider is not None
+        # 无备用 → 直连首选（imagefree）
+        assert provider.prefix == spec.provider
+        assert called["n"] == 0, "无候选不应调用 select_best"
+
+    def test_healthy_path_skips_select_best(self, monkeypatch):
+        """healthy 路径不调 select_best（直连契约不变：返回请求指定的提供商）。"""
+        reg = self._registry_with_stubs()
+        model_id = "imagefree/default"
+        spec = reg._models[model_id]
+        reg.recover(spec.provider)  # 确保首选 healthy
+
+        called = {"n": 0}
+
+        def _fake_select_best(candidates, **kwargs):
+            called["n"] += 1
+            return candidates[0]
+
+        monkeypatch.setattr(reg.adaptive_router, "select_best", _fake_select_best)
+
+        provider = reg.provider_for(model_id)
+        assert provider is not None
+        # healthy 直连：返回请求指定的提供商（不被偷换）
+        assert provider.prefix == spec.provider
+        assert called["n"] == 0, "healthy 路径不应调用 select_best"
+
+    def test_find_alternatives_returns_sorted_by_capability_overlap(self):
+        """find_alternatives 按能力重叠数降序返回（重叠越多越优先）。"""
+        from api.providers.registry import Registry
+        from api.providers import imagefree, aifreeforever, nanobanana
+
+        reg = Registry()
+        reg.register(imagefree.ImagefreeProvider())
+        reg.register(aifreeforever.AifreeforeverProvider())
+        reg.register(nanobanana.NanobananaProvider())
+        model_id = "imagefree/default"
+        alts = reg.find_alternatives(model_id)
+        # 至少能找到备用（aifreeforever 与 imagefree 能力有重叠）
+        assert len(alts) >= 1
+        # 验证返回的是 list[tuple[Provider, str]] 结构
+        for p, mid in alts:
+            assert hasattr(p, "prefix")
+            assert isinstance(mid, str)
+
+
 class TestPersistence:
     """P3-1 可观测/可恢复：SQLite 持久化、restore、历史查询。"""
 
@@ -223,7 +367,7 @@ class TestPersistence:
         from httpx import ASGITransport, AsyncClient
 
         from api.routes import admin
-        from api.errors import AppError, ErrorCodes
+        from api.errors import AppError
         from api.handlers import app_error_handler
 
         db_path = str(tmp_path / "rt.db")

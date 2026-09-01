@@ -13,10 +13,16 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+
+class _NoopApp:
+    """ASGI noop app：直接返回 200，用于直接测中间件逻辑（不经路由）。"""
+
+    async def __call__(self, scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/plain")]})
+        await send({"type": "http.response.body", "body": b"ok"})
 
 
 class TestSecurityHeaders:
@@ -61,6 +67,65 @@ class TestSecurityHeaders:
             r = await client.get("/v1/healthz")
             assert r.status_code == 200
             assert r.headers.get("x-request-id")
+
+    @pytest.mark.asyncio
+    async def test_csp_enabled_injects_header(self):
+        """P1-2: IF_CSP_ENABLED=True 时注入 Content-Security-Policy 头（生产收紧试点验证）。"""
+        import api.main
+
+        mw = api.main.SecurityHeadersMiddleware(_NoopApp())
+        mw._enabled = True
+        mw._csp_enabled = True  # 模拟生产开启 CSP
+
+        seen: dict = {}
+
+        async def cap(message):
+            if message["type"] == "http.response.start":
+                seen.update({k.lower().decode(): v.decode() for k, v in message["headers"]})
+
+        await mw({"type": "http", "scheme": "https", "headers": [], "path": "/x"}, None, cap)
+        assert "content-security-policy" in seen
+        csp = seen["content-security-policy"]
+        # CSP 常量含 default-src 'self' + img-src（画廊图源域名白名单）
+        assert "default-src 'self'" in csp
+        assert "img-src" in csp
+
+    @pytest.mark.asyncio
+    async def test_csp_disabled_no_header(self):
+        """P1-2: IF_CSP_ENABLED=False（默认）不注入 CSP（向后兼容）。"""
+        import api.main
+
+        mw = api.main.SecurityHeadersMiddleware(_NoopApp())
+        mw._enabled = True
+        mw._csp_enabled = False  # 默认关闭
+
+        seen: dict = {}
+
+        async def cap(message):
+            if message["type"] == "http.response.start":
+                seen.update({k.lower().decode(): v.decode() for k, v in message["headers"]})
+
+        await mw({"type": "http", "scheme": "https", "headers": [], "path": "/x"}, None, cap)
+        assert "content-security-policy" not in seen
+
+    @pytest.mark.asyncio
+    async def test_security_headers_off_when_disabled(self):
+        """P1-2: IF_SECURITY_HEADERS_ENABLED=False 时不注入任何安全头（最小回滚）。"""
+        import api.main
+
+        mw = api.main.SecurityHeadersMiddleware(_NoopApp())
+        mw._enabled = False  # 模拟关闭
+        mw._csp_enabled = True  # 即使 CSP 开关 true，主开关 false 也不注入
+
+        seen: dict = {}
+
+        async def cap(message):
+            if message["type"] == "http.response.start":
+                seen.update({k.lower().decode(): v.decode() for k, v in message["headers"]})
+
+        await mw({"type": "http", "scheme": "https", "headers": [], "path": "/x"}, None, cap)
+        assert "x-content-type-options" not in seen
+        assert "content-security-policy" not in seen
 
     @pytest.mark.asyncio
     async def test_hsts_only_on_https(self):

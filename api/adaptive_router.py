@@ -500,6 +500,15 @@ class AdaptiveRouter:
     ) -> str:
         """从候选 provider 中选出路由目标。
 
+        生产调用语义（P1-1 修正）：
+        - healthy 路径**不**调用本方法——registry.provider_for healthy 分支直接返回
+          请求指定的提供商（model_id 前缀即提供商），保证用户指定的 nanobanana/
+          aifreeforever 等模型真实路由到对应提供商，不被自动路由偷换。
+        - 仅 registry.provider_for degraded 多候选降级路径调用本方法：当首选
+          provider degraded 且存在 ≥2 个能力匹配的健康备用时，在备选间 MAB-EWMA
+          打分选最优（MAB 投资变现）；单候选不调用（单候选无打分意义）。
+        - 全熔断兜底：所有候选均 OPEN 时返回首个候选（最坏也只是慢，不卡死）。
+
         候选应为健康/或已从熔断恢复的 provider。返回选中的 provider_id，
         并写入一条路由记录（request_id/model 便于前端追踪）。
         """

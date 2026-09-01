@@ -302,4 +302,61 @@ describe('useApi', () => {
     expect(result.current.data).toBe('fast');
     expect(result.current.error).toBe(null);
   });
+
+  // ── P1-3 共享调度器 ───────────────────────────────────────────
+  it('共享调度器：多个 useApi(intervalMs) 只起一个 setInterval（注册数 = 实例数）', async () => {
+    const { pollingScheduler } = await import('../hooks/usePollingScheduler');
+    const before = pollingScheduler.size();
+    const fetcher = vi.fn().mockResolvedValue(1);
+    renderHook(() => useApi(fetcher, { intervalMs: 1000 }));
+    renderHook(() => useApi(fetcher, { intervalMs: 2000 }));
+    renderHook(() => useApi(fetcher, { intervalMs: 3000 }));
+    // 3 个实例注册到同一个调度器（timer 仅 1 个，由 scheduler.isTicking() 单例保证）
+    expect(pollingScheduler.size()).toBe(before + 3);
+    expect(pollingScheduler.isTicking()).toBe(true);
+  });
+
+  it('共享调度器：卸载后注册注销，无任务时停止 tick', async () => {
+    const { pollingScheduler } = await import('../hooks/usePollingScheduler');
+    const fetcher = vi.fn().mockResolvedValue(1);
+    const before = pollingScheduler.size();
+    const { unmount } = renderHook(() => useApi(fetcher, { intervalMs: 1000 }));
+    expect(pollingScheduler.size()).toBe(before + 1);
+    unmount();
+    expect(pollingScheduler.size()).toBe(before);
+  });
+
+  it('共享调度器：intervalMs=0 不注册（一次性请求不走调度器）', async () => {
+    const { pollingScheduler } = await import('../hooks/usePollingScheduler');
+    const before = pollingScheduler.size();
+    const fetcher = vi.fn().mockResolvedValue(1);
+    renderHook(() => useApi(fetcher, { intervalMs: 0 }));
+    expect(pollingScheduler.size()).toBe(before);
+  });
+
+  it('共享调度器：hidden 暂停、visible 立即补拉（visibilitychange 由 scheduler 统一处理）', async () => {
+    const fetcher = vi.fn().mockImplementation(async () => {
+      return await Promise.resolve(Date.now());
+    });
+    renderHook(() => useApi(fetcher, { intervalMs: 1000 }));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // 切 hidden：推进 2s 不应触发新请求
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    // 切 visible：scheduler 立即补拉所有任务
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(fetcher.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
 });

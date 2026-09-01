@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { pollingScheduler } from './usePollingScheduler';
 
 export interface UseApiOptions {
   /** 轮询间隔 ms；0/省略 = 只加载一次（手动 reload 刷新） */
@@ -43,8 +44,6 @@ export function useApi<T>(fetcher: (signal?: AbortSignal) => Promise<T>, options
   const unmountedRef = useRef(false);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
-  // P2-9: 页面不可见时暂停后台轮询（interval 在 hidden 期间不触发请求，减少 60-70% 无效请求）
-  const visibleRef = useRef(true);
   // P2-4: 每轮请求的 AbortController（新请求取消旧请求）+ 防抖定时器
   const controllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,28 +87,19 @@ export function useApi<T>(fetcher: (signal?: AbortSignal) => Promise<T>, options
   useEffect(() => {
     unmountedRef.current = false;
     if (immediate) void run(true);
+    // P1-3 共享调度器：intervalMs>0 时注册到全局单例 pollingScheduler，
+    // 所有 useApi 轮询共用一个 setInterval tick（Dashboard 8 个 useApi → 1 个 timer），
+    // 失焦暂停 / 聚焦补拉由 scheduler 统一管（不再每个 useApi 各绑 visibilitychange）。
     if (intervalMs > 0) {
-      const timer = setInterval(() => {
-        // P2-9: 页面切后台（hidden）时暂停；恢复可见立即补拉一轮数据
-        if (!visibleRef.current) return;
-        if (!document.hidden) void run(false);
-      }, intervalMs);
-      // P2-9: 监听 visibilitychange，隐藏时跳过、显示时立即刷新
-      const onVisibility = () => {
-        if (document.visibilityState === 'visible') {
-          visibleRef.current = true;
-          void run(false);
-        } else {
-          visibleRef.current = false;
-        }
-      };
-      document.addEventListener('visibilitychange', onVisibility);
+      const unregister = pollingScheduler.register(intervalMs, () => {
+        if (unmountedRef.current) return;
+        void run(false);
+      });
       return () => {
         unmountedRef.current = true;
-        clearInterval(timer);
+        unregister();
         controllerRef.current?.abort();
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-        document.removeEventListener('visibilitychange', onVisibility);
       };
     }
     return () => {

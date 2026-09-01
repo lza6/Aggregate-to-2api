@@ -150,11 +150,17 @@ class _TokenPool:
         self._ema = self._ema * (1 - alpha) + duration * alpha
 
     def _target_watermark(self) -> int:
-        """基于排队深度和动态水位配置。"""
+        """基于排队深度和动态水位配置（P0-3 双水位）。
+
+        direct 池：
+        - 有排队（qsize>0）→ 返回 maxsize（满负荷补池）；
+        - 无排队 → 返回 TOKEN_TARGET_WATERMARK（默认1=旧逻辑，生产建议5保持预热）。
+        per-proxy 池：沿用 target_getter（EDIT_PROXY_POOL_SIZE）。
+        """
         if self.key != "direct":
             return int(self.target_getter())
         if self._engine is None:
-            return 1
+            return max(1, config.TOKEN_TARGET_WATERMARK)
         qsize = 0
         try:
             qsize = self._engine.queue.qsize()
@@ -162,7 +168,18 @@ class _TokenPool:
             pass
         if qsize > 0:
             return self.maxsize
-        return 1
+        return max(1, config.TOKEN_TARGET_WATERMARK)
+
+    def _is_urgent(self) -> bool:
+        """P0-3 紧急水位：total 低于 TOKEN_URGENT_WATERMARK 时触发批量并发填充。
+
+        默认 0 = 关闭批量（走旧单次填充，向后兼容）；>0 时 total<urgent 即紧急。
+        生产建议 urgent=2：池将空时一次并发填 N 个，避免逐个填充期间请求干等。
+        """
+        if config.TOKEN_URGENT_WATERMARK <= 0:
+            return False
+        total = self.active_q.qsize() + self.standby_q.qsize()
+        return total < config.TOKEN_URGENT_WATERMARK
 
     def _get_prefetch_delay(self) -> float:
         """计算预取延迟：固定配置优先，否则自适应（EMA 指数衰减）。"""
@@ -172,8 +189,56 @@ class _TokenPool:
         # 原实现 *0.3 与配置文档 IF_PREFETCH_EMA_HALF 命名冲突，恢复为 *0.5。
         return max(0.5, min(self._ema * 0.5, 3.0))
 
+    async def _solve_one(self) -> tuple[str, float] | None:
+        """单次求解（经 semaphore 限流 + 走 turnstile_client 集群调度）。返回 (token, solve_time) 或 None。"""
+        try:
+            async with self.sem:  # type: ignore[union-attr]
+                token, solve_time = await turnstile_client.solve_turnstile(
+                    cf_solver_url=None,
+                    url=config.BASE_URL,
+                    sitekey=config.SITEKEY,
+                    timeout=config.TURNSTILE_TIMEOUT,
+                    proxy=self.proxy,
+                )
+            return token, solve_time
+        except Exception as e:
+            log.warning("token 预取失败[%s]: %s", self.key, e)
+            return None
+
+    async def _batch_fill(self, n: int) -> int:
+        """P0-3 批量并发填充：一次并发 n 个 solve，把成功结果塞入非满队列。
+
+        返回成功填入的 token 数。n 钳到 >=1；n=1 等价单次填充（向后兼容）。
+        真并发受 self.sem（TOKEN_PREFETCH_CONCURRENCY）与 cf_solver 多槽（P0-1）共同约束。
+        """
+        n = max(1, n)
+        results = await asyncio.gather(*(self._solve_one() for _ in range(n)), return_exceptions=True)
+        filled = 0
+        for r in results:
+            if isinstance(r, Exception) or r is None:
+                continue
+            token, solve_time = r
+            if not token:
+                continue
+            self.update_solve_time(solve_time)
+            # 优先塞 active，满则塞 standby，都满则弃（池已满）
+            target_queue = self.active_q if not self.active_q.full() else self.standby_q
+            if target_queue.full():
+                continue
+            try:
+                await target_queue.put((token, time.time()))
+                filled += 1
+            except asyncio.QueueFull:
+                continue
+        return filled
+
     async def prefetch_loop(self) -> None:
-        """双缓冲预热循环：依次填满 Active 与 Standby 队列。"""
+        """双缓冲预热循环：依次填满 Active 与 Standby 队列。
+
+        P0-3：当 _is_urgent()（total < TOKEN_URGENT_WATERMARK）且 TOKEN_BATCH_FILL_SIZE>1 时，
+        走批量并发填充（asyncio.gather）一次补 N 个，避免逐个填充期间请求干等。
+        默认 urgent=0/batch=1 = 关闭批量，完全保持旧单次填充行为（向后兼容）。
+        """
         while True:
             try:
                 self._prune_expired()
@@ -195,27 +260,30 @@ class _TokenPool:
                     self.need_event.clear()
                     continue
 
+                # P0-3 批量并发填充分支：urgent 且 batch>1
+                if self._is_urgent() and config.TOKEN_BATCH_FILL_SIZE > 1:
+                    batch_n = config.TOKEN_BATCH_FILL_SIZE
+                    filled = await self._batch_fill(batch_n)
+                    if filled > 0:
+                        # 批量填充后按 EMA 延迟节流（防 cf_solver 429）
+                        delay = self._get_prefetch_delay()
+                        await asyncio.sleep(delay)
+                    else:
+                        await asyncio.sleep(2.0)  # 全失败 → 退避
+                    continue
+
                 # 优先补充 Active 队列，其次补充 Standby
                 target_queue = self.active_q if not self.active_q.full() else self.standby_q
 
-                try:
-                    async with self.sem:  # type: ignore[union-attr]
-                        # 求解由 turnstile_client 统一走集群调度选节点
-                        token, solve_time = await turnstile_client.solve_turnstile(
-                            cf_solver_url=None,
-                            url=config.BASE_URL,
-                            sitekey=config.SITEKEY,
-                            timeout=config.TURNSTILE_TIMEOUT,
-                            proxy=self.proxy,
-                        )
-
+                res = await self._solve_one()
+                if res is not None:
+                    token, solve_time = res
                     if token and not target_queue.full():
                         await target_queue.put((token, time.time()))
                         self.update_solve_time(solve_time)
                         delay = self._get_prefetch_delay()
                         await asyncio.sleep(delay)
-                except Exception as e:
-                    log.warning("token 预取失败[%s]: %s", self.key, e)
+                else:
                     await asyncio.sleep(2.0)
             except asyncio.CancelledError:
                 raise
