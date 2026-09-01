@@ -91,8 +91,14 @@ class LRUCache:
             self._data.move_to_end(key)
             return value
 
-    async def set(self, key: str, value: Any) -> None:
-        """设置缓存条目。超出 maxsize 淘汰最久未用。"""
+    async def set(self, key: str, value: Any, ttl: float | None = None) -> None:
+        """设置缓存条目。超出 maxsize 淘汰最久未用。
+
+        P1-3: per-key TTL 分层。ttl=None 用全局 self._ttl（默认行为，向后兼容）；
+        显式传 ttl 则该 key 按指定 TTL 过期（热数据短 TTL / 冷数据长 TTL）。
+        热门展示数据 5s、模型列表 30s、提供商状态 60s 各自分层，避免冷热不分。
+        """
+        effective_ttl = self._ttl if ttl is None else max(0.0, float(ttl))
         async with self._lock:
             now = time.monotonic()
             if key in self._data:
@@ -104,11 +110,11 @@ class LRUCache:
                         j = self._serialize(evicted[1])
                         if j is not None:
                             self._pending.upserts.append((evicted_key, j, self._ttl))
-            self._data[key] = (now + self._ttl, value)
+            self._data[key] = (now + effective_ttl, value)
         if self._persist_db:
             j = self._serialize(value)
             if j is not None:
-                self._pending.upserts.append((key, j, self._ttl))
+                self._pending.upserts.append((key, j, effective_ttl))
 
     async def invalidate(self, key: str) -> None:
         """删除指定 key（如新图入库后主动失效画廊缓存）。"""

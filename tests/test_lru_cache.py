@@ -92,6 +92,53 @@ async def test_set_overwrites_existing():
 
 
 @pytest.mark.asyncio
+async def test_set_per_key_ttl_overrides_global():
+    """P1-3: 显式 ttl 覆盖全局 TTL（热数据短/冷数据长分层）。"""
+    cache = LRUCache(maxsize=128, ttl=60)  # 全局 60s
+    await cache.set("hot", "v", ttl=0.05)  # 热数据 0.05s
+    assert await cache.get("hot") == "v"
+    await asyncio.sleep(0.1)
+    assert await cache.get("hot") is None  # 按短 TTL 过期
+
+
+@pytest.mark.asyncio
+async def test_set_ttl_none_uses_global():
+    """ttl=None 走全局 TTL（向后兼容旧调用）。"""
+    cache = LRUCache(maxsize=128, ttl=60)
+    await cache.set("k", "v", ttl=None)
+    assert await cache.get("k") == "v"  # 60s 内不过期
+
+
+@pytest.mark.asyncio
+async def test_set_ttl_zero_immediate_expiry():
+    """ttl=0 → 立即过期（边界）。"""
+    cache = LRUCache(maxsize=128, ttl=60)
+    await cache.set("k", "v", ttl=0)
+    await asyncio.sleep(0.01)  # 让 monotonic 推进
+    assert await cache.get("k") is None  # deadline=now+0，已流逝 → 过期
+
+
+@pytest.mark.asyncio
+async def test_set_ttl_negative_clamped_to_zero():
+    """负 ttl 被 max(0,.) 钳制，不抛异常。"""
+    cache = LRUCache(maxsize=128, ttl=60)
+    await cache.set("k", "v", ttl=-5)  # 不抛
+    await asyncio.sleep(0.01)
+    assert await cache.get("k") is None  # 钳到 0 → 立即过期
+
+
+@pytest.mark.asyncio
+async def test_set_mixed_ttl_independent_expiry():
+    """同池不同 TTL 的 key 独立过期（冷热分层不互相拖累）。"""
+    cache = LRUCache(maxsize=128, ttl=60)
+    await cache.set("cold", "long", ttl=10)
+    await cache.set("hot", "short", ttl=0.05)
+    await asyncio.sleep(0.1)
+    assert await cache.get("hot") is None
+    assert await cache.get("cold") == "long"
+
+
+@pytest.mark.asyncio
 async def test_reaper_cleans_expired():
     """后台 reaper 协程应定期清理过期条目。"""
     cache = LRUCache(maxsize=128, ttl=0.1)
