@@ -9,6 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tresjs/core": "^5.8.3",
+    "@vueuse/core": "^14.4.0",
+    "motion-v": "^2.4.0",
+    "three": "^0.185.1",
     "vue": "^3.5.42"
   },
   "devDependencies": {

@@ -1,12 +1,11 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { motion } from 'motion-v'
 import { t } from '../composables/useI18n'
 
 const HOST = 'https://imagefree.tingfengai.art'
 
 // curl 示例：同步/异步生成、聊天、健康检查
-const samples = computed_samples()
-
 function computed_samples() {
   return [
     {
@@ -49,7 +48,6 @@ curl ${HOST}/v1/healthz`
   ]
 }
 
-import { computed } from 'vue'
 const samplesReactive = computed(() => computed_samples())
 
 const active = ref(0)
@@ -89,17 +87,24 @@ async function copyCode() {
       </div>
     </div>
 
-    <div class="code-card card">
+    <motion.div class="code-card card"
+      :initial="{ opacity: 0, y: 26 }"
+      :whileInView="{ opacity: 1, y: 0 }"
+      :viewport="{ once: true, margin: '-60px' }"
+      :transition="{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }"
+    >
       <div class="tabs">
-        <button
+        <motion.button
           v-for="(s, i) in samplesReactive"
           :key="s.title"
           class="tab"
           :class="{ on: i === active }"
           @click="active = i"
+          :whileHover="{ y: -2 }"
+          :whileTap="{ scale: 0.97 }"
         >
           {{ s.title }}
-        </button>
+        </motion.button>
       </div>
 
       <div class="code-body">
@@ -113,7 +118,7 @@ async function copyCode() {
           <pre><code v-pre>{{ samplesReactive[active].code }}</code></pre>
         </div>
       </div>
-    </div>
+    </motion.div>
   </section>
 </template>
 

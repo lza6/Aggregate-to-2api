@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { motion } from 'motion-v'
 import { orDash } from '../lib/fmt'
 import { t, locale } from '../composables/useI18n'
 
@@ -64,10 +65,15 @@ function displayName(p) {
     </div>
 
     <div v-if="providers.length" class="grid">
-      <article
-        v-for="p in providers"
+      <motion.article
+        v-for="(p, i) in providers"
         :key="p.id"
         class="provider card"
+        :initial="{ opacity: 0, y: 30, scale: 0.97 }"
+        :whileInView="{ opacity: 1, y: 0, scale: 1 }"
+        :viewport="{ once: true, margin: '-60px' }"
+        :transition="{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: (i % 4) * 0.08 }"
+        :whileHover="{ y: -6, scale: 1.015 }"
       >
         <div class="provider-head">
           <div class="provider-title">
@@ -95,7 +101,7 @@ function displayName(p) {
           </template>
           <span v-else class="degraded">{{ t('providers.no_models') }}</span>
         </div>
-      </article>
+      </motion.article>
     </div>
 
     <div v-else class="empty card">
@@ -133,11 +139,10 @@ function displayName(p) {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
 }
 .provider:hover {
   border-color: var(--line-2);
-  transform: translateY(-3px);
   box-shadow: var(--shadow-glow);
 }
 .provider-head {

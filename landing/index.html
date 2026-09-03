@@ -3,9 +3,79 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="data:," />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="听风AI（逆向号池）— 多提供商 AI 生成网关，自动逆向 · 号池/邮箱池/代理池 · 高并发异步队列 · 自动过 Cloudflare Turnstile" />
-    <title>听风AI（逆向号池）— 多提供商 AI 生成网关</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- 核心描述（150 字内，含关键词）-->
+    <meta name="description" content="听风AI — 多提供商 AI 图像生成网关，聚合 imagefree/aifreeforever/nanobanana/tryingopen 等，统一 OpenAI 风格 API。自动逆向号池、邮箱池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。支持文生图、图生图、文生视频、文本对话与工具调用。" />
+
+    <!-- 关键词 -->
+    <meta name="keywords" content="AI 图像生成, 多模型网关, OpenAI 兼容 API, 文生图, 图生图, AI 视频生成, 聊天 API, 多提供商聚合, 号池自动化, 代理池轮换, Cloudflare Turnstile 绕过, Python FastAPI, 异步任务队列, SSE 事件流, Claude Code 接入" />
+
+    <!-- 爬虫 -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="听风" />
+
+    <!-- 规范链接 -->
+    <link rel="canonical" href="https://imagefree.tingfengai.art/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="听风AI" />
+    <meta property="og:title" content="听风AI — 多提供商 AI 生成网关" />
+    <meta property="og:description" content="聚合多家 AI 图像生成服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。" />
+    <meta property="og:url" content="https://imagefree.tingfengai.art/" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="https://imagefree.tingfengai.art/static/logo-md.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="听风AI — 多提供商 AI 生成网关" />
+    <meta name="twitter:description" content="聚合多家 AI 图像生成服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列。" />
+    <meta name="twitter:image" content="https://imagefree.tingfengai.art/static/logo-md.png" />
+
+    <!-- 主题色 + 暗色声明 -->
+    <meta name="theme-color" content="#0a0e1a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0a0e1a" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- 结构化数据：SoftwareApplication（Google 富媒体支持）+ WebSite（站点）-->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "听风AI 生成网关",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "url": "https://imagefree.tingfengai.art/",
+      "description": "多提供商 AI 图像生成网关，聚合多家上游 AI 服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。",
+      "author": { "@type": "Person", "name": "听风", "url": "https://github.com/lza6" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+      "softwareVersion": "7.2.0",
+      "featureList": [
+        "文生图 (txt2img)",
+        "图生图 (img2img)",
+        "文生视频 (txt2vid)",
+        "OpenAI 兼容对话 /v1/chat/completions",
+        "Anthropic 兼容 /v1/messages",
+        "SSE 每任务事件流",
+        "MAB-EWMA 自适应路由",
+        "多提供商聚合"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "听风AI",
+      "url": "https://imagefree.tingfengai.art/",
+      "description": "多提供商 AI 生成网关",
+      "inLanguage": ["zh-CN", "en"]
+    }
+    </script>
+
+    <title>听风AI — 多提供商 AI 生成网关 | OpenAI 兼容 API · 文生图 · 图生图 · AI 对话</title>
   </head>
   <body>
     <div id="app"></div>

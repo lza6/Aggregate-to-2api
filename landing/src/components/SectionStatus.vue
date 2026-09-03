@@ -1,6 +1,7 @@
 <script setup>
 // 实时状态胶囊条 —— 从 /v1/stats + /v1/meta 拉取
 // 数字用 tabular-nums（.tnum），单位/小字弱化
+import { motion } from 'motion-v'
 import { t } from '../composables/useI18n'
 
 const props = defineProps({
@@ -33,11 +34,16 @@ const toneClass = (tone) => ({
     </div>
 
     <div class="chips" role="group" aria-label="实时状态指标">
-      <div
+      <motion.div
         v-for="(c, i) in props.chips"
         :key="c.label"
         class="chip"
         :class="toneClass(c.tone)"
+        :initial="{ opacity: 0, y: 20, scale: 0.96 }"
+        :whileInView="{ opacity: 1, y: 0, scale: 1 }"
+        :viewport="{ once: true }"
+        :transition="{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: i * 0.06 }"
+        :whileHover="{ y: -4, scale: 1.02 }"
       >
         <div class="chip-label">
           <span v-if="c.dot" class="dot" :class="c.dot"></span>
@@ -47,7 +53,7 @@ const toneClass = (tone) => ({
           {{ c.value }}
           <span v-if="c.sub" class="chip-sub">{{ c.sub }}</span>
         </div>
-      </div>
+      </motion.div>
     </div>
 
     <div v-if="Object.keys(props.meta).length" class="meta-line degraded">
@@ -95,12 +101,26 @@ const toneClass = (tone) => ({
   border-radius: var(--radius);
   padding: var(--space-3) var(--space-4);
   box-shadow: var(--shadow-card);
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  transition: border-color var(--dur) var(--ease-out);
   position: relative;
+  overflow: hidden;
+}
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.14), transparent 50%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 .chip:hover {
   border-color: var(--line-2);
-  transform: translateY(-2px);
 }
 .chip-label {
   display: flex;

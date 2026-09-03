@@ -1,6 +1,7 @@
 <script setup>
 // D4: 更新日志区 —— 读 /v1/healthz 实时状态 + 读静态 release notes 摘要
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { motion, AnimatePresence } from 'motion-v'
 import { usePolling } from '../composables/usePolling'
 import { t, locale } from '../composables/useI18n'
 
@@ -55,7 +56,12 @@ function toggle(i) { expanded.value = expanded.value === i ? -1 : i }
     </div>
 
     <!-- 更新日志列表 -->
-    <div class="notes-list card">
+    <motion.div class="notes-list card"
+      :initial="{ opacity: 0, y: 26 }"
+      :whileInView="{ opacity: 1, y: 0 }"
+      :viewport="{ once: true, margin: '-60px' }"
+      :transition="{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }"
+    >
       <div v-if="notes.length === 0 && !notesError" class="notes-empty muted">{{ t('changelog.loading') }}</div>
       <div v-else-if="notesError" class="notes-empty muted">{{ t('changelog.fail_prefix') }}{{ notesError }}）</div>
       <div v-else>
@@ -65,13 +71,23 @@ function toggle(i) { expanded.value = expanded.value === i ? -1 : i }
             <span class="note-title">{{ n.title }}</span>
             <span class="note-caret" :class="{ open: expanded === i }">▾</span>
           </button>
-          <div v-if="expanded === i" class="note-body">
-            <pre class="note-pre"><code>{{ n.preview }}</code></pre>
-            <a class="note-link" :href="n.url" target="_blank" rel="noopener">{{ t('changelog.full') }} {{ n.version }} {{ t('changelog.notes') }}</a>
-          </div>
+          <AnimatePresence>
+            <motion.div v-if="expanded === i"
+              :initial="{ height: 0, opacity: 0 }"
+              :animate="{ height: 'auto', opacity: 1 }"
+              :exit="{ height: 0, opacity: 0 }"
+              :transition="{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }"
+              style="overflow: hidden"
+            >
+              <div class="note-body">
+                <pre class="note-pre"><code>{{ n.preview }}</code></pre>
+                <a class="note-link" :href="n.url" target="_blank" rel="noopener">{{ t('changelog.full') }} {{ n.version }} {{ t('changelog.notes') }}</a>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
-    </div>
+    </motion.div>
   </section>
 </template>
 

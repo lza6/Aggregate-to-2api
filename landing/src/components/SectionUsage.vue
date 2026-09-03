@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { motion } from 'motion-v'
 import { fmtTokens, fmtInt, fmtFloat } from '../lib/fmt'
 import { t } from '../composables/useI18n'
 
@@ -46,7 +47,12 @@ const rows = computed(() => [
       </div>
     </div>
 
-    <div class="use-card card">
+    <motion.div class="use-card card"
+      :initial="{ opacity: 0, y: 28, scale: 0.98 }"
+      :whileInView="{ opacity: 1, y: 0, scale: 1 }"
+      :viewport="{ once: true, margin: '-60px' }"
+      :transition="{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }"
+    >
       <div class="use-main">
         <div class="use-label">{{ t('usage.total_label') }}</div>
         <div class="use-total tnum">{{ fmtTokens(totalTokens) }}</div>
@@ -66,7 +72,7 @@ const rows = computed(() => [
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
 
     <!-- 分模型 -->
     <div v-if="Array.isArray(u.by_model) && u.by_model.length" class="models-table">

@@ -1,10 +1,13 @@
 <script setup>
 // vite define 全局注入（landing/vite.config.js build-time 注入）
 const appVersion = __APP_VERSION__
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useStats, useMeta, useProviders, useModels, useChatUsage } from './composables/useApi'
 import { fmtTokens, fmtInt, fmtFloat, fmtPct, orDash } from './lib/fmt'
 import { t, locale, setLocale, toggle } from './composables/useI18n'
+import { useScroll, useMediaQuery } from '@vueuse/core'
+import { motion } from 'motion-v'
+import { useReveal } from './composables/useReveal'
 import SectionStatus from './components/SectionStatus.vue'
 import SectionProviders from './components/SectionProviders.vue'
 import SectionUsage from './components/SectionUsage.vue'
@@ -14,6 +17,9 @@ import SectionChangelog from './components/SectionChangelog.vue'
 import SectionCta from './components/SectionCta.vue'
 import Privacy from './components/Privacy.vue'
 
+// 3D 粒子场懒加载（three 不进首屏 LCP 关键路径）
+const Hero3D = defineAsyncComponent(() => import('./components/Hero3D.vue'))
+
 const status = useStats()
 const meta = useMeta()
 const providers = useProviders()
@@ -22,11 +28,36 @@ const usage = useChatUsage()
 
 const stats = computed(() => status.data.value ?? {})
 
+// 导航滚动收缩
+const { y: scrollY } = useScroll(window)
+const navScrolled = computed(() => scrollY.value > 24)
+const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
+const small = useMediaQuery('(max-width: 768px)')
+
+// reveal 预设（仅用于非首屏内容；首屏 hero 用 CSS fade-up 保证 JS 失败也可见）
+const reveal3 = useReveal(0.3)
+const reveal4 = useReveal(0.35)
+const reveal5 = useReveal(0.4)
+const reveal6 = useReveal(0.45)
+
+// 鼠标跟随光晕（玻璃层）
+const mx = ref(50), my = ref(50)
+function onGlow(e) {
+  mx.value = (e.clientX / window.innerWidth) * 100
+  my.value = (e.clientY / window.innerHeight) * 100
+}
+onMounted(() => {
+  window.addEventListener('mousemove', onGlow, { passive: true })
+  window.addEventListener('hashchange', onHash)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', onGlow)
+  window.removeEventListener('hashchange', onHash)
+})
+
 // P3-7 hash 路由：#/privacy → 隐私页，其余 → 首页
 const route = ref(typeof window !== 'undefined' ? window.location.hash : '')
 function onHash() { route.value = window.location.hash }
-onMounted(() => window.addEventListener('hashchange', onHash))
-onBeforeUnmount(() => window.removeEventListener('hashchange', onHash))
 const isPrivacy = computed(() => route.value.startsWith('#/privacy'))
 
 // 由 /v1/stats 加工出的「实时状态胶囊」数字
@@ -70,10 +101,17 @@ function goHome() { window.location.hash = '' }
 
 <template>
   <div class="landing">
+    <!-- 3D 粒子流场背景（全屏固定，最底层）-->
+    <div class="bg-field">
+      <Hero3D v-if="!small || !reduced" />
+    </div>
     <div class="aura" aria-hidden="true"></div>
 
+    <!-- 鼠标跟随玻璃光晕 -->
+    <div class="glow-cursor" :style="{ '--mx': mx + '%', '--my': my + '%' }" aria-hidden="true"></div>
+
     <!-- 顶部品牌导航 -->
-    <header class="nav">
+    <header class="nav" :class="{ scrolled: navScrolled }">
       <div class="container nav-inner">
         <div class="brand">
           <span class="logo" aria-hidden="true">听</span>
@@ -97,38 +135,52 @@ function goHome() { window.location.hash = '' }
     <!-- 首页 -->
     <main v-else class="main container">
       <section class="hero">
-        <div class="hero-badge">
+        <div class="hero-badge fade-up">
           <span class="dot ok"></span>
           <span>{{ t('hero.badge') }}</span>
         </div>
-        <h1>{{ t('hero.title') }}</h1>
-        <p class="hero-sub">{{ t('hero.sub') }}</p>
+        <h1 class="hero-title text-grad fade-up" style="animation-delay:0.1s">{{ t('hero.title') }}</h1>
+        <p class="hero-sub fade-up" style="animation-delay:0.2s">{{ t('hero.sub') }}</p>
 
-        <SectionStatus :stats="stats" :chips="statChips" :meta="metaInfo" :loading="status.loading.value" :error="status.error.value" />
+        <motion.div class="hero-status" v-bind="reveal3">
+          <SectionStatus :stats="stats" :chips="statChips" :meta="metaInfo" :loading="status.loading.value" :error="status.error.value" />
+        </motion.div>
       </section>
 
       <!-- 提供商与模型网格 -->
-      <SectionProviders
-        :provider-items="providerItems"
-        :model-list="modelList"
-        :loading="providers.loading.value"
-        :error="providers.error.value"
-      />
+      <motion.section v-bind="reveal2">
+        <SectionProviders
+          :provider-items="providerItems"
+          :model-list="modelList"
+          :loading="providers.loading.value"
+          :error="providers.error.value"
+        />
+      </motion.section>
 
       <!-- 对话 Token 用量卡（M/B/K 大单位） -->
-      <SectionUsage :usage="usage.data.value" :loading="usage.loading.value" :error="usage.error.value" />
+      <motion.section v-bind="reveal3">
+        <SectionUsage :usage="usage.data.value" :loading="usage.loading.value" :error="usage.error.value" />
+      </motion.section>
 
       <!-- API 快速开始 -->
-      <SectionCode />
+      <motion.section v-bind="reveal4">
+        <SectionCode />
+      </motion.section>
 
       <!-- D4: FAQ 区 + 手到即用 curl -->
-      <SectionFaq />
+      <motion.section v-bind="reveal5">
+        <SectionFaq />
+      </motion.section>
 
       <!-- D4: 更新日志区 + 实时状态 -->
-      <SectionChangelog />
+      <motion.section v-bind="reveal6">
+        <SectionChangelog />
+      </motion.section>
 
       <!-- CTA 区 + 页脚 -->
-      <SectionCta />
+      <motion.section v-bind="reveal4">
+        <SectionCta />
+      </motion.section>
     </main>
 
     <footer class="footer container">
@@ -158,14 +210,35 @@ function goHome() { window.location.hash = '' }
   overflow: hidden;
 }
 
-/* 导航 */
+/* 鼠标跟随玻璃光晕 */
+.glow-cursor {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%),
+    rgba(96, 165, 250, 0.10), transparent 25%);
+  transition: background 0.2s ease;
+}
+
+/* 导航（液态玻璃，滚动加深） */
 .nav {
-  position: relative;
-  z-index: 2;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--line);
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(10px);
+  border-bottom: 1px solid transparent;
+  background: rgba(10, 14, 26, 0.4);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  transition: padding var(--dur) var(--ease-out), background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+}
+.nav.scrolled {
+  padding: var(--space-2) 0;
+  background: rgba(10, 14, 26, 0.72);
+  border-bottom-color: var(--line);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 .nav-inner {
   display: flex;
@@ -185,11 +258,11 @@ function goHome() { window.location.hash = '' }
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--brand), #7c3aed);
+  background: linear-gradient(135deg, var(--brand), var(--accent));
   color: #fff;
   font-size: 20px;
   font-weight: 800;
-  box-shadow: 0 4px 16px var(--brand-glow);
+  box-shadow: 0 4px 16px var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   flex-shrink: 0;
 }
 .brand-text { display: flex; flex-direction: column; gap: 2px; }
@@ -208,6 +281,7 @@ function goHome() { window.location.hash = '' }
   background: var(--brand-soft);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
+  border: 1px solid rgba(96, 165, 250, 0.2);
 }
 .brand-sub { font-size: 12.5px; color: var(--muted); }
 
@@ -226,28 +300,30 @@ function goHome() { window.location.hash = '' }
   border-radius: var(--radius-pill);
   font-size: 14px;
   font-weight: 600;
-  transition: transform 0.14s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  transition: transform var(--dur-fast) var(--ease-spring), box-shadow var(--dur) var(--ease-out), background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
   white-space: nowrap;
 }
 .btn-primary {
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
   color: #fff;
-  box-shadow: 0 4px 18px var(--brand-glow);
+  box-shadow: 0 4px 18px var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 .btn-primary:hover {
-  background: var(--brand-2);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px var(--brand-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .btn-ghost {
   border: 1px solid var(--line-2);
   color: var(--text-2);
-  background: transparent;
+  background: var(--card);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .btn-ghost:hover {
   border-color: var(--brand);
   color: var(--text);
   background: var(--brand-soft);
+  transform: translateY(-1px);
 }
 .lang-btn { cursor: pointer; font-family: var(--mono); min-width: 44px; }
 
@@ -270,22 +346,21 @@ function goHome() { window.location.hash = '' }
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--text-2);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   padding: 6px 14px;
   margin-bottom: var(--space-4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
-.hero h1 {
+.hero-title {
   font-size: clamp(32px, 5.5vw, 56px);
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(120deg, #fff, var(--brand-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   margin-bottom: var(--space-3);
+  line-height: 1.1;
 }
 .hero-sub {
   font-size: clamp(15px, 2.2vw, 18px);
@@ -293,4 +368,5 @@ function goHome() { window.location.hash = '' }
   max-width: 720px;
   margin: 0 auto;
 }
+.hero-status { margin-top: var(--space-5); }
 </style>

@@ -1,6 +1,7 @@
 <script setup>
 // D4: FAQ 区 —— 常见问题与"到手即用"curl 引导
 import { ref, computed } from 'vue'
+import { motion, AnimatePresence } from 'motion-v'
 import { t } from '../composables/useI18n'
 
 const faqs = computed(() => [
@@ -57,22 +58,46 @@ function toggle(i) { openIdx.value = openIdx.value === i ? -1 : i }
 
     <div class="faq-grid">
       <div class="faq-list">
-        <div v-for="(f, i) in faqs" :key="i" class="faq-item">
+        <motion.div
+          v-for="(f, i) in faqs"
+          :key="i"
+          class="faq-item"
+          :initial="{ opacity: 0, x: -16 }"
+          :whileInView="{ opacity: 1, x: 0 }"
+          :viewport="{ once: true, margin: '-40px' }"
+          :transition="{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: i * 0.08 }"
+        >
           <button class="faq-q" @click="toggle(i)" :aria-expanded="openIdx === i">
             <span class="faq-q-text">{{ f.q }}</span>
             <span class="faq-caret" :class="{ open: openIdx === i }">▾</span>
           </button>
-          <div v-if="openIdx === i" class="faq-a muted">{{ f.a }}</div>
-        </div>
+          <AnimatePresence>
+            <motion.div v-if="openIdx === i"
+              :initial="{ height: 0, opacity: 0 }"
+              :animate="{ height: 'auto', opacity: 1 }"
+              :exit="{ height: 0, opacity: 0 }"
+              :transition="{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }"
+              style="overflow: hidden"
+            >
+              <div class="faq-a muted">{{ f.a }}</div>
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
       </div>
 
-      <div class="quick-card card">
+      <motion.div class="quick-card card"
+        :initial="{ opacity: 0, y: 24 }"
+        :whileInView="{ opacity: 1, y: 0 }"
+        :viewport="{ once: true, margin: '-40px' }"
+        :transition="{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }"
+        :whileHover="{ y: -4 }"
+      >
         <div class="quick-head">
           <span class="quick-title">{{ t('faq.quick_title') }}</span>
           <button class="copy-btn" @click="copyQuick">{{ copied ? t('code.copied') : t('code.copy') }}</button>
         </div>
         <pre class="quick-code"><code>{{ quickstart }}</code></pre>
-      </div>
+      </motion.div>
     </div>
   </section>
 </template>
