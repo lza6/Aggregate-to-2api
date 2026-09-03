@@ -1,8 +1,101 @@
-# workflow_status.md — v7.3 终局闭环总审计（Spec Kit 工作流）
+# workflow_status.md — v7.4 landing Vibe Coding 视觉升级（Spec Kit 工作流）
 
-> 只记录事实与证据，不记录私有推理。当前处于【阶段1：事实重建】。
-> 工作流模式：Spec Kit（.specify/specs/003-final-closure/）+ 多 Agent 并行 + 独立审查线程六维验证循环。
-> 技能：spec-kit-skill（7 阶段宪法驱动）+ critical-code-reviewer（有罪推定审查协议）。
+> 只记录事实与证据，不记录私有推理。当前阶段：【阶段6：文档同步 + HTML 报告交付，闭环】。
+> 工作流模式：Spec Kit（.specify/specs/004-landing-vibe-coding/）+ 多 Agent 并行（fork）+ critical-code-reviewer 审查协议。
+
+## 任务契约（本轮显式需求）
+
+| # | 需求 | 状态 | 证据 |
+|---|------|------|------|
+| 1 | Vibe Coding 视觉升级（液态玻璃 + 3D + motion + SEO） | ✅ 落地 | commit 1832c55, 18 文件 +1295/-158 |
+| 2 | 用 Spec Kit 技能 | ✅ 产物 | .specify/specs/004-landing-vibe-coding/{spec,plan,tasks}.md |
+| 3 | 用 addyosmani/agent-skills（critical-code-reviewer） | ✅ 审查 | fork 审查线程产出 9 条问题 |
+| 4 | 多 Agent 工作流 + 每节点验收 | ✅ 落地 | 3 个 fork 子代理并行：审查/运行时审计/spec 文档 |
+| 5 | 先思考后编码（深度推理） | ✅ 执行 | reflexion:reflect 复评置信度 2.35→迭代→修复 |
+| 6 | 生成 workflow_status.md 并循环 | ✅ 本文件 | |
+| 7 | HTML 变更报告 + 底部测验 | ✅ 交付 | docs/reports/v7.4-landing-vibe-coding-report.html |
+| 8 | 真实落地，禁止伪实现/空话 | ✅ 验证 | Node 等价契约 9 项全绿 + build 通过 |
+| 9 | 独立审查线程六维验证 + 修复循环 | ✅ 落地 | critical-code-reviewer fork 发现 P0×3/P1×3/P2×3，全修+复验 build |
+
+## 需求追踪矩阵 — landing 视觉升级 9 项
+
+| 条目 | 状态 | 证据 |
+|------|------|------|
+| 液态玻璃调色板 | ✅ | base.css token 重写，.card backdrop-filter + 高光边 + @supports/reduced-motion 降级 |
+| Three.js 粒子流场 3D | ✅ | Hero3D.vue ~2200 粒子，懒加载，forceContextLoss 释放 |
+| motion-v 滚动揭示 | ✅ | 7 Section whileInView + stagger + AnimatePresence |
+| 首屏 LCP/SEO 安全 | ✅ | hero h1 用 CSS fade-up 非 motion，避免 opacity:0 永久透明 |
+| SEO meta + JSON-LD | ✅ | description/keywords/OG/Twitter/canonical/theme-color + SoftwareApplication+WebSite |
+| og:image 死链修正 | ✅ | 改指 /static/logo-md.png（后端已注册路由） |
+| package-lock 同步 | ✅ | npm install 更新 lock，与 package.json 一起提交 |
+| chunkSizeWarningLimit | ✅ | vite.config.js:800 抑制 three chunk 噪声 |
+| spec 规范文档 | ✅ | .specify/specs/004-landing-vibe-coding/ 三文件 |
+
+## 阶段2：最强自我反驳（对本轮交付的最狠攻击）
+
+| # | 反驳 | 危险性 | 处置 |
+|---|------|--------|------|
+| R1 | og:image 指向 /static/tingfeng-logo.png 但后端无此路由 → 死链 | 社交卡裂图 SEO 扣分 | ✅ 修：改指 /static/logo-md.png |
+| R2 | hero h1 用 motion initial:opacity:0，JS 失败时 LCP 永久透明 | LCP/SEO 致命 | ✅ 修：hero 改 CSS fade-up |
+| R3 | WebGL context 未 forceContextLoss，小屏切换累积句柄 | 3D 静默失效 | ✅ 修：onBeforeUnmount 加 forceContextLoss |
+| R4 | WebAPI JSON-LD 非标准，Google 不保证支持 | 无效结构化数据噪声 | ✅ 修：删 WebAPI 块改 WebSite |
+| R5 | package-lock.json 未提交 → CI npm ci 失败 | CI 红 | ✅ 修：与 package.json 一起 git add |
+| R6 | loop() 每帧 arr.length/3 除法 | 懒（非阻塞） | ✅ 修：缓存上界 n |
+| R7 | three chunk 超 500kb 警告 | CI 噪声 | ✅ 修：chunkSizeWarningLimit:800 |
+| R8 | WebGL 探测用 test canvas 多分配 GL context | 资源浪费 | ✅ 修：删探测直接 try 创建 renderer |
+| R9 | SectionUsage 错误占位用 motion 包裹无意义 | 表演性代码 | ✅ 修：改回普通 div |
+
+## 阶段3：全量问题清单（critical-code-reviewer fork + 运行时审计 fork）
+
+| # | 级 | 问题 | 修法 | 状态 |
+|---|----|------|------|------|
+| P0-1 | 阻塞 | og:image 死链 | 改指 /static/logo-md.png | ✅ |
+| P0-2 | 阻塞 | package-lock 未提交 | git add 一起提交 | ✅ |
+| P0-3 | 阻塞 | hero h1 opacity:0 LCP 风险 | 改 CSS fade-up | ✅ |
+| P1-1 | 高 | WebGL 未 forceContextLoss | 加 forceContextLoss | ✅ |
+| P1-2 | 高 | WebGL 探测多分配 context | 删探测直接 try | ✅ |
+| P1-3 | 高 | WebAPI JSON-LD 非标准 | 删改 WebSite | ✅ |
+| P2-1 | 中 | loop 每帧除法 | 缓存 n | ✅ |
+| P2-2 | 中 | three chunk 超限警告 | chunkSizeWarningLimit:800 | ✅ |
+| P2-3 | 中 | SectionUsage motion 包裹无意义 | 改回 div | ✅ |
+
+## 验证记录（防重复测验）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-04 | npm install（landing +4 依赖） | ✓ added 20 packages | motion-v/three/@tresjs/core/@vueuse/core |
+| 2026-09-04 | npm run build（landing） | ✓ 414 modules 2.75s | 首屏 JS gzip 90kb，three 独立 chunk 189kb gzip 懒加载 |
+| 2026-09-04 | vite preview + curl / | ✓ HTTP 200 | 首页含全部 SEO meta |
+| 2026-09-04 | Node 等价契约测试（9 项） | ✓ 全绿 | id=app/assets/banned0/version7.2.0/og:image路由/lock/SoftwareApplication/WebAPI已删/theme-color |
+| 2026-09-04 | critical-code-reviewer fork | ✓ 9 问题全修 | P0×3 P1×3 P2×3，build 复验通过 |
+| 2026-09-04 | 运行时集成审计 fork | ✓ P0×2 P1×1 P2×3 | og:image/lock/WebAPI/canonical/motion-v兼容 |
+
+## 未验证项（诚实披露）
+
+- **Python 契约测试未实跑**：`.venv` 损坏（指向不存在的 uv python 路径），系统无 python3/py。已用 Node 等价覆盖 9 项断言。CI `frontend-version-gate` 会用干净环境跑 `test_public_landing_is_vue3_and_no_anon_generator` + `TestFrontendVersionConsistency`
+- **motion-v 浏览器运行时兼容未验**：build 通过 ≠ 运行时 OK，需本地 `npm run dev` 看 console。WebFetch 被 enterprise 策略阻断无法验 schema 合规
+- **og:image 尺寸未确认**：复用 logo-md.png（9589 字节），未确认 1200×630 比例，社交平台可能裁切但不再死链
+
+## 交付物清单（commit 1832c55）
+
+- landing/package.json + package-lock.json（+4 依赖）
+- landing/index.html（SEO meta + JSON-LD，og:image 修正）
+- landing/src/styles/base.css（液态玻璃 token 重写 +240 行）
+- landing/src/App.vue（3D 挂载 + 鼠标光晕 + nav 滚动 + hero CSS fade-up + motion reveal）
+- landing/src/components/Hero3D.vue（新建，Three.js 粒子流场 +201 行）
+- landing/src/composables/useReveal.js（新建）
+- landing/src/components/Section*.vue（7 组件 motion 化）
+- landing/vite.config.js（chunkSizeWarningLimit:800）
+- .specify/specs/004-landing-vibe-coding/{spec,plan,tasks}.md（Spec Kit 规范）
+- docs/reports/v7.4-landing-vibe-coding-report.html（HTML 报告 + 8 题测验）
+- 本文件 workflow_status.md
+
+## 最终完成度结论
+
+**本轮 landing Vibe Coding 视觉升级 9 项需求全部 ✅ 落地，9 条审查问题全部 ✅ 修复并 build 复验通过。**
+
+未达 100% 的仅 3 项外部受限验证（Python 环境/motion-v 运行时/og:image 尺寸），均非能力缺失，已诚实标注降级路径。一次 `git push` 后 CI 会补齐 Python 契约验证。
+
 
 ## 任务契约（用户显式需求 14 项）
 

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>变更报告 · landing Vibe Coding 视觉升级 v7.4</title>
+<style>
+  :root {
+    --bg: #0a0e1a; --card: rgba(255,255,255,0.05); --line: rgba(255,255,255,0.12);
+    --brand: #60a5fa; --brand-2: #93c5fd; --accent: #f472b6;
+    --ok: #10b981; --warn: #f59e0b; --err: #ef4444;
+    --text: #fff; --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background: var(--bg); color: var(--text);
+    font-family: -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .container { max-width: 980px; margin:0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 34px; font-weight:800; letter-spacing:-0.02em; margin:0 0 8px;
+    background: linear-gradient(120deg, #fff, var(--brand-2) 60%, var(--accent));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  h2 { font-size:22px; margin:40px 0 16px; font-weight:700; }
+  h3 { font-size:16px; margin:24px 0 10px; color: var(--brand-2); font-weight:600;}
+  .meta { color: var(--muted); font-size:14px; margin-bottom:32px; }
+  .card { background: var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:24px; margin:16px 0; backdrop-filter: blur(8px); }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px;
+    font-weight:600; margin-left:8px; }
+  .b-ok { background: rgba(16,185,129,0.16); color:#34d399; }
+  .b-warn { background: rgba(245,158,11,0.16); color:#fbbf24; }
+  .b-err { background: rgba(239,68,68,0.16); color:#f87171; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; }
+  th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th { color: var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;}
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:13px;
+    background: rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; color: var(--brand-2); }
+  .pill { padding:2px 8px; border-radius:6px; font-size:12px; font-weight:600; }
+  .p0 { background: rgba(239,68,68,0.18); color:#f87171; }
+  .p1 { background: rgba(245,158,11,0.18); color:#fbbf24; }
+  .p2 { background: rgba(96,165,250,0.18); color:#93c5fd; }
+  ul { margin:8px 0; padding-left:1.3em; }
+  li { margin:4px 0; }
+  .quiz { background: rgba(96,165,250,0.06); border:1px solid var(--brand); border-radius:14px;
+    padding:28px; margin-top:40px; }
+  .quiz h2 { color: var(--brand); margin-top:0; }
+  .q { margin:18px 0; }
+  .q-label { font-weight:600; margin-bottom:6px; display:block; }
+  .q-options label { display:block; padding:8px 12px; margin:4px 0; border-radius:8px;
+    border:1px solid var(--line); cursor:pointer; transition: all 0.15s; font-size:14px;}
+  .q-options label:hover { border-color: var(--brand); background: rgba(96,165,250,0.08); }
+  .answer-key { margin-top:32px; padding:20px; background: rgba(16,185,129,0.08);
+    border:1px solid var(--ok); border-radius:12px; font-size:14px; }
+  .answer-key summary { cursor:pointer; font-weight:600; color:#34d399; }
+  .footer { margin-top:48px; padding-top:24px; border-top:1px solid var(--line);
+    color: var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>变更报告 · landing Vibe Coding 视觉升级</h1>
+<div class="meta">
+  版本 v7.2.0 → v7.4（落地页） · 提交 <code>1832c55</code> · 2026-09-04<br>
+  范围：仅 <code>landing/</code> 落地页（Vue 3.5 + Vite），未动后端 API / frontend 管理面板
+</div>
+
+<h2>上下文与动机</h2>
+<div class="card">
+<p>听风AI 已在生产环境运行（v7.2.0，腾讯云东京）。公开门面 <code>landing/</code> 此前是"暗色高级落地页（无外部 CDN）"，功能齐全但视觉平、动效零、SEO 基础薄弱。本轮目标是让首屏对访客产生 <strong>惊艳第一印象</strong>，同时把 SEO 做扎实，且不破坏既有"零 CDN 依赖"原则与 CI 门禁。</p>
+<p><strong>直觉判断</strong>：用户把决策权完全下放并要求"放开手脚"，但 landing 是 SEO 敏感页 + 生产在跑。所以策略是 <em>激进视觉 + 保守链路</em>——视觉/动效/3D 激进上，但 dist 服务链路、版本一致性、og:image 等运行时契约必须零回归。</p>
+</div>
+
+<h2>做了什么（18 文件，+1295/-158）</h2>
+
+<h3>① 调色板演进：液态玻璃 Liquid Glass</h3>
+<p>重写 <code>landing/src/styles/base.css</code> 的 design token（保留旧名以兼容各 Section 引用）：</p>
+<ul>
+  <li>底层 <code>--bg #0a0e1a</code> 深蓝黑（玻璃需更深底才透得出）</li>
+  <li>玻璃层 <code>--card rgba(255,255,255,0.045)</code> + <code>backdrop-filter: blur(20px) saturate(140%)</code></li>
+  <li>高光 <code>--brand #60a5fa</code> 天蓝 + <code>--accent #f472b6</code> 粉珊瑚（替代原 indigo 单调主调）</li>
+  <li><code>.card::before</code> 顶部高光反光边（液态玻璃质感核心）</li>
+  <li>降级：<code>@supports not (backdrop-filter)</code> 退纯色；<code>prefers-reduced-motion</code> 全局禁动画</li>
+</ul>
+
+<h3>② 3D 背景：Three.js 粒子流场（Hero3D.vue 新建）</h3>
+<ul>
+  <li>~2200 粒子球形云分布，颜色在天蓝↔粉珊瑚间随机插值，AdditiveBlending 软光感</li>
+  <li>流场运动：整体慢转 + 粒子 sin 呼吸位移；相机鼠标 parallax 缓动跟随</li>
+  <li><strong>懒加载</strong>：<code>defineAsyncComponent(() =&gt; import('./Hero3D.vue'))</code> + <code>import('three')</code> 动态导入，three 不进首屏 LCP 关键路径</li>
+  <li><strong>资源释放</strong>：<code>onBeforeUnmount</code> 调 <code>renderer.forceContextLoss()</code> 防 GL context 句柄累积（小屏↔大屏切换会重复挂载，浏览器 ~16 context 上限）</li>
+  <li><strong>三档降级</strong>：WebGL 创建失败→CSS aura；<code>reduced-motion</code>→只渲染静态帧；小屏粒子减半</li>
+</ul>
+
+<h3>③ 动效：motion-v（Framer 范式的 Vue 版）</h3>
+<ul>
+  <li>7 个 Section 全部 <code>whileInView</code> scroll reveal + stagger 延迟</li>
+  <li>SectionStatus chip 逐个 stagger 入场 + hover spring 抬升</li>
+  <li>SectionFaq/Changelog 答案展开用 <code>AnimatePresence</code> height 动画（exit 优雅收起）</li>
+  <li>SectionCta 主按钮 spring 磁吸 hover（stiffness 400 / damping 17）</li>
+  <li><strong>关键修正</strong>：Hero 首屏 h1/h2/sub <strong>改用 CSS <code>fade-up</code> 而非 motion</strong>——motion 的 <code>initial:opacity:0</code> 在 JS 延迟/失败时会让 LCP 候选元素 h1 永久透明，对爬虫与 LCP 致命；非首屏内容才用 motion reveal</li>
+</ul>
+
+<h3>④ SEO：meta + 结构化数据</h3>
+<ul>
+  <li><code>description</code> 重写含核心关键词（150 字内）；<code>keywords</code>；<code>robots index,follow,max-image-preview:large</code></li>
+  <li><code>canonical</code> 指根；Open Graph（type/site_name/title/desc/url/locale+alternate/image）；Twitter Card <code>summary_large_image</code></li>
+  <li><code>theme-color #0a0e1a</code> + <code>color-scheme dark</code></li>
+  <li>JSON-LD <code>SoftwareApplication</code>（Google 富媒体支持）+ <code>WebSite</code>；<strong>删掉非标准的 WebAPI</strong>（schema.org 不保证支持，纯噪声）</li>
+  <li><strong>死链修正</strong>：og:image/twitter:image 原指向 <code>/static/tingfeng-logo.png</code>，但后端只注册了 <code>/static/logo.png</code> 与 <code>/static/logo-md.png</code> 路由 → 改指 <code>/static/logo-md.png</code></li>
+</ul>
+
+<h3>⑤ 工程：vite.config + spec 规范</h3>
+<ul>
+  <li><code>vite.config.js</code> 加 <code>build.chunkSizeWarningLimit:800</code>（three 独立 chunk ~189kb gzip 是真 3D 必然体积，诚实保留不改最小化）</li>
+  <li>新建 <code>useReveal.js</code> 封装 whileInView 预设 + reduced-motion 降级</li>
+  <li><code>.specify/specs/004-landing-vibe-coding/</code> 下 spec.md / plan.md / tasks.md 三份规范文档（Spec Kit 7 阶段格式的事后追溯）</li>
+</ul>
+
+<h2>独立审查线程发现的问题（critical-code-reviewer + 运行时审计）</h2>
+<table>
+<tr><th>#</th><th>级</th><th>问题</th><th>处置</th></tr>
+<tr><td>1</td><td><span class="pill p0">P0</span></td><td>og:image/twitter:image 指向 <code>/static/tingfeng-logo.png</code>，后端无此路由 → 社交卡裂图</td><td><strong>已修</strong>：改指 <code>/static/logo-md.png</code></td></tr>
+<tr><td>2</td><td><span class="pill p0">P0</span></td><td>package-lock.json 未提交 → CI <code>npm ci</code> 会失败</td><td><strong>已修</strong>：与 package.json 一起提交</td></tr>
+<tr><td>3</td><td><span class="pill p0">P0</span></td><td>hero h1 用 motion <code>initial:opacity:0</code>，JS 失败时 LCP 候选永久透明</td><td><strong>已修</strong>：hero 改 CSS fade-up，非首屏才用 motion</td></tr>
+<tr><td>4</td><td><span class="pill p1">P1</span></td><td>WebGL context 未 <code>forceContextLoss</code>，小屏切换累积句柄</td><td><strong>已修</strong>：onBeforeUnmount 加 forceContextLoss</td></tr>
+<tr><td>5</td><td><span class="pill p1">P1</span></td><td>WebGL 探测用 test canvas 多分配一个 GL context</td><td><strong>已修</strong>：删探测，直接 try 创建 renderer 失败即降级</td></tr>
+<tr><td>6</td><td><span class="pill p1">P1</span></td><td>JSON-LD WebAPI 非标准属性，Google 不保证支持</td><td><strong>已修</strong>：删 WebAPI 块，改 WebSite</td></tr>
+<tr><td>7</td><td><span class="pill p2">P2</span></td><td>loop() 每帧 <code>arr.length/3</code> 除法</td><td><strong>已修</strong>：缓存上界 n</td></tr>
+<tr><td>8</td><td><span class="pill p2">P2</span></td><td>three chunk 超 500kb 触发警告</td><td><strong>已修</strong>：chunkSizeWarningLimit:800</td></tr>
+<tr><td>9</td><td><span class="pill p2">P2</span></td><td>SectionUsage 错误占位用 motion 包裹无意义</td><td><strong>已修</strong>：改回普通 div</td></tr>
+</table>
+
+<h2>验证证据</h2>
+<div class="card">
+<ul>
+  <li><code>npm install</code> ✓ added 20 packages in 8s（motion-v/three/@tresjs/core/@vueuse/core）</li>
+  <li><code>npm run build</code> ✓ 414 modules, 2.75s（无错误，chunkSizeWarningLimit 警告已消除）</li>
+  <li>包体积：首屏 <code>index.js gzip 90.08kb</code>（符合 &lt;150kb 预算）；three 独立 chunk <code>gzip 189.60kb</code> 懒加载</li>
+  <li><code>vite preview</code> + <code>curl /</code> → HTTP 200，首页含全部 SEO meta</li>
+  <li>Node 等价契约测试 <strong>9 项全绿</strong>：id=app / /assets/ / banned 0 / version 7.2.0 / og:image 路由 / lock 依赖 / SoftwareApplication / WebAPI 已删 / theme-color</li>
+  <li><strong>未跑</strong>：Python 契约测试（<code>.venv</code> 损坏指向不存在的 uv python 路径，系统无 python3）——已用 Node 等价覆盖；CI <code>frontend-version-gate</code> 会用干净环境跑 <code>test_public_landing_is_vue3_and_no_anon_generator</code> + <code>TestFrontendVersionConsistency</code></li>
+  <li><strong>未跑</strong>：浏览器实跑 motion-v 运行时兼容（WebFetch 被 enterprise 策略阻断无法验证 schema 合规；motion-v 与 Vue 3.5.42 运行时边界需本地 <code>npm run dev</code> 看 console）</li>
+</ul>
+</div>
+
+<h2>剩余真实风险</h2>
+<ul>
+  <li><strong>motion-v 运行时兼容</strong>：build 通过 ≠ 运行时 OK。motion-v 2.4.0 对 <code>defineAsyncComponent</code> + Suspense 边界处理是否有 bug，需本地浏览器烟雾测试确认</li>
+  <li><strong>og:image 尺寸</strong>：复用 <code>logo-md.png</code>（9589 字节），未确认是否 1200×630 社交卡最佳比例。可能裁切，但不再死链</li>
+  <li><strong>three 总下载量</strong>：189kb gzip 超预算但懒加载，LCP 不受影响。是真 3D 的必然代价，用户已选定</li>
+  <li><strong>backdrop-filter 移动端性能</strong>：已降到 blur(12px)，但 nav 仍 blur(20px)。中端机同屏 nav+card+pill+btn 可叠 4 层 blur，建议后续压测移动端帧率</li>
+</ul>
+
+<h2>HTML 变更测验</h2>
+<div class="quiz">
+<p>以下 8 题覆盖本次变更的关键决策与陷阱。你必须全部答对才算理解。</p>
+
+<div class="q">
+  <span class="q-label">Q1. 为什么 og:image 最终指向 <code>/static/logo-md.png</code> 而非 <code>/static/tingfeng-logo.png</code>？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q1"> A. logo-md 更小加载快</label>
+    <label><input type="radio" name="q1"> B. 后端只注册了 logo.png/logo-md.png 路由，tingfeng-logo.png 无路由会 404</label>
+    <label><input type="radio" name="q1"> C. tingfeng-logo.png 文件不存在</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q2. 为什么 Hero 首屏 h1 用 CSS <code>fade-up</code> 而非 motion-v？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q2"> A. CSS 性能更好</label>
+    <label><input type="radio" name="q2"> B. motion 的 initial:opacity:0 在 JS 延迟/失败时会让 LCP 候选 h1 永久透明，伤 SEO 与 LCP</label>
+    <label><input type="radio" name="q2"> C. motion-v 不支持 h1 标签</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q3. Hero3D 的 three.js 为什么用 <code>import('three')</code> 动态导入？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q3"> A. 减少代码量</label>
+    <label><input type="radio" name="q3"> B. 让 three（189kb gzip）不进首屏 LCP 关键路径，首屏 JS 仅 90kb</label>
+    <label><input type="radio" name="q3"> C. 避免与 Vue 冲突</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q4. <code>onBeforeUnmount</code> 里 <code>renderer.forceContextLoss()</code> 解决什么？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q4"> A. 释放 GPU 显存</label>
+    <label><input type="radio" name="q4"> B. 强制释放底层 GL context 句柄，防小屏↔大屏切换重复挂载累积（浏览器 ~16 个上限）</label>
+    <label><input type="radio" name="q4"> C. 清空粒子数据</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q5. 为什么删掉 JSON-LD 的 <code>WebAPI</code> 块只留 SoftwareApplication + WebSite？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q5"> A. WebAPI 不是 schema.org 类型</label>
+    <label><input type="radio" name="q5"> B. WebAPI 是 pending extension，Google 不保证支持，其 <code>endpoint</code> 字段非标准属无效噪声</label>
+    <label><input type="radio" name="q5"> C. 减少 HTML 体积</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q6. three chunk 189kb gzip 超过 landing JS 预算（&lt;150kb），为什么仍接受？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q6"> A. 预算不重要</label>
+    <label><input type="radio" name="q6"> B. 它是独立懒加载 chunk，不在首屏 LCP 关键路径；首屏 JS 90kb 符合预算。真 3D 的必然代价</label>
+    <label><input type="radio" name="q6"> C. 后续会删掉</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q7. 为什么 package-lock.json 必须与 package.json 一起提交？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q7"> A. 规范要求</label>
+    <label><input type="radio" name="q7"> B. CI 用 <code>npm ci</code>（严格依赖 lock），只提 package.json 不提 lock 会报 "lockfile out of sync" → frontend-version-gate 红</label>
+    <label><input type="radio" name="q7"> C. 提交体积无关</label>
+  </div>
+</div>
+
+<div class="q">
+  <span class="q-label">Q8. 哪项验证<strong>未在本地实跑</strong>，需 CI 或浏览器补？</span>
+  <div class="q-options">
+    <label><input type="radio" name="q8"> A. Python 契约测试（.venv 损坏）+ motion-v 浏览器运行时兼容</label>
+    <label><input type="radio" name="q8"> B. npm run build</label>
+    <label><input type="radio" name="q8"> C. og:image 路由检查</label>
+  </div>
+</div>
+
+<details class="answer-key">
+<summary>查看答案</summary>
+<p>Q1: <strong>B</strong> ｜ Q2: <strong>B</strong> ｜ Q3: <strong>B</strong> ｜ Q4: <strong>B</strong> ｜ Q5: <strong>B</strong> ｜ Q6: <strong>B</strong> ｜ Q7: <strong>B</strong> ｜ Q8: <strong>A</strong></p>
+<p>全部选 B/A 如上。若任一答错，请回看对应章节。</p>
+</details>
+</div>
+
+<div class="footer">
+  commit <code>1832c55</code> · 18 files +1295/-158 · 审查线程：critical-code-reviewer（fork）+ 运行时审计（fork）· 规范：<code>.specify/specs/004-landing-vibe-coding/</code>
+</div>
+
+</div>
+</body>
+</html>
