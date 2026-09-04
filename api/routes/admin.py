@@ -77,7 +77,13 @@ async def providers():
     summary = registry.provider_summary()
     probes = provider_probe.snapshot().get("providers") or {}
 
-    for prefix, p in registry.providers.items():
+    # 仅遍历 summary 中已保留的提供商（号池停用 IF_ACCOUNT_AUTO=0 时 needs_account 提供商
+    # 已被 provider_summary 过滤掉，此处不可再遍历 registry.providers 全集，否则对缺失 prefix
+    # 执行 summary[prefix]["credits"] 会 KeyError）。
+    for prefix in summary:
+        p = registry.providers.get(prefix)
+        if p is None:
+            continue
         try:
             c = await p.credits()
             summary[prefix]["credits"] = c

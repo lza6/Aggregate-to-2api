@@ -93,6 +93,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">在线生成</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
+          <NavLink to="/api-guide" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
+            <span className="nav-icon" aria-hidden="true">📖</span>
+            <span className="nav-text">API 指南</span>
+            <span className="nav-pip" aria-hidden="true" />
+          </NavLink>
           <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🩺</span>
             <span className="nav-text">健康体检</span>

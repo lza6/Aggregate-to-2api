@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { Skeleton, Empty } from './components/Feedback';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
+import { KeyBanner } from './components/KeyBanner';
 
 // P-UI-5: 非首屏路由懒加载（首屏只打包 Dashboard；recharts 等重依赖随懒加载页拆出）
 const ProvidersPage = lazy(() => import('./pages/Providers').then(m => ({ default: m.ProvidersPage })));
@@ -18,6 +19,7 @@ const SecurityPage = lazy(() => import('./pages/Security').then(m => ({ default:
 const EcosystemPage = lazy(() => import('./pages/Ecosystem').then(m => ({ default: m.EcosystemPage })));
 const CostsPage = lazy(() => import('./pages/Costs').then(m => ({ default: m.CostsPage })));
 const SlowPage = lazy(() => import('./pages/Slow').then(m => ({ default: m.SlowPage })));
+const ApiGuidePage = lazy(() => import('./pages/ApiGuide').then(m => ({ default: m.ApiGuidePage })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -30,6 +32,8 @@ export default function App() {
       {/* P1-5: 根错误边界 —— 包住 <Layout> 与整棵路由树；任一页面崩坏时仍保持侧栏/Topbar 存活 */}
       <ErrorBoundary>
         <Layout>
+          {/* v7.8: 全站管理 Key 横幅 —— 保存一次全站写操作生效；未配置时常驻黄色提示 */}
+          <KeyBanner />
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -46,6 +50,7 @@ export default function App() {
               <Route path="/ecosystem" element={<ErrorBoundary><EcosystemPage /></ErrorBoundary>} />
               <Route path="/costs" element={<ErrorBoundary><CostsPage /></ErrorBoundary>} />
               <Route path="/slow" element={<ErrorBoundary><SlowPage /></ErrorBoundary>} />
+              <Route path="/api-guide" element={<ErrorBoundary><ApiGuidePage /></ErrorBoundary>} />
               {/* v7.7 UX：catch-all 404——未知路径不再渲染空白主区 */}
               <Route path="*" element={<Empty text="页面不存在" hint="请使用左侧导航访问有效页面" />} />
             </Routes>

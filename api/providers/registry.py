@@ -294,11 +294,39 @@ class Registry:
         self._ensure_booted()
         return list(self._models.values())
 
+    def _account_pool_enabled(self) -> bool:
+        """号池自动补号是否启用（IF_ACCOUNT_AUTO）。
+
+        号池停用（IF_ACCOUNT_AUTO=0）时，needs_account=True 的图片提供商
+        （nanobanana/minimaxh3 等）在前端模型列表与提供商看板中隐藏——
+        用户选不到这些用不了的模型，避免无效提交堆积 DLQ。后端适配器与
+        account_pool 能力保留，启用号池即自动恢复展示。
+        """
+        from .. import config
+
+        return bool(getattr(config, "ACCOUNT_AUTO", True))
+
+    def all_models_visible(self) -> list[ModelSpec]:
+        """对外可见的模型列表：号池停用时排除 needs_account 提供商的模型。
+
+        /v1/models 与 grouped() 用此方法，保证前端只看到当前可用的模型。
+        """
+        self._ensure_booted()
+        if self._account_pool_enabled():
+            return list(self._models.values())
+        hidden = {
+            prefix for prefix, p in self.providers.items() if p.needs_account()
+        }
+        return [m for m in self._models.values() if m.provider not in hidden]
+
     def grouped(self) -> dict[str, list[dict]]:
-        """按提供商分组，供 /v1/models 与前端展示（v4.4 起含聊天模型）。"""
+        """按提供商分组，供 /v1/models 与前端展示（v4.4 起含聊天模型）。
+
+        号池停用时 needs_account 图片提供商的模型不在此输出（见 all_models_visible）。
+        """
         self._ensure_booted()
         out: dict[str, list[dict]] = {}
-        for m in self._models.values():
+        for m in self.all_models_visible():
             out.setdefault(m.provider, []).append(
                 {
                     "id": m.id,
@@ -332,10 +360,17 @@ class Registry:
         return out
 
     def provider_summary(self) -> dict[str, dict]:
-        """每个提供商的看板摘要（状态/能力/模型数/额度/错误计数/降级标记），前端与 healthz 用。"""
+        """每个提供商的看板摘要（状态/能力/模型数/额度/错误计数/降级标记），前端与 healthz 用。
+
+        号池停用（IF_ACCOUNT_AUTO=0）时，needs_account 图片提供商
+        （nanobanana/minimaxh3 等）不在此输出，前端看不到这些用不了的提供商。
+        """
         self._ensure_booted()
         out = {}
         for prefix, p in self.providers.items():
+            # 号池停用时隐藏需账号的图片提供商（号池已停用，展示只会引导无效提交）
+            if p.needs_account() and not self._account_pool_enabled():
+                continue
             out[prefix] = {
                 "display_name": p.display_name,
                 "base_url": p.base_url,

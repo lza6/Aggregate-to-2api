@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useVirtualList } from '../hooks/useVirtualList';
 import { getStoredAdminKey } from '../api';
+import { ADMIN_KEY_CHANGED_EVENT } from '../components/KeyBanner';
 
 interface LogEntry {
   timestamp: string;
@@ -137,6 +139,22 @@ export function LogsPage() {
     };
   }, [connectWs]);
 
+  // v7.8：监听全局管理 Key 变更（KeyBanner 保存/清除时广播）。鉴权失败态下，
+  // 用户在顶部横幅补 Key 后无需手动刷新——重置 authFailed 并自动重连。
+  useEffect(() => {
+    const onKeyChanged = () => {
+      if (authFailedRef.current) {
+        authFailedRef.current = false;
+        setAuthFailed(false);
+        reconnectCountRef.current = 0;
+        setReconnectCount(0);
+        connectWs();
+      }
+    };
+    window.addEventListener(ADMIN_KEY_CHANGED_EVENT, onKeyChanged);
+    return () => window.removeEventListener(ADMIN_KEY_CHANGED_EVENT, onKeyChanged);
+  }, [connectWs]);
+
   const filtered = filter
     ? logs.filter(l => l.message.toLowerCase().includes(filter.toLowerCase()) || l.logger.toLowerCase().includes(filter.toLowerCase()))
     : logs;
@@ -188,6 +206,9 @@ export function LogsPage() {
         <span className="tf-badge tf-badge-warning ws-reconnecting-badge">
           <span className="tf-dot ws-spinner-dot" />
           正在重连中 (第 {reconnectCount} 次)...
+          {reconnectCount >= 3 && (
+            <Link to="/security" className="kb-link" style={{ marginLeft: 8, fontSize: 11.5 }}>持续重连？检查管理 Key →</Link>
+          )}
         </span>
       );
     }
@@ -230,9 +251,7 @@ export function LogsPage() {
             </button>
           )}
           {authFailed && (
-            <a href="/admin/security" className="tf-btn tf-btn-primary tf-btn-sm">
-              🔑 前往配置管理 Key
-            </a>
+            <Link to="/security" className="tf-btn tf-btn-primary tf-btn-sm">🔑 前往配置管理 Key</Link>
           )}
         </div>
       </div>

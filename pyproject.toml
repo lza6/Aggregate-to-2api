@@ -1,7 +1,7 @@
 # imagefree_api 项目配置
 [project]
 name = "imagefree-2ai"
-version = "7.6.0"
+version = "7.7.0"
 description = "High concurrency image generation API"
 requires-python = ">=3.11"
 dependencies = [

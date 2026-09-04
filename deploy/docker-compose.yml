@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v7.6.0
+# 版本: v7.7.0
 # 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
 #       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
 #       须从 deploy/ 目录运行：cd deploy && docker compose up -d
@@ -16,7 +16,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cfsolver
-    image: imagefree-cfsolver:7.6.0
+    image: imagefree-cfsolver:7.7.0
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -115,3 +115,10 @@ networks:
   imagefree:
     name: imagefree-network
     driver: bridge
+    # v7.7：固定子网（172.28.0.0/16）→ 网关稳定为 172.28.0.1。配合 Dockerfile.api 的
+    # --proxy-headers --forwarded-allow-ips=172.28.0.0/16，让 uvicorn 信任容器网关
+    # 追加的 X-Forwarded-For（Caddy 反代），正确重写 request.client 为真实公网 IP。
+    # 否则 socket 对端为网桥 IP（被 request_guard 判为 LAN → 前端显示"内网私有地址"）。
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

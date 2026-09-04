@@ -54,10 +54,14 @@ class TestRegistry:
 
     def test_provider_summary(self):
         s = registry.provider_summary()
-        assert set(s) >= {"imagefree", "aifreeforever", "nanobanana"}
+        # 号池停用（IF_ACCOUNT_AUTO=0，conftest 默认）时 nanobanana 等需账号提供商被隐藏，
+        # 不进 summary；imagefree/aifreeforever 无需账号始终可见。
+        assert "imagefree" in s and "aifreeforever" in s
         assert s["aifreeforever"]["needs_proxy_per_request"] is True
-        assert s["nanobanana"]["needs_account"] is True
         assert s["imagefree"]["needs_account"] is False
+        # 号池启用时 nanobanana 才出现；此时断言其 needs_account=True
+        if "nanobanana" in s:
+            assert s["nanobanana"]["needs_account"] is True
         # P1-E: 验证新增字段
         for prefix in s:
             assert "error_count" in s[prefix], f"{prefix} 缺少 error_count"

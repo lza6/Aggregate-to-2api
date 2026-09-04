@@ -34,4 +34,4 @@ EXPOSE 8100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request; import json; r = urllib.request.urlopen('http://127.0.0.1:8100/v1/healthz', timeout=5); body = json.loads(r.read()); assert body.get('status') in ('ok', 'degraded'), f'healthz status: {body.get(\"status\")}'"
 
-CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8100"]
+CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8100", "--proxy-headers", "--forwarded-allow-ips=172.28.0.0/16"]
