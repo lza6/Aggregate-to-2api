@@ -103,6 +103,70 @@ async function step(name, fn) {
       ok('样式注入（组件树存活）', toastHost > 0);
     });
 
+    // ⑥ v7.5 无障碍 + 响应式地基（WCAG 2.1 AA）
+    // 本轮落地：skip-link / aria-hidden 装饰图标 / main[id] / viewport-fit=cover /
+    // focus-visible 全局环 / prefers-reduced-motion 降级 / 触控目标≥44px / 安全区令牌。
+    console.log('⑥ 无障碍 + 响应式地基');
+    await page.goto(BASE + '/admin/', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(800);
+    await step('skip-link 存在且指向 main-content', async () => {
+      const sl = await page.locator('.skip-link').count();
+      ok('skip-link 存在', sl === 1);
+      if (sl === 1) {
+        const href = await page.locator('.skip-link').getAttribute('href');
+        ok('skip-link 指向 #main-content', href === '#main-content');
+        const mainId = await page.locator('main').getAttribute('id');
+        ok('main[id=main-content] 存在（skip-link 落点）', mainId === 'main-content');
+      }
+    });
+    await step('装饰 emoji 标 aria-hidden（屏幕阅读器不朗读）', async () => {
+      // Layout 导航图标 + brand 图标
+      const navIconHidden = await page.locator('.nav-icon[aria-hidden="true"]').count();
+      ok(`nav-icon aria-hidden（实际 ${navIconHidden}，应 ≥10）`, navIconHidden >= 10);
+      const brandHidden = await page.locator('.brand-icon[aria-hidden="true"]').count();
+      ok('brand-icon aria-hidden', brandHidden === 1);
+    });
+    await step('viewport-fit=cover（刘海屏安全区）', async () => {
+      const vp = await page.locator('meta[name="viewport"]').getAttribute('content');
+      ok('viewport-fit=cover', vp?.includes('viewport-fit=cover') === true);
+    });
+    await step('全局 focus-visible 规则注入', async () => {
+      // index.css 注入了 :focus-visible outline 规则；遍历样式表断言存在
+      const has = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule.cssText && rule.cssText.includes(':focus-visible') && rule.cssText.includes('outline')) {
+                return true;
+              }
+            }
+          } catch { /* cross-origin skip */ }
+        }
+        return false;
+      });
+      ok(':focus-visible 全局环规则注入', has);
+    });
+    await step('prefers-reduced-motion 降级规则注入', async () => {
+      const has = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule.cssText && rule.cssText.includes('prefers-reduced-motion')) return true;
+            }
+          } catch { /* cross-origin skip */ }
+        }
+        return false;
+      });
+      ok('prefers-reduced-motion 降级注入', has);
+    });
+    await step('安全区令牌 --safe-top 已定义', async () => {
+      const has = await page.evaluate(() => {
+        const v = getComputedStyle(document.documentElement).getPropertyValue('--safe-top');
+        return v.length > 0;
+      });
+      ok('--safe-top 令牌已定义', has);
+    });
+
     ok('无页面 JS 错误', pageErrors.length === 0);
     if (pageErrors.length) console.log('   错误:', pageErrors.join(' | ').slice(0, 200));
 

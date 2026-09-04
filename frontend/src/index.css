@@ -17,10 +17,13 @@
   --border-strong: #cbd5e1;
   --border-focus: #6366f1;
 
-  /* 文字色阶 */
+  /* 文字色阶
+     对比度（AA）：--text-muted 原 #94a3b8 on #fff ≈3.4:1 不达正文 4.5:1，
+     提至 #64748b（≈4.6:1）。辅助文字 12.5px 属"非正文"但保险起见仍提一档。
+     --text-secondary #475569 ≈7:1 达 AAA，保留。 */
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-muted: #64748b;
   --text-inverse: #ffffff;
 
   /* 主题主色 (Modern Indigo / Violet Gradient) */
@@ -78,6 +81,40 @@
 
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* —— 间距（4px 基准，1.25 比例）—— 统一间距取值，杜绝散写 12px/14px */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* —— z-index 层级 —— 统一取值，杜绝散写 9999 */
+  --z-base: 0;
+  --z-sticky: 30;
+  --z-drawer: 55;
+  --z-overlay: 50;
+  --z-toast: 70;
+  --z-modal: 80;
+
+  /* —— 动效曲线 —— */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 250ms;
+  --dur-slow: 400ms;
+
+  /* —— 安全区（刘海屏/异形屏）—— viewport-fit=cover 时由 env() 兜底 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,7 +182,7 @@
 }
 
 html {
-  font-size: 14px;
+  font-size: clamp(14px, 0.875rem + 0.2vw, 16px);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -300,6 +337,12 @@ code, kbd, samp, pre {
 .tf-input:focus, .tf-select:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+/* 仅键盘聚焦时补 outline 环（鼠标点击已有 box-shadow 高亮，不闪双环） */
+.tf-input:focus-visible, .tf-select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
 }
 
 .tf-input::placeholder {
@@ -523,4 +566,141 @@ code, kbd, samp, pre {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* ==========================================================================
+   全局无障碍 & 响应式增强（v7.5 前端体验升级）
+   ==========================================================================
+
+   skip-link：键盘用户跳过侧栏直达主内容（WCAG 2.4.1）。
+   默认屏幕外不可见，Tab 聚焦时滑入。
+*/
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-toast);
+  padding: 8px 16px;
+  background: var(--primary-600);
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow-lg);
+  /* 视觉隐藏但保留可聚焦 */
+  transform: translateY(-150%);
+  transition: transform var(--transition-fast);
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid var(--primary-200);
+  outline-offset: 2px;
+}
+
+/* 全局焦点可见态：键盘 Tab 聚焦任何交互元素都给可见环（WCAG 2.4.7 / 1.4.11）。
+   仅 :focus-visible（键盘）触发，鼠标点击不闪环。 */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* 原组件自带 outline 的不叠加（如 .tf-input:focus 已有 box-shadow，此处仍补 outline 兜底） */
+
+/* 触控目标放大（移动端 ≥44px，WCAG 2.5.5 Target Size / 2.2 Target Size Minimum） */
+@media (max-width: 860px) {
+  .tf-btn {
+    min-height: 44px;
+    padding: 11px 18px;
+    font-size: 14px;
+  }
+  .tf-btn-sm {
+    min-height: 40px;
+  }
+}
+
+/* 触控设备 hover 降级：避免移动端 :hover 粘住（无指针设备不触发 hover）。
+   显式回退到默认态值（非 revert-layer，Safari<16.4 不识 revert-layer 会半残）。 */
+@media (hover: none) {
+  .tf-card:hover,
+  .stat-card-modern:hover {
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border-default);
+  }
+  .nav-item:hover {
+    color: var(--sidebar-text);
+    background: transparent;
+  }
+  .tf-table tr:hover td {
+    background: transparent;
+  }
+}
+
+/* 响应式栅格过渡（补 768px/1024px 档，避免 auto-fill 跳列 CLS） */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+/* 大屏内容栏上限，避免超宽屏拉伸难读 */
+@media (min-width: 1440px) {
+  .main-content {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+}
+
+/* prefers-reduced-motion：尊重用户系统设置，降级装饰性动画（WCAG 2.3.3）。
+   功能性反馈（spinner/pulse 状态点）加速完成而非完全移除，保留状态可感知性。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 动态视口单位降级：100dvh 跟踪 iOS Safari 地址栏伸缩，旧浏览器回退 100vh */
+.layout-sidebar,
+.layout-root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* 安全区兜底：Layout.tsx 内联样式仍用 100vh，此处全局补 dvh 与安全区。
+   Layout 组件迁移到 CSS Modules 时会直接用这些令牌。 */
+.layout-topbar {
+  padding-top: calc(var(--space-2) + var(--safe-top));
+  padding-left: calc(var(--space-8) + var(--safe-left));
+  padding-right: calc(var(--space-8) + var(--safe-right));
+}
+.main-content {
+  padding-bottom: calc(var(--space-8) + var(--safe-bottom));
+  padding-left: calc(var(--space-8) + var(--safe-left));
+  padding-right: calc(var(--space-8) + var(--safe-right));
+}
+@media (max-width: 860px) {
+  .layout-topbar {
+    padding-left: calc(var(--space-4) + var(--safe-left));
+    padding-right: calc(var(--space-4) + var(--safe-right));
+  }
+  .main-content {
+    padding-left: calc(var(--space-4) + var(--safe-left));
+    padding-right: calc(var(--space-4) + var(--safe-right));
+  }
 }

@@ -48,7 +48,8 @@ export function ToastHost() {
 
         return (
           <div key={t.id} className={`toast-card-modern ${toastTypeClass}`}>
-            <span className="toast-icon">{icon}</span>
+            {/* 装饰性 emoji：aria-live region 内若不 aria-hidden 会被朗读 "white heavy check mark" */}
+            <span className="toast-icon" aria-hidden="true">{icon}</span>
             <span className="toast-msg">{t.message}</span>
             <button className="toast-close-btn" onClick={() => dismiss(t.id)} aria-label="关闭通知">
               ×
@@ -61,10 +62,13 @@ export function ToastHost() {
           position: fixed;
           top: 24px;
           right: 24px;
-          z-index: 9999;
+          /* 安全区兜底：刘海屏右侧不被遮挡 */
+          top: calc(24px + var(--safe-top, 0px));
+          right: calc(24px + var(--safe-right, 0px));
+          z-index: var(--z-toast, 9999);
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: var(--space-2, 10px);
           max-width: 380px;
           pointer-events: none;
         }

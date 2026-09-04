@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchBlocklist, fetchBlockStatus, blockIp, unblockIp, notify, getStoredAdminKey, setStoredAdminKey } from '../api';
 import { useApi } from '../hooks/useApi';
 import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
@@ -43,7 +43,8 @@ export function SecurityPage() {
     setStoredAdminKey(adminKey);
     notify(adminKey.trim() ? '管理 Key 已保存到本地' : '管理 Key 已清除（只读模式）', 'success');
     setPage(1);
-    reload();
+    // page 已为 1 时 effect 不触发，手动 reload；page 变化时由 effect 接管
+    if (page === 1) reload();
   };
 
   const handleBlock = async () => {
@@ -93,12 +94,15 @@ export function SecurityPage() {
     }
   };
 
-  // 切页：回顶 + 重拉
+  // 切页：回顶；reload 由上方 effect 响应 page 变化触发（原直接调 reload 用旧闭包）
   const goPage = (p: number) => {
     setPage(Math.max(1, p));
-    reload();
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // v7.6 P1：useApi 的 effect deps 不含 page，page 变化后 fetcher 闭包仍是旧值，
+  // goPage/saveKey 直接调 reload() 会用旧 page 拉取。改为 effect 响应 page 变化触发 reload。
+  useEffect(() => { void reload(); }, [page, reload]);
 
   const items: BlockRule[] = data?.items ?? [];
   const total: number = data?.total ?? 0;

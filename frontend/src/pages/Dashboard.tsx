@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
-import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, getStoredApiKey, fetchAccountPool, fetchSseStats, notify } from '../api';
+import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fetchChatUsage, fetchChatRemaining, fetchChatAuthStatus, getStoredAdminKey, fetchAccountPool, fetchSseStats, notify } from '../api';
 import { StatCard } from '../components/StatCard';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
@@ -34,7 +34,9 @@ export function Dashboard() {
   const { data: sys } = useApi<SystemSpec>(() => fetchSystemSpec(), { intervalMs: 60000 });
   const { data: chatUsage } = useApi<ChatUsageStats>(() => fetchChatUsage('24h'), { intervalMs: 15000 });
   const { data: chatRemaining } = useApi<ChatRemaining>(() => fetchChatRemaining(), { intervalMs: 15000 });
-  const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(getStoredApiKey() ? { adminKey: getStoredApiKey() } : undefined), { intervalMs: 30000 });
+  // v7.6 P1：/v1/chat/auth/status 走 check_admin_key，必须用管理 Key（非聊天 Key）。
+  // 独立 IF_ADMIN_KEYS 时 chat Key 不在管理池 → 401 → authStatus.key 为空，复制按钮不渲染。
+  const { data: authStatus } = useApi<ChatAuthStatus>(() => fetchChatAuthStatus(getStoredAdminKey() ? { adminKey: getStoredAdminKey() } : undefined), { intervalMs: 30000 });
   // v6.6.0: 号池成本口径（累计消耗获取每张平均成本）——供「成本口径」主卡
   const { data: accountPool } = useApi<AccountPoolResponse>(() => fetchAccountPool({ page: 1, pageSize: 1 }), { intervalMs: 30000 });
   // P3-2: SSE 事件流指标（事件推送量/补偿率/取消率）——需 admin key，无 key 时 401 不报错

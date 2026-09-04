@@ -38,8 +38,8 @@ export function Empty({ text = '暂无数据', hint }: { text?: string; hint?: s
   return (
     <div className="fb-empty-state">
       <div className="fb-empty-visual">
-        <span className="empty-sparkle">✨</span>
-        <div className="empty-box-icon">📦</div>
+        <span className="empty-sparkle" aria-hidden="true">✨</span>
+        <div className="empty-box-icon" aria-hidden="true">📦</div>
       </div>
       <div className="fb-empty-title">{text}</div>
       {hint && <div className="fb-empty-sub">{hint}</div>}
@@ -134,7 +134,7 @@ export function ErrorRetry({ message, onRetry, availableProviders, activeProvide
 
   return (
     <div className="fb-error-banner tf-card" role="alert">
-      <div className="fb-error-icon">{isKeyError ? '🔑' : '⚠️'}</div>
+      <div className="fb-error-icon" aria-hidden="true">{isKeyError ? '🔑' : '⚠️'}</div>
       <div className="fb-error-content">
         <div className="fb-error-heading">{displayHeading}</div>
         <div className="fb-error-msg">{displayMsg}</div>

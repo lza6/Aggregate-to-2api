@@ -1,13 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ToastHost } from './ToastHost';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   // D3: 移动端侧栏抽屉开关；桌面端常驻，窄屏可折叠 + Esc/遮罩关闭 + 键盘可达
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Esc 关闭抽屉（键盘可达性 WCAG 2.1.1）：原 D3 注释承诺但未实现，补齐。
+  // 仅在抽屉打开时挂监听，卸载即移除，避免污染全局 keydown。
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
   return (
     <div className="layout-root">
-      {/* D3: 移动端菜单按钮（窄屏可见），aria-label/焦点态 */}
+      {/* 无障碍：skip-link，键盘 Tab 首焦点跳过侧栏直达主内容（WCAG 2.4.1 Bypass Blocks） */}
+      <a href="#main-content" className="skip-link">跳到主内容</a>
+      {/* D3: 移动端菜单按钮（窄屏可见），aria-label/焦点态。触控目标 ≥44px（WCAG 2.2.2） */}
       <button
         type="button"
         className="layout-menu-btn"
@@ -23,7 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Brand Section */}
         <div className="sidebar-brand">
           <div className="brand-logo-glow">
-            <span className="brand-icon">⚡</span>
+            <span className="brand-icon" aria-hidden="true">⚡</span>
           </div>
           <div className="brand-info">
             <div className="brand-title">
@@ -37,76 +49,76 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="nav-section-title">核心模块</div>
         <nav className="sidebar-nav" aria-label="核心模块导航">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">📊</span>
+            <span className="nav-icon" aria-hidden="true">📊</span>
             <span className="nav-text">仪表盘</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/providers" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🔌</span>
+            <span className="nav-icon" aria-hidden="true">🔌</span>
             <span className="nav-text">提供商</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/tasks" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon" aria-hidden="true">📋</span>
             <span className="nav-text">任务管理</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/accounts" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">👤</span>
+            <span className="nav-icon" aria-hidden="true">👤</span>
             <span className="nav-text">长效号池</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/logs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">📝</span>
+            <span className="nav-icon" aria-hidden="true">📝</span>
             <span className="nav-text">实时日志</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/dlq" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🗑️</span>
+            <span className="nav-icon" aria-hidden="true">🗑️</span>
             <span className="nav-text">死信队列</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/slow" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🐌</span>
+            <span className="nav-icon" aria-hidden="true">🐌</span>
             <span className="nav-text">慢请求画像</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">💬</span>
+            <span className="nav-icon" aria-hidden="true">💬</span>
             <span className="nav-text">在线聊天</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/generate" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🖼️</span>
+            <span className="nav-icon" aria-hidden="true">🖼️</span>
             <span className="nav-text">在线生成</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🩺</span>
+            <span className="nav-icon" aria-hidden="true">🩺</span>
             <span className="nav-text">健康体检</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/ecosystem" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🌐</span>
+            <span className="nav-icon" aria-hidden="true">🌐</span>
             <span className="nav-text">AI 生态</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/costs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">💰</span>
+            <span className="nav-icon" aria-hidden="true">💰</span>
             <span className="nav-text">成本管理</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/security" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon">🛡️</span>
+            <span className="nav-icon" aria-hidden="true">🛡️</span>
             <span className="nav-text">安全风控</span>
-            <span className="nav-pip" />
+            <span className="nav-pip" aria-hidden="true" />
           </NavLink>
         </nav>
 
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
           <div className="system-pill">
-            <span className="system-dot" />
+            <span className="system-dot" aria-hidden="true" />
             <span className="system-status">服务运行正常</span>
           </div>
           <div className="system-version">v{__APP_VERSION__} SaaS Enterprise</div>
@@ -124,16 +136,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="topbar-actions">
             {/* P3-1: 公开/受保护边界说明（不引入登录体系，写操作需管理 Key） */}
             <span className="boundary-pill" title="本面板公开只读展示；写操作（封禁/解封、DLQ 重试/清空）需管理 Key（Authorization: Bearer 头，环境变量 IF_ADMIN_KEYS）">
-              <span className="boundary-dot" />
+              <span className="boundary-dot" aria-hidden="true" />
               公开只读 · 写操作需管理 Key
             </span>
             <span className="topbar-badge">
-              <span className="tf-dot tf-dot-pulse" style={{ background: '#10b981' }} />
+              <span className="tf-dot tf-dot-pulse" aria-hidden="true" style={{ background: '#10b981' }} />
               API Gateway
             </span>
           </div>
         </header>
-        <main className="main-content">{children}</main>
+        <main className="main-content" id="main-content" tabIndex={-1}>{children}</main>
       </div>
 
       <ToastHost />
@@ -151,10 +163,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           position: fixed;
           top: 10px;
           left: 10px;
-          z-index: 60;
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
+          z-index: var(--z-drawer, 60);
+          width: 44px;
+          height: 44px;
+          border-radius: var(--radius-md);
           border: 1px solid var(--border-default);
           background: var(--bg-card);
           color: var(--text-primary);
@@ -179,7 +191,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           position: sticky;
           top: 0;
           height: 100vh;
-          z-index: 40;
+          /* 100dvh：iOS Safari 地址栏伸缩时跟踪视口，旧浏览器回退 100vh */
+          height: 100dvh;
+          z-index: var(--z-drawer, 40);
         }
 
         .sidebar-brand {
@@ -362,9 +376,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           align-items: center;
           justify-content: space-between;
           padding: 0 32px;
+          padding-top: calc(0px + var(--safe-top));
           position: sticky;
           top: 0;
-          z-index: 30;
+          z-index: var(--z-sticky, 30);
           backdrop-filter: blur(12px);
         }
 
@@ -438,6 +453,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         .main-content {
           flex: 1;
           padding: 28px 32px;
+          /* 焦点跳转到这里（skip-link）时不滚动到顶上而是留出 topbar 高度 */
+          scroll-margin-top: 56px;
           overflow-y: auto;
         }
 
@@ -452,13 +469,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           .layout-sidebar {
             width: 240px;
             height: 100vh;
+            height: 100dvh;
             position: fixed;
             top: 0;
             left: 0;
             transform: translateX(-100%);
             transition: transform 0.22s ease;
             box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.3));
-            z-index: 55;
+            z-index: var(--z-drawer, 55);
             padding: 60px 16px 16px;
           }
           .layout-sidebar.is-open {
@@ -469,7 +487,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             position: fixed;
             inset: 0;
             background: rgba(0, 0, 0, 0.45);
-            z-index: 50;
+            z-index: var(--z-overlay, 50);
           }
           .sidebar-brand {
             margin-bottom: 10px;
@@ -497,7 +515,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         /* D3: 375px 单列网格收紧 */
         @media (max-width: 480px) {
-          .main-content { padding: 12px; }
+          .main-content { padding: 12px; scroll-margin-top: 50px; }
           .layout-topbar { height: 50px; }
           .topbar-breadcrumb { font-size: 12px; }
         }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useVirtualList } from '../hooks/useVirtualList';
+import { getStoredAdminKey } from '../api';
 
 interface LogEntry {
   timestamp: string;
@@ -10,22 +11,45 @@ interface LogEntry {
 
 type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 
+// 4401 = 后端 /v1/logs/ws 鉴权失败时主动 close 的码（admin.py log_websocket）。
+// 收到此码意味着 admin key 缺失/无效，重连只会再次 4401 → 必须停止重连并引导用户配置。
+const AUTH_FAILED_CODE = 4401;
+// 最大重连次数熔断：超过后转 disconnected，避免无限退避堆叠。
+const MAX_RECONNECTS = 8;
+
 export function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState('');
   const [connStatus, setConnStatus] = useState<ConnectionStatus>('disconnected');
   const [lastHeartbeat, setLastHeartbeat] = useState<Date | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
+  const [authFailed, setAuthFailed] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const unmountedRef = useRef(false);
+  // 重连计数用 ref 累加，避免闭包快照旧值导致退避失效（原实现 reconnectCount 闭包陷阱）。
+  const reconnectCountRef = useRef(0);
+  // 鉴权失败标志：置位后 connectWs 直接返回，不再发起无意义重连。
+  const authFailedRef = useRef(false);
 
   const connectWs = useCallback(() => {
     if (unmountedRef.current) return;
+    // 鉴权已失败 / 重连次数熔断 → 停在 disconnected，等用户配置 Key 后手动点「立即重连」。
+    if (authFailedRef.current || reconnectCountRef.current >= MAX_RECONNECTS) {
+      setConnStatus('disconnected');
+      return;
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/v1/logs/ws`;
+    // 后端 /v1/logs/ws 走 check_admin_key（与 /v1/logs 一致），可用 ?api_key= query
+    // 或 Authorization/X-API-Key 头。WS 无法设头，故用 ?api_key= 传递本地管理 Key。
+    // 注意：?api_key= 是弱安全通道（会进 referer/历史），但管理面仅内网运维，可接受；
+    // 若本地未存管理 Key 则走开放模式 / 401 由后端决定。
+    const adminKey = getStoredAdminKey();
+    const wsUrl = adminKey
+      ? `${protocol}//${window.location.host}/v1/logs/ws?api_key=${encodeURIComponent(adminKey)}`
+      : `${protocol}//${window.location.host}/v1/logs/ws`;
 
     try {
       setConnStatus(prev => prev === 'connected' ? 'reconnecting' : prev);
@@ -35,16 +59,30 @@ export function LogsPage() {
       ws.onopen = () => {
         if (unmountedRef.current) { ws.close(); return; }
         setConnStatus('connected');
+        reconnectCountRef.current = 0;
         setReconnectCount(0);
         setLastHeartbeat(new Date());
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (unmountedRef.current) return;
+        // 4401 = 鉴权失败：停止重连，引导用户去安全风控页配置管理 Key。
+        if (event.code === AUTH_FAILED_CODE) {
+          authFailedRef.current = true;
+          setAuthFailed(true);
+          setConnStatus('disconnected');
+          return;
+        }
+        const next = reconnectCountRef.current + 1;
+        reconnectCountRef.current = next;
+        setReconnectCount(next);
+        // 指数退避：1s, 1.5s, 2.25s… 上限 10s；超过 MAX_RECONNECTS 熔断为 disconnected。
+        if (next >= MAX_RECONNECTS) {
+          setConnStatus('disconnected');
+          return;
+        }
         setConnStatus('reconnecting');
-        setReconnectCount(c => c + 1);
-        // 指数退避重连：1s, 2s, 4s, 最大 10s
-        const delay = Math.min(1000 * Math.pow(1.5, reconnectCount), 10000);
+        const delay = Math.min(1000 * Math.pow(1.5, next - 1), 10000);
         reconnectTimeoutRef.current = window.setTimeout(() => {
           connectWs();
         }, delay);
@@ -56,6 +94,11 @@ export function LogsPage() {
       };
 
       ws.onmessage = (event) => {
+        // v7.6 P1：后端收到 "ping" 回 "pong"（裸串）；收到 pong 或日志均刷新心跳保活时间
+        if (event.data === 'pong') {
+          setLastHeartbeat(new Date());
+          return;
+        }
         setLastHeartbeat(new Date());
         try {
           const entry = JSON.parse(event.data);
@@ -65,18 +108,20 @@ export function LogsPage() {
     } catch {
       setConnStatus('disconnected');
     }
-  }, [reconnectCount]);
+  }, []);
 
   useEffect(() => {
     unmountedRef.current = false;
     connectWs();
 
-    // 心跳保活定时器：每 10 秒发送心跳检测 ping
+    // 心跳保活定时器：每 10 秒发送心跳检测 ping（裸串，后端 admin.py 收到 "ping" 回 "pong"）
     const heartbeatTimer = window.setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
-          wsRef.current.send(JSON.stringify({ type: 'ping' }));
-          setLastHeartbeat(new Date());
+          // v7.6 P1：原实现发 JSON.stringify({type:'ping'})，后端期望字面量 "ping"
+          // → 永不回 pong；且发送后立即 setLastHeartbeat，连接死但无日志流入时仍显示「心跳正常」。
+          // 现改为发裸串，heartbeat 仅在 onmessage 收到 pong/log 后更新。
+          wsRef.current.send('ping');
         } catch { /* ignore */ }
       }
     }, 10000);
@@ -122,6 +167,14 @@ export function LogsPage() {
   };
 
   const getStatusBadge = () => {
+    if (authFailed) {
+      return (
+        <span className="tf-badge tf-badge-danger">
+          <span className="tf-dot" style={{ background: 'var(--danger)' }} />
+          管理鉴权失败（请配置管理 Key）
+        </span>
+      );
+    }
     if (connStatus === 'connected') {
       return (
         <span className="tf-badge tf-badge-success">
@@ -171,10 +224,15 @@ export function LogsPage() {
           <button onClick={() => setLogs([])} className="tf-btn tf-btn-secondary tf-btn-sm">
             🗑️ 清屏
           </button>
-          {connStatus !== 'connected' && (
+          {(connStatus !== 'connected') && !authFailed && (
             <button onClick={() => connectWs()} className="tf-btn tf-btn-primary tf-btn-sm">
               ⚡ 立即重连
             </button>
+          )}
+          {authFailed && (
+            <a href="/admin/security" className="tf-btn tf-btn-primary tf-btn-sm">
+              🔑 前往配置管理 Key
+            </a>
           )}
         </div>
       </div>
@@ -206,7 +264,11 @@ export function LogsPage() {
         <div className="terminal-body" ref={vlist.containerRef} onScroll={vlist.onScroll}>
           {filtered.length === 0 ? (
             <div className="terminal-empty">
-              <span>⚡ {connStatus === 'reconnecting' ? '正在尝试恢复 WebSocket 连接…' : '等待服务端日志流推入中…'}</span>
+              <span>{authFailed
+                ? '⚠️ 管理鉴权失败：本地未配置管理 Key 或 Key 无效，请在「安全风控」页配置后重连。'
+                : connStatus === 'reconnecting'
+                  ? '正在尝试恢复 WebSocket 连接…'
+                  : '等待服务端日志流推入中…'}</span>
             </div>
           ) : (
             <>

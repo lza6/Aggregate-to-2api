@@ -64,14 +64,18 @@ export async function signGallery(limit = 20, adminKey?: string): Promise<{ url:
 }
 
 export interface LogEntry {
-  ts: number;
+  timestamp: string;
   level: string;
   logger: string;
   message: string;
+  severity?: string;
+  trace_id?: string;
+  req_id?: string;
 }
 
 export async function fetchLogs(lines = 100): Promise<{ logs: LogEntry[] }> {
-  return apiFetch<{ logs: LogEntry[] }>(`/v1/logs?lines=${lines}`);
+  // v7.6 P1：/v1/logs 走 check_admin_key（与 /v1/logs/ws 一致），须携带管理 Key
+  return apiFetch<{ logs: LogEntry[] }>(`/v1/logs?lines=${lines}`, { headers: adminHeaders(), caller: '日志获取失败' });
 }
 
 // ── v3.1.0 S-6/S-7: 只读诊断 + worker 健康 ──
