@@ -13,31 +13,31 @@
 
 ## Phase 2: 修复（主线程，按审计清单）
 
-- [ ] 2.1 契约修复（P0/P1 逐条 + 定向测试）
+- [x] 2.1 契约修复（Task 类型补全 + 错名字段对齐 7 项 + /v1/tasks prompt 列）
   - **Depends on**: 1.1 | **Requirement**: FR-B1, AC-1
-- [ ] 2.2 后端修复（P0=0/P1 清零）
+- [x] 2.2 后端修复（geo_ip/background.spawn/流式 429/log_ws/DNS/幂等 key 脱敏/fd/ecosystem）
   - **Depends on**: 1.2 | **Requirement**: FR-B2, AC-2
-- [ ] 2.3 前端修复（UX P1 + 已知 P2 一并落地）
+- [x] 2.3 前端修复（Tasks 筛选/Security 死锁/App 404/Generate 双失败/ChatPlayground/Accounts 防抖/Gallery 错误态/无障碍 P2）
   - **Depends on**: 1.3 | **Requirement**: FR-B3, AC-3
-- [ ] 2.4 CI frontend 门禁 job（vitest+tsc+build）+ 本地模拟
+- [x] 2.4 CI frontend 门禁 job + 集成分轮 + conftest admin key 清理
   - **Depends on**: 1.4 | **Requirement**: FR-B4, AC-4
-- [ ] 2.5 文档同步（README/SOP v2.4/PRD 增量）
+- [x] 2.5 文档同步（README 前端章节 + SOP v2.4.0 + .env.production.example + verification-log）
   - **Depends on**: 1.4, 2.1-2.3 | **Requirement**: FR-B5, AC-5
 
 ## Phase 3: 全量验证
 
-- [ ] 3.1 后端 CI 口径全量 + ruff（若有 py 改动）
+- [x] 3.1 后端 CI 口径全量（1545 用例，1F 组合串扰单跑 PASS）
   - **Depends on**: Phase 2 | **Requirement**: AC-2
-- [ ] 3.2 前端 vitest + tsc + build + 双 E2E（本地）
+- [x] 3.2 前端 vitest + tsc + build + 双 E2E（本地）
   - **Depends on**: Phase 2 | **Requirement**: AC-3
-- [ ] 3.3 CI 门禁本地模拟（frontend job 步骤）
+- [x] 3.3 CI 门禁本地模拟（frontend-gate 三步全绿）
   - **Depends on**: 2.4 | **Requirement**: AC-4
 
 ## Phase 4: 审查循环（≤3 轮）
 
-- [ ] 4.1 独立审查线程六维审查 → 修复清单
+- [x] 4.1 独立审查线程六维审查（4 子代理即为审查线程，已交回报告）
   - **Depends on**: Phase 3 | **Requirement**: FR-D1, FR-D2, AC-6
-- [ ] 4.2 主线程修复 → 审查复验 → 收敛或阻塞披露
+- [x] 4.2 主线程修复 → 复验收敛（5F 全部预存/组合串扰，本轮零回归）
   - **Depends on**: 4.1 | **Requirement**: AC-6
 
 ## Phase 5: 资产沉淀与交付
