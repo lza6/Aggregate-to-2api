@@ -1,8 +1,9 @@
 # imagefree API 标准操作程序（SOP）
 
-> 版本: 2.3.0 | 最后更新: 2026-08-19
+> 版本: 2.4.0 | 最后更新: 2026-09-04
 > 适用: 本机（Windows 开发）+ 线上服务器（腾讯云东京 43.165.173.36，Docker Compose）
 > 公网入口: `https://imagefree.tingfengai.art`（Caddy 自动 HTTPS → `127.0.0.1:8100`）
+> 当前代码版本: v7.7（发版前先核对 pyproject.toml 实际版本；v7.6 起版本对齐 8 处）
 
 ---
 
@@ -460,22 +461,25 @@ python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db 
 
 ---
 
-## 10. 新版本发布 Checklist（v7.3+）
+## 10. 新版本发布 Checklist（v7.3+，v7.7 更新）
 
 发版前逐项打勾，全绿才可 commit + tag：
 
-- [ ] **版本号全链对齐**（6 处）：`pyproject.toml:4` / `api/main.py:99` / `frontend/package.json:4` / `landing/package.json:4` / `deploy/docker-compose.yml:3,19` → 统一新版本号
+- [ ] **版本号全链对齐**（8 处）：`pyproject.toml` / `deploy/pyproject.toml` / `api/main.py`（app.version）/ `frontend/package.json` / `landing/package.json` / `deploy/docker-compose.yml:3,19` / `README.md` badge → 统一新版本号
 - [ ] **landing build 版本注入**：`cd landing && npm run build` → `grep -l "<新版本>" landing/dist/assets/*.js` 有命中
 - [ ] **后端测试**：CI 测试 job 绿（本地跑核心子集：`pytest tests/test_config_validate.py tests/test_ip_blocklist.py tests/test_request_guard_layers.py tests/test_providers.py::TestProviderGenerate -q -m "not slow" -p no:cacheprovider --no-header -o addopts=""`）
-- [ ] **前端测试**：`cd frontend && npx vitest run && npx tsc --noEmit && npm run build` 全绿
+- [ ] **集成/混沌分轮**（v7.7）：`pytest tests/integration/ -q -m "integration"` 与 `pytest -q -m "chaos"` 分开跑（防组合串扰；conftest 已自动清 IF_ADMIN_KEYS + 开放模式）
+- [ ] **前端测试**：`cd frontend && npm run build && npm run test`（v7.7 起 CI 有 frontend-gate job 同口径）
+- [ ] **E2E 冒烟**：`npm run build && npm run preview -- --port 4510 & node e2e-smoke.cjs`（22 断言）+ `node resp-audit.cjs`（20 断言，4 断点）
 - [ ] **全量 lint**：`.venv/Scripts/python.exe -m ruff check api/ tests/ scripts/` → 0 error
 - [ ] **release_notes_<新版本>.md** 已写（概述/落地项/验证/已知限制）
-- [ ] **改进指南版本回写区**（docs/planning/下一步改进指南.md 第 9 节）追加一行
-- [ ] **verification-log**（docs/verification-log.md）追加本次验证记录
+- [ ] **verification-log**（docs/verification-log.md）追加本次验证记录 + 新增「勿重跑」结论
+- [ ] **workflow_status.md**（.specify spec 轮次）或 spec tasks.md 全部 [x]
 - [ ] commit message 遵循约定式（feat/fix/docs），push main，打 tag `v<版本>` push 触发部署
 - [ ] **部署后线上验证**（5 分钟内）：
   - `curl https://imagefree.tingfengai.art/v1/healthz` → status=ok 且 uptime 归零（新容器）
-  - `/v1/models` count 正常、`/` 200、`/admin` 307
+  - `/v1/models` count 正常、`/` 200、`/admin` 307、`/admin/tasks` 深链 200（SPA fallback）
+  - `E2E_BASE=https://imagefree.tingfengai.art node e2e-smoke.cjs` 生产 22 断言全绿
   - GitHub Deploy run 4 job 全绿（测试/镜像/SSH 热更新/发行版）
 
 ## 11. 故障排查速查（常见症状 → 动作）
