@@ -129,13 +129,14 @@ jobs:
             tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # 热重启 API 容器。先 rm -f 清掉同名残留容器（可能是旧 compose project 或手动
-            # docker run 起的，不被当前 compose 识别 → 直接 up 会 'container name conflict'），
-            # 再 compose up --no-deps --no-build api：只 recreate api，完全不碰 cfsolver
-            # （cfsolver 镜像即便被宿主机清理也不阻断 api 部署，容器持旧 image id 仍运行）。
+            # v7.7：网络拓扑变更（subnet 固定 172.28.0.0/16）后，--no-deps 只重建 api 会导致
+            # cfsolver 仍连旧网络实例、api 进新网络 → IF_CF_SOLVER_URL=http://cfsolver:8001
+            # 跨网络 DNS 解析失败 → api 拿不到 token → 全站 502/求解熔断。
+            # 修复：网络定义变更时必须 down 全量（含 cfsolver）再 up，让两容器同处新网络。
+            # 平时（无网络变更）down+up 也就几秒，零宕机由 Caddy 反代重试兜底。
             export DOCKER_BUILDKIT=0
-            sudo docker rm -f imagefree-api 2>/dev/null || true
-            sudo docker compose up -d --force-recreate --no-build --no-deps api
+            sudo docker compose down 2>/dev/null || true
+            sudo docker compose up -d --force-recreate --no-build
 
             # 等待健康
             echo "等待 API 健康..."
