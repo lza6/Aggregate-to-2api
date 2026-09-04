@@ -351,11 +351,17 @@ export function GeneratePage() {
           <textarea
             className="tf-input gen-prompt"
             rows={4}
+            maxLength={2000}
             placeholder={mode === 'txt' ? 'a cute orange cat with blue eyes, soft lighting' : 'make it a watercolor painting'}
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
           />
         </label>
+        {prompt.length > 1800 && (
+          <div style={{ fontSize: 11.5, color: prompt.length >= 2000 ? 'var(--danger-text)' : 'var(--warning-text)', marginTop: -6 }}>
+            {prompt.length} / 2000 字符{prompt.length >= 2000 ? '（已达上限，后端将拒绝）' : ''}
+          </div>
+        )}
 
         {/* 模型 / 画幅 / 分辨率 */}
         <div className="gen-row">
