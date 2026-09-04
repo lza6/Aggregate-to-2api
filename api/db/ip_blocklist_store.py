@@ -135,8 +135,11 @@ class IPBlocklistStore:
             data = dict(row)
             if data["expire_at"] and data["expire_at"] > 0 and data["expire_at"] < now:
                 # 记录已过期，异步删除；无事件循环时静默跳过（由 cleanup 兜底）
+                # v7.7: 走 background.spawn 持强引用（裸 create_task 可能被 GC 中途回收→漏删）
                 try:
-                    asyncio.create_task(self.remove(ip))
+                    from ..background import spawn
+
+                    spawn(self.remove(ip), name="ip_blocklist_remove_expired")
                 except RuntimeError:
                     pass
                 return None

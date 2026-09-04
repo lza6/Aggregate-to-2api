@@ -797,9 +797,10 @@ class Engine:
         if status == "completed" and image_url:
             try:
                 from .meta import gallery_cache as _gc
-                import asyncio
+                # v7.7: 走 background.spawn 持强引用（裸 create_task 可能被 GC 中途回收→缓存不一致）
+                from ..background import spawn
 
-                asyncio.create_task(_gc.invalidate_prefix("gallery:"))
+                spawn(_gc.invalidate_prefix("gallery:"), name="gallery_cache_invalidate")
             except Exception as exc:
                 log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 

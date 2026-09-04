@@ -186,7 +186,10 @@ class AlertEngine:
                 triggered.append(entry)
         if triggered and config.IF_ALERT_WEBHOOK_URL:
             try:
-                asyncio.create_task(_send_webhook(triggered, config.IF_ALERT_WEBHOOK_URL))
+                # v7.7: 走 background.spawn 持强引用（裸 create_task 可能被 GC 中途回收→告警丢失）
+                from .background import spawn
+
+                spawn(_send_webhook(triggered, config.IF_ALERT_WEBHOOK_URL), name="alert_webhook")
             except RuntimeError:
                 log.warning("告警 webhook 调度失败（无运行事件循环），跳过外发")
         return triggered

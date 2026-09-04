@@ -355,8 +355,10 @@ def _record_auto_block_violation(ip: str, reason: str) -> None:
     if trigger:
         log.warning("IP %s 频繁超限（窗口内 %d 次），触发自动入黑名单", ip, _auto_block_threshold())
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_auto_block_ip(ip, reason))
+            # v7.7: 走 background.spawn 持强引用（裸 loop.create_task 可能被 GC 中途回收→封禁不落库）
+            from .background import spawn
+
+            spawn(_auto_block_ip(ip, reason), name="auto_block_ip")
         except RuntimeError:
             pass
 
