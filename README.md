@@ -212,7 +212,22 @@ pytest tests/integration/ -q
 pytest -m slow -q
 ```
 
-> **CI 参考**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 单测 `-m "not integration and not chaos and not slow"`（覆盖门禁 80%）、集成 `-m "integration or chaos"`、`ruff check api/`。`sync_deploy.py` 已于 v6.8.0 废除（build context 改为仓库根），CI 不再运行。
+> **CI 参考**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 单测 `-m "not integration and not chaos and not slow"`（覆盖门禁 80%）、集成与混沌分轮 `-m "integration"` / `-m "chaos"`（v7.7 起拆分，防组合串扰）、`ruff check api/`、frontend 门禁（tsc+vitest+build）。`sync_deploy.py` 已于 v6.8.0 废除（build context 改为仓库根），CI 不再运行。
+
+### 前端（管理面板）开发与测试
+
+```bash
+cd frontend
+npm install          # 首次
+npm run dev          # 开发模式（Vite HMR，代理 /v1 与 /metrics 到 127.0.0.1:8100）
+npm run build        # tsc -b && vite build（CI frontend-gate 同口径）
+npm run test         # Vitest 全量单测（CI 门禁之一）
+npm run test:watch   # 监听模式
+npm run smoke        # E2E 冒烟（需先 npm run build + npm run preview 或本地 API）
+node resp-audit.cjs  # 响应式 4 断点审计（375/768/1024/1440，截图归档 .benchmarks/）
+```
+
+> **E2E 前置**：`npm run smoke` 默认打 `http://localhost:4510`（`vite preview`）。先 `npm run build && npm run preview -- --port 4510`，或设 `E2E_BASE` 指向运行中的服务（如 `E2E_BASE=https://imagefree.tingfengai.art node e2e-smoke.cjs`）。
 
 ---
 
