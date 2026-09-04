@@ -328,7 +328,11 @@ async def download_image(
     if not host:
         raise ImagefreeError(f"图片 URL 无效: {image_url}")
     try:
-        results = socket.getaddrinfo(host, 80, proto=socket.IPPROTO_TCP)
+        # v7.7 P2：同步 getaddrinfo 放线程池——本函数是 async，慢解析域名不再卡事件循环；
+        # 解析结果与连接绑定同在本函数内完成，TOCTOU 防护语义不变
+        import asyncio as _asyncio
+
+        results = await _asyncio.to_thread(socket.getaddrinfo, host, 80, proto=socket.IPPROTO_TCP)
     except OSError:
         raise ImagefreeError(f"图片 URL 无法解析: {image_url}")
     # 使用解析后的 IP 地址连接，而非主机名，防止 DNS rebinding（TOCTOU）

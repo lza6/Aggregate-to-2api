@@ -291,11 +291,18 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
             if sem:
                 await sem.acquire()
             async with upstream_semaphore:
+                # v7.7 P2：SSRF 解析的 getaddrinfo 是同步 DNS 调用，放线程池执行，
+                # 慢解析域名不再阻塞事件循环（_parse_input_image 本身同步语义不变）
+                images = (
+                    await asyncio.to_thread(_parse_input_images, req.images)
+                    if req.images
+                    else None
+                )
                 res = await provider.generate(
                     model,
                     req.prompt,
                     req.aspect_ratio,
-                    images=_parse_input_images(req.images) if req.images else None,
+                    images=images,
                     resolution=req.resolution,
                     download=req.download,
                     duration=req.duration or (spec.meta.get("video_durations") or [4])[0],
