@@ -85,8 +85,11 @@ async def _acquire_edit_mutex(key: str, timeout: float | None = None) -> str | N
         try:
             token = uuid.uuid4().hex
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, f"{os.getpid()} {time.time()} {token}".encode("utf-8"))
-            os.close(fd)
+            try:
+                # v7.7 P2：try/finally 保底关 fd——os.write 抛异常时 fd 此前会泄漏
+                os.write(fd, f"{os.getpid()} {time.time()} {token}".encode("utf-8"))
+            finally:
+                os.close(fd)
             return token
         except FileExistsError:
             if _edit_mutex_stale(path):

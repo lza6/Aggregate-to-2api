@@ -224,6 +224,11 @@ async def lifespan(_app):
 
     await shutdown_phase(3.0, "⑦ HTTP 连接池关闭", turnstile_client.close_client(), imagefree_client.close_client())
 
+    # v7.7 P2：ecosystem 共享 httpx client 此前定义了 close_client 却无人调用（停机不释放连接池）
+    from .routes import ecosystem as _eco
+
+    await shutdown_phase(2.0, "⑦.5 生态页连接池关闭", _eco.close_client())
+
     async def _shutdown_otel() -> None:
         shutdown_telemetry()
 
