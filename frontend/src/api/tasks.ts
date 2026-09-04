@@ -28,7 +28,9 @@ export interface DLQItem {
   model: string;
   error: string | null;
   attempts: number;
-  last_attempt: number;
+  /** v7.7 契约对齐：后端字段名 last_attempt_at（api/db/core.py） */
+  last_attempt_at: number;
+  created_at?: number;
 }
 
 export async function fetchTasks(params?: { limit?: number; offset?: number; status?: string }): Promise<{ items: Task[]; total: number }> {
@@ -51,16 +53,16 @@ export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {
   return apiFetch<{ items: DLQItem[]; count: number }>('/v1/dead-letter-queue');
 }
 
-export async function retryDLQTask(taskId: string): Promise<{ detail?: string; message?: string }> {
-  return apiFetch<{ detail?: string; message?: string }>(`/v1/dead-letter-queue/${taskId}/retry`, {
+export async function retryDLQTask(taskId: string): Promise<{ status: string; detail?: string }> {
+  return apiFetch<{ status: string; detail?: string }>(`/v1/dead-letter-queue/${taskId}/retry`, {
     method: 'POST',
     headers: adminHeaders(),
     caller: '重试失败',
   });
 }
 
-export async function clearDLQ(): Promise<{ detail?: string; message?: string; success?: boolean }> {
-  return apiFetch<{ detail?: string; message?: string; success?: boolean }>('/v1/dead-letter-queue', {
+export async function clearDLQ(): Promise<{ status: string; detail?: string }> {
+  return apiFetch<{ status: string; detail?: string }>('/v1/dead-letter-queue', {
     method: 'DELETE',
     headers: adminHeaders(),
     caller: '清空失败',

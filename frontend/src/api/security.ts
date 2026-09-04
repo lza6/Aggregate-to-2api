@@ -6,9 +6,10 @@ export interface BlockRule {
   block_type: 'block' | 'daily_limit';
   daily_limit?: number | null;
   reason?: string | null;
-  ttl_seconds?: number | null;
+  /** v7.7 契约对齐：封禁记录不存 ttl_seconds（请求入参才有），记录侧只有 expire_at/updated_at */
   created_at?: number | null;
   expire_at?: number | null;
+  updated_at?: number | null;
 }
 
 export async function blockIp(body: {

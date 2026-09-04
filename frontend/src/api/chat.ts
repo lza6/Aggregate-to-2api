@@ -33,7 +33,8 @@ export interface ChatModelInfo {
   context_window: number;
   capabilities: string[];
   price_per_mtok?: number | null;
-  max_messages?: number;
+  /** v7.7 契约对齐：后端字段名 message_limit（api/routes/chat.py） */
+  message_limit?: number;
 }
 
 export interface ChatAuthStatus {

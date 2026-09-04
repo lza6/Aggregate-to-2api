@@ -7,7 +7,8 @@ export interface ProviderSummary {
   capabilities: string[];
   model_count: number;
   health_status: string;
-  credits: number | null;
+  /** v7.7 契约对齐：仅生图提供商注入 credits（聊天提供商行无此键），故为可选 */
+  credits?: number | null;
   error_count: number;
   degraded: boolean;
   // v6.9.1: 是否需要号池账号（供前端把「不需要账号」提供商排前面、nanobanana 折叠到末尾）

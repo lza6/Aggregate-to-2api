@@ -181,7 +181,6 @@ export interface AccountPoolItem {
   credits_used_total?: number;
   images_used?: number;
   last_used_at?: number | null;
-  credits_earned?: number;
 }
 
 export interface LiveRegistration {
