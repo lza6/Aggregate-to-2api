@@ -75,16 +75,24 @@ def broadcast_log(record: logging.LogRecord) -> None:
 
 
 async def _broadcast(entry: dict) -> None:
-    """向所有订阅者发送 JSON 日志条目。发送失败的连接自动移除。"""
-    dead: list[WebSocket] = []
+    """向所有订阅者发送 JSON 日志条目。发送失败的连接自动移除。
+
+    v7.7 P2：锁内只做订阅者快照拷贝，逐个 send_json 移到锁外——
+    此前慢/僵死客户端的 await send_json 会让 _broadcast 长时间持锁，
+    队头阻塞 register_ws/unregister_ws 与后续日志广播。
+    """
     async with _ws_lock:
-        for ws in list(_ws_subscribers):
-            try:
-                await ws.send_json(entry)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            _ws_subscribers.discard(ws)
+        targets = list(_ws_subscribers)
+    dead: list[WebSocket] = []
+    for ws in targets:
+        try:
+            await ws.send_json(entry)
+        except Exception:
+            dead.append(ws)
+    if dead:
+        async with _ws_lock:
+            for ws in dead:
+                _ws_subscribers.discard(ws)
 
 
 class WsLogHandler(logging.Handler):
