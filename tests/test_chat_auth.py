@@ -180,16 +180,22 @@ def client_auth_handler(monkeypatch):
 
 def test_completions_open_without_key(client_auth_handler, monkeypatch):
     # v7.7.1：公益定位——聊天端点不再强制 IF_API_KEYS 业务 Key，无 key 也放行（不限 key）。
-    # mock provider，避免真实上游调用
+    # mock provider + chat_model spec，避免真实上游调用
     from api.providers.registry import registry
+    from api.providers.base import ModelSpec
 
     class FakeProvider:
         async def chat_collect(self, model, messages, **kw):
             return {"text": "pong", "finish_reason": "stop"}
 
-    monkeypatch.setitem(
-        registry.chat_providers, "tryingopen", FakeProvider()
+    monkeypatch.setitem(registry.chat_providers, "tryingopen", FakeProvider())
+    spec = ModelSpec(
+        id="tryingopen/z-ai/glm-5.3-flash",
+        provider="tryingopen",
+        upstream_model="z-ai/glm-5.3-flash",
+        capabilities=("chat",),
     )
+    monkeypatch.setattr(registry, "chat_model", lambda mid: spec)
     resp = client_auth_handler.post("/v1/chat/completions", json=PAYLOAD)
     assert resp.status_code in (200, 429)
 
@@ -197,14 +203,20 @@ def test_completions_open_without_key(client_auth_handler, monkeypatch):
 def test_completions_open_with_any_key(client_auth_handler, monkeypatch):
     # v7.7.1：聊天不再校验 key 对错，任意/错误 key 同样放行（仅 per-IP 频控）。
     from api.providers.registry import registry
+    from api.providers.base import ModelSpec
 
     class FakeProvider:
         async def chat_collect(self, model, messages, **kw):
             return {"text": "pong", "finish_reason": "stop"}
 
-    monkeypatch.setitem(
-        registry.chat_providers, "tryingopen", FakeProvider()
+    monkeypatch.setitem(registry.chat_providers, "tryingopen", FakeProvider())
+    spec = ModelSpec(
+        id="tryingopen/z-ai/glm-5.3-flash",
+        provider="tryingopen",
+        upstream_model="z-ai/glm-5.3-flash",
+        capabilities=("chat",),
     )
+    monkeypatch.setattr(registry, "chat_model", lambda mid: spec)
     resp = client_auth_handler.post(
         "/v1/chat/completions",
         json=PAYLOAD,
