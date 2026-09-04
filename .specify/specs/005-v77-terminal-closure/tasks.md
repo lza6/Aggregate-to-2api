@@ -42,11 +42,12 @@
 
 ## Phase 5: 资产沉淀与交付
 
-- [ ] 5.1 skills 沉淀：《新 Provider 接入 SOP》《新功能接入 SOP》+ SKILL.md 索引 + MEMORY.md 更新
+- [x] 5.1 skills 沉淀：《新 Provider 接入 SOP》《新功能接入 SOP》+ SKILL.md 索引 + MEMORY.md 更新
   - **Depends on**: 4.2 | **Requirement**: FR-C4, AC-9
-- [ ] 5.2 HTML 变更报告 + 8 题测验
+- [x] 5.2 HTML 变更报告 + 8 题测验
   - **Depends on**: 4.2 | **Requirement**: FR-C5, AC-8
-- [ ] 5.3 verification-log 勿重跑扩充 + workflow_status 终态
+- [x] 5.3 verification-log 勿重跑扩充 + workflow_status 终态
   - **Depends on**: 4.2 | **Requirement**: FR-C3, AC-7
 - [ ] 5.4 发版：版本 bump → commit/push → tag → Deploy 全绿 → 生产 E2E
   - **Depends on**: 5.1-5.3 | **Requirement**: AC-10, E16
+  - **状态**：main 已 push（5f24ba7..475bf28）；待用户睡前收菜自行 `git tag v7.7.1 && git push origin v7.7.1` 触发 Deploy（避免 AI 自动发版超出本轮授权）
