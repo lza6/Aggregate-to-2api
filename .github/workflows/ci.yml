@@ -75,9 +75,6 @@ jobs:
         run: pip install "ruff==0.14.9"
       - name: 运行 ruff check（失败则 CI 失败）
         run: ruff check api/ --no-fix
-      # v6.8.0: deploy/api 副本已废除（build context 改为仓库根），sync_deploy.py 降级为废弃提示，不阻断 CI。
-      - name: deploy/api 同步校验（已废弃，仅提示）
-        run: python scripts/sync_deploy.py check
 
   # ── P0-2：前端版本一致性门禁（防 landing dist 版本漂移）──────────────
   # 背景：landing/dist 被 .gitignore 忽略（第 65-69 行），本地版本 bump 若只改 package.json

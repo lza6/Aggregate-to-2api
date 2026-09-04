@@ -93,8 +93,7 @@ sudo docker compose build api && sudo docker compose up -d api
 
 ```bash
 # 服务器上（/home/ubuntu/imagefree-api）
-# 本地：python scripts/sync_deploy.py sync 已同步到 deploy/api/
-# 上传整个 deploy/api 后：
+# v6.8.0 起 build context = 仓库根（..），直接用根 api/ 源码构建，无需 sync_deploy 同步
 cd /home/ubuntu/imagefree-api
 sudo docker compose build api && sudo docker compose up -d api
 curl http://127.0.0.1:8100/v1/models        # 应返回 45 模型（4 提供商）
@@ -116,10 +115,10 @@ compose 的 api 服务 environment 加：
 
 ```yaml
 - IF_ACCOUNT_AUTO=1
-- IF_MINIMAXH3_ACCOUNT_TARGET=500   # minimaxh3 用完即弃 → 自动注册补到 500
+# minimaxh3 已于 v6.8.0 全量移除（IF_MINIMAXH3_ACCOUNT_TARGET 已废弃，填了不生效）
 - IF_NANOBANANA_ACCOUNT_TARGET=500  # nanobanana 每日签到续额 → 常驻 500
 ```
-验证：`curl /v1/account-pool` 看 `minimaxh3.ok` 是否增长、`auto_register: true`。
+验证：`curl /v1/account-pool` 看 `nanobanana.ok` 是否增长、`auto_register: true`。
 
 ### 4. 手动批量真实注册（500 号，服务器执行）
 

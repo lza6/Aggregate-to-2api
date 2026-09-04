@@ -27,7 +27,7 @@ jobs:
         # pytest-timeout 兜底单测 120s；faulthandler 在卡死时 dump 线程栈定位；
         # -p no:cacheprovider 避免缓存干扰；sessionfinish teardown 若卡 aiosqlite join，
         # job timeout-minutes=8 兜底整体 fail 而非挂 18min。
-        run: pytest tests/ -q -m "not integration and not chaos and not slow" --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --cov=api --cov-report=term --cov-fail-under=70
+        run: pytest tests/ -q -m "not integration and not chaos and not slow" --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --cov=api --cov-report=term --cov-fail-under=80
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"

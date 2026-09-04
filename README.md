@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-7.2.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-7.6.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -56,8 +56,8 @@ cd frontend
 npm install && npm run build
 cd ..
 
-# 启动 cf_solver（独立复用的 Turnstile 求解服务）
-python cf_solver/boterdrop_wrapper.py &
+# 启动 cf_solver（独立复用的 Turnstile 求解服务；脚本位于 deploy/cf_solver/）
+python deploy/cf_solver/boterdrop_wrapper.py &
 
 uvicorn api.main:app --host 0.0.0.0 --port 8100
 ```
@@ -184,9 +184,9 @@ export ANTHROPIC_API_KEY=$TFAI_KEY
 | `IF_CF_SOLVER_URL` | `http://127.0.0.1:8001` | cf_solver 地址 |
 | `IF_CORS_ORIGINS` | `*` | CORS 白名单（逗号分隔） |
 | `IF_GALLERY_PASSWORD` | 空 | 画廊密码（前端不硬编码） |
-| `IF_KOOKEEY_*` | 空 | Kookeey 住宅代理凭据（从环境注入，不入库） |
+| `IF_KOOKEEY_*` | — | **已废弃**（v6.8.0 kookeey 移除，配置不生效） |
 
-> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（110+ 项模板）、[`api/config/`](api/config/)（分组配置包，全部 IF_ 前缀）与 [`deploy/.env.production.example`](deploy/.env.production.example)（生产收紧模板，v7.3）。
+> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（120+ 项模板）、[`api/config/`](api/config/)（分组配置包，全部 IF_ 前缀）与 [`deploy/.env.production.example`](deploy/.env.production.example)（生产收紧模板）。注意：仅出现在模板中但 `api/config/` 无 `validation_alias` 映射的变量不生效（模板尾部有废弃变量清单）。
 
 ---
 
@@ -212,7 +212,7 @@ pytest tests/integration/ -q
 pytest -m slow -q
 ```
 
-> **CI 参考**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 单测 `-m "not integration and not chaos and not slow"`（覆盖门禁 70%）、集成 `-m "integration or chaos"`、`ruff check api/`、`sync_deploy.py check` 防 deploy/api 漂移。
+> **CI 参考**：[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — 单测 `-m "not integration and not chaos and not slow"`（覆盖门禁 80%）、集成 `-m "integration or chaos"`、`ruff check api/`。`sync_deploy.py` 已于 v6.8.0 废除（build context 改为仓库根），CI 不再运行。
 
 ---
 

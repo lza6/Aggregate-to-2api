@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v7.2.0
+# 版本: v7.6.0
 # 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
 #       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
 #       须从 deploy/ 目录运行：cd deploy && docker compose up -d
@@ -16,7 +16,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cfsolver
-    image: imagefree-cfsolver:7.2.0
+    image: imagefree-cfsolver:7.6.0
     container_name: imagefree-cfsolver
     restart: unless-stopped
     mem_limit: 1024m
@@ -78,7 +78,7 @@ services:
       - IF_BASE_URL=https://imagefree.net
       - IF_SITEKEY=0x4AAAAAACE-XLGoQUckKKm_
       - IF_API_KEYS=${IF_API_KEYS}
-      - IF_REQUESTS_PER_MINUTE=${IF_REQUESTS_PER_MINUTE:-30}
+      - IF_REQUESTS_PER_MINUTE=${IF_REQUESTS_PER_MINUTE:-20}
       # 免费代理池（aifreeforever 每 IP 每日限额必须）
       - IF_FREE_PROXY=1
       - IF_FREE_PROXY_REFRESH_MIN=10
