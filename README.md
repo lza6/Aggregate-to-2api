@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-7.7.4-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-7.7.5-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -125,13 +125,13 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/chat/usage` | — | **全站聊天实时用量（Token消耗、调用量、时延、各模型分布）** |
 | `GET /v1/chat/remaining` | — | **基于代理池多出口自动推算的实时可用额度预测** |
 
-### 🔑 鉴权与开放策略（v7.7.4）
+### 🔑 鉴权与开放策略（v7.7.5）
 
 - **生图 / 聊天**：公益开放，**不限 Key**（仅 per-IP 限速防刷）。`IF_API_KEYS` 配置后可用于 `/v1/stats` 等可选鉴权场景，但不限制生图/聊天调用。
 - **管理面写操作**（封禁/解封、DLQ 清空/重试、日志 WS）：需独立**管理 Key**（`IF_ADMIN_KEYS`），与业务 Key 分离轮换。站长在管理面板「📖 API 指南」页或「🛡️ 安全风控」页顶部横幅保存一次管理 Key，全站写操作自动携带 Bearer 头。
 
 ```
-业务 Key（IF_API_KEYS）：生图/聊天可选鉴权（v7.7.4 起不限 Key）
+业务 Key（IF_API_KEYS）：生图/聊天可选鉴权（v7.7.5 起不限 Key）
 管理 Key（IF_ADMIN_KEYS）：面板写操作强制鉴权（封禁/DLQ/日志）
 ```
 
