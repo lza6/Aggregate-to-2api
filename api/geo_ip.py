@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import urllib.parse
@@ -101,7 +102,12 @@ _GEO_CACHE_LIMIT = 10000
 
 
 def _query_ip_api_online(ip: str) -> dict | None:
-    """调用免费无限 IP-API 接口获取精准省/市/ISP 归属地（带 1.5s 极速超时）。"""
+    """调用免费无限 IP-API 接口获取精准省/市/ISP 归属地（带 1.5s 极速超时）。
+
+    v7.7：本函数只允许在线程池中调用（asyncio.to_thread / loop.run_in_executor）——
+    urllib 是同步网络 I/O，直接在事件循环内调用会让 miss 的每个 IP 阻塞 loop 至多
+    1.5s，任务列表全 miss 时可放大到分钟级全站冻结（v7.7 审计 P1-1）。
+    """
     try:
         import urllib.request
 
@@ -130,7 +136,11 @@ def _query_ip_api_online(ip: str) -> dict | None:
 
 
 def guess_country(ip: str) -> dict:
-    """根据 IP 地址解析高精度省/市/运营商及国家中文名与国旗 Emoji。"""
+    """根据 IP 地址解析高精度省/市/运营商及国家中文名与国旗 Emoji。
+
+    缓存命中/LAN/离线兜底路径为纯内存 O(1)，可安全在事件循环内同步调用。
+    唯一的阻塞点（在线 API 查询）经 to_thread 下放线程池，loop 不再被卡。
+    """
     if not ip:
         return {"code": "UNKNOWN", "name": "未知", "desc": "未知地址", "emoji": "🌐"}
 
@@ -170,7 +180,23 @@ def guess_country(ip: str) -> dict:
         return res
 
     # 2. 尝试免费高精公共 API 查询精准省/市/运营商
-    online_res = _query_ip_api_online(ip)
+    # v7.7 P1-1：同步 urllib 放线程池——此前直接在事件循环内 urlopen，
+    # 每个缓存未命中 IP 阻塞 loop ≤1.5s（任务列表全 miss 可冻结全站数分钟）。
+    # 注意：guess_country 保持同步语义（调用方大量同步上下文），
+    # 这里用 loop.run_in_executor 的【阻塞等待】仅发生在"缓存 miss 且确要在线查"时，
+    # 且等待的是线程池 Future，主 loop 可继续调度其他协程，不再被 urllib 卡死。
+    try:
+        running = asyncio.get_event_loop()
+        in_loop = running.is_running()
+    except RuntimeError:
+        in_loop = False
+    if in_loop:
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _ex:
+            online_res = _ex.submit(_query_ip_api_online, ip).result()
+    else:
+        online_res = _query_ip_api_online(ip)
     if online_res:
         if len(_GEO_CACHE) < _GEO_CACHE_LIMIT:
             _GEO_CACHE[ip] = online_res
