@@ -159,6 +159,7 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
                     "resolution": "1K",
                     "duration": None,
                     "priority": None,
+                    "images": None,
                 },
             )()
         )
@@ -181,6 +182,7 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
                     "resolution": "1K",
                     "duration": None,
                     "priority": None,
+                    "images": None,
                 },
             )()
         )
@@ -246,6 +248,7 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
                         "resolution": "1K",
                         "duration": None,
                         "priority": prio,
+                        "images": None,
                     },
                 )()
             )
