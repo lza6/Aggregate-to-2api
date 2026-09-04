@@ -133,9 +133,14 @@ jobs:
             # cfsolver 仍连旧网络实例、api 进新网络 → IF_CF_SOLVER_URL=http://cfsolver:8001
             # 跨网络 DNS 解析失败 → api 拿不到 token → 全站 502/求解熔断。
             # 修复：网络定义变更时必须 down 全量（含 cfsolver）再 up，让两容器同处新网络。
-            # 平时（无网络变更）down+up 也就几秒，零宕机由 Caddy 反代重试兜底。
+            # v7.7.2：cfsolver 镜像 tag 固定为 :latest（本地 build 一次后持续可用，不跟版本 bump），
+            # 但首次部署或 Dockerfile.cfsolver 变更时本地可能无该镜像 → --no-build 会导致 up 失败。
+            # 故先确保 cfsolver 镜像存在（缺失则 build），api 用 GHCR pull 的镜像，再 up。
             export DOCKER_BUILDKIT=0
             sudo docker compose down 2>/dev/null || true
+            # cfsolver 镜像不存在时先 build（api 镜像来自 GHCR，不在此 build）
+            sudo docker compose build cfsolver 2>/dev/null || \
+              { echo "cfsolver build 失败，尝试用旧镜像继续"; }
             sudo docker compose up -d --force-recreate --no-build
 
             # 等待健康
