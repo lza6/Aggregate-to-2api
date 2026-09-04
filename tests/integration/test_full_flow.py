@@ -64,7 +64,9 @@ class TestFullFlow:
         assert "token_pool" in body
         # P15: 新增段
         assert "providers" in body
-        assert set(body["providers"]) >= {"imagefree", "aifreeforever", "nanobanana"}
+        # v7.7.1：号池停用（IF_ACCOUNT_AUTO=0，测试默认）时 needs_account 提供商（nanobanana）
+        # 被 provider_summary 隐藏，只断言无账号提供商可见。
+        assert set(body["providers"]) >= {"imagefree", "aifreeforever"}
         for p in body["providers"].values():
             assert "status" in p and "last_check" in p
         assert "queue" in body
@@ -80,9 +82,10 @@ class TestFullFlow:
         body = r.json()
         items = body.get("items", {})
         assert "imagefree" in items
-        assert "nanobanana" in items
+        # v7.7.1：号池停用（IF_ACCOUNT_AUTO=0，测试默认）时 nanobanana 模型被 all_models_visible 过滤
+        assert "nanobanana" not in items
         assert "count" in body
-        assert body["count"] >= 30
+        assert body["count"] >= 1
 
     async def test_stats_endpoint(self, app_with_mocks):
         """统计端点返回完整结构。"""

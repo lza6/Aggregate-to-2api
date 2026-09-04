@@ -104,9 +104,11 @@ def test_meta_anonymous_no_full_key(monkeypatch):
     assert body["auth_enabled"] is True
 
 
-def test_generate_without_key_401(client):
+def test_generate_without_key_open(client):
+    # v7.7.1：公益定位——生图/图生图不再强制 IF_API_KEYS 业务 Key，无 key 也放行（200/202/429）。
+    # 配 key 仅用于 stats 等可选鉴权场景，不再限制生图调用。
     r = client.post("/v1/generate/async", json={"prompt": "t", "aspect_ratio": "1:1"})
-    assert r.status_code == 401
+    assert r.status_code in (200, 202, 429)
 
 
 def test_generate_with_key_passes_guard(client, monkeypatch):

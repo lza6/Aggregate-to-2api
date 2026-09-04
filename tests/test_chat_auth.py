@@ -178,18 +178,39 @@ def client_auth_handler(monkeypatch):
     return TestClient(make_app_with_error_handler())
 
 
-def test_completions_rejects_missing_key(client_auth_handler):
+def test_completions_open_without_key(client_auth_handler, monkeypatch):
+    # v7.7.1：公益定位——聊天端点不再强制 IF_API_KEYS 业务 Key，无 key 也放行（不限 key）。
+    # mock provider，避免真实上游调用
+    from api.providers.registry import registry
+
+    class FakeProvider:
+        async def chat_collect(self, model, messages, **kw):
+            return {"text": "pong", "finish_reason": "stop"}
+
+    monkeypatch.setitem(
+        registry.chat_providers, "tryingopen", FakeProvider()
+    )
     resp = client_auth_handler.post("/v1/chat/completions", json=PAYLOAD)
-    assert resp.status_code == 401
+    assert resp.status_code in (200, 429)
 
 
-def test_completions_rejects_wrong_key(client_auth_handler):
+def test_completions_open_with_any_key(client_auth_handler, monkeypatch):
+    # v7.7.1：聊天不再校验 key 对错，任意/错误 key 同样放行（仅 per-IP 频控）。
+    from api.providers.registry import registry
+
+    class FakeProvider:
+        async def chat_collect(self, model, messages, **kw):
+            return {"text": "pong", "finish_reason": "stop"}
+
+    monkeypatch.setitem(
+        registry.chat_providers, "tryingopen", FakeProvider()
+    )
     resp = client_auth_handler.post(
         "/v1/chat/completions",
         json=PAYLOAD,
         headers={"Authorization": "Bearer sk-wrong"},
     )
-    assert resp.status_code == 401
+    assert resp.status_code in (200, 429)
 
 
 def test_completions_accepts_valid_key(client_auth_handler, monkeypatch):
