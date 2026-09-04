@@ -129,29 +129,48 @@ jobs:
             tar -xzf /tmp/landing-dist.tgz -C ../landing/dist
             rm -f /tmp/frontend-dist.tgz /tmp/landing-dist.tgz
 
-            # v7.7：网络拓扑变更（subnet 固定 172.28.0.0/16）后，--no-deps 只重建 api 会导致
-            # cfsolver 仍连旧网络实例、api 进新网络 → IF_CF_SOLVER_URL=http://cfsolver:8001
-            # 跨网络 DNS 解析失败 → api 拿不到 token → 全站 502/求解熔断。
-            # 修复：网络定义变更时必须 down 全量（含 cfsolver）再 up，让两容器同处新网络。
-            # v7.7.2：cfsolver 镜像 tag 固定为 :latest（本地 build 一次后持续可用，不跟版本 bump），
-            # 但首次部署或 Dockerfile.cfsolver 变更时本地可能无该镜像 → --no-build 会导致 up 失败。
-            # 故先确保 cfsolver 镜像存在（缺失则 build），api 用 GHCR pull 的镜像，再 up。
+            # v7.7.12：优化部署停机窗口——subnet 已固定 172.28.0.0/16 且 cfsolver 镜像 tag
+            # 固定 :latest（首次 build 后持续可用），故不再每次 down 全量杀容器。
+            # 改为：cfsolver 保持运行（若不存在或 unhealthy 才重建），api 用 --no-deps
+            # 只 recreate 自身，停机窗口从 1-2 分钟缩到秒级（Caddy 反代重试兜底）。
             export DOCKER_BUILDKIT=0
-            sudo docker compose down 2>/dev/null || true
-            # cfsolver 镜像不存在时先 build（api 镜像来自 GHCR，不在此 build）
-            sudo docker compose build cfsolver 2>/dev/null || \
-              { echo "cfsolver build 失败，尝试用旧镜像继续"; }
-            sudo docker compose up -d --force-recreate --no-build
+            # cfsolver 健康检查：不存在或 unhealthy 才 build+up
+            if ! sudo docker ps --filter "name=imagefree-cfsolver" --filter "health=healthy" | grep -q imagefree-cfsolver; then
+              echo "cfsolver 不健康或不存在，重建"
+              sudo docker compose build cfsolver 2>/dev/null || \
+                { echo "cfsolver build 失败，尝试用旧镜像继续"; }
+              sudo docker compose up -d --force-recreate --no-build cfsolver
+              # 等 cfsolver 健康（最多 60s）
+              for i in $(seq 1 30); do
+                if sudo docker ps --filter "name=imagefree-cfsolver" --filter "health=healthy" | grep -q imagefree-cfsolver; then
+                  echo "cfsolver 健康（第 ${i} 次检查）"
+                  break
+                fi
+                sleep 2
+              done
+            else
+              echo "cfsolver 健康，保持运行不重建"
+            fi
+            # api 用 --no-deps 只 recreate 自身（cfsolver 不动，秒级停机）
+            sudo docker compose up -d --force-recreate --no-build --no-deps api
 
             # 等待健康
             echo "等待 API 健康..."
+            API_HEALTHY=0
             for i in $(seq 1 30); do
               if curl -s http://localhost:8100/v1/healthz | grep -q '"status":"ok"'; then
                 echo "API 健康（第 ${i} 次检查）"
+                API_HEALTHY=1
                 break
               fi
               sleep 2
             done
+            # v7.7.12：健康检查失败必须 exit 1，避免 Deploy 假成功（容器没起但 job 报绿）
+            if [ "$API_HEALTHY" -ne 1 ]; then
+              echo "❌ API 30 次检查未健康，部署失败（dump 容器日志）"
+              sudo docker logs imagefree-api --tail 30 2>&1 || true
+              exit 1
+            fi
 
             # 验证
             echo "=== 验证 ==="
