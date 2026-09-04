@@ -38,16 +38,15 @@ export function LogsPage() {
 
   const connectWs = useCallback(() => {
     if (unmountedRef.current) return;
-    // 鉴权已失败 / 重连次数熔断 → 停在 disconnected，等用户配置 Key 后手动点「立即重连」。
+    // v7.7.8：实时日志公益只读开放，访客无需管理 Key 即可连接 WS。
+    // 鉴权已失败 / 重连次数熔断 → 停在 disconnected（仅网络异常触发，非鉴权）。
     if (authFailedRef.current || reconnectCountRef.current >= MAX_RECONNECTS) {
       setConnStatus('disconnected');
       return;
     }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // 后端 /v1/logs/ws 走 check_admin_key（与 /v1/logs 一致），可用 ?api_key= query
-    // 或 Authorization/X-API-Key 头。WS 无法设头，故用 ?api_key= 传递本地管理 Key。
-    // 注意：?api_key= 是弱安全通道（会进 referer/历史），但管理面仅内网运维，可接受；
-    // 若本地未存管理 Key 则走开放模式 / 401 由后端决定。
+    // v7.7.8：/v1/logs/ws 已对访客只读开放（日志内容脱敏，无 prompt/api_key 明文）。
+    // 若本地存了管理 Key 仍透传（向后兼容 + 未来若恢复鉴权不破），但不强制。
     const adminKey = getStoredAdminKey();
     const wsUrl = adminKey
       ? `${protocol}//${window.location.host}/v1/logs/ws?api_key=${encodeURIComponent(adminKey)}`

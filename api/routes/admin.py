@@ -488,32 +488,22 @@ async def metrics():
 
 @router.get("/v1/logs")
 async def get_logs(request: Request, lines: int = Query(50, ge=1, le=200)):
-    """返回最近 N 行日志（P3-6：需管理 Key 鉴权，防止公网匿名扫接口拉取内部日志）。
+    """返回最近 N 行日志。
 
-    向后兼容：若未配置 IF_ADMIN_KEYS 且未配置 IF_API_KEYS 且 IF_ADMIN_KEY_OPEN=1
-    （本地运维开放模式）则放行；配置了任意 Key 则需 admin key。
+    v7.7.8：公益开放——实时日志对访客只读可见（展示系统工作状态：worker/求解器/代理轮换）。
+    日志已脱敏：log_buffer 不记录 prompt 明文/api_key 明文（auth._extract_key 仅 warning 不打印 key）。
+    管理面写操作（封禁/DLQ 清空）仍需管理 Key，此处只读端点开放。
     """
-    check_admin_key(request, scope="admin-logs")
     return {"logs": log_buffer_handler.snapshot(lines)}
 
 
 @router.websocket("/v1/logs/ws")
 async def log_websocket(websocket: WebSocket):
-    """WebSocket 实时日志推送（P3-6：与 /v1/logs 一致需管理 Key 鉴权）。
+    """WebSocket 实时日志推送（v7.7.8：公益只读开放，访客可见实时日志流）。
 
-    通过 query ?api_key= 或子协议头传递 admin key；鉴权失败直接关闭连接（code=4401）。
-    向后兼容：未配置任何 Key 且 IF_ADMIN_KEY_OPEN=1 时放行（本地运维开放模式）。
+    日志内容已脱敏（无 prompt/api_key 明文），对访客只读开放。
+    管理面写操作（封禁/DLQ 清空）仍需管理 Key，WS 推送不涉写操作。
     """
-    # 构造伪 Request 以复用 check_admin_key（ws 无 Request 对象）
-    from starlette.requests import Request as StarletteRequest
-
-    scope = websocket.scope
-    fake_request = StarletteRequest(scope, receive=lambda: None, send=lambda _: None)
-    try:
-        check_admin_key(fake_request, scope="admin-logs")
-    except Exception:
-        await websocket.close(code=4401)
-        return
     await register_ws(websocket)
     try:
         while True:

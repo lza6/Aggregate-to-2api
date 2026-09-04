@@ -1,9 +1,8 @@
-"""P3-6: /v1/logs 端点管理 Key 鉴权测试。
+"""v7.7.8: /v1/logs 端点鉴权测试（公益开放只读）。
 
 覆盖：
-- 未配置任何 Key（IF_ADMIN_KEY_OPEN=1 开放模式）→ 放行
-- 配置 IF_API_KEYS → /v1/logs 需 admin key，无 key 401
-- 配置 IF_ADMIN_KEYS → /v1/logs 需 admin key，无 key 401
+- 开放模式 / 配置 Key / 独立 admin key → /v1/logs 均 200（v7.7.8 起对访客只读开放）
+- ?api_key= query 不落入访问日志（脱敏通道不回归）
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ def open_mode_client(monkeypatch):
 
 @pytest.fixture()
 def secured_client(monkeypatch):
-    """配置了 IF_API_KEYS → /v1/logs 需 admin key。"""
+    """配置了 IF_API_KEYS（v7.7.8：/v1/logs 仍只读开放）。"""
     monkeypatch.setenv("IF_API_KEYS", "sk-test-key-12345")
     monkeypatch.setenv("IF_ADMIN_KEYS", "")
     monkeypatch.setenv("IF_ADMIN_KEY_OPEN", "")
@@ -51,7 +50,7 @@ def secured_client(monkeypatch):
 
 @pytest.fixture()
 def admin_secured_client(monkeypatch):
-    """配置了独立 IF_ADMIN_KEYS → /v1/logs 需 admin key。"""
+    """配置了独立 IF_ADMIN_KEYS（v7.7.8：/v1/logs 仍只读开放）。"""
     monkeypatch.setenv("IF_API_KEYS", "sk-test-key-12345")
     monkeypatch.setenv("IF_ADMIN_KEYS", "sk-admin-key-67890")
     monkeypatch.setenv("IF_ADMIN_KEY_OPEN", "")
@@ -64,30 +63,28 @@ def admin_secured_client(monkeypatch):
 
 class TestLogsAdminAuth:
     def test_open_mode_allows_logs(self, open_mode_client):
-        """开放模式（无 Key + ADMIN_KEY_OPEN=1）放行 /v1/logs。"""
+        """开放模式放行 /v1/logs。"""
         r = open_mode_client.get("/v1/logs?lines=10")
         assert r.status_code == 200
         assert "logs" in r.json()
 
-    def test_secured_rejects_without_key(self, secured_client):
-        """配置了业务 Key 时，/v1/logs 无 key → 401。"""
+    def test_secured_allows_without_key(self, secured_client):
+        """v7.7.8：配置了业务 Key 时，/v1/logs 无 key 也放行（公益只读开放）。"""
         r = secured_client.get("/v1/logs?lines=10")
-        assert r.status_code == 401
+        assert r.status_code == 200
 
     def test_secured_accepts_with_admin_key(self, secured_client):
-        """配置了业务 Key 时，/v1/logs 携带 admin key（继承业务 Key）→ 200。"""
+        """携带 admin key（继承业务 Key）→ 200。"""
         r = secured_client.get("/v1/logs?lines=10", headers={"Authorization": "Bearer sk-test-key-12345"})
         assert r.status_code == 200
 
-    def test_admin_secured_rejects_wrong_key(self, admin_secured_client):
-        """配置了独立 admin key 时，业务 key 不能访问 /v1/logs。"""
-        r = admin_secured_client.get(
-            "/v1/logs?lines=10", headers={"Authorization": "Bearer sk-test-key-12345"}
-        )
-        assert r.status_code == 401
+    def test_admin_secured_allows_without_key(self, admin_secured_client):
+        """v7.7.8：配置了独立 admin key 时，/v1/logs 无 key 也放行（公益只读开放）。"""
+        r = admin_secured_client.get("/v1/logs?lines=10")
+        assert r.status_code == 200
 
     def test_admin_secured_accepts_correct_key(self, admin_secured_client):
-        """配置了独立 admin key 时，正确 admin key 放行。"""
+        """正确 admin key 放行。"""
         r = admin_secured_client.get(
             "/v1/logs?lines=10", headers={"Authorization": "Bearer sk-admin-key-67890"}
         )
