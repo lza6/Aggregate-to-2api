@@ -288,6 +288,11 @@ class TestRequestGuard:
             rg.check_generate_request(_make_request("203.0.113.25"))
 
     async def test_auto_block_after_repeated_429(self, blocklist_store, monkeypatch):
+        # v7.6 flaky 根修：显式先建表。原实现依赖 _auto_block_ip task 里的
+        # add_or_update 首次建表——轮询期间多个 fire-and-forget task 并发竞态
+        # （init_schema check-then-act + Windows tmp DB 首连慢），偶发
+        # "no such table: ip_blocklist" → 403 永不出现 → assert blocked 失败。
+        await blocklist_store.init_schema()
         monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 2)
         monkeypatch.setattr(config, "IF_AUTO_BLOCK_ENABLED", True)
         monkeypatch.setattr(config, "IF_AUTO_BLOCK_THRESHOLD", 2)
@@ -304,9 +309,12 @@ class TestRequestGuard:
             rg.check_generate_request(_make_request(ip))  # 第 4 次 429（超限 #2 → 触发自动封禁）
         assert e2.value.status_code == 429
 
-        # 轮询等待异步自动封禁落地（不再用固定 sleep，防 CI 慢机）
+        # 轮询等待异步自动封禁落地（不再用固定 sleep，防 CI 慢机）。
+        # v7.6 flaky 根治双保险：① 用例开头显式 init_schema 预建表，消除
+        # "首次建表发生在并发 429 task 中"的竞态；② 轮询预算 250×0.02s=5s，
+        # 覆盖 Windows 本机 tmp DB 首连 + Defender 实扫偶发延迟（CI ubuntu <100ms）。
         blocked = False
-        for _ in range(50):
+        for _ in range(250):
             try:
                 rg.check_generate_request(_make_request(ip))
             except AppError as e:
@@ -316,7 +324,7 @@ class TestRequestGuard:
                 if e.status_code != 429:
                     raise
             await asyncio.sleep(0.02)
-        assert blocked, "自动封禁未在预期时间内生效"
+        assert blocked, "自动封禁未在预期时间内生效（5s）"
 
         got = await store.get(ip)
         assert got is not None and got["block_type"] == "block"
