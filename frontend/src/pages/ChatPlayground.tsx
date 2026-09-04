@@ -13,7 +13,7 @@ import { MessageBubble, ModelPicker } from '../components/chat/ChatComponents';
 import { useChatStream } from '../components/chat/useChatStream';
 
 export function ChatPlayground() {
-  const { data: modelsData, loading: modelsLoading } = useApi<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>(fetchChatModels);
+  const { data: modelsData, loading: modelsLoading, error: modelsError, reload: reloadModels } = useApi<{ items: ChatModelInfo[]; count: number; auth_required?: boolean }>(fetchChatModels);
   const { data: remaining } = useApi<ChatRemaining>(fetchChatRemaining, { intervalMs: 30000 });
   const { data: providersData } = useApi(() => fetchProviders());
   const { data: usage } = useApi<ChatUsageStats>(() => fetchChatUsage('1h'), { intervalMs: 60000 });
@@ -214,6 +214,13 @@ export function ChatPlayground() {
           <h1 className="page-title">在线聊天 <span className="title-badge">AI Playground</span></h1>
           <p className="page-desc">选择模型，直接体验统一 AI 聊天服务与流式响应能力</p>
         </div>
+        {/* v7.7 UX：模型列表加载失败不再静默锁死，给出可见错误与重试 */}
+        {modelsError && (
+          <div className="tf-card" style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--danger-text)', background: 'var(--danger-bg)', borderColor: 'var(--danger-border)' }}>
+            模型目录加载失败：{modelsError.message}
+            <button className="tf-btn tf-btn-secondary tf-btn-sm" style={{ marginLeft: 8 }} onClick={reloadModels}>🔄 重试</button>
+          </div>
+        )}
         <div className="chat-header-actions">
           <button className="tf-btn tf-btn-secondary tf-btn-sm" onClick={() => setShowApiPanel(v => !v)}>
             🔑 API 接入
