@@ -598,6 +598,7 @@ class DB:
         "type",
         "model",
         "aspect_ratio",
+        "prompt",
         "client_ip",
         "user_agent",
     )
