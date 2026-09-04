@@ -1,7 +1,7 @@
 import { fetchTasks } from '../api';
 import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Task } from '../api';
 
 export function TasksPage() {
@@ -10,6 +10,9 @@ export function TasksPage() {
     () => fetchTasks({ limit: 50, status: status || undefined }),
     { intervalMs: 10000 },
   );
+
+  // v7.7 UX P1：状态筛选变化立即拉取（此前只改 state，最长要等 10s 轮询才反映，用户会判定"筛选坏了"）
+  useEffect(() => { void reload(); }, [status, reload]);
 
   const tasks: Task[] = data?.items ?? [];
   const total = data?.total ?? 0;

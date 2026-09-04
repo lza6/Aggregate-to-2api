@@ -120,10 +120,48 @@ export function SecurityPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (error && !data) {
+    // v7.7 UX P1：无 Key 时 fetchBlocklist 401 会走这里——若整页早退，Key 输入横幅
+    // （本页下方）永不可达，自举死锁：没 Key → 401 → 看不到保存 Key 的地方。
+    // 修复：仍渲染 Key 横幅 + 管理操作区，仅封禁列表区显示错误态。
     return (
       <div className="security-container">
-        <div className="page-header"><h1 className="page-title">安全风控</h1></div>
-        <ErrorRetry message={error.message} onRetry={reload} />
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">安全风控</h1>
+            <p className="page-desc">IP 动态封禁 / 解封 / 列表与状态查询（写操作需管理 Key 鉴权）</p>
+          </div>
+          <button onClick={reload} disabled={loading} className="tf-btn tf-btn-secondary">
+            <span>🔄</span> 刷新
+          </button>
+        </div>
+        <div className="admin-key-banner tf-card">
+          <div className="akb-icon">🔑</div>
+          <div className="akb-body">
+            <div className="akb-title">管理 Key（Authorization: Bearer 头）</div>
+            <div className="akb-desc">
+              封禁 / 解封 / 列表 / 状态查询均需携带管理 Key（环境变量 <code>IF_ADMIN_KEYS</code>）。
+              本面板仅将 Key 保存在本浏览器 localStorage，写操作随请求 Bearer 头发送；只读端点不携带。
+            </div>
+          </div>
+          <div className="akb-input-wrap">
+            <input
+              type="password"
+              aria-label="管理 Key（仅本地保存）"
+              placeholder="粘贴管理 Key（仅本地保存）"
+              value={adminKey}
+              onChange={e => setAdminKey(e.target.value)}
+              className="tf-input akb-input"
+            />
+            <button onClick={saveKey} className="tf-btn tf-btn-primary tf-btn-sm">保存</button>
+          </div>
+        </div>
+        {(error instanceof Error && (error as { status?: number }).status === 401) || (error instanceof Error && (error as { status?: number }).status === 403) ? (
+          <div className="tf-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--warning-text)', background: 'var(--warning-bg)', borderColor: 'var(--warning-border)' }}>
+            🔑 需要管理 Key 才能查看封禁列表。请在上方横幅保存管理 Key 后点「刷新」。{error.message ? `（${error.message}）` : ''}
+          </div>
+        ) : (
+          <ErrorRetry message={error?.message ?? '加载失败'} onRetry={reload} />
+        )}
       </div>
     );
   }
