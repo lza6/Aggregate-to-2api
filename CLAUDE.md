@@ -108,7 +108,7 @@ CI 流水线：`.github/workflows/ci.yml`（单测 + 集成 + ruff + sync_deploy
 
 ## 约定
 
-- **环境变量统一 `IF_` 前缀**：`IF_HOST`/`IF_PORT`/`IF_CF_SOLVER_URL`/`IF_CORS_ORIGINS`/`IF_API_KEYS`/`IF_DB_FILE` 等，全部经 `api/config/` 分组加载；`.env.example`（110+ 项模板）+ `deploy/.env.production.example`（生产收紧：CORS 白名单/独立管理 Key/CSP/限流）。
+- **环境变量统一 `IF_` 前缀**：`IF_HOST`/`IF_PORT`/`IF_CF_SOLVER_URL`/`IF_CORS_ORIGINS`/`IF_API_KEYS`/`IF_DB_FILE` 等，全部经 `api/config/` 分组加载；`.env.example`（160+ 项模板）+ `deploy/.env.production.example`（生产收紧：CORS 白名单/独立管理 Key/CSP/限流）。
 - **聊天端点鉴权**：`/v1/chat/completions`、`/v1/messages` 受 `IF_API_KEYS` 保护（Bearer / `X-API-Key` / `?api_key=` 三种传法）；生图主链路 `/v1/generate*` 公益开放不受影响。
 - **路由引擎**：MAB-EWMA 打分 `Score=(成功率/log10时延)×负载惩罚`，10% 探索率 + 熔断器；`/v1/routing/records` 可查节点评分快照。
 - **SSE 事件流**：每任务 `subscribe`/`publish`/`replay`，`Last-Event-ID` 断线补偿；全局广播 `/v1/events/tasks` 向后兼容。

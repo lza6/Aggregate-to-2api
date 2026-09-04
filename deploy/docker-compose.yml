@@ -41,7 +41,9 @@ services:
 
   api:
     # v6.8.0: 优先用 GHCR 镜像（CI 自动 push），fallback 本地 build
-    image: ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest
+    # v7.7 P1-2 修复：镜像名可被 API_IMAGE 覆盖（deploy.yml fallback / SOP §8.1 tag 回滚
+    # 传 export API_IMAGE=ghcr.io/...:<tag> 即生效；此前硬编码 latest 导致回滚机制断裂）。
+    image: ${API_IMAGE:-ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest}
     # build:  # 无镜像时本地构建（CI 已 push 镜像，通常不需要）
     #   context: ..
     #   dockerfile: deploy/Dockerfile.api
@@ -65,6 +67,12 @@ services:
       - ../frontend/dist:/app/frontend/dist:ro
       # 公开落地页产物（宿主机构建 landing/dist → 只读挂载；后端 / 静态出）
       - ../landing/dist:/app/landing/dist:ro
+    # v7.7 P1-1 修复：加载 deploy/.env 全量环境变量。
+    # 此前 environment 白名单仅透传 2 项，.env.production.example 的 15 项生产收紧
+    # （CORS/AdminKeys/自动封禁/CSP/限流/OTel 等）全部不进容器 → 整体失效。
+    # env_file 优先级低于 environment 段（同变量以 environment 为准，保持显式覆写能力）。
+    env_file:
+      - .env
     environment:
       - IF_CF_SOLVER_URL=http://cfsolver:8001
       # P1-6 多节点：横向扩展时改为逗号分隔多 URL，如 http://cfsolver:8001,http://cfsolver2:8001

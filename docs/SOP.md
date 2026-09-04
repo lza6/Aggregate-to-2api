@@ -41,7 +41,7 @@ cd ../私单/GPT自动化注册的项目/cf_solver
 curl http://127.0.0.1:8100/v1/healthz
 # 预期: {"status":"ok","cf_solver":"up",...}
 curl http://127.0.0.1:8100/v1/models
-# 预期: 返回 45+ 模型列表（4 提供商）
+# 预期: 返回 模型列表（5 提供商）
 ```
 
 ### 1.2 服务器 Docker 启动
@@ -57,8 +57,8 @@ curl https://imagefree.tingfengai.art/v1/healthz
 Compose 服务结构：
 | 服务 | 容器名 | 端口 | 资源限制 | 说明 |
 |------|--------|------|----------|------|
-| cfsolver | `imagefree-cfsolver` | 8001（仅内部） | mem 1500m, cpus 2 | Turnstile 求解，healthcheck 30s |
-| api | `imagefree-api` | 8100（公网） | mem 256m, cpus 1 | FastAPI 服务，`depends_on` cfsolver 健康，挂载 `./data` |
+| cfsolver | `imagefree-cfsolver` | 8001（仅内部） | mem 1024m | Turnstile 求解，healthcheck 30s |
+| api | `imagefree-api` | 8100（公网） | mem 512m, cpus 2 | FastAPI 服务，`depends_on` cfsolver 健康，挂载 `./data` + dist |
 
 停止服务：`sudo docker compose down`（保留 `./data` 数据不丢）。
 
@@ -85,9 +85,9 @@ npm run preview                  # 本地预览构建产物
 2. `npm run build`
 3. 将 dist 部署到服务器（见 §3.2）
 
-> 生产静态服分为两类：
-> - **API 文档首页**：`api/static/`（`docs.html` 等，随 api 镜像同步部署，见 sync_deploy 的 DIRS）
-> - **React 看板前端**：`frontend/dist/`（实时日志、画廊、metrics 看板等）
+> 生产静态服分为两类（均由后端 `api/main.py` 挂载）：
+> - **公开落地页**：`landing/dist/`（Vue3，挂 `/`，v7.4 起）
+> - **React 看板前端**：`frontend/dist/`（挂 `/admin`，实时日志、画廊、metrics 看板等）
 
 ---
 
@@ -112,10 +112,10 @@ cd frontend; npm run build
 
 ```bash
 cd /home/ubuntu/imagefree-api
-# 拉取最新 API 镜像（GHCR，CI 已推送）；失败则本地 build 兜底
+# 拉取最新 API 镜像（GHCR，CI 已推送）；失败则本地 build 兜底（v7.7：compose image 可被 API_IMAGE 覆盖，兜底镜像名即生效）
 sudo docker pull ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest 2>/dev/null && \
   export API_IMAGE="ghcr.io/lza6/aggregate-to-2api/imagefree-api:latest" || \
-  { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:6.8.0 ..; }
+  { echo "GHCR 镜像拉取失败，本地 build"; export DOCKER_BUILDKIT=0; sudo docker build --no-cache -f Dockerfile.api -t imagefree-api:local ..; export API_IMAGE="imagefree-api:local"; }
 
 # 仅更新 api 服务（最常见）
 sudo docker compose up -d api
@@ -176,7 +176,7 @@ sudo docker logs --tail 50 imagefree-api     # 无异常堆栈
 
 ### 4.4 内存 / 磁盘
 
-- **内存不足**：服务器 2G 内存紧张。cf_solver 限 1.5G、api 限 256M（compose 已配 mem_limit）。给 cf_solver 加浏览器槽前先确认 RAM（每槽 ≈0.3GB+）
+- **内存不足**：服务器 2G 内存紧张。cf_solver 限 1024m、api 限 512m cpus 2（compose 已配）。给 cf_solver 加浏览器槽前先确认 RAM（每槽 ≈0.3GB+）
 - **磁盘增长**：`data/imagefree.db` 随请求量增长，`IF_DB_RETENTION_DAYS` 控制保留天数
 - **base64 文件**：`data/imgs/` 自动清理（`IF_BASE64_FILE_TTL`）
 - 日志已限容：compose 日志 `max-size: 10m, max-file: 3`，不会无限膨胀
@@ -457,7 +457,7 @@ python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db 
 | `IF_OTEL_ENABLED` | 0 | 0 | OpenTelemetry 追踪开关 |
 | `IF_DB_RETENTION_DAYS` | — | 按需 | DB 记录保留天数 |
 
-完整开关与说明见 `api/config.py`、`.env.example`、`deploy/.env.example`。
+完整开关与说明见 `api/config/` 包（分组配置，165 项 `IF_*`）、`deploy/.env.example`、`deploy/.env.production.example`。
 
 ---
 
@@ -488,7 +488,7 @@ python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db 
 |------|------|------|
 | `/v1/healthz` status=degraded | `solver_status` 字段 | cfsolver 容器挂 → `docker compose restart cfsolver`；solve_consecutive_failures>5 → 看 solver_guard 熔断日志 |
 | 生成请求全 429 | IF_RATE_TOKEN_CAPACITY/滑窗 | 单 IP 超限是预期；全部 IP 429 → 查 `_l1_token_buckets` 是否污染、代理池是否枯竭 |
-| 任务卡 queued 不动 | workers 数 + token_pools | worker 全忙 → 看 IF_WORKERS_AUTO；token 池空 → `solve_avg_seconds` 飙升说明 cf_solver 慢 |
+| 任务卡 queued 不动 | workers 数 + token_pools | worker 全忙 → 看 IF_WORKER_AUTO；token 池空 → `solve_avg_seconds` 飙升说明 cf_solver 慢 |
 | 502/504 网关错 | api 容器 OOM | `docker inspect imagefree-api \| grep OOMKilled`；mem_limit 512m 不够则查内存泄漏 |
 | nanobanana 号池枯竭 | /admin 号池页 | registerer 是否在跑（`/v1/account-pool` growth_stats）；邮箱源全 429 → 看 email-sources last_error |
 | 部署后接口 500 | 版本不齐/迁移漏 | `docker logs imagefree-api --tail 50`；常见是 package.json 版本与 app.version 不一致（CI 测试会拦） |

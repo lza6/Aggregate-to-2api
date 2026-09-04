@@ -41,9 +41,14 @@
 
 ```bash
 git clone https://github.com/lza6/Aggregate-to-2api.git
-cd Aggregate-to-2api/deploy
+cd Aggregate-to-2api
 
-# 编辑 docker-compose.yml 按需配置（含 IF_SITEKEY / IF_FREE_PROXY 等）
+# ⚠ 前端产物 dist/ 不入 git（.gitignore），compose 挂载的是宿主机目录 —— 必须先在宿主机构建：
+cd frontend && npm ci && npm run build && cd ..
+cd landing && npm ci && npm run build && cd ..
+
+cd deploy
+# 编辑 deploy/.env（或 cp .env.production.example .env 按生产模板收紧；v7.7 起 env_file 会全量注入容器）
 docker compose up -d
 ```
 
@@ -52,9 +57,9 @@ docker compose up -d
 ```bash
 pip install -r requirements.txt
 
-cd frontend
-npm install && npm run build
-cd ..
+# 两个前端产物都要构建（landing 挂 /，frontend 挂 /admin；缺 landing 则根路径 404）
+cd frontend && npm install && npm run build && cd ..
+cd landing && npm install && npm run build && cd ..
 
 # 启动 cf_solver（独立复用的 Turnstile 求解服务；脚本位于 deploy/cf_solver/）
 python deploy/cf_solver/boterdrop_wrapper.py &
@@ -62,7 +67,7 @@ python deploy/cf_solver/boterdrop_wrapper.py &
 uvicorn api.main:app --host 0.0.0.0 --port 8100
 ```
 
-访问 `http://localhost:8100` 查看首页仪表盘，`http://localhost:8100/admin` 查看 React 管理面板。
+访问 `http://localhost:8100` 查看落地页，`http://localhost:8100/admin` 查看 React 管理面板。
 
 ---
 
@@ -186,7 +191,7 @@ export ANTHROPIC_API_KEY=$TFAI_KEY
 | `IF_GALLERY_PASSWORD` | 空 | 画廊密码（前端不硬编码） |
 | `IF_KOOKEEY_*` | — | **已废弃**（v6.8.0 kookeey 移除，配置不生效） |
 
-> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（120+ 项模板）、[`api/config/`](api/config/)（分组配置包，全部 IF_ 前缀）与 [`deploy/.env.production.example`](deploy/.env.production.example)（生产收紧模板）。注意：仅出现在模板中但 `api/config/` 无 `validation_alias` 映射的变量不生效（模板尾部有废弃变量清单）。
+> **完整环境变量**：见 [`deploy/.env.example`](deploy/.env.example)（160+ 项模板）、[`api/config/`](api/config/)（分组配置包，全部 IF_ 前缀）与 [`deploy/.env.production.example`](deploy/.env.production.example)（生产收紧模板）。注意：仅出现在模板中但 `api/config/` 无 `validation_alias` 映射的变量不生效（模板尾部有废弃变量清单）。
 
 ---
 
