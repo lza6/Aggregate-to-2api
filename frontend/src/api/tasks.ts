@@ -4,14 +4,23 @@ import { apiFetch, adminHeaders } from './core';
 export interface Task {
   id: string;
   status: string;
-  prompt: string;
+  prompt: string | null;
   image_url: string | null;
+  /** 画廊/详情用：后端 task_to_public 会把 file:// base64 读出内联（<10MB 时） */
+  image_base64?: string | null;
+  image_mime?: string | null;
   error: string | null;
   duration_sec: number | null;
   created_at: number;
+  /** txt | img | vid（txt2img/img2img/txt2vid），后端默认 txt */
+  type?: string;
   model: string;
+  aspect_ratio?: string | null;
   client_ip?: string | null;
   client_location?: string | null;
+  user_agent?: string | null;
+  /** 阶段耗时拆解（当前仅 total_sec，预留扩展） */
+  timings?: Record<string, number>;
 }
 
 export interface DLQItem {

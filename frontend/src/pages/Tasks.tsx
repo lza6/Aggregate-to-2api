@@ -87,7 +87,7 @@ export function TasksPage() {
                     <span className="task-model-pill">{t.model}</span>
                   </td>
                   <td>
-                    <div className="task-prompt-text" title={t.prompt}>
+                    <div className="task-prompt-text" title={t.prompt ?? undefined}>
                       {t.prompt || <span style={{ color: 'var(--text-muted)' }}>-</span>}
                     </div>
                   </td>
