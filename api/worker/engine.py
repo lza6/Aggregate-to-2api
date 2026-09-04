@@ -804,6 +804,19 @@ class Engine:
             except Exception as exc:
                 log.warning("IMP-11 画廊缓存失效失败（可忽略）: %s", exc)
 
+        # v7.7.4: 反滥用——任务失败时记录调用方 IP 违规，窗口内高频失败自动入黑名单。
+        # 防恶意刷资源（如脚本批量提交必然失败的 prompt 消耗队列/求解配额）。
+        if status == "error":
+            try:
+                from ..request_guard import _record_auto_block_violation as _record
+                # 从 DB 行回查 client_ip（_finish 入参无 ip，但落库的 mark_finished 已写 client_ip）
+                row = await self.db.get(task_id)
+                ip = (row or {}).get("client_ip") or ""
+                if ip and ip != "unknown":
+                    _record(ip, "task-failure-burst")
+            except Exception as exc:
+                log.debug("反滥用违规记录失败（可忽略）: %s", exc)
+
     async def _generate_once(self, row: dict[str, Any], token: str, proxy: str | None = None) -> dict[str, Any]:
         """提交生成并轮询到出图。
 

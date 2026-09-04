@@ -316,6 +316,9 @@ class Settings(BaseSettings):
     if_admin_keys: str = Field("", validation_alias="IF_ADMIN_KEYS")
     # 显式开放模式：仅当配置为空且设置 IF_ADMIN_KEY_OPEN=1（本地运维/内网）时放行管理端
     if_admin_key_open: bool = Field(False, validation_alias="IF_ADMIN_KEY_OPEN")
+    # v7.7.4: 管理员申诉联系方式（被封禁用户可据此联系解封）。空=不展示。
+    # 展示于安全风控页 + 封禁响应提示。仅管理端可见配置值，不泄露给匿名访客的写操作响应。
+    if_admin_contact: str = Field("", validation_alias="IF_ADMIN_CONTACT")
     _db: DBSettings | None = None
     _http: HTTPSettings | None = None
     _solver: SolverSettings | None = None
@@ -934,6 +937,7 @@ IF_AUTO_BLOCK_TTL_SECONDS = settings.if_auto_block_ttl_seconds
 # ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
 IF_ADMIN_KEYS = settings.if_admin_keys
 IF_ADMIN_KEY_OPEN = settings.if_admin_key_open
+IF_ADMIN_CONTACT = settings.if_admin_contact
 
 # ── CORS 白名单（模块级便捷引用；运行时不可变，直接读 settings.if_cors_origins 修改）──
 CORS_ORIGINS = "*"
@@ -1168,6 +1172,7 @@ __all__ = [
     "IF_TRUSTED_PROXIES",
     "IF_ADMIN_KEYS",
     "IF_ADMIN_KEY_OPEN",
+    "IF_ADMIN_CONTACT",
     "IF_AUTO_BLOCK_ENABLED",
     "IF_AUTO_BLOCK_THRESHOLD",
     "IF_AUTO_BLOCK_WINDOW_SECONDS",

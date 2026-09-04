@@ -18,7 +18,13 @@ description: 听风AI imagefree_api 项目开发工作流指南。涉及本仓�
 - **零鉴权部署** — 开箱即用；Docker Compose 一键部署
 
 技术栈：Python 3.11+ / FastAPI / uvicorn / SQLite(aiosqlite) / httpx / pydantic-v2 / React 19 + Vite 6 + TS / Vue3 landing。
-当前版本 v7.2.0（改动前先核对 pyproject.toml 实际版本）。
+当前版本 v7.7.3（改动前先核对 pyproject.toml 实际版本）。
+
+> **v7.7.4 鉴权契约**（必读）：
+> - 生图 `/v1/generate*`、聊天 `/v1/chat/*`、`/v1/messages`：**公益开放不限 Key**（`guard_generate_request`/`guard_chat_request` 已移除 `check_api_key`，仅 per-IP 限速防刷）。
+> - 管理面写操作（封禁/解封、DLQ 清空/重试、日志 WS、priority=0 队列）：**保留管理 Key 鉴权**（`IF_ADMIN_KEYS`，`check_admin_key`）。
+> - 号池停用（`IF_ACCOUNT_AUTO=0`，生产默认）时，`needs_account=True` 的提供商（nanobanana/minimaxh3）被 `provider_summary()`/`all_models_visible()` 隐藏（前端不可见、`/v1/models` 不返回，但适配器与 account_pool 能力保留，开号池即恢复）。
+> - 生产真实 IP：compose subnet `172.28.0.0/16` + Dockerfile `--proxy-headers --forwarded-allow-ips` + `.env` `IF_TRUSTED_PROXIES=172.28.0.1` 三者配合。
 
 线上演示：https://imagefree.tingfengai.art （腾讯云东京，公益开放）
 

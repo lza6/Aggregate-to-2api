@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-7.7.3-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-7.7.4-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -125,32 +125,32 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/chat/usage` | — | **全站聊天实时用量（Token消耗、调用量、时延、各模型分布）** |
 | `GET /v1/chat/remaining` | — | **基于代理池多出口自动推算的实时可用额度预测** |
 
-### 🔑 聊天 API 鉴权（防滥用）
+### 🔑 鉴权与开放策略（v7.7.4）
 
-聊天端点（`/v1/chat/completions`、`/v1/messages`）受固定 Key 保护：
-服务端配置环境变量 `IF_API_KEYS=<key1>,<key2>` 即启用；为空则开放。客户端三种传法任选其一：
+- **生图 / 聊天**：公益开放，**不限 Key**（仅 per-IP 限速防刷）。`IF_API_KEYS` 配置后可用于 `/v1/stats` 等可选鉴权场景，但不限制生图/聊天调用。
+- **管理面写操作**（封禁/解封、DLQ 清空/重试、日志 WS）：需独立**管理 Key**（`IF_ADMIN_KEYS`），与业务 Key 分离轮换。站长在管理面板「📖 API 指南」页或「🛡️ 安全风控」页顶部横幅保存一次管理 Key，全站写操作自动携带 Bearer 头。
 
 ```
-Authorization: Bearer <key>
-X-API-Key: <key>
-?url参数 ?api_key=<key>
+业务 Key（IF_API_KEYS）：生图/聊天可选鉴权（v7.7.4 起不限 Key）
+管理 Key（IF_ADMIN_KEYS）：面板写操作强制鉴权（封禁/DLQ/日志）
 ```
 
-未携带/错误 Key 返回 `401 {"error":{"code":"AUTH.001",...}}`。生图主链路 `/v1/generate*` 保持公益开放不受影响。
-
-**curl 示例：**
+**curl 示例（生图无需 Key）：**
 
 ```bash
 # OpenAI 兼容
 curl -X POST https://imagefree.tingfengai.art/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TFAI_KEY" \
   -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"你好"}],"stream":true}'
 
-# Anthropic 兼容（Claude Code）
+# Anthropic 兼容（Claude Code）——聊天不限 Key，API_KEY 可填任意占位
 export ANTHROPIC_BASE_URL=https://imagefree.tingfengai.art/v1
-export ANTHROPIC_API_KEY=$TFAI_KEY
+export ANTHROPIC_API_KEY=any-placeholder
 ```
+
+> 📖 **内置 API 调用指南页**：管理面板 `/admin/api-guide` 提供 Base URL + 一键复制的 curl/Python/JS 示例，新接入方可直接照抄。
+
+> 🌐 **生产真实 IP 恢复**（v7.7+）：`deploy/docker-compose.yml` 固定子网 `172.28.0.0/16` + `Dockerfile.api` 的 uvicorn `--proxy-headers --forwarded-allow-ips=172.28.0.0/16` + `.env` 的 `IF_TRUSTED_PROXIES=172.28.0.1` 三者配合，让 Caddy 反代追加的 `X-Forwarded-For` 被正确解析，任务列表显示真实公网 IP 而非"内网私有地址"。
 | `GET /v1/providers` | — | 提供商状态看板 |
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊（支持密码保护） |

@@ -393,8 +393,14 @@ def check_rate_limit(request: Request) -> None:
         b_type = rule.get("block_type", "block")
         if b_type == "block":
             # S5：对外隐藏 reason（内部配置/措施信息不外泄），reason 仅供管理面/日志
+            contact = getattr(config, "IF_ADMIN_CONTACT", "") or ""
+            contact_hint = f"（如需申诉请联系管理员：{contact}）" if contact else ""
             log.warning("安全风控拦截 IP=%s reason=%s", key, rule.get("reason") or "")
-            raise AppError(ErrorCodes.FORBIDDEN, "该 IP 已被系统安全风控限制访问", 403)
+            raise AppError(
+                ErrorCodes.FORBIDDEN,
+                f"该 IP 已被系统安全风控限制访问{contact_hint}",
+                403,
+            )
         if b_type == "daily_limit":
             daily_limit = int(rule.get("daily_limit", 1))
             with _ip_lock(key):

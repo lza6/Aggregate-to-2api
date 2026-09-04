@@ -37,7 +37,7 @@ export function SecurityPage() {
   const [submitting, setSubmitting] = useState(false);
   const [unblockingIp, setUnblockingIp] = useState<string | null>(null);
   const [queryIp, setQueryIp] = useState('');
-  const [queryResult, setQueryResult] = useState<{ ip: string; rule: BlockRule | null; blocked: boolean } | null>(null);
+  const [queryResult, setQueryResult] = useState<{ ip: string; rule: BlockRule | null; blocked: boolean; admin_contact?: string } | null>(null);
 
   const saveKey = () => {
     setStoredAdminKey(adminKey);
@@ -271,6 +271,9 @@ export function SecurityPage() {
                     {queryResult.rule?.reason && <div className="sec-query-reason">原因: {queryResult.rule.reason}</div>}
                     <div className="sec-query-meta">过期: {formatExpires(queryResult.rule)}</div>
                     <button onClick={() => handleUnblock(queryResult.ip)} className="tf-btn tf-btn-secondary tf-btn-sm">解封该 IP</button>
+                    {queryResult.admin_contact && (
+                      <div className="sec-query-contact">📞 被封禁用户申诉请联系管理员: <code>{queryResult.admin_contact}</code></div>
+                    )}
                   </div>
                 ) : (
                   <div className="sec-query-clean">✅ 该 IP 未被封禁</div>
@@ -379,6 +382,8 @@ export function SecurityPage() {
         .sec-query-blocked { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
         .sec-query-reason { font-size: 12px; color: var(--text-primary); }
         .sec-query-meta { font-size: 11.5px; color: var(--text-muted); }
+        .sec-query-contact { font-size: 11.5px; color: var(--info-text); margin-top: 4px; padding: 6px 8px; background: var(--info-bg); border-radius: var(--radius-sm); }
+        .sec-query-contact code { font-family: ui-monospace, monospace; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px; }
         .sec-query-clean { font-size: 12.5px; color: var(--success-text); }
 
         .sec-list-section { padding: 20px; display: flex; flex-direction: column; gap: 14px; }

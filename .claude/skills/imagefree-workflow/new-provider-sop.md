@@ -10,6 +10,7 @@
 - 构造里注册 `ModelSpec`（capabilities/aspect_ratios/resolutions/credits/account_required）。
 - 上游网络调用统一走 `httpx.AsyncClient` + `retry_policy`（指数退避+jitter），不自写重试循环。
 - 风控差异化：每 IP 限额 → `needs_proxy_per_request=True`；需账号 → `needs_account=True`。
+- **号池隐藏契约（v7.7.3+）**：`needs_account=True` 的提供商在 `IF_ACCOUNT_AUTO=0`（号池停用，生产默认）时会被 `provider_summary()` 和 `all_models_visible()` 自动过滤——`/v1/providers` 看板不显示、`/v1/models` 不返回该提供商的模型（前端选不到）。适配器与 account_pool 能力保留，开号池（`IF_ACCOUNT_AUTO=1`）即恢复展示。新加 needs_account 提供商无需额外处理，registry 已统一过滤。
 - **验收**：`pytest tests/test_providers.py::TestProviderGenerate -q -m "not slow"` 全绿。
 
 ### 2. Registry 注册（api/providers/registry.py）

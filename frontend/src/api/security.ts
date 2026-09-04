@@ -57,6 +57,6 @@ export async function fetchBlocklist(
   });
 }
 
-export async function fetchBlockStatus(ip: string): Promise<{ ip: string; rule: BlockRule | null; blocked: boolean }> {
-  return apiFetch<{ ip: string; rule: BlockRule | null; blocked: boolean }>(`/v1/admin/security/status?ip=${encodeURIComponent(ip)}`, { headers: adminHeaders(), caller: '封禁状态查询失败' });
+export async function fetchBlockStatus(ip: string): Promise<{ ip: string; rule: BlockRule | null; blocked: boolean; admin_contact?: string }> {
+  return apiFetch<{ ip: string; rule: BlockRule | null; blocked: boolean; admin_contact?: string }>(`/v1/admin/security/status?ip=${encodeURIComponent(ip)}`, { headers: adminHeaders(), caller: '封禁状态查询失败' });
 }

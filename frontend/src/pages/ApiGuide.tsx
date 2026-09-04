@@ -47,33 +47,34 @@ export function ApiGuidePage() {
   };
 
   const examples = useMemo(() => ({
-    curlSync: `curl -X POST ${baseUrl}/v1/generate \\
-  -H "Authorization: Bearer ${key}" \\
+    // v7.7.4：生图公益开放不限 Key（guard_generate_request 已移除 check_api_key），
+    // 故生图 curl 不带 -H Authorization；用户填的业务 Key 仅用于可选鉴权场景。
+    curlSync: `# 生图公益开放无需 Key（仅 per-IP 限流防刷）
+curl -X POST ${baseUrl}/v1/generate \\
   -H "Content-Type: application/json" \\
   -d '{"model":"imagefree/default","prompt":"a cute cat","aspect_ratio":"1:1"}'`,
-    curlAsync: `# 1. 异步提交（立即返回 task_id）
+    curlAsync: `# 1. 异步提交（立即返回 task_id）——生图无需 Key
 curl -X POST ${baseUrl}/v1/generate/async \\
-  -H "Authorization: Bearer ${key}" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"imagefree/default","prompt":"a cute cat","aspect_ratio":"1:1"}'
 
 # 返回: {"id":"<task_id>","status":"queued", ...}
 
-# 2. 轮询任务状态直到 completed
-curl ${baseUrl}/v1/tasks/<task_id> -H "Authorization: Bearer ${key}"`,
-    curlChat: `curl -X POST ${baseUrl}/v1/chat/completions \\
+# 2. 轮询任务状态直到 completed（/v1/tasks/{id} 公开端点，无需 Key）
+curl ${baseUrl}/v1/tasks/<task_id>`,
+    curlChat: `# 聊天公益开放不限 Key；带 Bearer 可启用限流配额归属（可选）
+curl -X POST ${baseUrl}/v1/chat/completions \\
   -H "Authorization: Bearer ${key}" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"tryingopen/gpt-4o","messages":[{"role":"user","content":"你好"}]}'`,
+  -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"你好"}]}'`,
     pyRequests: `import requests
 
 BASE = "${baseUrl}"
-KEY = "${key}"
 
-# 同步生图（阻塞到出图完成）
+# 同步生图（生图公益开放无需 Key）
 r = requests.post(
     f"{BASE}/v1/generate",
-    headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
+    headers={"Content-Type": "application/json"},
     json={"model": "imagefree/default", "prompt": "a cute cat", "aspect_ratio": "1:1"},
     timeout=120,
 )
@@ -82,6 +83,7 @@ print(task["id"], task["status"])
 if task.get("image_url"):
     print("图片:", task["image_url"])`,
     pyOpenai: `# 用 openai 库（兼容 OpenAI 风格的 /v1/chat/completions）
+# 聊天不限 Key；api_key 可填任意占位或你的业务 Key
 from openai import OpenAI
 
 client = OpenAI(
@@ -90,17 +92,16 @@ client = OpenAI(
 )
 
 resp = client.chat.completions.create(
-    model="tryingopen/gpt-4o",
+    model="tryingopen/z-ai/glm-5.3-flash",
     messages=[{"role": "user", "content": "你好"}],
 )
 print(resp.choices[0].message.content)`,
-    jsFetch: `// 浏览器 / Node.js fetch
+    jsFetch: `// 浏览器 / Node.js fetch —— 异步生图无需 Key
 const BASE = "${baseUrl}";
-const KEY = "${key}";
 
 const res = await fetch(\`\${BASE}/v1/generate/async\`, {
   method: "POST",
-  headers: { "Authorization": \`Bearer \${KEY}\`, "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ model: "imagefree/default", prompt: "a cute cat", aspect_ratio: "1:1" }),
 });
 const task = await res.json();
@@ -148,7 +149,7 @@ console.log(task.id, task.status);`,
           <button type="button" onClick={saveKey} className="tf-btn tf-btn-primary tf-btn-sm">保存</button>
           <CopyButton text={key} />
         </div>
-        <div className="ag-card-hint">未配置业务 Key 的端点（公益生图 <code>/v1/generate</code>）保持开放，但建议配置以启用限流配额归属。</div>
+        <div className="ag-card-hint">v7.7.4 起<b>生图 / 聊天均公益开放不限 Key</b>（仅 per-IP 限流防刷）；<code>IF_API_KEYS</code> 配置后可用于 stats 等可选鉴权。管理面写操作（封禁/DLQ/日志）需独立 <code>IF_ADMIN_KEYS</code>。</div>
       </div>
 
       {/* 鉴权方式 */}

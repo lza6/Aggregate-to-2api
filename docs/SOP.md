@@ -490,6 +490,7 @@ python scripts/restore_db.py --backup data/backups/imagefree-20260901-030000.db 
 | 生成请求全 429 | IF_RATE_TOKEN_CAPACITY/滑窗 | 单 IP 超限是预期；全部 IP 429 → 查 `_l1_token_buckets` 是否污染、代理池是否枯竭 |
 | 任务卡 queued 不动 | workers 数 + token_pools | worker 全忙 → 看 IF_WORKER_AUTO；token 池空 → `solve_avg_seconds` 飙升说明 cf_solver 慢 |
 | 502/504 网关错 | api 容器 OOM | `docker inspect imagefree-api \| grep OOMKilled`；mem_limit 512m 不够则查内存泄漏 |
+| 502 + cfsolver 未起 | cfsolver 镜像缺失/跨网络 DNS 失败 | `docker images \| grep cfsolver`，tag 缺失则 `docker compose build cfsolver`（本地 build，非 GHCR）；改过 compose network subnet 必须 `docker compose down && up`（不能 `--no-deps`，否则 cfsolver 跨网络 DNS 解析 cfsolver:8001 失败）；cfsolver image tag 固定 `:latest`（不跟版本 bump，每次 bump 都会本地缺镜像） |
 | nanobanana 号池枯竭 | /admin 号池页 | registerer 是否在跑（`/v1/account-pool` growth_stats）；邮箱源全 429 → 看 email-sources last_error |
 | 部署后接口 500 | 版本不齐/迁移漏 | `docker logs imagefree-api --tail 50`；常见是 package.json 版本与 app.version 不一致（CI 测试会拦） |
 | 线上日志含敏感 Key | P3-6 泄露通道 | httpx/uvicorn.access propagate 已禁；新泄露源 → 检查是否有 logger 未收敛 |

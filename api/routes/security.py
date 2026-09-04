@@ -155,11 +155,19 @@ async def blocklist(
 
 @router.get("/v1/admin/security/status")
 async def block_status(request: Request, ip: str = "") -> dict[str, Any]:
-    """查询单个 IP 的当前生效规则（不存在或已过期返回 None）。"""
+    """查询单个 IP 的当前生效规则（不存在或已过期返回 None）。
+
+    v7.7.4: 附带 admin_contact（管理员申诉联系方式），供被封禁用户联系解封。
+    """
     _require_admin_key(request)
     ip = _validate_ip(ip)
     rule = await ip_blocklist_store.get(ip)
-    return {"ip": ip, "rule": rule, "blocked": rule is not None}
+    return {
+        "ip": ip,
+        "rule": rule,
+        "blocked": rule is not None,
+        "admin_contact": getattr(config, "IF_ADMIN_CONTACT", "") or "",
+    }
 
 
 @router.get("/v1/admin/security/stats")
