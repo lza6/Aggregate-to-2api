@@ -55,8 +55,11 @@ jobs:
             curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
             sleep 1
           done
-          pytest tests/integration/ -q -m "integration" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p no:cacheprovider
-          pytest tests/ -q -m "chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=80 --timeout=120 --timeout-method=thread
+          # v7.7.5：集成轮单独跑覆盖率仅 ~44%（只覆盖 integration 路径），
+          # --cov-fail-under=80 必然 fail。覆盖率门禁只在单测轮卡（单测轮 82% 达标）。
+          # 集成轮只验证集成路径正确性，不卡覆盖率；chaos 轮同理（仅 --cov-append 累加）。
+          pytest tests/integration/ -q -m "integration" --cov=api --cov-report=term --timeout=120 --timeout-method=thread -p no:cacheprovider
+          pytest tests/ -q -m "chaos" --cov=api --cov-report=term --cov-append --timeout=120 --timeout-method=thread
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
