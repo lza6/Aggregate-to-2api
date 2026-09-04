@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { fetchDiagnostics, fetchAccountPool, fetchProxyPool } from '../api';
+import { fetchDiagnostics, fetchProxyPool } from '../api';
 import { StatCard } from '../components/StatCard';
 import { ProxyPoolGeo } from '../components/ProxyPoolGeo';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
@@ -25,15 +25,10 @@ export function HealthPage() {
     () => fetchDiagnostics(),
     { intervalMs: 15000 },
   );
-  const { data: accountData, error: accountError, reload: reloadAccount } = useApi(
-    () => fetchAccountPool({ page: 1, pageSize: 1 }),
-    { intervalMs: 15000 },
-  );
   const { data: proxyData, error: proxyError, reload: reloadProxy } = useApi(
     () => fetchProxyPool({ page: 1, pageSize: 1 }),
     { intervalMs: 15000 },
   );
-
   // P3-4: 需要地理明细 → 用更大页拉取代理池条目（供 ProxyPoolGeo 聚合）。
   const { data: proxyDetail, error: proxyDetailError, reload: reloadProxyDetail } = useApi(
     () => fetchProxyPool({ page: 1, pageSize: 500 }),
@@ -69,23 +64,6 @@ export function HealthPage() {
       });
     }
 
-    // ── 号池（分值 20） ──
-    if (accountData) {
-      const nb = accountData.accounts?.nanobanana;
-      if (nb && nb.target > 0) {
-        const accScore = Math.round(Math.min(1, nb.ok / nb.target) * 20);
-        scores.push({
-          label: '长效号池达标',
-          detail: `${nb.ok} 可用 / 目标 ${nb.target} · 额度耗尽 ${nb.exhausted} · 积分池 ${nb.credits}`,
-          score: accScore,
-          max: 20,
-          level: levelOf(accScore, 20),
-        });
-      } else {
-        scores.push({ label: '长效号池', detail: '未配置账号池（不影响基础出图）', score: 0, max: 20, level: 'warn' });
-      }
-    }
-
     // ── 求解器（分值 20） ──
     if (diag) {
       const s = diag.solver;
@@ -116,7 +94,7 @@ export function HealthPage() {
     }
 
     return scores;
-  }, [diag, proxyData, accountData]);
+  }, [diag, proxyData]);
 
   const capability = useMemo(() => {
     if (!diag) return null;
@@ -132,7 +110,7 @@ export function HealthPage() {
   }, [diag, poolScores]);
 
   const capabilityLevel = capability == null ? 'bad' : capability >= 70 ? 'good' : capability >= 40 ? 'warn' : 'bad';
-  const errors = [diagError, accountError, proxyError, proxyDetailError].filter(Boolean) as Error[];
+  const errors = [diagError, proxyError, proxyDetailError].filter(Boolean) as Error[];
 
   if (diagError && !diag) return <ErrorRetry message={diagError.message} onRetry={reloadDiag} />;
 
@@ -141,9 +119,9 @@ export function HealthPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">系统健康体检</h1>
-          <p className="page-desc">聚合诊断、号池与代理池状态，实时评估「可立即出图能力」</p>
+          <p className="page-desc">聚合诊断与代理池状态，实时评估「可立即出图能力」</p>
         </div>
-        <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadAccount(); reloadProxy(); reloadProxyDetail(); }}>
+        <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadProxy(); reloadProxyDetail(); }}>
           <span>🔄</span> 重新体检
         </button>
       </div>
@@ -165,7 +143,7 @@ export function HealthPage() {
             {capabilityLevel === 'good' ? '🟢 状态良好，可正常出图' : capabilityLevel === 'warn' ? '🟡 有降级项，建议关注' : '🔴 存在可用性风险，请优先处理'}
           </h2>
           <p className="score-sub">
-            综合 5 项体检维度（Worker 存活、出口代理、长效号池、CF 求解器、磁盘水位）打分；
+            综合 4 项体检维度（Worker 存活、出口代理、CF 求解器、磁盘水位）打分；
             {capability == null ? '数据加载中…' : `当前得分 ${capability}/100`}
           </p>
         </div>

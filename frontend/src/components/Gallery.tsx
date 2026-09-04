@@ -48,6 +48,7 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
 }) {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);  // v7.7 UX：非 401/403 错误不再伪装成"暂无作品"空态
   const [pwdInput, setPwdInput] = useState('');
   const [pwdSubmitting, setPwdSubmitting] = useState(false);
   const [pwdWrong, setPwdWrong] = useState(false);
@@ -85,6 +86,7 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const data = await fetchGallery(limit, effectivePwd);
         if (cancelled) return;
@@ -93,13 +95,16 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
         setPwdWrong(false);
       } catch (e) {
         if (cancelled) return;
-        const status = (e as any)?.status ?? (e as any)?.response?.status;
+        const status = (e as { status?: number })?.status ?? (e as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
           sessionStorage.removeItem(PWD_KEY);
           setPwdState('required');
           if (effectivePwd) setPwdWrong(true);
         } else if (status === 401) {
           onGalleryFail?.();
+        } else {
+          // v7.7 UX：非鉴权错误（500/网络/超时）落可见错误态，而非伪装成"暂无作品"
+          setLoadError(e instanceof Error ? e.message : String(e));
         }
       }
       if (!cancelled) setLoading(false);
@@ -247,6 +252,16 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
         <Skeleton lines={1} height={200} />
         <Skeleton lines={1} height={200} />
         <style>{`.gallery-skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }`}</style>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="tf-card" style={{ padding: '24px', textAlign: 'center', color: 'var(--danger-text)', background: 'var(--danger-bg)', borderColor: 'var(--danger-border)' }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>画廊加载失败</div>
+        <div style={{ fontSize: 12.5, opacity: 0.85, wordBreak: 'break-all' }}>{loadError}</div>
       </div>
     );
   }

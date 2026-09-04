@@ -107,7 +107,7 @@ export function AccountsPage() {
   }, [poolPaused]);
   const { data, loading, error, reload } = useApi<AccountPoolData>(
     () => fetchAccountPool({ page, pageSize, search: filter }),
-    { intervalMs: 10000 },
+    { intervalMs: 10000, debounceMs: 300 },  // v7.7 UX：搜索防抖——快速输入不再每键一请求
   );
 
   useEffect(() => { setPage(1); }, [filter, pageSize]);
