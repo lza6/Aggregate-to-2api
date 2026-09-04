@@ -3,9 +3,11 @@
 设计：
 - 固定静态 Key 池由环境变量 IF_API_KEYS 注入（逗号分隔）；空 = 开放模式。
 - 支持三种传递方式（按优先级）：Authorization: Bearer <key> / X-API-Key: <key> / ?api_key=<key>。
-- v4.4.2：全站写操作（生图 /v1/generate*、图生图 /v1/edit、聊天 /v1/chat/*、/v1/messages）统一强制 Key。
-- 只读端点（/v1/stats、/v1/providers、/v1/models、/v1/meta、/v1/healthz 等）与运维端点保持公开/独立权限。
-- ISSUE-02 加固：管理面（封禁/解封）使用独立 IF_ADMIN_KEYS 池；未配置管理 Key 时默认拒绝，
+- v7.7.1：公益定位——生图 /v1/generate*、图生图 /v1/edit、聊天 /v1/chat/*、/v1/messages
+  不再强制业务 Key（guard_generate_request / guard_chat_request 已移除 check_api_key）。
+  普通用户可直接调用，仅 per-IP 限速防刷。IF_API_KEYS 配置后仍可用于 stats 等可选鉴权场景。
+- 只读端点（/v1/stats、/v1/providers、/v1/models、/v1/meta、/v1/healthz、/v1/cost 等）保持公开。
+- ISSUE-02 加固：管理面（封禁/解封/DLQ/日志）使用独立 IF_ADMIN_KEYS 池；未配置管理 Key 时默认拒绝，
   只有显式 IF_ADMIN_KEY_OPEN=1 时才开放（本地运维模式）。
 - public_keymask() 用于 UI 展示脱敏前缀（不泄露完整 Key）。
 """
@@ -178,14 +180,20 @@ def check_chat_rate_limit(request: Request) -> None:
 
 
 def guard_chat_request(request: Request) -> None:
-    """聊天端点组合守卫：Key 校验 + 频控。"""
-    check_api_key(request, scope="chat")
+    """聊天端点组合守卫：频控（v7.7.1：公益定位，聊天不再强制 IF_API_KEYS 业务 Key）。
+
+    保留 per-IP 频控（check_chat_rate_limit）防刷；Key 校验移除——普通用户可直接调用
+    /v1/chat/* 与 /v1/messages，不被 Key 限制。若站长需限流可配 IF_CHAT_RATE_LIMIT。
+    """
     check_chat_rate_limit(request)
 
 
 def guard_generate_request(request: Request) -> None:
-    """生图/图生图端点守卫：与聊天端点一致要求 Key（未配置时开放）。"""
-    check_api_key(request, scope="generate")
+    """生图/图生图端点守卫。
+
+    v7.7.1：公益定位——生图/图生图写操作不再强制 IF_API_KEYS 业务 Key，普通用户可直接调用，
+    不被 Key 限制（与项目"公益免费"一致）。保留 per-IP 限速（check_generate_request）防刷即可。
+    """
     # 把真实客户端 IP 挂到请求 state，供 dispatch 落库记录调用者（防刷取证）。
     # 复用 request_guard.get_client_ip 的受信代理判定，避免单独信任 XFF 首段导致伪造。
     request.state.client_ip = _client_ip_of(request)
