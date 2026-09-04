@@ -369,7 +369,11 @@ async def _openai_stream(
                 error=str(exc),
             )
         )
-        yield _sse_data({"error": {"type": "server_error", "message": "聊天流式调用失败"}})
+        # v7.7 P2：流式路径区分 429（对齐 _chat_collect v7.6 修复，客户端可按 429 退避）
+        if isinstance(exc, ProviderRateLimited):
+            yield _sse_data({"error": {"type": "rate_limit_error", "message": str(exc) or "上游限流", "code": "PROV.001"}})
+        else:
+            yield _sse_data({"error": {"type": "server_error", "message": "聊天流式调用失败"}})
     finally:
         yield "data: [DONE]\n\n"
 
@@ -565,8 +569,13 @@ async def _anthropic_stream(
                 error=str(exc),
             )
         )
-        yield "event: error\n"
-        yield _sse_data({"type": "error", "error": {"type": "api_error", "message": "聊天流式调用失败"}})
+        # v7.7 P2：流式路径区分 429（对齐 _chat_collect v7.6 修复）
+        if isinstance(exc, ProviderRateLimited):
+            yield "event: error\n"
+            yield _sse_data({"type": "error", "error": {"type": "rate_limit_error", "message": str(exc) or "上游限流", "code": "PROV.001"}})
+        else:
+            yield "event: error\n"
+            yield _sse_data({"type": "error", "error": {"type": "api_error", "message": "聊天流式调用失败"}})
     finally:
         yield "event: message_stop\n"
         yield _sse_data({"type": "message_stop"})
