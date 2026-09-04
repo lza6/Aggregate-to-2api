@@ -1,17 +1,18 @@
 {
-  "nodeCount": 4108,
-  "edgeCount": 8139,
+  "nodeCount": 4740,
+  "edgeCount": 10215,
   "languages": [
     "javascript",
     "python",
     "tsx",
-    "typescript"
+    "typescript",
+    "vue"
   ],
-  "totalCount": 4108,
+  "totalCount": 4740,
   "readyCount": 0,
   "staleCount": 0,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-09-01T07:01:27.893Z",
-  "lastFile": "test_email_sources.py"
+  "syncedAt": "2026-09-04T10:26:18.545Z",
+  "lastFile": "test_ui_ux_improvements.py"
 }

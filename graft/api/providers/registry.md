@@ -1,6 +1,6 @@
 # api/providers/registry.py
 
-- Registry · class · L22-L361 — class Registry
+- Registry · class · L22-L388 — class Registry
 - __init__ · method · L23-L41 — def __init__(self) -> None
 - _ensure_booted · method · L43-L46 — def _ensure_booted(self) -> None
 - register · method · L48-L56 — def register(self, provider: Provider) -> None
@@ -9,22 +9,23 @@
 - all_chat_models · method · L85-L91 — def all_chat_models(self) -> list[ModelSpec]
 - model · method · L93-L95 — def model(self, model_id: str) -> ModelSpec | None
 - get_routing_records · method · L97-L102 — def get_routing_records(self, limit: int = 50, from_ts: float | None = None) -> list[dict]
-- provider_for · method · L104-L159 — def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None
-- find_alternative · method · L161-L183 — def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]
-- degrade · method · L186-L196 — def degrade(self, provider: str, reason: str) -> None
-- mark_down · method · L198-L208 — def mark_down(self, provider: str, reason: str) -> None
-- degraded_providers · method · L210-L214 — def degraded_providers(self) -> list[str]
-- recover · method · L216-L225 — def recover(self, provider: str) -> None
-- record_failure · method · L228-L235 — def record_failure(self, provider: str) -> None
-- record_success · method · L237-L241 — def record_success(self, provider: str) -> None
-- mark_exhausted · method · L243-L245 — def mark_exhausted(self, provider: str, account_id: str) -> None
-- try_recover · method · L247-L252 — def try_recover(self, provider: str) -> None
-- try_recover_all · method · L254-L264 — def try_recover_all(self) -> None
-- all_models · method · L266-L268 — def all_models(self) -> list[ModelSpec]
-- grouped · method · L270-L305 — def grouped(self) -> dict[str, list[dict]]
-- provider_summary · method · L307-L340 — def provider_summary(self) -> dict[str, dict]
-- healthy_providers · method · L343-L345 — def healthy_providers(self) -> list[str]
-- health_check_all · method · L347-L361 — async def health_check_all(self) -> None
-- bootstrap · function · L368-L400 — def bootstrap() -> None
-- startup_all · function · L403-L414 — async def startup_all() -> None
-- shutdown_all · function · L417-L427 — async def shutdown_all() -> None
+- provider_for · method · L104-L173 — def provider_for(self, model_id: str, prefer_healthy: bool = True) -> Provider | None
+- find_alternative · method · L175-L184 — def find_alternative(self, model_id: str) -> tuple[Provider | None, str | None]
+- find_alternatives · method · L186-L210 — def find_alternatives(self, model_id: str) -> list[tuple[Provider, str]]
+- degrade · method · L213-L223 — def degrade(self, provider: str, reason: str) -> None
+- mark_down · method · L225-L235 — def mark_down(self, provider: str, reason: str) -> None
+- degraded_providers · method · L237-L241 — def degraded_providers(self) -> list[str]
+- recover · method · L243-L252 — def recover(self, provider: str) -> None
+- record_failure · method · L255-L262 — def record_failure(self, provider: str) -> None
+- record_success · method · L264-L268 — def record_success(self, provider: str) -> None
+- mark_exhausted · method · L270-L272 — def mark_exhausted(self, provider: str, account_id: str) -> None
+- try_recover · method · L274-L279 — def try_recover(self, provider: str) -> None
+- try_recover_all · method · L281-L291 — def try_recover_all(self) -> None
+- all_models · method · L293-L295 — def all_models(self) -> list[ModelSpec]
+- grouped · method · L297-L332 — def grouped(self) -> dict[str, list[dict]]
+- provider_summary · method · L334-L367 — def provider_summary(self) -> dict[str, dict]
+- healthy_providers · method · L370-L372 — def healthy_providers(self) -> list[str]
+- health_check_all · method · L374-L388 — async def health_check_all(self) -> None
+- bootstrap · function · L395-L427 — def bootstrap() -> None
+- startup_all · function · L430-L441 — async def startup_all() -> None
+- shutdown_all · function · L444-L454 — async def shutdown_all() -> None

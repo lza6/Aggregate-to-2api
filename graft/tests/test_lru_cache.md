@@ -8,16 +8,21 @@
 - test_clear · function · L64-L71 — async def test_clear()
 - test_invalidate_specific_key · function · L75-L82 — async def test_invalidate_specific_key()
 - test_set_overwrites_existing · function · L86-L91 — async def test_set_overwrites_existing()
-- test_reaper_cleans_expired · function · L95-L104 — async def test_reaper_cleans_expired()
-- test_stop_reaper_clears · function · L108-L115 — async def test_stop_reaper_clears()
-- test_concurrent_safety · function · L119-L129 — async def test_concurrent_safety()
-- worker · function · L123-L127 — async def worker(key: str) -> None
-- test_concurrent_get_set_mixed · function · L133-L149 — async def test_concurrent_get_set_mixed()
-- writer · function · L139-L142 — async def writer() -> None
-- reader · function · L144-L147 — async def reader() -> None
-- test_missing_key_returns_none · function · L153-L156 — async def test_missing_key_returns_none()
-- test_snapshot · function · L160-L171 — async def test_snapshot()
-- test_cache_hits_miss_db_mock · function · L175-L202 — async def test_cache_hits_miss_db_mock()
-- fake_db_query · function · L179-L182 — async def fake_db_query() -> str
-- test_ttl_expiry_db_reread · function · L206-L229 — async def test_ttl_expiry_db_reread()
-- fake_db_query · function · L210-L213 — async def fake_db_query() -> str
+- test_set_per_key_ttl_overrides_global · function · L95-L101 — async def test_set_per_key_ttl_overrides_global()
+- test_set_ttl_none_uses_global · function · L105-L109 — async def test_set_ttl_none_uses_global()
+- test_set_ttl_zero_immediate_expiry · function · L113-L118 — async def test_set_ttl_zero_immediate_expiry()
+- test_set_ttl_negative_clamped_to_zero · function · L122-L127 — async def test_set_ttl_negative_clamped_to_zero()
+- test_set_mixed_ttl_independent_expiry · function · L131-L138 — async def test_set_mixed_ttl_independent_expiry()
+- test_reaper_cleans_expired · function · L142-L151 — async def test_reaper_cleans_expired()
+- test_stop_reaper_clears · function · L155-L162 — async def test_stop_reaper_clears()
+- test_concurrent_safety · function · L166-L176 — async def test_concurrent_safety()
+- worker · function · L170-L174 — async def worker(key: str) -> None
+- test_concurrent_get_set_mixed · function · L180-L196 — async def test_concurrent_get_set_mixed()
+- writer · function · L186-L189 — async def writer() -> None
+- reader · function · L191-L194 — async def reader() -> None
+- test_missing_key_returns_none · function · L200-L203 — async def test_missing_key_returns_none()
+- test_snapshot · function · L207-L218 — async def test_snapshot()
+- test_cache_hits_miss_db_mock · function · L222-L249 — async def test_cache_hits_miss_db_mock()
+- fake_db_query · function · L226-L229 — async def fake_db_query() -> str
+- test_ttl_expiry_db_reread · function · L253-L276 — async def test_ttl_expiry_db_reread()
+- fake_db_query · function · L257-L260 — async def fake_db_query() -> str

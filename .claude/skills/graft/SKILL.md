@@ -74,9 +74,17 @@ hotspots, straight from the wiring graph.
   or ask your way through every subsystem it lists. `--max-dirs N` widens it.
 
 ### 6 · Lifecycle: `graft build` / `graft check`
-`build` regenerates the graph after code changes (`$0`; `--deep` adds an LLM
-concept map, skip unless asked). `check` fails when `graft/` is stale (for CI).
-You rarely touch these mid-task; the graph is already built and committed.
+Every tool above refreshes the graph itself before answering, so what those tools
+return always describes the code as it is right now — including edits you just made
+and have not committed. You do **not** need to run `build` after editing.
+
+One caveat, if you `grep` the markdown under `graft/` directly: those cards are a
+projection, rebuilt at the end of the turn rather than on each query, so after an edit
+they can lag. The tools above never do — prefer them, and treat a card's spans as
+stale if you have edited that file this turn.
+
+`build` is for the LLM layer (`--deep` adds a concept map; skip unless asked);
+`check` fails when `graft/` is stale, for CI.
 
 ## Scenarios: the shortest path through a coding task
 
@@ -114,13 +122,19 @@ you already know where you're working, narrow with `graft ask "<task>" --in <sco
   the symbol to find where it lives now, or run `graft build` to refresh.
 
 ## Report what graft saved, every turn
-Each retrieval tool ends its output with a `[graft] tokens saved ≈ N` line: the
-estimated tokens that call saved versus reading the files it covers whole.
+Each retrieval tool **opens** its output with a `[graft] tokens saved ≈ N` line:
+the estimated tokens that call saved versus reading the files it covers whole.
 Whenever you used any graft tool in a turn, close your reply with a one-line
 tally summing those numbers across every graft call you made, e.g.
-`🌱 graft saved ~12,400 tokens this turn (3 calls)`. A call with no footer (tiny
-files, where the pointers cost as much as the source) saved nothing, so skip it.
-This is the per-turn figure; the statusline carries the running session total.
+`🌱 graft saved ~12,400 tokens this turn (3 calls)`. A call with no such line
+(tiny files, where the pointers cost as much as the source) saved nothing, so
+skip it. This is the per-turn figure; the statusline carries the running
+session total.
+
+**Never pipe a graft command through `head`, `tail`, or `sed -n`.** Every tool
+is already capped and states what it dropped; clipping it costs you hits you
+asked for, and it silently drops the savings line the statusline's running
+total is parsed from.
 
 ## When graft isn't enough
 - Span truncated ("+N more lines"): open the file at that exact range.
@@ -131,6 +145,6 @@ This is the per-turn figure; the statusline carries the running session total.
   exhaustive where it matters, so reach for them first.
 
 When the graft MCP server is connected, these are exposed as tools too:
-`graft_ask`, `graft_grep`, `graft_skeleton`, `graft_callers` (with
-`direction` / `depth`), `graft_map`, `graft_check`. Use whichever surface is
+`graft_find_code`, `graft_find_all`, `graft_file_api`, `graft_trace_calls` (with
+`direction` / `depth`), `graft_repo_map`, `graft_check_freshness`. Use whichever surface is
 available; the guidance is identical.

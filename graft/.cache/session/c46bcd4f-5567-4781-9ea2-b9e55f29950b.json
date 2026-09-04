@@ -5,5 +5,6 @@
   "sourceReads": 0,
   "savedTokens": 0,
   "injectedPointers": [],
-  "nudges": 1
+  "nudges": 1,
+  "summarized": true
 }

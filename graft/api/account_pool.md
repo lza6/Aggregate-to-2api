@@ -1,48 +1,50 @@
 # api/account_pool.py
 
-- AccountStatus · class · L46-L75 — class AccountStatus(str, enum.Enum)
-- canonical · method · L60-L75 — def canonical(cls, status: str) -> str
-- AdaptiveAccountScore · class · L78-L103 — class AdaptiveAccountScore
-- __init__ · method · L81-L86 — def __init__(self, email: str)
-- update_result · method · L88-L97 — def update_result(self, duration_ms: float, is_success: bool)
-- score · method · L99-L103 — def score(self) -> float
-- AccountPool · class · L106-L935 — class AccountPool
-- __init__ · method · L107-L131 — def __init__(self, db_path: str = DB_FILE) -> None
-- get_adaptive · method · L133-L145 — def get_adaptive(self, provider: str) -> dict | None
-- _get_or_create_score · method · L147-L150 — def _get_or_create_score(self, email: str) -> AdaptiveAccountScore
-- report_result · method · L152-L154 — def report_result(self, email: str, duration_ms: float, is_success: bool) -> None
-- async_get · method · L161-L163 — async def async_get(self, provider: str) -> list[dict]
-- async_borrow_account · method · L165-L169 — async def async_borrow_account( self, provider: str, prefer_email: str | None = None ) -> dict | None
-- async_release_account · method · L171-L182 — async def async_release_account( self, provider: str, email: str, new_credits: int | None = None, status: str | None = None, note: str = "", ) -> None
-- async_mark_dead · method · L184-L188 — async def async_mark_dead( self, provider: str, email: str, reason: str = "401/403 banned" ) -> None
-- async_consume_credits · method · L190-L194 — async def async_consume_credits( self, provider: str, email: str, amount: int ) -> None
-- async_get_adaptive · method · L196-L198 — async def async_get_adaptive(self, provider: str) -> dict | None
-- _init_schema · method · L200-L249 — def _init_schema(self) -> None
-- _reclaim_lease_timeout · method · L253-L266 — def _reclaim_lease_timeout(self, provider: str) -> int
-- borrow_account · method · L268-L315 — def borrow_account(self, provider: str, prefer_email: str | None = None) -> dict | None
-- release_account · method · L317-L351 — def release_account( self, provider: str, email: str, new_credits: int | None = None, status: str | None = None, note: str = "" ) -> None
-- mark_dead · method · L353-L362 — def mark_dead(self, provider: str, email: str, reason: str = "401/403 banned") -> None
-- mark_cooling · method · L364-L374 — def mark_cooling(self, provider: str, email: str, reason: str = "credits exhausted") -> None
-- wake_cooling_accounts · method · L376-L403 — def wake_cooling_accounts( self, provider: str | None = None, cooling_timeout: float = DEFAULT_COOLING_PERIOD_SECONDS ) -> int
-- lease · method · L406-L433 — async def lease(self, provider: str, prefer_email: str | None = None) -> AsyncGenerator[dict | None, None]
-- add · method · L437-L457 — def add( self, provider: str, email: str, cookie: str, password: str | None = None, credits: int = 0, status: str = "ok", note: str = "", register_ip: str = "", ) -> None
-- list · method · L459-L478 — def list(self, provider: str | None = None, status: str | None = None) -> list[dict]
-- list_page · method · L480-L523 — def list_page( self, provider: str | None = None, status: str | None = None, page: int = 1, page_size: int = 20, search: str = "", ) -> dict
-- get · method · L525-L532 — def get(self, provider: str) -> list[dict]
-- update_credits · method · L534-L540 — def update_credits(self, provider: str, email: str, credits: int) -> None
-- consume_credits · method · L542-L561 — def consume_credits(self, provider: str, email: str, amount: int) -> None
-- mark · method · L563-L571 — def mark(self, provider: str, email: str, status: str, note: str = "") -> None
-- set_checkin · method · L573-L578 — def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
-- set_checkin_profile · method · L580-L606 — def set_checkin_profile( self, provider: str, email: str, checkin_at: float, cycle_day: int = 0, reward: int = 0, next_claim_at: float | None = None, ) -> None
-- counts · method · L608-L643 — def counts(self) -> dict
-- total_credits · method · L645-L650 — def total_credits(self, provider: str) -> int
-- cost_summary · method · L652-L679 — def cost_summary(self, provider: str) -> dict
-- growth_stats · method · L682-L714 — def growth_stats(self, provider: str) -> dict
-- start · method · L717-L725 — async def start(self) -> None: # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
-- _autoreg_enabled · method · L728-L729 — def _autoreg_enabled(provider: str) -> bool
-- stop · method · L731-L736 — async def stop(self) -> None
-- _cooling_wake_loop · method · L738-L750 — async def _cooling_wake_loop(self) -> None
-- _autoregister_loop · method · L752-L799 — async def _autoregister_loop(self, provider: str) -> None
-- _load_checkin_batch · method · L801-L814 — def _load_checkin_batch(self, provider: str, cutoff: float, size: int) -> list[dict]
-- _daily_checkin_loop · method · L816-L897 — async def _daily_checkin_loop(self, provider: str) -> None
-- dashboard · method · L899-L935 — def dashboard(self) -> dict
+- AccountStatus · class · L52-L81 — class AccountStatus(str, enum.Enum)
+- canonical · method · L66-L81 — def canonical(cls, status: str) -> str
+- AdaptiveAccountScore · class · L84-L109 — class AdaptiveAccountScore
+- __init__ · method · L87-L92 — def __init__(self, email: str)
+- update_result · method · L94-L103 — def update_result(self, duration_ms: float, is_success: bool)
+- score · method · L105-L109 — def score(self) -> float
+- AccountPool · class · L112-L1033 — class AccountPool
+- __init__ · method · L119-L131 — def __init__(self, db_path: str = DB_FILE) -> None
+- _ensure_conn · method · L133-L188 — async def _ensure_conn(self) -> aiosqlite.Connection | None
+- _close_conn_safe · method · L190-L199 — async def _close_conn_safe(self) -> None
+- _init_schema · method · L201-L251 — async def _init_schema(self, conn: aiosqlite.Connection) -> None
+- get_adaptive · method · L253-L263 — async def get_adaptive(self, provider: str) -> dict | None
+- _get_or_create_score · method · L265-L268 — def _get_or_create_score(self, email: str) -> AdaptiveAccountScore
+- report_result · method · L270-L272 — def report_result(self, email: str, duration_ms: float, is_success: bool) -> None
+- async_get · method · L277-L279 — async def async_get(self, provider: str) -> list[dict]
+- async_borrow_account · method · L281-L285 — async def async_borrow_account( self, provider: str, prefer_email: str | None = None ) -> dict | None
+- async_release_account · method · L287-L296 — async def async_release_account( self, provider: str, email: str, new_credits: int | None = None, status: str | None = None, note: str = "", ) -> None
+- async_mark_dead · method · L298-L302 — async def async_mark_dead( self, provider: str, email: str, reason: str = "401/403 banned" ) -> None
+- async_consume_credits · method · L304-L308 — async def async_consume_credits( self, provider: str, email: str, amount: int ) -> None
+- async_get_adaptive · method · L310-L312 — async def async_get_adaptive(self, provider: str) -> dict | None
+- _reclaim_lease_timeout · method · L316-L330 — async def _reclaim_lease_timeout(self, provider: str) -> int
+- borrow_account · method · L332-L383 — async def borrow_account(self, provider: str, prefer_email: str | None = None) -> dict | None
+- release_account · method · L385-L421 — async def release_account( self, provider: str, email: str, new_credits: int | None = None, status: str | None = None, note: str = "" ) -> None
+- mark_dead · method · L423-L433 — async def mark_dead(self, provider: str, email: str, reason: str = "401/403 banned") -> None
+- mark_cooling · method · L435-L446 — async def mark_cooling(self, provider: str, email: str, reason: str = "credits exhausted") -> None
+- wake_cooling_accounts · method · L448-L477 — async def wake_cooling_accounts( self, provider: str | None = None, cooling_timeout: float = DEFAULT_COOLING_PERIOD_SECONDS ) -> int
+- lease · method · L480-L506 — async def lease(self, provider: str, prefer_email: str | None = None) -> AsyncGenerator[dict | None, None]
+- add · method · L510-L531 — async def add( self, provider: str, email: str, cookie: str, password: str | None = None, credits: int = 0, status: str = "ok", note: str = "", register_ip: str = "", ) -> None
+- list · method · L533-L555 — async def list(self, provider: str | None = None, status: str | None = None) -> list[dict]
+- list_page · method · L557-L605 — async def list_page( self, provider: str | None = None, status: str | None = None, page: int = 1, page_size: int = 20, search: str = "", ) -> dict
+- get · method · L607-L616 — async def get(self, provider: str) -> list[dict]
+- update_credits · method · L618-L625 — async def update_credits(self, provider: str, email: str, credits: int) -> None
+- consume_credits · method · L627-L648 — async def consume_credits(self, provider: str, email: str, amount: int) -> None
+- mark · method · L650-L659 — async def mark(self, provider: str, email: str, status: str, note: str = "") -> None
+- set_checkin · method · L661-L667 — async def set_checkin(self, provider: str, email: str, checkin_at: float) -> None
+- set_checkin_profile · method · L669-L696 — async def set_checkin_profile( self, provider: str, email: str, checkin_at: float, cycle_day: int = 0, reward: int = 0, next_claim_at: float | None = None, ) -> None
+- counts · method · L698-L736 — async def counts(self) -> dict
+- total_credits · method · L738-L746 — async def total_credits(self, provider: str) -> int
+- cost_summary · method · L748-L778 — async def cost_summary(self, provider: str) -> dict
+- growth_stats · method · L781-L818 — async def growth_stats(self, provider: str) -> dict
+- start · method · L821-L829 — async def start(self) -> None: # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
+- _autoreg_enabled · method · L832-L833 — def _autoreg_enabled(provider: str) -> bool
+- stop · method · L835-L841 — async def stop(self) -> None
+- _cooling_wake_loop · method · L843-L855 — async def _cooling_wake_loop(self) -> None
+- _autoregister_loop · method · L857-L903 — async def _autoregister_loop(self, provider: str) -> None
+- _load_checkin_batch · method · L905-L918 — async def _load_checkin_batch(self, provider: str, cutoff: float, size: int) -> list[dict]
+- _daily_checkin_loop · method · L920-L995 — async def _daily_checkin_loop(self, provider: str) -> None
+- dashboard · method · L997-L1033 — async def dashboard(self) -> dict

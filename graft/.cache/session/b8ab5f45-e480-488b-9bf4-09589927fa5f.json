@@ -17,5 +17,6 @@
     "scripts/loadtest.py",
     "api/main.py:L274-L282"
   ],
-  "nudges": 2
+  "nudges": 2,
+  "summarized": true
 }

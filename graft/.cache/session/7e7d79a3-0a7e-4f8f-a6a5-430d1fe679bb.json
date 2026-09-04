@@ -20,5 +20,6 @@
     "asyncio",
     "logging"
   ],
-  "nudges": 2
+  "nudges": 2,
+  "summarized": true
 }

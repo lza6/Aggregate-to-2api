@@ -20,7 +20,7 @@
         ]
       },
       {
-        "matcher": "Bash|mcp__graft__",
+        "matcher": "Bash|mcp__graft__|Read|Grep|Glob",
         "hooks": [
           {
             "type": "command",
@@ -36,7 +36,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" prompt",
-            "timeout": 8000
+            "timeout": 15000
           }
         ]
       }
@@ -70,7 +70,9 @@
   "permissions": {
     "allow": [
       "Bash(graft:*)",
-      "Bash(npx graft:*)"
+      "Bash(npx graft:*)",
+      "Bash(graft-dev:*)",
+      "Bash(node dist/cli.js:*)"
     ]
   }
 }

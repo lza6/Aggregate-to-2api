@@ -1,17 +1,21 @@
 # api/telemetry.py
 
-- _bool_env · function · L53-L55 — def _bool_env(key: str, default: bool = False) -> bool
-- TraceIdLogFilter · class · L58-L76 — class TraceIdLogFilter(logging.Filter)
-- filter · method · L65-L76 — def filter(self, record: logging.LogRecord) -> bool
-- init_telemetry · function · L79-L154 — def init_telemetry() -> None
-- shutdown_telemetry · function · L157-L195 — def shutdown_telemetry() -> None
-- get_tracer · function · L198-L202 — def get_tracer(name: str = "imagefree-api")
-- is_otel_enabled · function · L205-L207 — def is_otel_enabled() -> bool
-- _NoopTracer · class · L210-L214 — class _NoopTracer
-- start_as_current_span · method · L213-L214 — def start_as_current_span(self, name: str, **kw)
-- _NoopSpanContext · class · L217-L232 — class _NoopSpanContext
-- __enter__ · method · L218-L219 — def __enter__(self)
-- __exit__ · method · L221-L222 — def __exit__(self, *args)
-- set_attribute · method · L224-L225 — def set_attribute(self, k, v)
-- add_event · method · L227-L228 — def add_event(self, name: str, attributes=None)
-- attributes · method · L231-L232 — def attributes(self)
+- _bool_env · function · L77-L79 — def _bool_env(key: str, default: bool = False) -> bool
+- TailBasedErrorSampler · class · L82-L142 — class TailBasedErrorSampler
+- __init__ · method · L96-L100 — def __init__(self, sample_rate: float, error_sample_rate: float) -> None
+- should_sample · method · L102-L139 — def should_sample( self, parent_context, # noqa: ANN001 trace_id: int, name: str, kind=None, # noqa: ANN001 OTel SDK 新版第 4 位是 SpanKind（旧版无此位） attributes=None, links=None, trace_state=None, ): # noqa: ANN001 # 错误请求：带 http.status_code>=500 或 error=true 属性 → 100% 采样
+- get_description · method · L141-L142 — def get_description(self) -> str
+- TraceIdLogFilter · class · L145-L163 — class TraceIdLogFilter(logging.Filter)
+- filter · method · L152-L163 — def filter(self, record: logging.LogRecord) -> bool
+- init_telemetry · function · L166-L250 — def init_telemetry() -> None
+- shutdown_telemetry · function · L253-L291 — def shutdown_telemetry() -> None
+- get_tracer · function · L294-L298 — def get_tracer(name: str = "imagefree-api")
+- is_otel_enabled · function · L301-L303 — def is_otel_enabled() -> bool
+- _NoopTracer · class · L306-L310 — class _NoopTracer
+- start_as_current_span · method · L309-L310 — def start_as_current_span(self, name: str, **kw)
+- _NoopSpanContext · class · L313-L328 — class _NoopSpanContext
+- __enter__ · method · L314-L315 — def __enter__(self)
+- __exit__ · method · L317-L318 — def __exit__(self, *args)
+- set_attribute · method · L320-L321 — def set_attribute(self, k, v)
+- add_event · method · L323-L324 — def add_event(self, name: str, attributes=None)
+- attributes · method · L327-L328 — def attributes(self)
