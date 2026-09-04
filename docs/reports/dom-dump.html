@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- 核心描述（150 字内，含关键词）-->
+    <meta name="description" content="听风AI — 多提供商 AI 图像生成网关，聚合 imagefree/aifreeforever/nanobanana/tryingopen 等，统一 OpenAI 风格 API。自动逆向号池、邮箱池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。支持文生图、图生图、文生视频、文本对话与工具调用。">
+
+    <!-- 关键词 -->
+    <meta name="keywords" content="AI 图像生成, 多模型网关, OpenAI 兼容 API, 文生图, 图生图, AI 视频生成, 聊天 API, 多提供商聚合, 号池自动化, 代理池轮换, Cloudflare Turnstile 绕过, Python FastAPI, 异步任务队列, SSE 事件流, Claude Code 接入">
+
+    <!-- 爬虫 -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+    <meta name="author" content="听风">
+
+    <!-- 规范链接 -->
+    <link rel="canonical" href="https://imagefree.tingfengai.art/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="听风AI">
+    <meta property="og:title" content="听风AI — 多提供商 AI 生成网关">
+    <meta property="og:description" content="聚合多家 AI 图像生成服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。">
+    <meta property="og:url" content="https://imagefree.tingfengai.art/">
+    <meta property="og:locale" content="zh_CN">
+    <meta property="og:locale:alternate" content="en_US">
+    <meta property="og:image" content="https://imagefree.tingfengai.art/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="听风AI 多提供商 AI 生成网关 — 液态玻璃落地页首屏">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="听风AI — 多提供商 AI 生成网关">
+    <meta name="twitter:description" content="聚合多家 AI 图像生成服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列。">
+    <meta name="twitter:image" content="https://imagefree.tingfengai.art/og-image.png">
+
+    <!-- 主题色 + 暗色声明 -->
+    <meta name="theme-color" content="#0a0e1a" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#0a0e1a">
+    <meta name="color-scheme" content="dark">
+
+    <!-- 结构化数据：SoftwareApplication（Google 富媒体支持）+ WebSite（站点）-->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "听风AI 生成网关",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "url": "https://imagefree.tingfengai.art/",
+      "description": "多提供商 AI 图像生成网关，聚合多家上游 AI 服务，统一 OpenAI 风格 API。自动逆向号池、代理池轮换、高并发异步队列、自动过 Cloudflare Turnstile。",
+      "author": { "@type": "Person", "name": "听风", "url": "https://github.com/lza6" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+      "softwareVersion": "7.2.0",
+      "featureList": [
+        "文生图 (txt2img)",
+        "图生图 (img2img)",
+        "文生视频 (txt2vid)",
+        "OpenAI 兼容对话 /v1/chat/completions",
+        "Anthropic 兼容 /v1/messages",
+        "SSE 每任务事件流",
+        "MAB-EWMA 自适应路由",
+        "多提供商聚合"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "听风AI",
+      "url": "https://imagefree.tingfengai.art/",
+      "description": "多提供商 AI 生成网关",
+      "inLanguage": ["zh-CN", "en"]
+    }
+    </script>
+
+    <title>听风AI — 多提供商 AI 生成网关 | OpenAI 兼容 API · 文生图 · 图生图 · AI 对话</title>
+    <script type="module" crossorigin="" src="/assets/index-DPagr57C.js"></script>
+    <link rel="stylesheet" crossorigin="" href="/assets/index-TxAjY4WE.css">
+  </head>
+  <body>
+    <div id="app" data-v-app=""><div data-v-ee1d68a6="" class="landing"><div data-v-ee1d68a6="" class="bg-field"><!----></div><div data-v-ee1d68a6="" class="aura" aria-hidden="true"></div><div data-v-ee1d68a6="" class="glow-cursor" aria-hidden="true" style="--mx: 50%; --my: 50%;"></div><header data-v-ee1d68a6="" class="nav"><div data-v-ee1d68a6="" class="container nav-inner"><div data-v-ee1d68a6="" class="brand"><span data-v-ee1d68a6="" class="logo" aria-hidden="true">听</span><div data-v-ee1d68a6="" class="brand-text"><div data-v-ee1d68a6="" class="brand-name">听风AI <span data-v-ee1d68a6="" class="brand-tag">自动逆向 · 号池 / 邮箱池 / 代理池 · 自动过 Cloudflare Turnstile</span></div><div data-v-ee1d68a6="" class="brand-sub">自动逆向 · 号池 / 邮箱池 / 代理池 · 高并发异步队列 · 自动过 Cloudflare Turnstile</div></div></div><nav data-v-ee1d68a6="" class="nav-actions"><button data-v-ee1d68a6="" class="btn btn-ghost lang-btn" aria-label="Switch to English">EN</button><a data-v-ee1d68a6="" class="btn btn-ghost" href="/docs" target="_blank" rel="noopener">API 文档</a><a data-v-ee1d68a6="" class="btn btn-primary" href="/admin">进入管理台 <span data-v-ee1d68a6="" aria-hidden="true">→</span></a></nav></div></header><main data-v-ee1d68a6="" class="main container"><section data-v-ee1d68a6="" class="hero"><div data-v-ee1d68a6="" class="hero-badge fade-up"><span data-v-ee1d68a6="" class="dot ok"></span><span data-v-ee1d68a6="">自动逆向 · 号池 / 邮箱池 / 代理池 · 自动过 Cloudflare Turnstile</span></div><h1 data-v-ee1d68a6="" class="hero-title text-grad fade-up" style="animation-delay: 0.1s;">多提供商 AI 生成网关</h1><p data-v-ee1d68a6="" class="hero-sub fade-up" style="animation-delay: 0.2s;">自动逆向 · 号池 / 邮箱池 / 代理池 · 高并发异步队列 · 自动过 Cloudflare Turnstile</p><div data-v-ee1d68a6="" class="hero-status" style="opacity: 1; transform: none;"><section data-v-2d70a173="" data-v-ee1d68a6="" class="status-wrap"><div data-v-2d70a173="" class="status-head"><div data-v-2d70a173="" class="status-title"><span data-v-2d70a173="" class="dot ok"></span><span data-v-2d70a173="">实时状态</span><!----></div><div data-v-2d70a173="" class="degraded">⚠ 数据暂不可用</div></div><div data-v-2d70a173="" class="chips" role="group" aria-label="实时状态指标"><div data-v-2d70a173="" class="chip --tone" viewport="[object Object]" style="opacity: 0; transform: none;"><div data-v-2d70a173="" class="chip-label"><!----> 总请求</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone ok" viewport="[object Object]" style="opacity: 0; transform: none;"><div data-v-2d70a173="" class="chip-label"><!----> 总出图</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone warn" viewport="[object Object]" style="opacity: 0; transform: translateY(20px) scale(0.96);"><div data-v-2d70a173="" class="chip-label"><!----> 失败</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone" viewport="[object Object]" style="opacity: 0; transform: translateY(20px) scale(0.96);"><div data-v-2d70a173="" class="chip-label"><!----> 平均出图耗时</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone" viewport="[object Object]" style="opacity: 0; transform: translateY(20px) scale(0.96);"><div data-v-2d70a173="" class="chip-label"><!----> 当前并发</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone" viewport="[object Object]" style="opacity: 0; transform: translateY(20px) scale(0.96);"><div data-v-2d70a173="" class="chip-label"><!----> Worker</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div><div data-v-2d70a173="" class="chip --tone muted" viewport="[object Object]" style="opacity: 0; transform: translateY(20px) scale(0.96);"><div data-v-2d70a173="" class="chip-label"><span data-v-2d70a173="" class="dot muted"></span> CF 求解</div><div data-v-2d70a173="" class="chip-value tnum">— <!----></div></div></div><!----></section></div></section><section data-v-ee1d68a6=""><section data-v-0e396825="" data-v-ee1d68a6="" class="section"><div data-v-0e396825="" class="section-head"><h2 data-v-0e396825="">提供商与模型</h2><div data-v-0e396825="" class="section-sub muted"><span data-v-0e396825="" class="degraded">⚠ 数据暂不可用</span></div></div><div data-v-0e396825="" class="empty card"><span data-v-0e396825="">⚠ 数据暂不可用</span></div></section></section><section data-v-ee1d68a6="" style="opacity: 1; transform: none;"><section data-v-be92aa98="" data-v-ee1d68a6="" class="section"><div data-v-be92aa98="" class="section-head"><h2 data-v-be92aa98="">对话 Token 用量 <span data-v-be92aa98="" class="unit">24h</span></h2><div data-v-be92aa98="" class="section-sub muted"><span data-v-be92aa98="" class="degraded">⚠ 数据暂不可用</span></div></div><div data-v-be92aa98="" class="use-card card" viewport="[object Object]" style="opacity: 0; transform: translateY(28px) scale(0.98);"><div data-v-be92aa98="" class="use-main"><div data-v-be92aa98="" class="use-label">总 Tokens（prompt + completion + reasoning）</div><div data-v-be92aa98="" class="use-total tnum">0</div><div data-v-be92aa98="" class="use-meta muted-2"><!----><!----><!----></div></div><div data-v-be92aa98="" class="use-rows"><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">调用次数</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">—</span><span data-v-be92aa98="" class="use-row-sub">成功 — / 失败 —</span></div></div><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">输入 tokens</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">0</span><span data-v-be92aa98="" class="use-row-sub">prompt</span></div></div><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">输出 tokens</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">0</span><span data-v-be92aa98="" class="use-row-sub">completion</span></div></div><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">推理 tokens</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">0</span><span data-v-be92aa98="" class="use-row-sub">reasoning</span></div></div><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">平均耗时</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">—</span><!----></div></div><div data-v-be92aa98="" class="use-row"><span data-v-be92aa98="" class="use-row-label">工具调用</span><div data-v-be92aa98="" class="use-row-val"><span data-v-be92aa98="" class="tnum">—</span><!----></div></div></div></div><!----><div data-v-be92aa98="" class="use-card card empty"><span data-v-be92aa98="">⚠ 数据暂不可用</span></div></section></section><section data-v-ee1d68a6="" style="opacity: 1; transform: none;"><section data-v-073cf131="" data-v-ee1d68a6="" class="section code-section"><div data-v-073cf131="" class="section-head"><h2 data-v-073cf131="">API 快速开始</h2><div data-v-073cf131="" class="section-sub muted">写接口需 <code data-v-073cf131="" class="inline-code">API Key</code>（聊天 / 生成 / 图生图）· 请合理使用</div></div><div data-v-073cf131="" class="code-card card" viewport="[object Object]" style="opacity: 0; transform: translateY(26px);"><div data-v-073cf131="" class="tabs"><button data-v-073cf131="" class="tab on" whiletap="[object Object]">同步生成 /v1/generate</button><button data-v-073cf131="" class="tab" whiletap="[object Object]">异步生成 /v1/generate/async</button><button data-v-073cf131="" class="tab" whiletap="[object Object]">聊天 /v1/chat/completions</button><button data-v-073cf131="" class="tab" whiletap="[object Object]">健康检查 /v1/healthz</button></div><div data-v-073cf131="" class="code-body"><div data-v-073cf131="" class="code-head"><span data-v-073cf131="" class="code-desc muted-2">等待出图，典型 20~45 秒</span><button data-v-073cf131="" class="copy-btn">复制</button></div><div data-v-073cf131="" class="code-box"><pre data-v-073cf131=""><code data-v-073cf131="">{{ samplesReactive[active].code }}</code></pre></div></div></div></section></section><section data-v-ee1d68a6="" style="opacity: 1; transform: none;"><section data-v-0641d1c8="" data-v-ee1d68a6="" class="section faq-section"><div data-v-0641d1c8="" class="section-head"><h2 data-v-0641d1c8="">常见问题 · 手到即用</h2><div data-v-0641d1c8="" class="section-sub muted">一键复制 curl，立即开始</div></div><div data-v-0641d1c8="" class="faq-grid"><div data-v-0641d1c8="" class="faq-list"><div data-v-0641d1c8="" class="faq-item" viewport="[object Object]" style="opacity: 0; transform: translateX(-16px);"><button data-v-0641d1c8="" class="faq-q" aria-expanded="true"><span data-v-0641d1c8="" class="faq-q-text">如何获取 API Key？</span><span data-v-0641d1c8="" class="faq-caret open">▾</span></button><div data-v-0641d1c8="" data-ap="0" style="overflow: hidden; height: auto; opacity: 0;"><div data-v-0641d1c8="" class="faq-a muted">进入管理台 /admin → 在线聊天或在线生成页右上角「配置 Key」填入。Key 仅保存在你本地浏览器 localStorage，永不上传。匿名只读端点无需 Key；写接口（生成/聊天）需 Key。</div></div></div><div data-v-0641d1c8="" class="faq-item" viewport="[object Object]" style="opacity: 0; transform: translateX(-16px);"><button data-v-0641d1c8="" class="faq-q" aria-expanded="false"><span data-v-0641d1c8="" class="faq-q-text">生成图像是同步还是异步？</span><span data-v-0641d1c8="" class="faq-caret">▾</span></button></div><div data-v-0641d1c8="" class="faq-item" viewport="[object Object]" style="opacity: 0; transform: translateX(-16px);"><button data-v-0641d1c8="" class="faq-q" aria-expanded="false"><span data-v-0641d1c8="" class="faq-q-text">支持哪些客户端？</span><span data-v-0641d1c8="" class="faq-caret">▾</span></button></div><div data-v-0641d1c8="" class="faq-item" viewport="[object Object]" style="opacity: 0; transform: translateX(-16px);"><button data-v-0641d1c8="" class="faq-q" aria-expanded="false"><span data-v-0641d1c8="" class="faq-q-text">限流策略是什么？</span><span data-v-0641d1c8="" class="faq-caret">▾</span></button></div></div><div data-v-0641d1c8="" class="quick-card card" viewport="[object Object]" style="opacity: 0; transform: translateY(24px);"><div data-v-0641d1c8="" class="quick-head"><span data-v-0641d1c8="" class="quick-title">⚡ 手到即用 curl</span><button data-v-0641d1c8="" class="copy-btn">复制</button></div><pre data-v-0641d1c8="" class="quick-code"><code data-v-0641d1c8=""># 1. curl https://imagefree.tingfengai.art/v1/healthz
+
+# 2. curl -X POST https://imagefree.tingfengai.art/v1/generate \
+  -H "Authorization: Bearer &lt;KEY&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"a cute orange cat","aspect_ratio":"1:1"}'
+
+# 3. curl -X POST https://imagefree.tingfengai.art/v1/chat/completions \
+  -H "Authorization: Bearer &lt;KEY&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"hi"}]}'</code></pre></div></div></section></section><section data-v-ee1d68a6="" style="opacity: 1; transform: none;"><section data-v-c8cbd10f="" data-v-ee1d68a6="" class="section changelog-section"><div data-v-c8cbd10f="" class="section-head"><h2 data-v-c8cbd10f="">更新日志 · 实时状态</h2><div data-v-c8cbd10f="" class="section-sub muted">读 <code data-v-c8cbd10f="" class="inline-code">/v1/healthz</code> 与最近 release notes</div></div><div data-v-c8cbd10f="" class="health-chips"><div data-v-c8cbd10f="" class="health-chip tone-warn"><span data-v-c8cbd10f="" class="hc-label">服务状态</span><span data-v-c8cbd10f="" class="hc-value">—</span></div><div data-v-c8cbd10f="" class="health-chip tone-warn"><span data-v-c8cbd10f="" class="hc-label">CF 求解</span><span data-v-c8cbd10f="" class="hc-value">—</span></div><div data-v-c8cbd10f="" class="health-chip tone-text"><span data-v-c8cbd10f="" class="hc-label">Worker</span><span data-v-c8cbd10f="" class="hc-value">—</span></div><div data-v-c8cbd10f="" class="health-chip tone-text"><span data-v-c8cbd10f="" class="hc-label">并发</span><span data-v-c8cbd10f="" class="hc-value">—</span></div><div data-v-c8cbd10f="" class="health-chip tone-text"><span data-v-c8cbd10f="" class="hc-label">排队</span><span data-v-c8cbd10f="" class="hc-value">—</span></div><div data-v-c8cbd10f="" class="health-chip tone-text"><span data-v-c8cbd10f="" class="hc-label">DB 行数</span><span data-v-c8cbd10f="" class="hc-value">—</span></div></div><div data-v-c8cbd10f="" class="notes-list card" viewport="[object Object]" style="opacity: 0; transform: translateY(26px);"><div data-v-c8cbd10f=""><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="true"><span data-v-c8cbd10f="" class="note-version">6.7.0</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.7.0 发布说明</span><span data-v-c8cbd10f="" class="note-caret open">▾</span></button><div data-v-c8cbd10f="" data-ap="4" style="overflow: hidden; height: auto; opacity: 0;"><div data-v-c8cbd10f="" class="note-body"><pre data-v-c8cbd10f="" class="note-pre"><code data-v-c8cbd10f=""># 听风AI v6.7.0 发布说明
+
+## 概述
+
+v6.7.0 聚焦 **前端体验升级（M4）**，落地 D1–D5 五项前端闭环任务，并新增前端错误遥测后端端点。本次发版纯前端体验与可观测性增强，不涉及出图/聊天核心链路行为变更。
+
+## D1 · 动作化错误提示（P0）
+
+错误提示从「文案」升级为「行动」，在用户遇到错误时直接给出可点击的降级路径：
+
+- **429 限流** → 错误卡片内联「切备用 provider」下拉/胶囊（调 `/v1/providers` 拉取健康备用引擎，一键切换）。
+- **401 / 未配置 Key** → 自动生成 curl 命令 + 一键复制（`navigator.clipboard` 优先，HTTP/非安全上下文降级 `execCommand`）。
+- **502 / provider down** → 显示备用 provider 列表可一键用（筛 `health_status != "down"`，优先 `healthy`）。
+- 落点：`frontend/src/components/Feedback.tsx`（`classifyError` / `copyToClipboard` / `ProviderOption` / `ErrorRetry` 重构）、`Generate.tsx`、`ChatPlayground.tsx`。
+
+## D2 · ChatPlayground 会话化（P1）
+
+- 会话列表持久化到 `localStorage`（`chatPlaygroundHistory`，增量存消息，**密钥不落盘**）。
+- 多轮上下文编辑（回填 messages，`MAX_CONTEXT_MESSAGES=30`）。
+- 成本/耗时展示：前端读 `/v1/chat/usage?period=1h` 渲染「近 1h 用量」行（调用数 / 成功 / 均耗时 / 成本 / 今日 tokens）。
+- 切换模型保留上下文（model 仅影响请求，messages 不重置）。
+
+## D3 · 面板移动端 / 可访问性补齐（P2）
+
+- `Layout.tsx` 重构为移动端抽屉式侧栏：`@media (max-width: 860px)` 默认收起，`is-open` 滑入；菜单按钮 `aria-label` / `aria-expanded` / `aria-controls` 齐全。
+- 导航项 `:focus-visible` 焦点态可见；点击导航项自动关闭抽屉。
+- 375px / 390px 单列网格收紧；3 个断点（320/768/1440）截图无横向溢出。
+- 落点：`frontend/src/components/Layout.tsx`、`index.css`。
+
+## D4 · 落地页扩展（P2）</code></pre><a data-v-c8cbd10f="" class="note-link" href="/release/release_notes_6.7.0.md" target="_blank" rel="noopener">查看完整 6.7.0 说明 ↗</a></div></div></div><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="false"><span data-v-c8cbd10f="" class="note-version">6.6.2</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.6.2 发布说明</span><span data-v-c8cbd10f="" class="note-caret">▾</span></button></div><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="false"><span data-v-c8cbd10f="" class="note-version">6.6.1</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.6.1 发布说明</span><span data-v-c8cbd10f="" class="note-caret">▾</span></button></div><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="false"><span data-v-c8cbd10f="" class="note-version">6.6.0</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.6.0 发布说明</span><span data-v-c8cbd10f="" class="note-caret">▾</span></button></div><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="false"><span data-v-c8cbd10f="" class="note-version">6.5.1</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.5.1 发布说明</span><span data-v-c8cbd10f="" class="note-caret">▾</span></button></div><div data-v-c8cbd10f="" class="note-item"><button data-v-c8cbd10f="" class="note-head" aria-expanded="false"><span data-v-c8cbd10f="" class="note-version">6.5.0</span><span data-v-c8cbd10f="" class="note-title">听风AI v6.5.0 发布说明</span><span data-v-c8cbd10f="" class="note-caret">▾</span></button></div></div></div></section></section><section data-v-ee1d68a6="" style="opacity: 1; transform: none;"><section data-v-8e41b95f="" data-v-ee1d68a6="" class="cta-section"><div data-v-8e41b95f="" class="cta card" viewport="[object Object]" style="opacity: 0; transform: translateY(30px) scale(0.97);"><h2 data-v-8e41b95f="">开始使用听风AI 生成网关</h2><p data-v-8e41b95f="" class="cta-sub muted">进入管理台管理号池、任务与账单 · 或查看完整 Swagger 接口文档</p><div data-v-8e41b95f="" class="cta-actions"><a data-v-8e41b95f="" class="btn btn-primary btn-lg" href="/admin" whiletap="[object Object]">进入管理台 <span data-v-8e41b95f="" aria-hidden="true">→</span></a><a data-v-8e41b95f="" class="btn btn-ghost btn-lg" href="/docs" target="_blank" rel="noopener" whiletap="[object Object]">查看 Swagger /docs</a></div></div></section></section></main><footer data-v-ee1d68a6="" class="footer container"><div data-v-ee1d68a6="" class="footer-inner"><span data-v-ee1d68a6="">负责人：听风</span><span data-v-ee1d68a6="" class="sep">·</span><a data-v-ee1d68a6="" href="https://github.com/lza6/" target="_blank" rel="noopener">GitHub github.com/lza6</a><span data-v-ee1d68a6="" class="sep">·</span><a data-v-ee1d68a6="" href="#">隐私</a><span data-v-ee1d68a6="" class="sep">·</span><a data-v-ee1d68a6="" href="/v1/slow/view" target="_blank" rel="noopener">慢请求看板</a><span data-v-ee1d68a6="" class="sep">·</span><a data-v-ee1d68a6="" href="/v1/honor" target="_blank" rel="noopener">请我喝咖啡</a><span data-v-ee1d68a6="" class="sep">·</span><span data-v-ee1d68a6="" class="muted-2">v7.4.0</span></div></footer></div></div>
+  
+
+</body></html>
