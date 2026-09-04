@@ -241,6 +241,7 @@ export function LogsPage() {
       <div className="logs-search-wrapper">
         <input
           type="text"
+          aria-label="按关键词或模块过滤日志"
           placeholder="🔍 按关键词、模块名称过滤日志条目…"
           value={filter}
           onChange={e => setFilter(e.target.value)}
@@ -261,7 +262,7 @@ export function LogsPage() {
           <div className="terminal-badge">{filtered.length} lines</div>
         </div>
 
-        <div className="terminal-body" ref={vlist.containerRef} onScroll={vlist.onScroll}>
+        <div className="terminal-body" ref={vlist.containerRef} onScroll={vlist.onScroll} role="log" aria-label="实时日志流">
           {filtered.length === 0 ? (
             <div className="terminal-empty">
               <span>{authFailed

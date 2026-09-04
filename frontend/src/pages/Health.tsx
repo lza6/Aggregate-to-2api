@@ -161,9 +161,9 @@ export function HealthPage() {
           <span className="score-ring-label">可立即出图能力</span>
         </div>
         <div className="score-summary">
-          <h3 className="score-title">
+          <h2 className="score-title">
             {capabilityLevel === 'good' ? '🟢 状态良好，可正常出图' : capabilityLevel === 'warn' ? '🟡 有降级项，建议关注' : '🔴 存在可用性风险，请优先处理'}
-          </h3>
+          </h2>
           <p className="score-sub">
             综合 5 项体检维度（Worker 存活、出口代理、长效号池、CF 求解器、磁盘水位）打分；
             {capability == null ? '数据加载中…' : `当前得分 ${capability}/100`}

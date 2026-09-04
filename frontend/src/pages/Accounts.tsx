@@ -178,6 +178,7 @@ export function AccountsPage() {
           <div className="detail-search-wrap" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
             <input
               type="text"
+              aria-label="搜索脱敏邮箱或状态"
               placeholder="🔍 搜索脱敏邮箱 / 状态…"
               value={filter}
               onChange={e => setFilter(e.target.value)}

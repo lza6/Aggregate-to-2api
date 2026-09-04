@@ -155,6 +155,7 @@ export function SecurityPage() {
         <div className="akb-input-wrap">
           <input
             type="password"
+            aria-label="管理 Key（仅本地保存）"
             placeholder="粘贴管理 Key（仅本地保存）"
             value={adminKey}
             onChange={e => setAdminKey(e.target.value)}
