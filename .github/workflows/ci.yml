@@ -47,13 +47,16 @@ jobs:
           IF_DB_FILE: "data/test.db"
 
       - name: 启动 mock cf_solver 并运行集成测试
+        # v7.7 缓解组合串扰：integration 与 chaos 分两轮跑（各自 fresh 进程内状态），
+        # 避免混沌注入的 IP 桶/限流状态污染集成用例（本地 3 轮复现→分轮后收敛）。
         run: |
           python scripts/mock_cfsolver.py --port 8001 &
           for i in $(seq 1 10); do
             curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
             sleep 1
           done
-          pytest tests/ -q -m "integration or chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=80 --timeout=120 --timeout-method=thread -x
+          pytest tests/integration/ -q -m "integration" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p no:cacheprovider
+          pytest tests/ -q -m "chaos" --cov=api --cov-report=term --cov-append --cov-fail-under=80 --timeout=120 --timeout-method=thread
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
@@ -115,6 +118,29 @@ jobs:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
           IF_DB_FILE: "data/test-ci.db"
+
+  # ── v7.7：frontend 管理面板 CI 门禁 ───────────────────────────────
+  # 背景：landing 有 frontend-version-gate，但 frontend/src（React 管理面板）
+  # 的 tsc/vitest/build 从无 CI 门禁——类型错误或用例回归只能靠本地自觉。
+  # 本 job 补齐：tsc 0 error + vitest 全绿 + vite build 成功三道闸。
+  frontend-gate:
+    name: 前端管理面板门禁（tsc + vitest + build）
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: 设置 Node.js（构建 frontend）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        run: cd frontend && npm ci
+      - name: TypeScript 类型检查 + 构建（tsc -b && vite build）
+        run: cd frontend && npm run build
+      - name: Vitest 单测
+        run: cd frontend && npm run test
 
   docker:
     name: Docker 构建验证

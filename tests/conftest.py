@@ -165,6 +165,12 @@ async def _app_instance(mock_cfsolver):
     # 集成/混沌套件默认关闭 per-IP 限流：限流有专属单测（request_guard），此处聚焦
     # 完整链路可用性；避免多个测试累计请求共享同一 IP 桶导致 429 抢占、顺序污染。
     os.environ["IF_REQUESTS_PER_MINUTE"] = "0"
+    # v7.7: 集成套件显式清理管理 Key 环境——v7.6 给 DLQ retry/clear 等写操作加了
+    # check_admin_key（无 IF_ADMIN_KEYS 时默认拒绝 403）。集成用例不发管理 Key，
+    # 若宿主 shell / .env 残留 IF_ADMIN_KEYS，403 会随机污染 DLQ 用例（CI 3F flaky 根因）。
+    # 开放模式（IF_ADMIN_KEY_OPEN=1）仅当无任何 Key 配置时放行，即测试环境专属。
+    os.environ.pop("IF_ADMIN_KEYS", None)
+    os.environ["IF_ADMIN_KEY_OPEN"] = "1"
 
     # 临时 DB 文件（会话级，共享 DB 实例）
     _db_path = tempfile.mktemp(suffix=".db")
