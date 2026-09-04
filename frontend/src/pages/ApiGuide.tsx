@@ -8,9 +8,9 @@
  * 注意：业务 Key（IF_API_KEYS，生图/聊天用）与管理 Key（IF_ADMIN_KEYS，写操作用）
  * 是两把不同的 Key，页面明确区分。
  */
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getStoredApiKey, setStoredApiKey, notify } from '../api';
+import { notify } from '../api';
 import { copyToClipboard } from '../components/Feedback';
 
 function CopyButton({ text }: { text: string }) {
@@ -32,19 +32,9 @@ function CodeBlock({ code, title }: { code: string; title?: string }) {
 }
 
 export function ApiGuidePage() {
-  const [apiKey, setApiKey] = useState<string>(() => getStoredApiKey());
+  // v7.7.11: 移除业务 Key 输入——生图/聊天公益开放不限 Key，示例不再填充业务 Key
+  // （管理 Key 仅用于面板写操作，不在本页输入；用户自行去 Security 页存管理 Key）
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://imagefree.tingfengai.art';
-  // 占位 Key：用户未填则用 <YOUR_API_KEY> 提示，避免暴露空值。
-  const key = apiKey.trim() || '<YOUR_API_KEY>';
-
-  const saveKey = () => {
-    setStoredApiKey(apiKey.trim());
-    notify(apiKey.trim() ? '✅ 业务 API Key 已保存到本地' : '业务 API Key 已清除', apiKey.trim() ? 'success' : 'info');
-  };
-
-  const onKeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveKey(); }
-  };
 
   const examples = useMemo(() => ({
     // v7.7.4：生图公益开放不限 Key（guard_generate_request 已移除 check_api_key），
@@ -62,9 +52,8 @@ curl -X POST ${baseUrl}/v1/generate/async \\
 
 # 2. 轮询任务状态直到 completed（/v1/tasks/{id} 公开端点，无需 Key）
 curl ${baseUrl}/v1/tasks/<task_id>`,
-    curlChat: `# 聊天公益开放不限 Key；带 Bearer 可启用限流配额归属（可选）
+    curlChat: `# 聊天公益开放不限 Key（仅 per-IP 限流防刷）；无需 Authorization 头
 curl -X POST ${baseUrl}/v1/chat/completions \\
-  -H "Authorization: Bearer ${key}" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"tryingopen/z-ai/glm-5.3-flash","messages":[{"role":"user","content":"你好"}]}'`,
     pyRequests: `import requests
@@ -83,12 +72,12 @@ print(task["id"], task["status"])
 if task.get("image_url"):
     print("图片:", task["image_url"])`,
     pyOpenai: `# 用 openai 库（兼容 OpenAI 风格的 /v1/chat/completions）
-# 聊天不限 Key；api_key 可填任意占位或你的业务 Key
+# 聊天公益开放不限 Key；api_key 可填任意占位（openai 库要求非空）
 from openai import OpenAI
 
 client = OpenAI(
     base_url="${baseUrl}/v1",
-    api_key="${key}",
+    api_key="any-placeholder",
 )
 
 resp = client.chat.completions.create(
@@ -106,7 +95,7 @@ const res = await fetch(\`\${BASE}/v1/generate/async\`, {
 });
 const task = await res.json();
 console.log(task.id, task.status);`,
-  }), [baseUrl, key]);
+  }), [baseUrl]);
 
   return (
     <div className="ag-container">
@@ -127,49 +116,33 @@ console.log(task.id, task.status);`,
         </div>
       </div>
 
-      {/* 我的业务 API Key */}
+      {/* v7.7.11: 移除业务 Key 输入框——生图/聊天公益开放不限 Key，无需用户填业务 Key */}
       <div className="tf-card ag-card">
-        <div className="ag-card-title">🔑 我的业务 API Key</div>
+        <div className="ag-card-title">🆓 公益开放说明</div>
         <div className="ag-card-desc">
-          业务 Key（环境变量 <code>IF_API_KEYS</code>）用于调用 <b>生图 / 聊天</b> 接口；
-          与<b>管理 Key</b>（<code>IF_ADMIN_KEYS</code>，用于面板封禁/DLQ 写操作）不同。
-          填入后下方所有示例自动替换 <code>&lt;YOUR_API_KEY&gt;</code>。仅保存在本浏览器 localStorage。
+          <b>生图 / 聊天均公益开放不限 Key</b>（仅 per-IP 限流防刷），直接用下方 curl 调用即可，无需任何 Key。
+          <br/>管理面<b>写操作</b>（封禁 / DLQ 清空重试 / 日志）需独立<b>管理 Key</b>（<code>IF_ADMIN_KEYS</code>），详见 <Link to="/security" className="ag-link">安全风控页</Link>。
         </div>
-        <div className="ag-key-row">
-          <input
-            type="text"
-            aria-label="业务 API Key（仅本地保存）"
-            placeholder="粘贴你的业务 API Key（IF_API_KEYS）"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onKeyDown={onKeyKeyDown}
-            className="tf-input ag-key-input"
-            autoComplete="off"
-          />
-          <button type="button" onClick={saveKey} className="tf-btn tf-btn-primary tf-btn-sm">保存</button>
-          <CopyButton text={key} />
-        </div>
-        <div className="ag-card-hint">v7.7.4 起<b>生图 / 聊天均公益开放不限 Key</b>（仅 per-IP 限流防刷）；<code>IF_API_KEYS</code> 配置后可用于 stats 等可选鉴权。管理面写操作（封禁/DLQ/日志）需独立 <code>IF_ADMIN_KEYS</code>。</div>
       </div>
 
       {/* 鉴权方式 */}
       <div className="tf-card ag-card">
-        <div className="ag-card-title">🛡️ 鉴权方式（三选一）</div>
+        <div className="ag-card-title">🛡️ 鉴权方式（生图/聊天无需，管理写操作需）</div>
         <div className="ag-auth-grid">
           <div className="ag-auth-item">
-            <code>Authorization: Bearer &lt;key&gt;</code>
-            <div className="ag-auth-note">推荐，标准 HTTP 头，不进 URL。</div>
+            <code>Authorization: Bearer &lt;管理Key&gt;</code>
+            <div className="ag-auth-note">管理写操作推荐，标准 HTTP 头。</div>
           </div>
           <div className="ag-auth-item">
-            <code>X-API-Key: &lt;key&gt;</code>
+            <code>X-API-Key: &lt;管理Key&gt;</code>
             <div className="ag-auth-note">自定义头，与 Bearer 等价。</div>
           </div>
           <div className="ag-auth-item">
-            <code>?api_key=&lt;key&gt;</code>
+            <code>?api_key=&lt;管理Key&gt;</code>
             <div className="ag-auth-note">⚠️ 会进 referer/访问日志，仅 WebSocket 等无法设头的场景用。</div>
           </div>
         </div>
-        <div className="ag-card-hint">管理 Key 用于面板写操作（封禁/DLQ/日志），详见 <Link to="/security" className="ag-link">安全风控页</Link>。</div>
+        <div className="ag-card-hint">生图/聊天公益开放无需 Key；管理 Key 仅用于面板写操作（封禁/DLQ/日志）。</div>
       </div>
 
       {/* curl 示例 */}
@@ -197,7 +170,7 @@ console.log(task.id, task.status);`,
       <div className="tf-card ag-card">
         <div className="ag-card-title">📋 可用模型</div>
         <div className="ag-card-desc">
-          查看当前可用模型列表：<code>GET {baseUrl}/v1/models</code>（带业务 Key）。
+          查看当前可用模型列表：<code>GET {baseUrl}/v1/models</code>（公益开放，无需 Key）。
           模型 id 命名：<code>&lt;提供商前缀&gt;/&lt;上游真实模型名&gt;</code>，如 <code>imagefree/default</code>、<code>tryingopen/gpt-4o</code>。
         </div>
       </div>

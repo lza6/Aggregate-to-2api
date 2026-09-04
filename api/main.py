@@ -106,7 +106,7 @@ class SecurityHeadersMiddleware:
 # ── App 组装 ──
 app = FastAPI(
     title="imagefree API",
-    version="7.7.10",
+    version="7.7.11",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
     "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
@@ -161,11 +161,23 @@ if _FRONTEND_DIR.exists():
             async def get_response(self, path: str, scope):
                 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+                # v7.7.11: index.html 不缓存（防 vite build 新 hash chunk 后浏览器用旧缓存
+                # → "Failed to fetch dynamically imported module: Costs-De1zk6Ws.js" 卡死）。
+                # assets/ 带 hash 的 chunk 可长期缓存（immutable），index.html 必须每次回源。
+                def _apply_nocache(resp):
+                    if path == "index.html" or path == "" or path.endswith("/index.html"):
+                        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                        resp.headers["Pragma"] = "no-cache"
+                        resp.headers["Expires"] = "0"
+                    return resp
+
                 try:
-                    return await super().get_response(path, scope)
+                    resp = await super().get_response(path, scope)
+                    return _apply_nocache(resp)
                 except StarletteHTTPException as exc:
                     if exc.status_code == 404 and not path.startswith("assets/"):
-                        return await super().get_response("index.html", scope)
+                        resp = await super().get_response("index.html", scope)
+                        return _apply_nocache(resp)
                     raise
 
         app.mount("/admin", SPAStaticFiles(directory=str(_FRONTEND_DIR), html=True), name="admin")
