@@ -81,21 +81,22 @@ export function Dashboard() {
           <p className="page-desc">全节点图像生成任务调度、集群负载与核心业务指标一览</p>
         </div>
         <div className="dashboard-header-actions">
-          {authStatus?.enabled && (
-            <span className="tf-badge tf-badge-warning api-key-badge" title="全站写操作需携带此 Key">
-              🔑 API Key: <code>{authStatus.key_mask ?? '…'}</code>
-              {/* 完整 Key 仅当请求携带管理面 Key（auth/status 被鉴权通过）才返回；匿名只拿 mask */}
+          {/* v7.7.7: 生图/聊天公益开放不限业务 Key，此徽章仅对站长（已存管理 Key）展示管理 Key 脱敏，
+              普通访客不再看到误导性的"必须带 Key"提示。生图/聊天无需任何 Key。 */}
+          {authStatus?.admin_enabled && getStoredAdminKey() && (
+            <span className="tf-badge tf-badge-warning api-key-badge" title="管理写操作（封禁/DLQ/日志）需此管理 Key">
+              🔑 管理 Key: <code>{authStatus.key_mask ?? '…'}</code>
               {authStatus.key ? (
                 <button
                   type="button"
                   className="api-key-copy"
-                  aria-label="复制完整 API Key"
+                  aria-label="复制完整管理 Key"
                   onClick={async () => {
                     const full = authStatus.key ?? '';
                     if (!full) { notify('未获取到 Key', 'error'); return; }
                     try {
                       await navigator.clipboard.writeText(full);
-                      notify('API Key 已复制到剪贴板', 'success');
+                      notify('管理 Key 已复制到剪贴板', 'success');
                     } catch {
                       notify('复制失败，请手动复制', 'error');
                     }
