@@ -30,6 +30,14 @@ from .worker import QueueFull  # noqa: F401  (generate.py 依赖 dispatch 再导
 log = logging.getLogger("dispatch")
 
 
+def _mask_idem_key(key: str | None) -> str:
+    """幂等 key 日志脱敏（v7.7 P2-9）：key 是客户端任意字符串，可能含敏感值。
+    只保留前 4 位 + 长度提示，足以关联日志又不泄露内容。"""
+    if not key:
+        return "-"
+    return f"{key[:4]}…(len={len(key)})"
+
+
 # ── Model 校验 / 归一化 ──
 def _normalize_model(model: str) -> str:
     """旧版风格预设 id（default/anime/...）映射为 imagefree/<id>，向后兼容。"""
@@ -225,7 +233,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     if IF_IDEMPOTENCY_ENABLED and idempotency_key:
         existing = await db.get_idempotency(idempotency_key)
         if existing is not None:
-            log.info("幂等提交命中: key=%s task_id=%s", idempotency_key, existing["task_id"])
+            log.info("幂等提交命中: key=%s task_id=%s", _mask_idem_key(idempotency_key), existing["task_id"])
             return existing["task_id"]
 
     if provider is None or provider.prefix == "imagefree":
@@ -243,7 +251,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
             # 原子抢占：并发下抢不到则让位给 winner（本 task_id 成为孤儿，标记取消）
             winner = await db.claim_idempotency(idempotency_key, task_id)
             if winner != task_id:
-                log.info("幂等并发让位: key=%s mine=%s winner=%s", idempotency_key, task_id, winner)
+                log.info("幂等并发让位: key=%s mine=%s winner=%s", _mask_idem_key(idempotency_key), task_id, winner)
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)
@@ -272,7 +280,7 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
         # 原子抢占：抢不到说明并发请求已占用 key，本 request 标记重复、不启动生成
         winner = await db.claim_idempotency(idempotency_key, task_id)
         if winner != task_id:
-            log.info("幂等并发让位: key=%s mine=%s winner=%s", idempotency_key, task_id, winner)
+            log.info("幂等并发让位: key=%s mine=%s winner=%s", _mask_idem_key(idempotency_key), task_id, winner)
             await db.mark_finished(task_id, "error", None, "重复提交（幂等 key 已被并发请求占用）", 0.0)
             return winner
 
