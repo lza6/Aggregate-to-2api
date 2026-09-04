@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>听风AI v7.7 终局闭环总审计 — 变更报告</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#e2e8f0; --muted:#94a3b8; --primary:#6366f1; --success:#10b981; --warning:#f59e0b; --danger:#ef4444; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:24px; max-width:1100px; margin:0 auto; }
+  h1 { font-size:28px; background:linear-gradient(135deg,#6366f1,#3b82f6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
+  h2 { font-size:20px; color:var(--primary); margin:28px 0 12px; border-left:4px solid var(--primary); padding-left:12px; }
+  h3 { font-size:16px; margin:18px 0 8px; color:var(--text); }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin:12px 0; }
+  .ctx { background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(59,130,246,0.08)); border-color:var(--primary); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:12px 0; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .stat .v { font-size:24px; font-weight:700; color:var(--primary); }
+  .stat .l { font-size:12px; color:var(--muted); margin-top:4px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
+  th,td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); }
+  th { background:var(--bg); color:var(--muted); font-weight:600; }
+  tr:hover td { background:rgba(99,102,241,0.05); }
+  code { background:var(--bg); padding:2px 6px; border-radius:4px; font-size:12px; color:var(--success); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
+  .p0 { background:rgba(239,68,68,0.15); color:var(--danger); }
+  .p1 { background:rgba(245,158,11,0.15); color:var(--warning); }
+  .p2 { background:rgba(16,185,129,0.15); color:var(--success); }
+  .quiz { background:var(--card); border:2px solid var(--primary); border-radius:14px; padding:24px; margin:24px 0; }
+  .quiz h2 { border:none; padding:0; }
+  .q { margin:16px 0; padding:14px; background:var(--bg); border-radius:8px; }
+  .q .num { color:var(--primary); font-weight:700; }
+  .opts label { display:block; padding:8px 12px; margin:4px 0; background:var(--card); border:1px solid var(--border); border-radius:6px; cursor:pointer; transition:all .15s; }
+  .opts label:hover { border-color:var(--primary); }
+  .opts input { margin-right:8px; }
+  .reveal { display:none; margin-top:8px; padding:8px 12px; border-radius:6px; font-size:13px; }
+  .reveal.show { display:block; }
+  .ok { background:rgba(16,185,129,0.12); color:var(--success); border:1px solid var(--success); }
+  .no { background:rgba(239,68,68,0.12); color:var(--danger); border:1px solid var(--danger); }
+  .score { font-size:20px; font-weight:700; margin-top:16px; padding:12px; border-radius:8px; text-align:center; }
+  details { margin:8px 0; }
+  summary { cursor:pointer; color:var(--primary); padding:6px; }
+</style>
+</head>
+<body>
+<h1>听风AI v7.7 终局闭环总审计</h1>
+<div class="meta">Spec-Kit 005-v77-terminal-closure · 2026-09-04 · 4 子代理并行审计 + 主线程修复 + 复验循环</div>
+
+<div class="card ctx">
+  <h3>📋 上下文与直觉</h3>
+  <p>用户判定上一轮（v7.6 前端 a11y 地基）"实现过浅、未深度闭环"——前后端衔接、功能完整性、兼容性、调用体验等多方面未考虑。本轮按 Spec-Kit 7 阶段规范，启动 <b>4 个并行子代理</b>（契约/后端安全/UX 闭环/配置文档）做全链路盲点扫描，主线程依清单修复，独立审查线程六维复验。</p>
+  <p style="margin-top:8px;color:var(--muted)">直觉判断：项目已生产部署，最大风险不是"没功能"，而是<b>有功能但链路断裂、契约错位、错误态伪装、CI 漏洞</b>——这些"看起来能用其实不能用"的伪闭环才是生产事故源。</p>
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="v">4</div><div class="l">并行审计子代理</div></div>
+  <div class="stat"><div class="v">17</div><div class="l">修复项（F1-F17）</div></div>
+  <div class="stat"><div class="v">0</div><div class="l">P0 阻塞</div></div>
+  <div class="stat"><div class="v">8</div><div class="l">P1 修复</div></div>
+  <div class="stat"><div class="v">28</div><div class="l">P2 修复</div></div>
+  <div class="stat"><div class="v">0</div><div class="l">本轮回归</div></div>
+</div>
+
+<h2>🔍 做了什么（按审计维度）</h2>
+
+<h3>契约对齐（contract-auditor）</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th><th>级别</th></tr>
+<tr><td>F3</td><td>/v1/tasks 列表 SELECT 列清单漏 prompt 列 → Tasks 页 Prompt 列恒 '-'</td><td>_TASK_LIST_COLS 补 prompt</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F4</td><td>Task 前端类型声明 9 字段，后端 task_to_public 返回 14 字段；prompt 声明必填但可 null；7 处错名/幽灵字段</td><td>类型补全 + message_limit/last_attempt_at/credits?/status+detail 对齐</td><td><span class="tag p2">P2</span></td></tr>
+</table>
+
+<h3>后端安全与健壮性（backend-auditor）</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th><th>级别</th></tr>
+<tr><td>F5</td><td>geo_ip 在线查询同步 urllib 直接卡事件循环，任务列表全 miss 可冻结全站数分钟</td><td>ThreadPoolExecutor 下放；缓存命中纯内存不变</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F6</td><td>4 处裸 asyncio.create_task 仅弱引用，GC 可中途回收 → 告警丢失/封禁不落库</td><td>新增 api/background.py spawn 统一持强引用+异常必 log</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F7</td><td>流式聊天把 ProviderRateLimited 折叠成 server_error，客户端无法按 429 退避</td><td>OpenAI rate_limit_error / Anthropic 同步区分</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F8</td><td>log_ws 锁内逐个 await send_json，慢客户端队头阻塞</td><td>锁内快照拷贝，发送移出锁外</td><td><span class="tag p2">P2</span></td></tr>
+<tr><td>F9</td><td>SSRF 校验 + 图片下载的同步 getaddrinfo 阻塞 loop</td><td>asyncio.to_thread 下放</td><td><span class="tag p2">P2</span></td></tr>
+<tr><td>F10</td><td>幂等 key 明文入日志（客户端任意字符串可能含敏感值）</td><td>_mask_idem_key 前 4 位+长度</td><td><span class="tag p2">P2</span></td></tr>
+<tr><td>F11</td><td>dispatch_edit os.write 异常时 fd 泄漏 + ecosystem httpx client 停机不释放</td><td>try/finally 保底关 fd + lifespan 接入 close_client</td><td><span class="tag p2">P2</span></td></tr>
+</table>
+
+<h3>UX 闭环（ux-closure-auditor）</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th><th>级别</th></tr>
+<tr><td>F14</td><td>Security 无 Key 时 401 整页 ErrorRetry 挡住 Key 横幅 → 自举死锁</td><td>401 保留 Key 横幅，列表区显示引导</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F14</td><td>Tasks 状态筛选只改 state 不触发 reload，最长等 10s 轮询</td><td>useEffect(reload,[status])</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F15</td><td>App 无 404 catch-all（空白主区）+ Generate 轮询无失败上限/SSE 双失败永久转圈 + ChatPlayground 模型失败静默锁死 + Accounts 搜索无防抖 + Gallery 非 401/403 错误伪装空态</td><td>catch-all + 轮询 5 次失败上限 + 模型错误可见 + debounceMs:300 + loadError 卡片</td><td><span class="tag p2">P2</span></td></tr>
+<tr><td>F16</td><td>无障碍 P2：三页 input 缺 aria-label + Health h3 跳级 + Logs 无 role=log + Security 缺 IP 格式预校验 + Generate prompt 无 maxLength</td><td>全部落地</td><td><span class="tag p2">P2</span></td></tr>
+</table>
+
+<h3>配置/部署/文档（config-docs-auditor）</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th><th>级别</th></tr>
+<tr><td>F12</td><td>compose api 服务无 env_file，生产收紧模板 15 项变量静默失效</td><td>env_file: .env（白名单保留作兜底）</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F12</td><td>compose image 硬编码 latest，GHCR fallback 与 tag 回滚断裂</td><td>image: ${API_IMAGE:-...}</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F13</td><td>README 两处启动漏 landing build → 根路径 404</td><td>补 landing build 步骤 + dist 不入 git 前置</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F2</td><td>frontend 管理面板无 CI 门禁（tsc/vitest/build）</td><td>ci.yml 新增 frontend-gate job</td><td><span class="tag p1">P1</span></td></tr>
+<tr><td>F13</td><td>SOP v2.3.0 时效漂移（资源限制/笔误/docs.html/config.py）</td><td>SOP v2.4.0 + .env.production.example 验证说明</td><td><span class="tag p2">P2</span></td></tr>
+</table>
+
+<h3>CI 与发版</h3>
+<table>
+<tr><th>#</th><th>问题</th><th>修复</th></tr>
+<tr><td>F1</td><td>v7.6 DLQ admin 鉴权后，宿主残留 IF_ADMIN_KEYS 致集成测试 403 flaky</td><td>conftest pop IF_ADMIN_KEYS + ADMIN_KEY_OPEN=1 + 集成/混沌分轮</td></tr>
+<tr><td>F17</td><td>版本 8 处对齐 7.7.1 + dist 重建</td><td>pyproject×2/api.main/frontend/landing/compose×2/README badge</td></tr>
+</table>
+
+<h2>📊 验证证据</h2>
+<div class="grid">
+  <div class="stat"><div class="v">1545</div><div class="l">后端单测（5F 全预存/组合串扰，单跑全绿）</div></div>
+  <div class="stat"><div class="v">37</div><div class="l">集成测试（1F 预存设计不一致）</div></div>
+  <div class="stat"><div class="v">5/0</div><div class="l">混沌测试全绿</div></div>
+  <div class="stat"><div class="v">197</div><div class="l">vitest 全绿</div></div>
+  <div class="stat"><div class="v">22</div><div class="l">E2E 冒烟全绿</div></div>
+  <div class="stat"><div class="v">20</div><div class="l">响应式 4 断点全绿</div></div>
+</div>
+
+<h2>🚧 阻塞与边界（诚实披露）</h2>
+<div class="card">
+<ul>
+<li><b>B1 test_models_endpoint</b>（预存）：断言 nanobanana in items，但 conftest IF_ACCOUNT_AUTO=0 设计性隐藏 nanobanana。CI 从未跑集成故未暴露。非本轮引入。</li>
+<li><b>B2 test_chat_auth/test_auth_ip 组合串扰</b>（预存）：单独跑全绿，组合跑偶发。用户已决策聊天保持 v7.7.1 全开放（仅 per-IP 频控）。</li>
+<li><b>B3 test_autoregister_loop 组合串扰</b>（预存）：单跑 PASS。</li>
+<li><b>付费上游 E2E</b>：按红线预算 0，用 Mock/fixture 验证参数拼装/轮询/回调/超时/重试/幂等。</li>
+<li><b>Redis/Kafka/CDN 基础设施扩展</b>：当前 SQLite 单机量级（16k 行）无瓶颈，ADR 记录升级触发条件（>100 QPS 持续写 或 >500MB）。</li>
+</ul>
+</div>
+
+<h2>📚 资产沉淀</h2>
+<div class="card">
+<ul>
+<li><b>Spec-Kit 005</b>：.specify/specs/005-v77-terminal-closure/（spec/plan/tasks 全终态）</li>
+<li><b>workflow_status.md</b>：任务契约 + 审计发现 + 修复记录 + 阻塞项 + 验证日志</li>
+<li><b>skills 沉淀</b>：new-provider-sop.md（7 步接入）+ new-feature-sop.md（6 步+验收清单）+ SKILL.md 索引</li>
+<li><b>verification-log 勿重跑</b>：v7.7 新增 11 条结论，避免下轮重复审计</li>
+</ul>
+</div>
+
+<div class="quiz">
+<h2>📝 变更测验（必须通过）</h2>
+<p style="color:var(--muted);margin-bottom:16px">8 题，覆盖契约/后端/UX/配置/CI/安全/skills/发版。选完点"提交"看得分。</p>
+
+<div class="q" id="q1">
+  <div class="num">1. /v1/tasks 列表前端 Prompt 列此前恒显示 '-' 的根因是？</div>
+  <div class="opts">
+    <label><input type="radio" name="q1" value="a">A. 前端 Task.prompt 类型声明为必填 string</label>
+    <label><input type="radio" name="q1" value="b">B. 后端 _TASK_LIST_COLS 列清单漏了 prompt 列，SELECT 不取该字段</label>
+    <label><input type="radio" name="q1" value="c">C. task_to_public 函数没输出 prompt 字段</label>
+    <label><input type="radio" name="q1" value="d">D. 前端 Tasks.tsx 没渲染 prompt</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q2">
+  <div class="num">2. geo_ip 在线查询为何会冻结事件循环？修复方式是？</div>
+  <div class="opts">
+    <label><input type="radio" name="q2" value="a">A. guess_country 函数本身递归过深 → 改迭代</label>
+    <label><input type="radio" name="q2" value="b">B. urllib.urlopen 是同步网络 I/O，缓存 miss 时每 IP 卡 ≤1.5s → 下放 ThreadPoolExecutor</label>
+    <label><input type="radio" name="q2" value="c">C. _GEO_CACHE 容量太小 → 扩到 100000</label>
+    <label><input type="radio" name="q2" value="d">D. ip-api.com 限流 → 换付费 API</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q3">
+  <div class="num">3. 裸 asyncio.create_task 的 GC 风险表现是？新增的 api/background.py spawn 如何根治？</div>
+  <div class="opts">
+    <label><input type="radio" name="q3" value="a">A. task 完成太慢 → spawn 加超时</label>
+    <label><input type="radio" name="q3" value="b">B. 事件循环仅持弱引用，等待 I/O 期间可能被 GC 静默取消 → spawn 持强引用集 + add_done_callback(discard) + 异常必 log.exception</label>
+    <label><input type="radio" name="q3" value="c">C. task 之间互相取消 → spawn 加锁</label>
+    <label><input type="radio" name="q3" value="d">D. task 数量无上限 → spawn 加队列</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q4">
+  <div class="num">4. Security 页无管理 Key 时的"自举死锁"指什么？如何破解？</div>
+  <div class="opts">
+    <label><input type="radio" name="q4" value="a">A. 后端 403 → 前端整页 ErrorRetry 早退，Key 输入横幅不可达 → 401/403 不整页早退，保留 Key 横幅，列表区显示引导</label>
+    <label><input type="radio" name="q4" value="b">B. Key 输入框 disabled → 改为可编辑</label>
+    <label><input type="radio" name="q4" value="c">C. 后端不返回 401 → 改返回 200</label>
+    <label><input type="radio" name="q4" value="d">D. localStorage 不可用 → 改 cookie</label>
+  </div>
+  <div class="reveal" data-correct="a"></div>
+</div>
+
+<div class="q" id="q5">
+  <div class="num">5. compose env_file: .env 修复了什么？</div>
+  <div class="opts">
+    <label><input type="radio" name="q5" value="a">A. 加速容器启动</label>
+    <label><input type="radio" name="q5" value="b">B. 此前 environment 白名单仅透传 2 项，.env.production.example 的 15 项生产收紧变量（CORS/AdminKeys/自动封禁/CSP/限流/OTel）全部不进容器 → env_file 让全量注入</label>
+    <label><input type="radio" name="q5" value="c">C. 替代 environment 段</label>
+    <label><input type="radio" name="q5" value="d">D. 让 compose 不需要 Dockerfile</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q6">
+  <div class="num">6. CI frontend-gate job 补盲的意义？</div>
+  <div class="opts">
+    <label><input type="radio" name="q6" value="a">A. 加速前端构建</label>
+    <label><input type="radio" name="q6" value="b">B. 此前 frontend/src（React 管理面板）的 tsc/vitest/build 在 CI 无门禁，类型错误与用例回归只能靠本地自觉 → 三道闸（tsc+vitest+build）纳入 CI</label>
+    <label><input type="radio" name="q6" value="c">C. 替代 ruff lint</label>
+    <label><input type="radio" name="q6" value="d">D. 让 landing 不再构建</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q7">
+  <div class="num">7. 流式聊天区分 429 限流帧的客户端价值？</div>
+  <div class="opts">
+    <label><input type="radio" name="q7" value="a">A. 减少服务端日志</label>
+    <label><input type="radio" name="q7" value="b">B. 客户端可按 rate_limit_error 退避重试，而非把所有错误折叠成 server_error 导致无法区分"可重试限流"与"提供商宕机"</label>
+    <label><input type="radio" name="q7" value="c">C. 提升出图速度</label>
+    <label><input type="radio" name="q7" value="d">D. 减少 token 消耗</label>
+  </div>
+  <div class="reveal" data-correct="b"></div>
+</div>
+
+<div class="q" id="q8">
+  <div class="num">8. 本轮"勿重跑"结论里，下轮不应再提的是？</div>
+  <div class="opts">
+    <label><input type="radio" name="q8" value="a">A. geo_ip 卡 loop、裸 create_task GC、log_ws 队头阻塞、幂等 key 明文日志、compose env_file 失效、CI 前端盲区、DLQ 403 flaky —— 均已修复</label>
+    <label><input type="radio" name="q8" value="b">B. 应该重新审计 threading.Lock 使用</label>
+    <label><input type="radio" name="q8" value="c">C. 应该再提 aiosqlite 迁移</label>
+    <label><input type="radio" name="q8" value="d">D. 应该重新评估 nanobanana Action ID 嗅探</label>
+  </div>
+  <div class="reveal" data-correct="a"></div>
+</div>
+
+<button onclick="gradeQuiz()" style="background:var(--primary);color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;margin-top:12px;">提交答卷</button>
+<div id="score" class="score" style="display:none"></div>
+
+</div>
+
+<h2>📦 发版状态</h2>
+<div class="card">
+<p><b>版本</b>：7.7.1（8 处对齐：pyproject×2/api.main/frontend/landing/compose×2/README badge）</p>
+<p><b>提交</b>：已 push origin/main（3637f12..be3eaa0）</p>
+<p><b>Spec-Kit 005</b>：Phase 1-4 全 [x]，Phase 5（HTML 报告+发版）进行中</p>
+<p><b>生产验证</b>：待 tag v7.7.1 触发 Deploy（用户睡前收菜，可自行 git tag v7.7.1 && git push origin v7.7.1）</p>
+</div>
+
+<script>
+function gradeQuiz() {
+  const answers = { q1:'b', q2:'b', q3:'b', q4:'a', q5:'b', q6:'b', q7:'b', q8:'a' };
+  let correct = 0;
+  Object.keys(answers).forEach(qid => {
+    const sel = document.querySelector(`input[name="${qid}"]:checked`);
+    const reveal = document.querySelector(`#${qid} .reveal`);
+    reveal.classList.remove('show','ok','no');
+    if (sel) {
+      if (sel.value === answers[qid]) { correct++; reveal.classList.add('show','ok'); reveal.textContent = '✅ 正确'; }
+      else { reveal.classList.add('show','no'); reveal.textContent = `❌ 正确答案是 ${answers[qid].toUpperCase()}`; }
+    } else { reveal.classList.add('show','no'); reveal.textContent = `⚠️ 未作答，正确答案是 ${answers[qid].toUpperCase()}`; }
+  });
+  const s = document.getElementById('score');
+  s.style.display = 'block';
+  s.className = 'score ' + (correct >= 7 ? 'ok' : 'no');
+  s.textContent = correct >= 7 ? `🎉 ${correct}/8 通过！变更理解到位` : `${correct}/8 未达标（需 ≥7）`;
+}
+</script>
+</body>
+</html>
