@@ -177,6 +177,20 @@ async def lifespan(_app):
     await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
     await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
 
+    # v7.6 P0：非 imagefree 生成任务（nanobanana/aifreeforever/falai）是 asyncio.create_task
+    # 挂 _PROVIDER_TASKS，不 drain 则重启时被硬取消、结果不落库（客户端永久 pending）。
+    # 放在 Provider 停止之前、DB 关闭之前，给在途任务足够时间落库。
+    async def _drain_provider_tasks() -> None:
+        from .dispatch import _PROVIDER_TASKS
+
+        tasks = list(_PROVIDER_TASKS)
+        if not tasks:
+            return
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    await shutdown_phase(8.0, "③.5 非 imagefree 在途任务排空", _drain_provider_tasks())
+
+
     async def _restore_engine() -> None:
         await providers_shutdown()
         _imgf = registry.providers.get("imagefree")

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from .. import auth
 from ..chat_usage import chat_usage_tracker as chat_usage
 from ..errors import AppError, ErrorCodes
-from ..providers.base import ChatProvider
+from ..providers.base import ChatProvider, ProviderRateLimited
 from ..providers.registry import bootstrap as providers_bootstrap
 from ..providers.registry import registry
 
@@ -239,6 +239,22 @@ async def _chat_collect(
         return result, text, reasoning, tool_calls, finish_reason, usage
     except AppError:
         raise
+    except ProviderRateLimited as exc:
+        # v7.6 P1：保留 429 限流语义（原 except Exception 把它降级为 503 PROVIDER_DOWN，
+        # 客户端无法区分"可重试限流"与"提供商宕机"，错误地按 503 退避而非 Retry-After）。
+        usage = _normalize_usage({}, "", messages)
+        await _record(
+            **_record_args(
+                provider_name,
+                request.model,
+                usage,
+                (time.perf_counter() - started) * 1000,
+                False,
+                0,
+                error=str(exc),
+            )
+        )
+        raise AppError(ErrorCodes.RATE_LIMITED, str(exc) or "提供商限流，请稍后重试", 429) from exc
     except Exception as exc:
         # 根因必须落日志（此前被静默吞掉导致线上排障困难）
         log.exception("聊天提供商调用失败 model=%s provider=%s", request.model, provider_name)

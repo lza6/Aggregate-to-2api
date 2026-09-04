@@ -941,6 +941,45 @@ class DB:
             (key, task_id, time.time()),
         )
 
+    async def claim_idempotency(self, key: str, task_id: str) -> str:
+        """原子抢占幂等 key：成功（首次）返回本 task_id；已存在返回先前 task_id。
+
+        v7.6 P0 修复：save_idempotency 的 INSERT OR REPLACE + get/save 两步在并发下
+        存在 TOCTOU——两个请求都通过 get==None 检查后各自 save，后者覆盖前者，
+        同 key 并发返回不同 task_id 且产生孤儿任务。此方法把 check-and-set 收进单条
+        INSERT ... ON CONFLICT DO NOTHING，凭 rowcount 判定抢占结果，无中间竞态窗口。
+        注意：绕过 _enqueue_write 批量缓冲（调用方必须立即读到抢占结果）。
+        """
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cursor = await conn.execute(
+                "INSERT INTO idempotency_keys (idempotency_key, task_id, created_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(idempotency_key) DO NOTHING",
+                (key, task_id, time.time()),
+            )
+            if cursor.rowcount > 0:
+                await conn.commit()
+                self._commit_count += 1
+                return task_id
+            existing = await conn.execute(
+                "SELECT task_id FROM idempotency_keys WHERE idempotency_key=?", (key,)
+            )
+            row = await existing.fetchone()
+            await conn.commit()
+            self._commit_count += 1
+            if row:
+                return str(row[0])
+            # 理论不可达：rowcount==0 且 select 为空说明并发删除（clean_expired）竞态，
+            # 保守回退为直接写入本 task_id
+            await conn.execute(
+                "INSERT INTO idempotency_keys (idempotency_key, task_id, created_at) VALUES (?, ?, ?)",
+                (key, task_id, time.time()),
+            )
+            await conn.commit()
+            self._commit_count += 1
+            return task_id
+
+
     async def get_idempotency(self, key: str) -> dict | None:
         """查询幂等 key，返回 {idempotency_key, task_id, created_at} 或 None。"""
         await self._ensure_flushed()

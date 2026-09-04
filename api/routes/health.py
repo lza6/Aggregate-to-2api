@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import os
 import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import FileResponse
 
 from .. import config
@@ -225,21 +227,35 @@ async def readyz(response: Response) -> dict[str, Any]:
 
 
 @router.get("/v1/system")
-async def system_info() -> dict[str, Any]:
-    """服务器规格与自适应并发参数（供前端看板展示）。"""
-    return system_spec()
+async def system_info(request: Request, response: Response) -> dict[str, Any]:
+    """服务器规格与自适应并发参数（供前端看板展示）。
+
+    P2-3: ETag 协商缓存——低频变更只读端点，响应体哈希作 ETag；
+    客户端带 If-None-Match 且匹配 → 304 Not Modified（省带宽）。
+    """
+    payload = system_spec()
+    etag = '"' + hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:32] + '"'
+    inm = request.headers.get("if-none-match")
+    if inm and inm == etag:
+        response.status_code = 304
+        response.headers["ETag"] = etag
+        return {}  # 304 空 body
+    response.headers["ETag"] = etag
+    return payload
 
 
 @router.get("/v1/meta")
-async def meta() -> dict[str, Any]:
+async def meta(request: Request, response: Response) -> dict[str, Any]:
     """暴露站点配置，方便调用方集成。
 
     安全（P0）：此处为公开只读探测端点，**不返回完整 API Key**，仅返回脱敏前缀与鉴权开关。
     需要「站长一键复制完整 Key」走 /v1/chat/auth/status（带管理 Key 鉴权）。
+
+    P2-3: ETag 协商缓存（同 /v1/system——api_key_mask 变化时 ETag 自动失效）。
     """
     from ..auth import public_keymask, auth_enabled
 
-    return {
+    payload = {
         "sitekey": config.SITEKEY,
         "aspect_ratios": config.ASPECT_RATIOS,
         "supported_resolutions": ["1K", "2K", "4K", "480p", "720p"],
@@ -247,6 +263,14 @@ async def meta() -> dict[str, Any]:
         "auth_enabled": auth_enabled(),
         "api_key_mask": public_keymask(),
     }
+    etag = '"' + hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:32] + '"'
+    inm = request.headers.get("if-none-match")
+    if inm and inm == etag:
+        response.status_code = 304
+        response.headers["ETag"] = etag
+        return {}
+    response.headers["ETag"] = etag
+    return payload
 
 
 @router.get("/static/zanshang.jpg", include_in_schema=False)

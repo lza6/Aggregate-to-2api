@@ -37,8 +37,15 @@ def _prepare(request: Request, req: GenerateRequest) -> None:
 
     v4.2 P3-1: sync 与 async 唯一差别只在“是否等待”，提交前必须走完全同一路径，
     确保鉴权/校验/IP 取证三者语义一致，不各自实现。
+
+    v7.6 P1: priority=0 是 admin 队列（ADMIN_QUEUE_MAX 有限），仅业务 Key 可提交
+    priority 1/2；设 0 必须额外通过管理 Key 校验，否则普通用户可挤占运营通道。
     """
     _guard(request, req.prompt)
+    if req.priority == 0:
+        from .. import auth
+
+        auth.check_admin_key(request, scope="admin-priority")
     _validate_ratio(req.aspect_ratio)
     # 图生视频（images 非空）用 img2vid，否则 duration 非空为 txt2vid，默认 txt2img
     if req.images:

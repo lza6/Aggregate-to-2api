@@ -64,10 +64,14 @@ def test_frontend_components_enhancements():
     assert "一键复制调用命令示例" in fb_content
 
     # 3. 检查 ChatPlayground.tsx 中的错误智能改写
+    # v7.5 P1-1：ChatPlayground 拆分 790→424 行，错误改写文案移至 components/chat/chat-utils.ts
     chat_file = Path("frontend/src/pages/ChatPlayground.tsx")
     assert chat_file.exists()
-    chat_content = chat_file.read_text(encoding="utf-8")
-    assert "当前提供商繁忙，已为您自动切换至备用引擎" in chat_content
+    chat_utils_file = Path("frontend/src/components/chat/chat-utils.ts")
+    assert chat_utils_file.exists()
+    chat_utils_content = chat_utils_file.read_text(encoding="utf-8")
+    assert "当前提供商繁忙，已为您自动切换至备用引擎" in chat_utils_content, \
+        "chat-utils.ts 应含错误智能改写文案（v7.5 拆分后从 ChatPlayground 移入）"
 
     # 4. 检查 index.css 中的 375px 窄屏微调与 WS 动画
     css_file = Path("frontend/src/index.css")

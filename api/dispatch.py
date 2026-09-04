@@ -208,12 +208,6 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     from .config import IF_IDEMPOTENCY_ENABLED
 
     idempotency_key = getattr(req, "idempotency_key", None)
-    if IF_IDEMPOTENCY_ENABLED and idempotency_key:
-        existing = await db.get_idempotency(idempotency_key)
-        if existing is not None:
-            log.info("幂等提交命中: key=%s task_id=%s", idempotency_key, existing["task_id"])
-            return existing["task_id"]
-
     model = _normalize_model(req.model)
     # 路由记录全覆盖：先经 registry（含 imagefree），失败再回退原路径
     provider = None
@@ -224,6 +218,15 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
 
     # P0-6: priority=0 是 admin 级别，不可用 or 2 判定
     priority = req.priority if req.priority is not None else 2
+
+    # v7.6 P0：先原子抢占幂等 key（claim 成功=首次提交放行；已存在=并发/重放请求，
+    # 直接复用先前的 task_id）。原先 get→save 两步存在 TOCTOU：同 key 并发请求各自
+    # save，后者覆盖前者，返回两个不同 task_id。
+    if IF_IDEMPOTENCY_ENABLED and idempotency_key:
+        existing = await db.get_idempotency(idempotency_key)
+        if existing is not None:
+            log.info("幂等提交命中: key=%s task_id=%s", idempotency_key, existing["task_id"])
+            return existing["task_id"]
 
     if provider is None or provider.prefix == "imagefree":
         # imagefree 主路径：走既有引擎队列（高性能）
@@ -236,13 +239,16 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
             client_ip=getattr(req, "client_ip", None),
             user_agent=getattr(req, "user_agent", None),
         )
+        if IF_IDEMPOTENCY_ENABLED and idempotency_key:
+            # 原子抢占：并发下抢不到则让位给 winner（本 task_id 成为孤儿，标记取消）
+            winner = await db.claim_idempotency(idempotency_key, task_id)
+            if winner != task_id:
+                log.info("幂等并发让位: key=%s mine=%s winner=%s", idempotency_key, task_id, winner)
         # 路由记录：imagefree 请求也写入（记录请求最终由 imagefree/engine 处理）
         try:
             registry.adaptive_router.record_result("imagefree", 0.0, True)
         except Exception:
             pass
-        if IF_IDEMPOTENCY_ENABLED and idempotency_key:
-            await db.save_idempotency(idempotency_key, task_id)
         return task_id
 
     if provider is None:
@@ -263,7 +269,12 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
     spec = registry.model(model)
 
     if IF_IDEMPOTENCY_ENABLED and idempotency_key:
-        await db.save_idempotency(idempotency_key, task_id)
+        # 原子抢占：抢不到说明并发请求已占用 key，本 request 标记重复、不启动生成
+        winner = await db.claim_idempotency(idempotency_key, task_id)
+        if winner != task_id:
+            log.info("幂等并发让位: key=%s mine=%s winner=%s", idempotency_key, task_id, winner)
+            await db.mark_finished(task_id, "error", None, "重复提交（幂等 key 已被并发请求占用）", 0.0)
+            return winner
 
     async def _run() -> None:
         # P1-D: 非 imagefree 路径按 priority 控制并发

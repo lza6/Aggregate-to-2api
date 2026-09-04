@@ -18,6 +18,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from .. import config
+from ..prompts import compose_system_text
 from ..proxy_pool import proxy_pool
 from .base import (
     CAP_CHAT,
@@ -41,15 +42,23 @@ _MODEL_RE = re.compile(r'\{id:"([a-z0-9][a-z0-9.\-]*/[a-z0-9][a-z0-9.\-]*)",' r'
 
 # 站点目录不可访问时仍需提供可用的静态目录。
 _FALLBACK_CATALOG: tuple[dict[str, Any], ...] = (
-    {"id": "z-ai/glm-5.3-flash", "name": "GLM-5.3 Flash", "context": "128k", "supportsTools": True},
-    {"id": "z-ai/glm-5.2", "name": "GLM-5.2", "context": "128k", "supportsTools": True},
-    {"id": "qwen/qwen3.8-27b", "name": "Qwen3.8 27B", "context": "128k", "supportsTools": True},
+    # P0-3：演示性 meta.system_prompt_template 配置——按模型家族挂不同人格模板
+    # 用户可通过 refresh_models 动态目录覆盖；无 system_prompt_template 键走原 [SYSTEM INSTRUCTIONS] 路径
+    {"id": "z-ai/glm-5.3-flash", "name": "GLM-5.3 Flash", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "kimi_k2_teach", "thinking_mode": "interleaved", "refusal_stance": "default_help"},
+    {"id": "z-ai/glm-5.2", "name": "GLM-5.2", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "kimi_k2_teach", "thinking_mode": "interleaved"},
+    {"id": "qwen/qwen3.8-27b", "name": "Qwen3.8 27B", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "kimi_k2_teach"},
     {"id": "nvidia/nemotron-3.5-lightning", "name": "Nemotron 3.5 Lightning", "context": "128k"},
-    {"id": "deepseek/deepseek-v4-flash-0731", "name": "DeepSeek V4 Flash", "context": "128k", "supportsTools": True},
-    {"id": "deepseek/deepseek-v4-pro-0813", "name": "DeepSeek V4 Pro", "context": "128k", "supportsTools": True},
+    {"id": "deepseek/deepseek-v4-flash-0731", "name": "DeepSeek V4 Flash", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "anthropic_v5_chat", "thinking_mode": "interleaved"},
+    {"id": "deepseek/deepseek-v4-pro-0813", "name": "DeepSeek V4 Pro", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "anthropic_v5_chat", "thinking_mode": "interleaved", "max_thinking_length": 12000},
     {"id": "google/gemma-4-31b-it", "name": "Gemma 4 31B IT", "context": "128k"},
     {"id": "google/gemma-4-26b-a4b-it", "name": "Gemma 4 26B A4B IT", "context": "128k"},
-    {"id": "openai/gpt-oss-120b", "name": "GPT OSS 120B", "context": "128k", "supportsTools": True},
+    {"id": "openai/gpt-oss-120b", "name": "GPT OSS 120B", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "anthropic_v5_chat"},
     {"id": "meta/muse-glimmer-30b", "name": "Muse Glimmer 30B", "context": "128k"},
     {
         "id": "moonshotai/kimi-k3",
@@ -58,8 +67,12 @@ _FALLBACK_CATALOG: tuple[dict[str, Any], ...] = (
         "supportsTools": True,
         "messageLimit": 5,
         "cheaperFallbackId": "minimax/minimax-m3",
+        "system_prompt_template": "kimi_k2_teach",
+        "thinking_mode": "interleaved",
+        "max_thinking_length": 16000,
     },
-    {"id": "minimax/minimax-m3", "name": "MiniMax M3", "context": "128k", "supportsTools": True},
+    {"id": "minimax/minimax-m3", "name": "MiniMax M3", "context": "128k", "supportsTools": True,
+     "system_prompt_template": "kimi_k2_teach"},
     {"id": "thinkingmachines/inkling-small", "name": "Inkling Small", "context": "64k"},
 )
 
@@ -261,6 +274,7 @@ class TryingopenChatProvider(ChatProvider):
         self._sync_task: asyncio.Task | None = None
         self._catalog_source = "fallback"
         self._last_sync = 0.0
+        self._current_meta: dict[str, Any] | None = None  # P0-3：当前请求模型的 meta（chat_stream 设置）
         self._build_models(_FALLBACK_CATALOG)
 
     def _build_models(self, records: tuple[dict[str, Any], ...] | list[dict[str, Any]]) -> None:
@@ -286,6 +300,13 @@ class TryingopenChatProvider(ChatProvider):
                     "pricePerMTok",
                     "messageLimit",
                     "cheaperFallbackId",
+                    # P0-3：提示词模板系统 meta 键（全部可选，向后兼容）
+                    "system_prompt_template",
+                    "thinking_mode",
+                    "max_thinking_length",
+                    "refusal_stance",
+                    "citation_style",
+                    "skills",
                 )
                 if key in record
             }
@@ -364,9 +385,12 @@ class TryingopenChatProvider(ChatProvider):
         if user_index is None:
             converted.insert(0, {"id": f"msg-{uuid.uuid4().hex[:12]}", "role": "user", "parts": []})
             user_index = 0
-        if system_text:
+        # P0-3：系统提示词模板系统——按 ModelSpec.meta.system_prompt_template 组合宪法+模板+用户 system
+        # 无模板键/开关关闭时 compose_system_text 原样返回 user system，向后兼容原 [SYSTEM INSTRUCTIONS] 路径
+        composed_system = compose_system_text(system_text, getattr(self, "_current_meta", None))
+        if composed_system:
             converted[user_index]["parts"] = [
-                {"type": "text", "text": f"[SYSTEM INSTRUCTIONS]\n{system_text}\n[/SYSTEM INSTRUCTIONS]"},
+                {"type": "text", "text": f"[SYSTEM INSTRUCTIONS]\n{composed_system}\n[/SYSTEM INSTRUCTIONS]"},
                 *converted[user_index]["parts"],
             ]
         return converted
@@ -392,6 +416,9 @@ class TryingopenChatProvider(ChatProvider):
         effort: str = DEFAULT_EFFORT,
         **kw: Any,
     ) -> AsyncIterator[dict]:
+        # P0-3：把当前模型的 meta 暴露给 _convert_messages（用于 system_prompt_template 组合）
+        spec = self.models.get(model)
+        self._current_meta = spec.meta if spec else None
         converted = self._convert_messages(messages, tools, tool_choice)
         payload = self._payload(model, converted, effort)
         attempts = config.IF_TRYINGOPEN_MAX_ATTEMPTS

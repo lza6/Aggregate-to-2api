@@ -1,5 +1,6 @@
 """IMP-06: 幂等提交测试。"""
 
+import asyncio
 import time
 
 import pytest
@@ -131,3 +132,31 @@ class TestIdempotencyDisabled:
         row = await tmp_db.get_idempotency(key)
         assert row is not None
         assert row["task_id"] == "task-789"
+
+
+class TestClaimIdempotencyAtomic:
+    """v7.6 P0：claim_idempotency 原子抢占（根治 TOCTOU）。"""
+
+    @pytest.mark.asyncio
+    async def test_first_claim_wins(self, tmp_db):
+        """首次 claim 返回自己的 task_id。"""
+        result = await tmp_db.claim_idempotency("claim-key-1", "task-first")
+        assert result == "task-first"
+
+    @pytest.mark.asyncio
+    async def test_second_claim_returns_winner(self, tmp_db):
+        """已存在 key 的 claim 返回先前 task_id（不覆盖）。"""
+        first = await tmp_db.claim_idempotency("claim-key-2", "task-A")
+        second = await tmp_db.claim_idempotency("claim-key-2", "task-B")
+        assert first == "task-A"
+        assert second == "task-A"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_claims_same_key(self, tmp_db):
+        """同 key 并发 claim：仅一个 winner，其余全部返回 winner 的 task_id。"""
+        results = await asyncio.gather(*[
+            tmp_db.claim_idempotency("claim-key-3", f"task-{i}") for i in range(10)
+        ])
+        assert len(set(results)) == 1, f"并发 claim 应全部收敛到同一 task_id，实际 {results}"
+        row = await tmp_db.get_idempotency("claim-key-3")
+        assert row["task_id"] == results[0]
