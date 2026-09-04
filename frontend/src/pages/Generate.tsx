@@ -85,13 +85,19 @@ export function GeneratePage() {
     if (model && !activeModels.some(m => m.id === model)) setModel(activeModels[0]?.id ?? '');
   }, [activeModels, model]);
 
+  // v7.7 UX：轮询失败计数——连续失败 N 次后终止轮询并落错误态（此前上游宕机时 4s 轮询无限进行，UI 永久"生成中"）
+  const pollFailsRef = useRef(0);
+  const POLL_FAIL_LIMIT = 5;
+
   const startPoll = useCallback((taskId: string, edit: boolean) => {
     clearPoll();
+    pollFailsRef.current = 0;
     const poll = async () => {
       try {
         let t: Task;
         if (edit) t = await fetchEditTask(taskId);
         else t = await fetchTask(taskId);
+        pollFailsRef.current = 0; // 成功即清零
         if (t.status === 'completed' || t.status === 'error') {
           clearPoll();
           if (t.status === 'completed') {
@@ -105,7 +111,14 @@ export function GeneratePage() {
           setGenState({ status: 'running', task: t });
         }
       } catch (e) {
-        // 轮询失败不中断，等下一轮
+        pollFailsRef.current += 1;
+        if (pollFailsRef.current >= POLL_FAIL_LIMIT) {
+          clearPoll();
+          const msg = e instanceof Error ? e.message : String(e);
+          setGenState({ status: 'error', error: `查询任务进度连续失败 ${POLL_FAIL_LIMIT} 次：${msg}` });
+          notify('任务进度查询失败，请稍后在任务管理页查看', 'error');
+        }
+        // 未达上限：轮询失败不中断，等下一轮
       }
     };
     void poll();

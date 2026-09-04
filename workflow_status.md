@@ -23,7 +23,10 @@
 
 ## 修复记录
 
-> 待填：文件 + 变更 + 验证命令。
+| # | 修复 | 文件 | 验证 | 状态 |
+|---|------|------|------|------|
+| F1 | CI 集成 flaky 根治：conftest pop IF_ADMIN_KEYS + ADMIN_KEY_OPEN=1（v7.6 DLQ admin 鉴权引入的宿主残留污染）+ integration/chaos 分轮 | tests/conftest.py, ci.yml | integration 37/37 + chaos 5/5 全绿（CI 同口径） | ✅ |
+| F2 | frontend-gate CI 门禁补盲（tsc+vitest+build） | ci.yml | YAML parse OK + 本地三步全绿既有证据 | ✅ |
 
 ## 阻塞项
 

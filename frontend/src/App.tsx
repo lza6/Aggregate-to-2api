@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
-import { Skeleton } from './components/Feedback';
+import { Skeleton, Empty } from './components/Feedback';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
 
@@ -46,6 +46,8 @@ export default function App() {
               <Route path="/ecosystem" element={<ErrorBoundary><EcosystemPage /></ErrorBoundary>} />
               <Route path="/costs" element={<ErrorBoundary><CostsPage /></ErrorBoundary>} />
               <Route path="/slow" element={<ErrorBoundary><SlowPage /></ErrorBoundary>} />
+              {/* v7.7 UX：catch-all 404——未知路径不再渲染空白主区 */}
+              <Route path="*" element={<Empty text="页面不存在" hint="请使用左侧导航访问有效页面" />} />
             </Routes>
           </Suspense>
         </Layout>
