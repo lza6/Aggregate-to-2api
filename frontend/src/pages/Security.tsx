@@ -47,10 +47,20 @@ export function SecurityPage() {
     if (page === 1) reload();
   };
 
+  // v7.7: 前端 IP 格式预校验（与后端 _validate_ip 的 ipaddress 模块等价的宽松判定：
+  // IPv4 点分十进制 或 IPv6 冒号十六进制）。避免必然 400 的提交打到后端。
+  const isValidIp = (s: string): boolean => {
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+      return s.split('.').every(o => { const n = Number(o); return n >= 0 && n <= 255 && String(n) === o; });
+    }
+    return /^[0-9a-fA-F:]{2,45}$/.test(s) && s.includes(':');
+  };
+
   const handleBlock = async () => {
     if (submitting) return;
     const ip = ipInput.trim();
     if (!ip) { notify('请填写要封禁的 IP 地址', 'error'); return; }
+    if (!isValidIp(ip)) { notify(`IP 格式非法: ${ip}（需 IPv4/IPv6 字面量）`, 'error'); return; }
     setSubmitting(true);
     try {
       const res = await blockIp({
