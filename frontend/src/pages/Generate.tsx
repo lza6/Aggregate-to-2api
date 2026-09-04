@@ -157,6 +157,8 @@ export function GeneratePage() {
     es.onerror = () => {
       // P2-2: SSE 断线显式提示（网络抖动/服务端关流），并主动查一次任务状态：
       // 已终态则收尾，未终态则转轮询兜底（保持既有能力）。
+      // v7.7 UX：兜底查询也失败时不再静默 close()（此前会永久转圈"生成中"无出路），
+      // 落错误态并给重试出口。
       notify('任务事件流已断开，正在恢复…', 'info');
       void fetchTask(taskId).then((t) => {
         clearPoll();
@@ -165,11 +167,16 @@ export function GeneratePage() {
           else { setGenState({ status: 'error', error: t.error ?? undefined, task: t }); notify(t.error ?? '生成失败', 'error'); }
           close();
         } else {
-          // 未终态：回退轮询（startPoll 内部会 clearPoll）
+          // 未终态：回退轮询（startPoll 内部会 clearPoll，且自带失败上限）
           notify('已切换为轮询查询任务进度', 'info');
           startPoll(taskId, false);
         }
-      }).catch(() => { close(); });
+      }).catch((e) => {
+        close();
+        const msg = e instanceof Error ? e.message : String(e);
+        setGenState({ status: 'error', error: `事件流断开且任务查询失败：${msg}` });
+        notify('任务进度查询失败，请稍后在任务管理页查看', 'error');
+      });
     };
   }, [clearPoll, startPoll]);
 
