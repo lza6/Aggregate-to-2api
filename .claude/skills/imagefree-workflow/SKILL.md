@@ -209,9 +209,13 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 - **字面问题**（找某个字符串、统计出现位置）：用 Grep。
 - **具体符号源码**：`graft ask --source` / codegraph node / Read 单文件对应行段。
 
-## 附：imagefree-rules.md
+## 附：imagefree-rules.md + 接入 SOP
 
-代码规范、命名约定、错误处理模式、测试要求详见同目录 [imagefree-rules.md](./imagefree-rules.md)。
+- 代码规范、命名约定、错误处理模式、测试要求：[imagefree-rules.md](./imagefree-rules.md)
+- **新增上游图像/对话生成提供商**：[new-provider-sop.md](./new-provider-sop.md)（7 步，每步带验收点）
+- **新增任意功能/端点/页面/脚本**：[new-feature-sop.md](./new-feature-sop.md)（6 步 + 强制先思考后编码 + 验收清单）
+
+> 新功能开发前先读这两个 SOP，避免遗漏鉴权/数据层/后台任务/无障碍/文档同步等接缝点。
 
 ## Do-Not-Repeat（v3.1.0 已验证，勿再盲目优化）
 

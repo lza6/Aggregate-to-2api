@@ -57,6 +57,39 @@
 - hover:none 降级用显式回退值（v7.6.0）：勿改回 revert-layer（Safari<16.4 不识别会半残）
 - --safe-* 令牌与 viewport-fit=cover 已配对（v7.6.0）：新增 fixed 元素须用 calc(... + var(--safe-*))
 
+## v7.7 终局闭环总审计验证记录（2026-09-04，Spec-Kit 005）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-04 | 4 子代理并行审计（契约/后端/UX/配置文档） | P0=0；P1×8；P2×28 全部处置 | contract-auditor 0P0/1P1/7P2；backend 0P0/3P1/11P2；ux 0P0/2P1/10P2；config 0P0/4P1/11P2 |
+| 2026-09-04 | 后端 P1：geo_ip 事件循环阻塞根治 | 在线查询下放 ThreadPoolExecutor，缓存命中路径纯内存不变 | 功能验证同步+loop 两路径正常；targeted 81/81 |
+| 2026-09-04 | 后端 P1：fire-and-forget GC 风险 | 新增 api/background.py spawn（强引用集+异常必 log），4 调用点迁移 | targeted 95/95 |
+| 2026-09-04 | 后端 P1：流式聊天 429 区分 | OpenAI rate_limit_error / Anthropic 同步，对齐 v7.6 _chat_collect | chat targeted 44/44 |
+| 2026-09-04 | 后端 P2：log_ws 锁内发送外移 + DNS 下放 + 幂等 key 脱敏 + fd/ecosystem 生命周期 | 全部落地 | targeted 60/60 + 58/58 |
+| 2026-09-04 | 契约 P1：/v1/tasks 列表补 prompt 列 | _TASK_LIST_COLS 加 prompt；Tasks 页 Prompt 列不再恒 '-' | targeted 17/17 |
+| 2026-09-04 | 契约 P2：错名字段对齐 7 项 | message_limit/last_attempt_at/credits? 可选/status+detail 等 | build + 197 tests |
+| 2026-09-04 | UX P1：Tasks 筛选即时生效 + Security 无 Key 自举死锁破解 | useEffect(reload,[status])；401 保留 Key 横幅 | build + 197 tests |
+| 2026-09-04 | UX P2：App 404 + Generate 双失败 + ChatPlayground/Accounts/Gallery 错误态 | 全部落地 | build + 197 tests + E2E 22/22 + resp 20/20 |
+| 2026-09-04 | CI：frontend-gate 门禁补盲 + 集成/混沌分轮 + conftest admin key 清理 | YAML OK；integration 37/37 + chaos 5/5（v7.6 DLQ 鉴权引入的 flaky 根因） | conftest IF_ADMIN_KEYS pop + ADMIN_KEY_OPEN |
+| 2026-09-04 | 配置：compose env_file:.env + image ${API_IMAGE:-...} | 15 项生产收紧变量生效；回滚机制修复 | YAML OK |
+| 2026-09-04 | 文档：README 前端章节 + SOP v2.4.0 + .env.production.example 验证说明 | 全部同步 | 文档复核 |
+| 2026-09-04 | 版本 bump 7.6.0→7.7.1 全 8 处 + dist 重建 | 版本一致性契约 3/3 | landing/frontend/backend 均 7.7.1 |
+| 2026-09-04 | 全量验证：unit 1545 / integration 37 / chaos 5 / vitest 197 / E2E 22 / resp 20 | 5F 全部预存（3 auth 组合串扰单跑全绿 + 1 auto_block flaky + 1 test_models_endpoint 设计不一致） | 本轮零回归 |
+
+## 新增「验证过勿重跑」结论（v7.7）
+
+- geo_ip 在线查询已下放线程池（v7.7）：勿再提"urllib 卡 loop"——缓存命中是纯内存 O(1)，miss 走 ThreadPoolExecutor
+- fire-and-forget 已统一走 background.spawn（v7.7）：勿再用裸 asyncio.create_task（GC 风险）；新增后台任务直接 spawn
+- log_ws 广播已锁内快照+锁外发送（v7.7）：勿再提"慢客户端队头阻塞"
+- 幂等 key 日志已脱敏（_mask_idem_key，v7.7）：勿再提"幂等 key 明文入日志"
+- compose env_file:.env 已生效（v7.7）：.env.production.example 15 项收紧变量此前静默失效已修复
+- compose image 可被 API_IMAGE 覆盖（v7.7）：GHCR fallback 与 tag 回滚机制已修复
+- CI frontend-gate job 已存在（v7.7）：前端 tsc/vitest/build 有 CI 门禁，勿再提"前端无 CI 盲区"
+- 集成/混沌已分轮跑（v7.7）：conftest 已 pop IF_ADMIN_KEYS + ADMIN_KEY_OPEN，勿再提"DLQ 403 flaky"
+- 聊天端点 v7.7.1 公益开放（用户决策）：guard_chat_request 不再 check_api_key，仅 per-IP 频控；生图公益开放；管理面独立 IF_ADMIN_KEYS 池不变
+- test_models_endpoint 断言 nanobanana in items 与 conftest IF_ACCOUNT_AUTO=0 设计性隐藏冲突（预存）：CI 从未跑集成故未暴露，单跑可见
+- test_chat_auth/test_auth_ip/test_autoregister_loop 组合串扰（预存）：单跑全绿，组合跑偶发——属 Settings 单例+monkeypatch 跨用例残留，非回归
+
 - 幂等 claim_idempotency 已原子化（v7.6）：勿再提"加锁包裹 get+save"方案，直接复用 claim 接口
 - _PROVIDER_TASKS drain 已入 lifespan ③.5（v7.6）：勿在 engine.stop() 内重复处理
 - deploy/pyproject.toml 已对齐 7.4.0（v7.6）：版本门禁 7 处 = pyproject×2 + main.py + frontend + landing + compose×2

@@ -19,10 +19,10 @@
 - _browser_headers · function · L192-L219 — def _browser_headers(base_url: str, referer: str | None = None) -> dict
 - submit_generate · function · L222-L266 — async def submit_generate( base_url: str, prompt: str, aspect_ratio: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None, ) -> str
 - poll_generate_status · function · L269-L315 — async def poll_generate_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, ) -> dict
-- download_image · function · L318-L359 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
-- to_base64 · function · L362-L364 — def to_base64(data: bytes, mime: str = "image/png") -> str
-- detect_mime · function · L367-L379 — def detect_mime(data: bytes) -> str
-- _edit_client · function · L393-L397 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
-- upload_edit_image · function · L400-L428 — async def upload_edit_image( base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None ) -> str
-- submit_edit · function · L431-L455 — async def submit_edit( base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None ) -> str
-- poll_edit_status · function · L458-L494 — async def poll_edit_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None ) -> dict
+- download_image · function · L318-L363 — async def download_image( image_url: str, timeout: float = 60.0, max_bytes: int = 4 * 1024 * 1024, ) -> bytes
+- to_base64 · function · L366-L368 — def to_base64(data: bytes, mime: str = "image/png") -> str
+- detect_mime · function · L371-L383 — def detect_mime(data: bytes) -> str
+- _edit_client · function · L397-L401 — async def _edit_client(proxy: str | None) -> httpx.AsyncClient
+- upload_edit_image · function · L404-L432 — async def upload_edit_image( base_url: str, image_bytes: bytes, content_type: str = "image/png", timeout: float = 60.0, proxy: str | None = None ) -> str
+- submit_edit · function · L435-L459 — async def submit_edit( base_url: str, image_url: str, prompt: str, turnstile_token: str, timeout: float = 30.0, proxy: str | None = None ) -> str
+- poll_edit_status · function · L462-L498 — async def poll_edit_status( base_url: str, task_id: str, timeout: float = 180.0, poll_interval: float = 2.0, proxy: str | None = None ) -> dict
