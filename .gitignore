@@ -104,3 +104,7 @@ codegraph.lock
 .coverage_run.log
 .unit_run.log
 frontend/e2e_shots*/
+
+# External tool artifact (not project code)
+config/
+.cursor/
