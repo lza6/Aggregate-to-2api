@@ -115,8 +115,19 @@ jobs:
           pip install --no-cache-dir -r requirements.txt
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
       - name: 版本一致性断言（失败则 CI 失败）
+        # P0-11（v9.0.0）：强化输出可见性——历史遗留 exit 4 但 GitHub Actions step output
+        # 默认不捕获 pytest stdout，只剩 "Process completed with exit code 4." 无 stderr。
+        # 改为：去掉 -q 静默 + --tb=long 完整 traceback + -v 逐用例输出 + tee 到日志文件
+        # （$GITHUB_STEP_SUMMARY 让摘要也可见，防日志被截断后无诊断线索）。
         run: |
-          pytest tests/test_openapi_contract.py::TestFrontendVersionConsistency -v
+          set -o pipefail
+          pytest tests/test_openapi_contract.py::TestFrontendVersionConsistency -v --tb=long -p no:cacheprovider 2>&1 | tee /tmp/version-gate.log
+          {
+            echo "## TestFrontendVersionConsistency 结果"
+            echo '```'
+            cat /tmp/version-gate.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
