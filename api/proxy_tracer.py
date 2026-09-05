@@ -30,7 +30,7 @@ import time
 import httpx
 
 from . import config
-from .geo_ip import COUNTRY_NAMES, _GEO_CACHE
+from .geo_ip import _GEO_CACHE, COUNTRY_NAMES
 
 log = logging.getLogger("proxy_tracer")
 

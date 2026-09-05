@@ -262,7 +262,7 @@ class ProxyPool:
                 return
 
     def snapshot(self, page: int = 1, page_size: int = 20) -> dict:
-        from .geo_ip import guess_country, format_proxy_protocols
+        from .geo_ip import format_proxy_protocols, guess_country
 
         now = time.time()
 

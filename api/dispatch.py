@@ -20,9 +20,9 @@ from urllib.parse import urlsplit
 from fastapi.responses import StreamingResponse
 
 from . import config
-from .models import GenerateRequest
-from .meta import db, engine, registry
 from .errors import AppError, ErrorCodes
+from .meta import db, engine, registry
+from .models import GenerateRequest
 from .semaphore_manager import upstream_semaphore
 from .sse_events import publish_task_event
 from .worker import QueueFull  # noqa: F401  (generate.py 依赖 dispatch 再导出)

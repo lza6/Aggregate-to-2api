@@ -16,8 +16,7 @@ import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
-from .. import config
-from .. import turnstile_client
+from .. import config, turnstile_client
 from ..solver_guard import solver_guard
 
 log = logging.getLogger("engine")

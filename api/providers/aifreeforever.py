@@ -20,8 +20,7 @@ import time
 
 import httpx
 
-from .. import config
-from .. import turnstile_client
+from .. import config, turnstile_client
 from .base import CAP_IMG2IMG, CAP_TXT2IMG, GenerationResult, ModelSpec, Provider, ProviderError, ProviderRateLimited
 
 log = logging.getLogger("providers.aifreeforever")

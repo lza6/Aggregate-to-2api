@@ -12,7 +12,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+
 import httpx
+
 from . import config
 
 log = logging.getLogger("provider_probe")

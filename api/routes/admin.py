@@ -18,16 +18,16 @@ from fastapi import APIRouter, Query, Request, WebSocket
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from .. import config
-from ..auth import check_admin_key
-from ..meta import db, engine, registry, gallery_cache, _SLOW_PAGE, _uptime_human
-from ..errors import AppError, ErrorCodes
-from ..solver_guard import solver_guard
-from ..metrics_ext import imagefree_metrics as metrics_v2
-from ..log_ws import register_ws, unregister_ws
-from ..log_buffer import log_buffer as log_buffer_handler
 from ..audit import audit_log
-from ..slow_log import slow_log as _slow_log
+from ..auth import check_admin_key
+from ..errors import AppError, ErrorCodes
+from ..log_buffer import log_buffer as log_buffer_handler
+from ..log_ws import register_ws, unregister_ws
+from ..meta import _SLOW_PAGE, _uptime_human, db, engine, gallery_cache, registry
+from ..metrics_ext import imagefree_metrics as metrics_v2
 from ..provider_probe import provider_probe
+from ..slow_log import slow_log as _slow_log
+from ..solver_guard import solver_guard
 
 router = APIRouter()
 
@@ -107,8 +107,8 @@ async def cost_overview():
     - 图片成本估算 = account_pool.cost_summary(credits_used_total) × IF_USD_PER_CREDIT（0=不估算）；
     - budget 来自 IF_COST_BUDGET_USD（0=不启用成本告警）。
     """
-    from ..chat_usage import chat_usage_tracker as _tracker
     from .. import account_pool as _account_pool
+    from ..chat_usage import chat_usage_tracker as _tracker
 
     now = time.time()
     today_start = time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))
@@ -608,8 +608,8 @@ async def email_sources():
 @router.get("/v1/proxy-pool/subscribe", include_in_schema=False)
 async def get_proxy_subscription(format: str = Query("base64", description="订阅格式：base64 或 raw")):
     """代理订阅一键生成。"""
-    from ..proxy_pool import proxy_pool
     from ..geo_ip import generate_subscription_text
+    from ..proxy_pool import proxy_pool
 
     snap = proxy_pool.snapshot(page=1, page_size=1000)
     items = snap.get("items") or []
@@ -714,6 +714,7 @@ async def slow_view():
 async def diagnostics():
     """一键体检（零副作用只读）：DB/队列/worker/token 池/代理池/磁盘/慢日志。"""
     import shutil as _shutil
+
     from ..worker_health import worker_health
 
     db_file = Path(config.DB_FILE)

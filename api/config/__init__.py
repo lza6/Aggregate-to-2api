@@ -147,7 +147,8 @@ class Settings(BaseSettings):
     if_worker_scale_up_threshold: int = Field(200, validation_alias="IF_WORKER_SCALE_UP_THRESHOLD")
     if_worker_scale_down_threshold: int = Field(20, validation_alias="IF_WORKER_SCALE_DOWN_THRESHOLD")
     if_worker_idle_seconds: int = Field(90, validation_alias="IF_WORKER_IDLE_SECONDS")
-    if_persistent_queue_enabled: bool = Field(False, validation_alias="IF_PERSISTENT_QUEUE_ENABLED")
+    # v8.0 P1-8：持久化队列默认开启——重启不丢未完成任务（queue.db 持久化 + replay）
+    if_persistent_queue_enabled: bool = Field(True, validation_alias="IF_PERSISTENT_QUEUE_ENABLED")
     if_persistent_queue_db: str = Field("data/queue.db", validation_alias="IF_PERSISTENT_QUEUE_DB")
     # worker 批量调度（可选优化）：启用后 worker 按小批次消费队列减少上下文切换
     if_worker_batch_enabled: bool = Field(False, validation_alias="IF_WORKER_BATCH_ENABLED")
@@ -311,6 +312,8 @@ class Settings(BaseSettings):
     if_auto_block_threshold: int = Field(3, validation_alias="IF_AUTO_BLOCK_THRESHOLD")
     if_auto_block_window_seconds: int = Field(300, validation_alias="IF_AUTO_BLOCK_WINDOW_SECONDS")
     if_auto_block_ttl_seconds: int = Field(3600, validation_alias="IF_AUTO_BLOCK_TTL_SECONDS")
+    # v7.7.13: 恶意 IP 永久封禁——True 时自动封禁 ttl=0（永不过期），防脚本刷资源 30 分钟解封后继续刷
+    if_auto_block_permanent: bool = Field(False, validation_alias="IF_AUTO_BLOCK_PERMANENT")
     # ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
     # 优先使用独立管理 Key；为空则继承 IF_API_KEYS；两者皆空默认拒绝管理操作
     if_admin_keys: str = Field("", validation_alias="IF_ADMIN_KEYS")
@@ -351,6 +354,7 @@ class Settings(BaseSettings):
         "if_idempotency_enabled",
         "if_dlq_enabled",
         "if_auto_block_enabled",
+        "if_auto_block_permanent",
         "if_admin_key_open",
         "if_proxy_trace_enabled",
         "if_falai_enabled",
@@ -933,6 +937,7 @@ IF_AUTO_BLOCK_ENABLED = settings.if_auto_block_enabled
 IF_AUTO_BLOCK_THRESHOLD = settings.if_auto_block_threshold
 IF_AUTO_BLOCK_WINDOW_SECONDS = settings.if_auto_block_window_seconds
 IF_AUTO_BLOCK_TTL_SECONDS = settings.if_auto_block_ttl_seconds
+IF_AUTO_BLOCK_PERMANENT = settings.if_auto_block_permanent
 
 # ── 管理面（安全风控）独立 Key（ISSUE-02 加固）──────────
 IF_ADMIN_KEYS = settings.if_admin_keys
@@ -1177,6 +1182,7 @@ __all__ = [
     "IF_AUTO_BLOCK_THRESHOLD",
     "IF_AUTO_BLOCK_WINDOW_SECONDS",
     "IF_AUTO_BLOCK_TTL_SECONDS",
+    "IF_AUTO_BLOCK_PERMANENT",
     "CORS_ORIGINS",
     "IF_SECURITY_HEADERS_ENABLED",
     "IF_CSP_ENABLED",

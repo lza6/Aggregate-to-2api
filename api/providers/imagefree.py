@@ -98,7 +98,7 @@ class ImagefreeProvider(Provider):
                 return await runner(model, prompt, images, download)
             # 未显式注入 runner 时直通内部链路
             from .. import imagefree_client
-            from ..dispatch_edit import _EDIT_PROXY_POOL, _EDIT_LOCK, _acquire_edit_mutex, _release_edit_mutex
+            from ..dispatch_edit import _EDIT_LOCK, _EDIT_PROXY_POOL, _acquire_edit_mutex, _release_edit_mutex
 
             image = images[0]
             ctype = imagefree_client.detect_mime(image)

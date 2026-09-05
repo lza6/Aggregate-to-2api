@@ -5,13 +5,7 @@ main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
 
 from fastapi import APIRouter
 
-from . import health
-from . import tasks
-from . import generate
-from . import admin
-from . import chat
-from . import security
-from . import ecosystem
+from . import admin, chat, ecosystem, generate, health, security, tasks
 
 # ── 注册所有路由 ──
 api_router = APIRouter()

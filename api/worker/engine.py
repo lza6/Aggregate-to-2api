@@ -21,24 +21,22 @@ import uuid
 from typing import Any
 from urllib.parse import urlsplit
 
-from .. import config
-from .. import imagefree_client
-from .. import turnstile_client
+from .. import config, imagefree_client, turnstile_client
+
+# B2: traceId 透传——worker 后台协程脱离入口请求 context
+from ..context import RequestContext, get_current_trace_id, request_context_var
 from ..db import DB
 from ..db.queue_store import QueueStore
 from ..retry_policy import RetryPolicy
+
+# S-4: 慢日志画像打点 + S-7: worker 心跳
+from ..slow_log import SlowSample, slow_log
 
 # 注意：solver_guard 模块内定义了同名单例实例，须导入实例本身（`from . import solver_guard`
 # 会绑到模块对象，`solver_guard.allow_solve()` 将 AttributeError）。
 from ..solver_guard import solver_guard
 from ..telemetry import get_tracer
-
-# S-4: 慢日志画像打点 + S-7: worker 心跳
-from ..slow_log import SlowSample, slow_log
 from ..worker_health import worker_health
-
-# B2: traceId 透传——worker 后台协程脱离入口请求 context
-from ..context import RequestContext, request_context_var, get_current_trace_id
 from .token_pool import TokenPoolManager
 
 log = logging.getLogger("engine")
@@ -796,9 +794,9 @@ class Engine:
             pass
         if status == "completed" and image_url:
             try:
-                from .meta import gallery_cache as _gc
                 # v7.7: 走 background.spawn 持强引用（裸 create_task 可能被 GC 中途回收→缓存不一致）
                 from ..background import spawn
+                from .meta import gallery_cache as _gc
 
                 spawn(_gc.invalidate_prefix("gallery:"), name="gallery_cache_invalidate")
             except Exception as exc:

@@ -16,7 +16,7 @@ from .engine import (
     _is_token_rejected,
     _safe_proxy_label,
 )
-from .token_pool import _TokenPool, TokenPoolManager
+from .token_pool import TokenPoolManager, _TokenPool
 
 __all__ = [
     "Engine",

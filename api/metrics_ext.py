@@ -5,7 +5,7 @@
 统一走 _metric 工厂：已注册同名指标时复用既有 collector。
 """
 
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, REGISTRY
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram, generate_latest
 
 
 def _metric(factory, name, doc, labelnames=(), **kw):

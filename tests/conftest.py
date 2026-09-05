@@ -170,6 +170,9 @@ async def _app_instance(mock_cfsolver):
     # 若宿主 shell / .env 残留 IF_ADMIN_KEYS，403 会随机污染 DLQ 用例（CI 3F flaky 根因）。
     # 开放模式（IF_ADMIN_KEY_OPEN=1）仅当无任何 Key 配置时放行，即测试环境专属。
     os.environ.pop("IF_ADMIN_KEYS", None)
+    # v7.7.13: 测试环境关闭永久封禁（防 .env 的 IF_AUTO_BLOCK_PERMANENT=1 污染，
+    # 测试需可控 ttl；生产默认 True 恶意 IP 永久封禁）
+    os.environ.pop("IF_AUTO_BLOCK_PERMANENT", None)
     os.environ["IF_ADMIN_KEY_OPEN"] = "1"
 
     # 临时 DB 文件（会话级，共享 DB 实例）

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import email
-from email.header import decode_header
 import os
 import random
 import string
+from email.header import decode_header
 
 from .base import BaseMailSource, log
 

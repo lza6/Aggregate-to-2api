@@ -20,7 +20,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # ── 契约模型（都只声明字段类型，不施加跨字段约束）─────────────
 
 

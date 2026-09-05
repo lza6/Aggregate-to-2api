@@ -7,12 +7,12 @@ import datetime
 import logging
 
 from . import config
-from .base64_store import enforce_quota as enforce_base64_quota
 from .alerting import alert_engine
 from .audit import audit_log
-from .errors import ErrorCodes
-from .error_tracker import count_of as _error_tracker_count_of
+from .base64_store import enforce_quota as enforce_base64_quota
 from .db.ip_blocklist_store import ip_blocklist_store
+from .error_tracker import count_of as _error_tracker_count_of
+from .errors import ErrorCodes
 
 log = logging.getLogger("bg_tasks")
 
@@ -103,8 +103,8 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                 # M6-F3：成本告警上下文注入（cost_over_budget / cost_burn_rate_warning）
                 # 口径与 /v1/cost 一致：token 成本（chat_usage）+ 图片成本（号池积分*IF_USD_PER_CREDIT）。
                 try:
-                    from .chat_usage import chat_usage_tracker as _cu
                     from .account_pool import account_pool as _ap
+                    from .chat_usage import chat_usage_tracker as _cu
 
                     _now_dt = datetime.datetime.now()
                     month_ts = datetime.datetime(_now_dt.year, _now_dt.month, 1).timestamp()

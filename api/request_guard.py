@@ -133,6 +133,9 @@ def _auto_block_window() -> float:
 
 
 def _auto_block_ttl() -> float:
+    # v7.7.13: IF_AUTO_BLOCK_PERMANENT=1 时恶意 IP 永久封禁（ttl=0），防脚本 30分钟解封后继续刷
+    if getattr(config, "IF_AUTO_BLOCK_PERMANENT", False):
+        return 0.0
     try:
         return float(max(0, int(getattr(config, "IF_AUTO_BLOCK_TTL_SECONDS", 1800))))
     except (TypeError, ValueError):

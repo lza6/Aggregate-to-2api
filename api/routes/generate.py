@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .. import config
-from ..models import GenerateRequest, EditRequest, TaskInfo  # noqa: F401
-from ..meta import db, engine
-from ..dispatch import _dispatch_generate
-from ..dispatch_edit import edit_image
-from ..dispatch import _validate_ratio, _validate_model
-from ..dispatch import QueueFull
 from ..db import task_to_public
+from ..dispatch import QueueFull, _dispatch_generate, _validate_model, _validate_ratio
+from ..dispatch_edit import edit_image
 from ..errors import AppError, ErrorCodes
+from ..meta import db, engine
+from ..models import EditRequest, GenerateRequest, TaskInfo  # noqa: F401
 from ..request_guard import check_generate_request
 
 router = APIRouter()

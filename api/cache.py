@@ -2,11 +2,13 @@
 
 IMP-11: 支持持久化回写 DB。set 时同步写入 cache_store 表；后台 reaper 每轮清理后
 flush 变更到 DB；stop 时全量刷新；start 时从 DB 恢复缓存，避免重启后空窗期。
+P2-5: 支持按字节预算淘汰（max_bytes），防 512MB 容器 OOM（不只按条数淘汰）。
 """
 
 import asyncio
 import json
 import logging
+import sys
 import time
 from collections import OrderedDict
 from typing import Any
@@ -31,6 +33,10 @@ class LRUCache:
     set 超出 maxsize 时淘汰最久未用的项（popitem(last=False)）。
     后台协程 _reaper 每秒扫描所有项，清理过期条目。
 
+    P2-5: 若传入 max_bytes（int），则按字节预算淘汰——当总字节超过 max_bytes 时，
+    淘汰最久未用项直到总字节 <= max_bytes。与 maxsize 淘汰并行（先到先淘汰）。
+    max_bytes=None（默认）= 不限字节，仅按 maxsize 条数淘汰（向后兼容）。
+
     若传入 persist_db（DB 实例），则：
     - set/invalidate 时同步写入 DB 变更缓冲区
     - 后台 reaper 每轮扫描后批量 flush 到 DB
@@ -38,15 +44,71 @@ class LRUCache:
     - 启动时从 DB 加载恢复缓存，避免重启后空窗期
     """
 
-    def __init__(self, maxsize: int = 128, ttl: float = 5.0, persist_db: object | None = None) -> None:
+    def __init__(
+        self,
+        maxsize: int = 128,
+        ttl: float = 5.0,
+        persist_db: object | None = None,
+        max_bytes: int | None = None,
+    ) -> None:
         self._maxsize = maxsize
         self._ttl = ttl
+        self._max_bytes = max_bytes
         self._data: OrderedDict[str, tuple[float, Any]] = OrderedDict()
+        # P2-5: per-key 字节大小（用 _sizeof 计算，与 max_bytes 淘汰配合）
+        self._sizes: dict[str, int] = {}
+        self._total_bytes: int = 0
         self._lock = asyncio.Lock()
         self._reaper_task: asyncio.Task | None = None
         # IMP-11: 持久化回写
         self._persist_db = persist_db
         self._pending = _DbPending()
+
+    @staticmethod
+    def _sizeof(value: Any) -> int:
+        """估算 value 占用字节数。
+
+        优先用 JSON 序列化长度（与持久化字节一致，且对 dict/list 准确）；
+        不可序列化则回退 sys.getsizeof（容器浅层大小，保守估算）。
+        """
+        try:
+            return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+        except (TypeError, ValueError):
+            return sys.getsizeof(value, default=0)
+
+    def _evict_one(self) -> tuple[str, Any] | None:
+        """淘汰最久未用项（popitem(last=False)），维护 _sizes/_total_bytes。返回被淘汰项。"""
+        if not self._data:
+            return None
+        evicted_key, evicted = self._data.popitem(last=False)
+        sz = self._sizes.pop(evicted_key, 0)
+        self._total_bytes -= sz
+        return evicted_key, evicted[1]
+
+    async def _enforce_limits(self) -> None:
+        """P2-5: maxsize 与 max_bytes 双限淘汰（调用方需持 self._lock）。
+
+        先按 maxsize 淘汰（条数），再按 max_bytes 淘汰（字节）。先到先淘汰。
+        """
+        # 条数淘汰（向后兼容）
+        while len(self._data) > self._maxsize:
+            evicted = self._evict_one()
+            if evicted is None:
+                break
+            if self._persist_db:
+                j = self._serialize(evicted[1])
+                if j is not None:
+                    self._pending.upserts.append((evicted[0], j, self._ttl))
+        # 字节淘汰（P2-5）
+        if self._max_bytes is not None:
+            while self._total_bytes > self._max_bytes and self._data:
+                evicted = self._evict_one()
+                if evicted is None:
+                    break
+                if self._persist_db:
+                    j = self._serialize(evicted[1])
+                    if j is not None:
+                        self._pending.upserts.append((evicted[0], j, self._ttl))
 
     @property
     def maxsize(self) -> int:
@@ -102,15 +164,26 @@ class LRUCache:
         async with self._lock:
             now = time.monotonic()
             if key in self._data:
+                # P2-5: 更新已存在 key 的字节差值
+                old_sz = self._sizes.get(key, 0)
+                self._total_bytes -= old_sz
                 self._data.move_to_end(key)
             else:
+                # maxsize 条数淘汰（向后兼容，旧逻辑内联）
                 while len(self._data) >= self._maxsize:
-                    evicted_key, evicted = self._data.popitem(last=False)
+                    evicted = self._evict_one()
+                    if evicted is None:
+                        break
                     if self._persist_db:
                         j = self._serialize(evicted[1])
                         if j is not None:
-                            self._pending.upserts.append((evicted_key, j, self._ttl))
+                            self._pending.upserts.append((evicted[0], j, self._ttl))
             self._data[key] = (now + effective_ttl, value)
+            # P2-5: 记录新 value 字节大小并维护总字节预算
+            new_sz = self._sizeof(value)
+            self._sizes[key] = new_sz
+            self._total_bytes += new_sz
+            await self._enforce_limits()
         if self._persist_db:
             j = self._serialize(value)
             if j is not None:

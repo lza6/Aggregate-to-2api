@@ -40,7 +40,10 @@ _Sampler = None
 try:
     from opentelemetry import trace as _trace
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _F
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _H
+    from opentelemetry.instrumentation.logging import LoggingInstrumentor as _L
+    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
     from opentelemetry.sdk.trace.sampling import (
@@ -49,9 +52,6 @@ try:
         SamplingResult,
         TraceIdRatioBased,
     )
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _F
-    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor as _H
-    from opentelemetry.instrumentation.logging import LoggingInstrumentor as _L
 
     _FastAPIInstrumentor = _F
     _HTTPXClientInstrumentor = _H

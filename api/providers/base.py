@@ -17,7 +17,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 if TYPE_CHECKING:
     from .registry import Registry

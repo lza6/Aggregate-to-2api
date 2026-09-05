@@ -10,9 +10,9 @@ import logging
 from pathlib import Path
 
 from . import config
+from .cache import LRUCache
 from .db import DB
 from .worker import Engine
-from .cache import LRUCache
 
 log = logging.getLogger("imagefree_api")
 

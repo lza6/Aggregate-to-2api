@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import logging
 
-from .base import ModelSpec, Provider, ChatProvider
-from . import imagefree
-from . import aifreeforever
-from . import nanobanana
+from . import aifreeforever, imagefree, nanobanana
+from .base import ChatProvider, ModelSpec, Provider
 
 log = logging.getLogger("registry")
 

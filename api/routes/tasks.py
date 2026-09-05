@@ -7,10 +7,10 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from ..meta import db
 from ..db import task_to_public
-from ..errors import AppError, ErrorCodes
 from ..dispatch import sse_task_events
+from ..errors import AppError, ErrorCodes
+from ..meta import db
 from ..models import TaskInfo
 from ..sse_events import task_events_generator
 
@@ -62,6 +62,7 @@ async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)) -> dic
     - task：DB 中的任务终态（若有）。
     """
     import uuid as _uuid
+
     from ..log_buffer import log_buffer as _lb
     from ..slow_log import slow_log as _slow
     from ..sse_events import hub as _hub

@@ -9,7 +9,6 @@ from typing import Any
 from . import config
 from .proxy_pool import proxy_pool
 
-
 _PERIOD_SECONDS = {
     "1h": 3600,
     "24h": 24 * 3600,

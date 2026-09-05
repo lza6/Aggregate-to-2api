@@ -11,8 +11,7 @@ import weakref
 
 import aiosqlite
 
-from .. import config
-from .. import base64_store
+from .. import base64_store, config
 from ..telemetry import get_tracer
 
 log = logging.getLogger("db")

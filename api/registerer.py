@@ -23,16 +23,16 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone as _datetime_tz
+from datetime import datetime
+from datetime import timezone as _datetime_tz
 from typing import Any
 
 import httpx
 
-from . import config
-from . import turnstile_client
+from . import config, turnstile_client
 from .email_pool import email_pool
-from .solver_guard import solver_guard
 from .providers.nanobanana import ACTION_CLAIM_DAILY_CHECKIN
+from .solver_guard import solver_guard
 
 log = logging.getLogger("registerer")
 

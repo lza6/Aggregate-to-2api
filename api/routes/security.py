@@ -13,8 +13,8 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from ..auth import check_admin_key
 from .. import config
+from ..auth import check_admin_key
 from ..db.ip_blocklist_store import ip_blocklist_store
 from ..errors import AppError, ErrorCodes
 from ..request_guard import apply_ip_rule, invalidate_ip_cache

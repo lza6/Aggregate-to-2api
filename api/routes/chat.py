@@ -622,7 +622,7 @@ async def chat_auth_status(request: Request):
     供站长管理面板「一键复制」（复制按钮仅站长可见）。
     未启用鉴权（开放模式）时 key 为空。
     """
-    from ..auth import first_key, public_keymask, check_admin_key, admin_enabled
+    from ..auth import admin_enabled, check_admin_key, first_key, public_keymask
 
     enabled = auth.auth_enabled()
     full_key = ""

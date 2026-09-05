@@ -6,25 +6,23 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from . import config
-from . import imagefree_client
-from . import turnstile_client
+from . import config, imagefree_client, turnstile_client
 from .base64_store import ensure_dir as ensure_base64_dir
+from .bg_tasks import run_background_tasks
+from .cache_warmup import warmup_cache
+from .disk_logger import setup_disk_logging, teardown_disk_logging
+from .log_ws import ws_log_handler
 from .meta import (
-    shutdown_phase,
+    _prev_engine,
     db,
     engine,
     gallery_cache,
-    registry,
     providers_bootstrap,
-    _prev_engine,
+    registry,
+    shutdown_phase,
 )
-from .bg_tasks import run_background_tasks
-from .cache_warmup import warmup_cache
-from .log_ws import ws_log_handler
-from .disk_logger import setup_disk_logging, teardown_disk_logging
-from .telemetry import init_telemetry, shutdown_telemetry
 from .solver_guard import solver_guard
+from .telemetry import init_telemetry, shutdown_telemetry
 from .worker_health import worker_health
 
 log = logging.getLogger("imagefree_api")
@@ -206,8 +204,8 @@ async def lifespan(_app):
 
     await shutdown_phase(8.0, "④ Provider 停止", _restore_engine())
 
-    from .free_proxy_fetcher import free_proxy_fetcher as _fpf
     from .account_pool import account_pool as _ap
+    from .free_proxy_fetcher import free_proxy_fetcher as _fpf
     from .proxy_tracer import proxy_tracer as _pt
 
     await shutdown_phase(5.0, "⑤ 代理/号池停止", _fpf.stop(), _ap.stop(), _pt.stop())

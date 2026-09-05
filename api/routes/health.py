@@ -14,17 +14,17 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import FileResponse
 
 from .. import config
-from ..meta import db, engine
-from ..providers import registry
-from ..errors import AppError, ErrorCodes
-from ..solver_guard import solver_guard
-from ..slow_log import slow_log
-from ..slo_budget import slo_budget as _slo_engine
-from ..health import health_registry
-from ..system_spec import system_spec
 
 # 需要在 main 组装的 edit 状态（图生图看板用）
 from ..dispatch_edit import _EDIT_PENDING
+from ..errors import AppError, ErrorCodes
+from ..health import health_registry
+from ..meta import db, engine
+from ..providers import registry
+from ..slo_budget import slo_budget as _slo_engine
+from ..slow_log import slow_log
+from ..solver_guard import solver_guard
+from ..system_spec import system_spec
 
 router = APIRouter()
 
@@ -253,7 +253,7 @@ async def meta(request: Request, response: Response) -> dict[str, Any]:
 
     P2-3: ETag 协商缓存（同 /v1/system——api_key_mask 变化时 ETag 自动失效）。
     """
-    from ..auth import public_keymask, auth_enabled
+    from ..auth import auth_enabled, public_keymask
 
     payload = {
         "sitekey": config.SITEKEY,
