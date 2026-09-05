@@ -39,11 +39,24 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
-        # P0-11：v8.1.5 发现 PYTEST_EXIT=2 但 /tmp/pytest-unit.log 为空 → pytest 启动即崩
-        # （collecting 阶段），可能 import error / conftest 加载失败 / 段错误。
-        # 本地 .venv 全绿（1739 passed），CI exit 2 无输出 → 用 python -X faulthandler
-        # 直接跑 + 显示 traceback 到 stderr，绕过 pytest 的输出缓冲。
+        # P0-11：v8.1.5/v8.1.6 发现 PYTEST_EXIT=2 但 /tmp/pytest-unit.log 为空 →
+        # pytest 进程无 stdout 输出即退出（SIGKILL/OOM/段错误，非正常测试失败）。
+        # 关键诊断：先用 -p no:cacheprovider --co（仅 collect 不跑）验证是否 collecting 阶段崩；
+        # 再用 ulimit -a + free -m 看资源；最后跑一个小子集确认 pytest 能否启动。
         run: |
+          echo "=== 环境诊断 ==="
+          ulimit -a || true
+          echo "--- mem ---"
+          free -m || true
+          echo "--- python version ---"
+          python --version
+          echo "--- pytest 版本 ---"
+          python -m pytest --version
+          echo "=== collect only（验证 collecting 是否崩）==="
+          python -X faulthandler -m pytest tests/ --co -q -p no:cacheprovider -m "not integration and not chaos and not slow" 2>&1 | tail -30 || echo "COLLECT_EXIT=$?"
+          echo "=== 跑 1 个小测试验证 pytest 能启动 ==="
+          python -X faulthandler -m pytest tests/test_async_sync_contamination.py -v -p no:cacheprovider --timeout=30 2>&1 | tail -20 || echo "SMOKE_EXIT=$?"
+          echo "=== 正式单测 ==="
           python -X faulthandler -m pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${PYTEST_EXIT}"
           {
@@ -58,6 +71,7 @@ jobs:
           IF_MOCK_REGISTER: "1"
           IF_DB_FILE: "data/test.db"
           PYTHONUNBUFFERED: "1"
+          PYTHONFAULTHANDLER: "1"
 
       - name: 启动 mock cf_solver 并运行集成测试
         # v7.7 缓解组合串扰：integration 与 chaos 分两轮跑（各自 fresh 进程内状态），
