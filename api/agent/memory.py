@@ -316,9 +316,15 @@ class MemoryStore:
 
                             await asyncio.to_thread(_insert)
                         promoted += 1
-            # 清空已巩固的 L0
+            # 清空已巩固的 L0（P0-11 修复：原 lambda 创建两个独立 _conn() 连接，
+            # execute 与 commit 落在不同连接上导致 DELETE 未生效。改为单连接 with 上下文）
             async with self._lock:
-                await asyncio.to_thread(lambda: self._conn().execute("DELETE FROM mem_observations") or self._conn().commit())
+                def _clear_l0() -> None:
+                    with self._conn() as conn:
+                        conn.execute("DELETE FROM mem_observations")
+                        conn.commit()
+
+                await asyncio.to_thread(_clear_l0)
             return {"L0_to_L1": promoted, "pruned": 0}
         except Exception as exc:
             log.warning("LLM 巩固失败回退 Mock: %s", exc)
