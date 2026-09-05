@@ -399,6 +399,15 @@ def check_rate_limit(request: Request) -> None:
             contact = getattr(config, "IF_ADMIN_CONTACT", "") or ""
             contact_hint = f"（如需申诉请联系管理员：{contact}）" if contact else ""
             log.warning("安全风控拦截 IP=%s reason=%s", key, rule.get("reason") or "")
+            # v7.7.20: 标记请求被拦截，context.py 据此跳过 access log（避免被封 IP 刷请求淹没日志）
+            try:
+                from .context import get_current_context
+
+                ctx = get_current_context()
+                if ctx is not None:
+                    ctx.blocked = True
+            except Exception:
+                pass
             raise AppError(
                 ErrorCodes.FORBIDDEN,
                 f"该 IP 已被系统安全风控限制访问{contact_hint}",

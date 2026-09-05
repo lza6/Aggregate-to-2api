@@ -28,6 +28,7 @@ class RequestContext:
     client_ip:   客户端 IP
     model:       请求使用的模型名称（由路由处理程序填充）
     start_time:  请求到达时间戳（time.time()）
+    blocked:     是否被安全风控拦截（被封 IP 再请求时置 True，access log 不记入 log_buffer）
     """
 
     request_id: str
@@ -35,6 +36,7 @@ class RequestContext:
     client_ip: str
     model: str
     start_time: float
+    blocked: bool = False
 
     def effective_trace_id(self) -> str:
         """全链路统一 traceId：上游传入优先，否则回退 request_id（保证永不为空）。"""
@@ -132,7 +134,9 @@ class RequestContextMiddleware:
                     # 仅写入内存 log_buffer，绝不调用 uvicorn.access logger：
                     # uvicorn 的 AccessFormatter.formatMessage 会按固定模板解包 record.args（3 个值），
                     # 用 () 构造的 record 触发 "not enough values to unpack (expected 5, got 0)" 日志噪声。
-                    if path != "/v1/logs" and not path.startswith("/static"):
+                    # v7.7.20: 被安全风控拦截的请求（blocked=True）不记 access log，
+                    # 避免被封 IP 刷请求淹没日志（用户诉求：拉黑的 IP 再请求不出现在日志）。
+                    if path != "/v1/logs" and not path.startswith("/static") and not ctx.blocked:
                         try:
                             from .log_buffer import log_buffer
 
