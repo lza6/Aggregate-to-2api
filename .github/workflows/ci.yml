@@ -40,22 +40,28 @@ jobs:
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
         # P0-11 根治：.gitignore `config/` 误伤 api/config/presets.py（已改 /config/ + 提交）。
-        # 强化输出：tee 落盘 + 失败用例摘要 cat 到 stdout（bash -e 会中断，故用 set +e 保 cat 段执行）。
+        # v8.2.1 发现 tee 的 pytest stdout 在 Actions 上被截断（grep/tail 段不可见），
+        # 改用 --junitxml + Python 解析 xml 直接输出失败用例名+message（绕过 stdout 缓冲）。
         run: |
           set +e
-          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log
-          PYTEST_EXIT=${PIPESTATUS[0]}
+          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA --junitxml=/tmp/pytest-unit.xml
+          PYTEST_EXIT=$?
           echo "PYTEST_EXIT=${PYTEST_EXIT}"
-          echo "=== 失败用例摘要（FAILED/ERROR 行）==="
-          grep -E "FAILED|ERROR|assert|Error" /tmp/pytest-unit.log | tail -40 || true
-          echo "=== pytest 输出末尾 80 行 ==="
-          tail -80 /tmp/pytest-unit.log
-          {
-            echo "## 单元测试结果（exit=${PYTEST_EXIT}）"
-            echo '```'
-            tail -80 /tmp/pytest-unit.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "=== 失败用例（从 junitxml 解析）==="
+          python3 -c "
+          import re, sys
+          try:
+              xml=open('/tmp/pytest-unit.xml',encoding='utf-8').read()
+              cnt=0
+              for m in re.finditer(r'classname=\"([^\"]+)\" name=\"([^\"]+)\"[^>]*>(.*?)</testcase>', xml, re.S):
+                  if '<failure' in m.group(3):
+                      cnt+=1
+                      fm=re.search(r'message=\"([^\"]{0,300})\"', m.group(3))
+                      print('FAIL:', m.group(1)+'::'+m.group(2), '|', (fm.group(1)[:200] if fm else ''))
+              print(f'=== 共 {cnt} 个失败 ===')
+          except Exception as e:
+              print('junit 解析失败:', e)
+          "
           exit ${PYTEST_EXIT}
         env:
           IF_ACCOUNT_AUTO: "0"
@@ -66,17 +72,37 @@ jobs:
       - name: 启动 mock cf_solver 并运行集成测试
         # v7.7 缓解组合串扰：integration 与 chaos 分两轮跑（各自 fresh 进程内状态），
         # 避免混沌注入的 IP 桶/限流状态污染集成用例（本地 3 轮复现→分轮后收敛）。
+        # P0-11：加 --junitxml + 解析失败用例（-q stdout 在 Actions 被吞）。
         run: |
+          set +e
           python scripts/mock_cfsolver.py --port 8001 &
+          CF_PID=$!
           for i in $(seq 1 10); do
             curl -sf http://127.0.0.1:8001/turnstile?url=x\&sitekey=x > /dev/null 2>&1 && break
             sleep 1
           done
-          # v7.7.5：集成轮单独跑覆盖率仅 ~44%（只覆盖 integration 路径），
-          # --cov-fail-under=80 必然 fail。覆盖率门禁只在单测轮卡（单测轮 82% 达标）。
-          # 集成轮只验证集成路径正确性，不卡覆盖率；chaos 轮同理（仅 --cov-append 累加）。
-          pytest tests/integration/ -q -m "integration" --cov=api --cov-report=term --timeout=120 --timeout-method=thread -p no:cacheprovider
+          pytest tests/integration/ -m "integration" --cov=api --cov-report=term --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=/tmp/pytest-intg.xml -rA --tb=short
+          INTG_EXIT=$?
+          echo "INTG_EXIT=${INTG_EXIT}"
+          echo "=== 集成失败用例（从 junitxml 解析）==="
+          python3 -c "
+          import re
+          try:
+              xml=open('/tmp/pytest-intg.xml',encoding='utf-8').read()
+              cnt=0
+              for m in re.finditer(r'classname=\"([^\"]+)\" name=\"([^\"]+)\"[^>]*>(.*?)</testcase>', xml, re.S):
+                  if '<failure' in m.group(3):
+                      cnt+=1
+                      fm=re.search(r'message=\"([^\"]{0,300})\"', m.group(3))
+                      print('FAIL:', m.group(1)+'::'+m.group(2), '|', (fm.group(1)[:200] if fm else ''))
+              print(f'=== 集成共 {cnt} 个失败 ===')
+          except Exception as e:
+              print('junit 解析失败:', e)
+          "
           pytest tests/ -q -m "chaos" --cov=api --cov-report=term --cov-append --timeout=120 --timeout-method=thread
+          CHAOS_EXIT=$?
+          kill $CF_PID 2>/dev/null || true
+          exit ${INTG_EXIT}
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
@@ -84,6 +110,7 @@ jobs:
           IF_DB_FILE: "data/test-ci.db"
           IF_TURNSTILE_POLL_INTERVAL: "0.2"
           IF_TOKEN_POOL_SIZE: "2"
+          PYTHONUNBUFFERED: "1"
 
   lint:
     name: 代码检查
