@@ -11,19 +11,27 @@ Turnstile 求解是最贵的串行资源（cf_solver 单槽 5s/token），所以
 - 动态水位：direct 池无排队时维持 1 个新鲜 token（避免满池空转重解），有排队补满；
 - 空闲回收：per-proxy 池空闲超 TTL 自动回收（释放 cf_solver 浏览器上下文）。
 - 池满即停，不空闲浪费；token 用后即弃（一次性）。
+
+P0-4（v8.0）：本模块从原 999 行单体拆分，纯逻辑实体下沉到子模块：
+- worker/queue.py: CountedPriorityQueue / QueueFull / _WorkerHandle / _safe_proxy_label / _is_token_rejected
+- worker/scaler.py: 多维扩缩容算法（v7.7.17 已落地，本轮不动）
+- worker/dlq.py: 死信队列推送与文案构造
+- worker/generator.py: 上游生成提交与轮询（含 429 代理 fallback）
+
+本文件保留：Engine 类主循环 + PriorityQueue 调度 + 优雅关闭（_PROVIDER_TASKS drain）+
+终态落库编排（_finish / _process 重试循环）。顶层 re-export 旧符号保持
+`from api.worker.engine import CountedPriorityQueue, QueueFull, _safe_proxy_label,
+_is_token_rejected` 等旧 import 路径可用（兼容垫片铁律）。
 """
 
 import asyncio
-import hashlib
 import logging
 import time
 import uuid
 from typing import Any
-from urllib.parse import urlsplit
-
-from .. import config, imagefree_client, turnstile_client
 
 # B2: traceId 透传——worker 后台协程脱离入口请求 context
+from .. import config
 from ..context import RequestContext, get_current_trace_id, request_context_var
 from ..db import DB
 from ..db.queue_store import QueueStore
@@ -37,93 +45,30 @@ from ..slow_log import SlowSample, slow_log
 from ..solver_guard import solver_guard
 from ..telemetry import get_tracer
 from ..worker_health import worker_health
+from .dlq import build_dlq_message, push_dlq_on_exhaust
+from .generator import generate_with_429_proxy_fallback
+
+# P0-4: 队列与 worker 句柄的纯逻辑实体（兼容垫片 re-export）
+from .queue import (
+    CountedPriorityQueue,
+    QueueFull,
+    _is_token_rejected,
+    _safe_proxy_label,
+    _WorkerHandle,
+)
 from .token_pool import TokenPoolManager
 
+# 兼容垫片：旧 import 路径 `from api.worker.engine import ...` 仍可用。
+__all__ = [
+    "Engine",
+    "QueueFull",
+    "CountedPriorityQueue",
+    "_WorkerHandle",
+    "_is_token_rejected",
+    "_safe_proxy_label",
+]
+
 log = logging.getLogger("engine")
-
-
-def _safe_proxy_label(key: str) -> str:
-    """观测面脱敏：代理 URL 含 user:pass 凭据，healthz/metrics 只暴露 host:port。
-
-    key="direct" 原样；解析失败回退 sha256 截断（不泄漏完整 URL）。
-    """
-    if key == "direct":
-        return "direct"
-    try:
-        u = urlsplit(key)
-        host = u.hostname or key
-        return f"{host}:{u.port}" if u.port else host
-    except (ValueError, TypeError):
-        return hashlib.sha256(key.encode("utf-8", "replace")).hexdigest()[:12]
-
-
-class QueueFull(RuntimeError):
-    """队列已满（入口限流）。"""
-
-
-# 上游判定「turnstile token 无效/被拒绝」的关键信号（重试条件）。
-# 这类失败是瞬时性的：换一个新 token 重新提交大概率成功，所以 worker 会自动重试。
-_TOKEN_REJECTED_MARKERS = ("human verification failed",)
-
-
-def _is_token_rejected(err: object) -> bool:
-    """判断失败是否由 token 被上游拒绝引起（可换 token 重试）。"""
-    msg = str(err).lower()
-    return any(m in msg for m in _TOKEN_REJECTED_MARKERS)
-
-
-class CountedPriorityQueue(asyncio.PriorityQueue[tuple[int, int, str]]):
-    """支持优先级计数的 PriorityQueue 子类。
-
-    内部维护 _counts 字典按优先级计数，put/get 时自动更新。
-    支持 per-priority 上限判定（is_full / put_nowait 时抛 QueueFull）。
-    """
-
-    def __init__(self, maxsize: int = 0, limits: dict[int, int] | None = None) -> None:
-        super().__init__(maxsize=maxsize)
-        self._counts: dict[int, int] = {0: 0, 1: 0, 2: 0}
-        self._limits: dict[int, int] = limits or {0: 200, 1: 500, 2: 1500}
-
-    def put_nowait(self, item: tuple[int, int, str]) -> None:
-        priority = item[0]
-        if self._counts.get(priority, 0) >= self._limits.get(priority, 9999):
-            raise asyncio.QueueFull
-        super().put_nowait(item)
-        self._counts[priority] = self._counts.get(priority, 0) + 1
-
-    def get_nowait(self) -> tuple[int, int, str]:
-        item = super().get_nowait()
-        self._counts[item[0]] = max(0, self._counts.get(item[0], 0) - 1)
-        return item
-
-    async def get(self) -> tuple[int, int, str]:
-        item = await super().get()
-        self._counts[item[0]] = max(0, self._counts.get(item[0], 0) - 1)
-        return item
-
-    def count(self, priority: int | None = None) -> int:
-        if priority is not None:
-            return self._counts.get(priority, 0)
-        return sum(self._counts.values())
-
-    def is_full(self, priority: int) -> bool:
-        return self._counts.get(priority, 0) >= self._limits.get(priority, 9999)
-
-    def capacity(self) -> int:
-        """队列真实总容量 = 各优先级上限之和（观测口径，避免误报 config.MAX_QUEUE）。"""
-        return sum(self._limits.values())
-
-
-class _WorkerHandle:
-    """Worker 句柄：唯一 ID、asyncio.Task、可取消的 stop_event、最后活跃时间。"""
-
-    __slots__ = ("id", "task", "stop_event", "last_active")
-
-    def __init__(self, idx: int, task: asyncio.Task[None], stop_event: asyncio.Event):
-        self.id = idx
-        self.task = task
-        self.stop_event = stop_event
-        self.last_active = time.monotonic()
 
 
 class Engine:
@@ -736,7 +681,7 @@ class Engine:
                             },
                         ):
                             _up0 = time.monotonic()
-                            result = await self._generate_with_429_proxy_fallback(task_id, row, token)
+                            result = await generate_with_429_proxy_fallback(self, task_id, row, token)
                             _slow["upstream"] += (time.monotonic() - _up0) * 1000.0
                     except Exception as e:
                         last_error = str(e)
@@ -779,29 +724,18 @@ class Engine:
                             result.get("image_base64"),
                             result.get("image_mime"),
                         )
-                        # B3: 拆分上游首字节/轮询分段（_generate_once_b3 返回 submit_ms/poll_ms）
+                        # B3: 拆分上游首字节/轮询分段（generate_once_b3 返回 submit_ms/poll_ms）
                         _slow["submit_ms"] = result.get("submit_ms", 0.0)
                         _slow["poll_ms"] = result.get("poll_ms", 0.0)
                         log.info("出图完成 %s 耗时 %.1fs", task_id, time.monotonic() - t0)
                         self._record_slow(task_id, row, _slow, t0, "completed")
                         return "completed"
                 # 重试耗尽 → DLQ 标记
-            dlq_note = f"（DLQ: 重试 {config.IF_TXT_RETRY_MAX} 次耗尽）"
-            dlq_msg = f"{last_error}{dlq_note}" if last_error else f"重试 {config.IF_TXT_RETRY_MAX} 次耗尽"
+            dlq_msg = build_dlq_message(last_error, config.IF_TXT_RETRY_MAX)
             await self._finish(task_id, "error", None, dlq_msg, t0)
             self._record_slow(task_id, row, _slow, t0, "error")
-            # IMP-21: 重试满后如有 DLQ 配置则推入死信队列
-            if config.IF_DLQ_ENABLED:
-                row = await self.db.get(task_id)
-                model = (row.get("model") or "default") if row else "default"
-                await self.db.push_dlq(task_id, model, last_error, config.IF_TXT_RETRY_MAX)
-                log.info(
-                    "DLQ: task %s 推入死信队列（model=%s, error=%s, attempts=%d）",
-                    task_id,
-                    model,
-                    last_error,
-                    config.IF_TXT_RETRY_MAX,
-                )
+            # IMP-21: 重试满后如有 DLQ 配置则推入死信队列（委托 dlq 模块）
+            await push_dlq_on_exhaust(self.db, task_id, last_error, config.IF_TXT_RETRY_MAX)
             return "error"
         finally:
             # B2: 退出本任务上下文（无论完成/异常都恢复）
@@ -865,7 +799,7 @@ class Engine:
             try:
                 # v7.7: 走 background.spawn 持强引用（裸 create_task 可能被 GC 中途回收→缓存不一致）
                 from ..background import spawn
-                from .meta import gallery_cache as _gc
+                from ..meta import gallery_cache as _gc
 
                 spawn(_gc.invalidate_prefix("gallery:"), name="gallery_cache_invalidate")
             except Exception as exc:
@@ -883,106 +817,6 @@ class Engine:
                     _record(ip, "task-failure-burst")
             except Exception as exc:
                 log.debug("反滥用违规记录失败（可忽略）: %s", exc)
-
-    async def _generate_once(self, row: dict[str, Any], token: str, proxy: str | None = None) -> dict[str, Any]:
-        """提交生成并轮询到出图。
-
-        proxy 非空时：提交走该出口（token 必须同为该出口所解，见调用方 _proxy_retry）。
-        出图成功后若请求了 download，附带回 base64/mime；下载失败不影响出图结果
-        （仍按 completed 返回 image_url，仅记录下载失败，HIGH-2）。
-        """
-        tid = await imagefree_client.submit_generate(
-            config.BASE_URL,
-            config.apply_model(row["prompt"], row.get("model", "default")),
-            row["aspect_ratio"],
-            token,
-            30.0,
-            proxy=proxy,
-        )
-        result = await imagefree_client.poll_generate_status(
-            config.BASE_URL,
-            tid,
-            config.GENERATE_TIMEOUT,
-            config.GENERATE_POLL_INTERVAL,
-        )
-        out = {"status": "completed", "image_url": result["image"]}
-        if row["download"]:
-            try:
-                raw = await imagefree_client.download_image(
-                    result["image"],
-                    60.0,
-                    config.MAX_IMAGE_BYTES,
-                )
-                # H8: 按字节魔数判定 mime，比 URL 后缀匹配可靠（上游可能返回 .webp/.avif）
-                mime = imagefree_client.detect_mime(raw)
-                out["image_base64"] = imagefree_client.to_base64(raw, mime)
-                out["image_mime"] = mime
-            except Exception as e:
-                log.warning("图片下载失败（不影响出图结果）: %s", e)
-        return out
-
-    async def _generate_once_b3(self, row: dict[str, Any], token: str, proxy: str | None = None) -> dict[str, Any]:
-        """B3: _generate_once 的分段计时包装——返回 submit_ms/poll_ms。"""
-        _sub0 = time.monotonic()
-        out = await self._generate_once(row, token, proxy=proxy)
-        _elapsed = (time.monotonic() - _sub0) * 1000.0
-        out["submit_ms"] = round(_elapsed * 0.3, 1)
-        out["poll_ms"] = round(_elapsed * 0.7, 1)
-        return out
-
-    async def _generate_with_429_proxy_fallback(self, task_id: str, row: dict[str, Any], token: str) -> dict[str, Any]:
-        """v4.4.2: 直连 429 → 同 IP 配对重试（solver(proxy=P) + submit(proxy=P)）。
-
-        Turnstile token 与出口 IP 绑定，因此换 IP 必须重新解 token —— 复用
-        图生图链路已生产验证的模式。直连成功零额外成本；仅 429 时才消耗代理。
-        """
-        from ..imagefree_client import ImagefreeError
-
-        try:
-            return await self._generate_once_b3(row, token)
-        except ImagefreeError as e:
-            if "429" not in str(e):
-                raise
-            log.warning("task %s 直连被上游 429，切换代理池重试", task_id)
-
-        last_error: Exception | None = None
-        for round_no in range(1, 4):  # 最多 3 个代理出口
-            proxy_url = await self._proxy_pool.acquire(prefer_source="residential")
-            if not proxy_url:
-                proxy_url = await self._proxy_pool.acquire(prefer_source="free")
-            if not proxy_url:
-                break  # 无可用出口 → 走耗尽路径
-            # 第一步：用同一出口解新 token（solver 失败 → 冷却该代理换下一个）
-            try:
-                fallback_token, _solve_ms = await turnstile_client.solve_turnstile(
-                    cf_solver_url=None,
-                    url=config.BASE_URL,
-                    sitekey=config.SITEKEY,
-                    timeout=min(config.TURNSTILE_TIMEOUT, 45.0),
-                    proxy=proxy_url,
-                )
-            except Exception as exc:
-                await self._proxy_pool.mark_failure(proxy_url, rate_limited=False)
-                last_error = exc
-                await asyncio.sleep(1.0 * round_no)
-                continue
-            # 第二步：同 IP 提交（429 → 冷却换下家；其他错误原样抛出）
-            try:
-                result = await self._generate_once_b3(row, fallback_token, proxy=proxy_url)
-            except ImagefreeError as exc:
-                rate_limited = "429" in str(exc)
-                await self._proxy_pool.mark_failure(proxy_url, rate_limited=rate_limited)
-                last_error = exc
-                if not rate_limited or round_no == 3:
-                    raise
-                await asyncio.sleep(1.5 * round_no)
-                continue
-            else:
-                await self._proxy_pool.mark_success(proxy_url)
-                return result
-        raise ImagefreeError(
-            f"generate 提交失败: HTTP 429（代理重试耗尽{('，末次: ' + str(last_error)[:80]) if last_error else ''}）"
-        )
 
     # ── 实时状态 ──────────────────────────────────
     def snapshot(self) -> dict[str, Any]:

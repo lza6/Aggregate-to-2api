@@ -62,6 +62,25 @@ async def lifespan(_app):
         await sync_blocklist_cache()
     except Exception as e:
         log.warning("IP 封禁表缓存预热失败（可忽略）: %s", e)
+    # P1-1（v8.0）：可选 Redis 集中式 storage 适配器装配。
+    # IF_STORAGE_BACKEND=redis 且 IF_REDIS_URL 非空 → 注入 RedisStorageAdapter 到 request_guard；
+    # 失败回退 None（单机内存模式，零依赖）。单机缺省（sqlite/memory）不装配，行为零回归。
+    try:
+        backend = str(getattr(config, "IF_STORAGE_BACKEND", "sqlite") or "sqlite").lower()
+        redis_url = getattr(config, "IF_REDIS_URL", "") or ""
+        if backend == "redis" and redis_url:
+            from .request_guard import set_storage_adapter as _set_storage
+            from .storage import RedisStorageAdapter  # noqa: F401  (按需装配)
+
+            _redis_adapter = RedisStorageAdapter(redis_url)
+            await _redis_adapter.startup()
+            _set_storage(_redis_adapter)
+            log.info("P1-1: Redis 集中式 storage 适配器已装配（request_guard 可用）")
+    except Exception as e:
+        log.warning("P1-1: Redis storage 适配器装配失败，回退单机内存模式: %s", e)
+        from .request_guard import set_storage_adapter as _set_storage
+
+        _set_storage(None)
     _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     _background_task = asyncio.create_task(
         run_background_tasks(db, engine, registry, solver_guard, worker_health, gallery_cache)
@@ -236,6 +255,18 @@ async def lifespan(_app):
         await db.close()
 
     await shutdown_phase(3.0, "⑨ DB 连接池关闭", _close_db())
+
+    # P1-1（v8.0）：关闭 Redis storage 适配器（若装配过）。
+    try:
+        from .request_guard import get_storage_adapter as _get_storage
+        from .request_guard import set_storage_adapter as _set_storage
+
+        _adapter = _get_storage()
+        if _adapter is not None:
+            await _adapter.shutdown()
+            _set_storage(None)
+    except Exception as e:
+        log.warning("P1-1: Redis storage 适配器关闭失败（可忽略）: %s", e)
 
     logging.getLogger().removeHandler(ws_log_handler)
     teardown_disk_logging(_disk_log_handler)

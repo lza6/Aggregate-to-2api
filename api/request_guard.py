@@ -36,9 +36,31 @@ log = logging.getLogger("request_guard")
 _cache_lock = threading.Lock()
 _ip_locks_guard = threading.Lock()
 _ip_locks: dict[str, threading.Lock] = {}
+
+# P1-1（v8.0）：可选 Redis 集中式存储适配器单例（IF_STORAGE_BACKEND=redis 且 IF_REDIS_URL 非空时由
+# lifespan startup 注入）。缺省 None → check_rate_limit 决策路径仍走单机内存分片桶（零依赖、零回归）。
+# 注：check_rate_limit 是同步入口（被 sync check_generate_request 调用），不能直接 await Redis 异步
+# rate_limiter.is_allowed。故本轮 P1-1 只做"装配 + 启停 + 降级内存"：adapter 被注入后可用于 async 路径
+# （如未来 chat guard async 化、或可观测侧的集中计数）。真实"集中式 Redis 429 决策"需 async 化
+# check_rate_limit 调用链（generate.py _prepare 等），属 L3 跨模块改动，留待后续。
+_storage_adapter = None
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
 _DAY_SECONDS = 86400.0
+
+
+def set_storage_adapter(adapter) -> None:
+    """供 lifespan.py startup 注入 storage 适配器（IF_STORAGE_BACKEND=redis 时）。测试亦可注入。
+
+    传入 None 即清空（lifespan shutdown 或测试 teardown），回退到单机内存模式。
+    """
+    global _storage_adapter
+    _storage_adapter = adapter
+
+
+def get_storage_adapter():
+    """读取当前 storage 适配器（None=单机内存模式）。供 async 路径或可观测侧使用。"""
+    return _storage_adapter
 
 
 def _ip_lock(ip: str) -> threading.Lock:

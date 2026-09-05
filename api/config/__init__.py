@@ -20,17 +20,16 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .base import _env_int
-from .db import DBSettings
-from .http import HTTPSettings
-from .solver import SolverSettings
 from .cache import CacheSettings
-from .provider import ProviderSettings
-from .pool import PoolSettings
-from .queue import QueueSettings
-from .observability import ObservabilitySettings
+from .db import DBSettings
 from .edit import EditSettings
+from .http import HTTPSettings
+from .observability import ObservabilitySettings
+from .pool import PoolSettings
+from .provider import ProviderSettings
+from .queue import QueueSettings
 from .security import SecuritySettings
-
+from .solver import SolverSettings
 
 # ── 顶层 Settings 类 ──────────────────────────────────────
 
@@ -397,10 +396,10 @@ class Settings(BaseSettings):
             return
         try:
             from ..system_spec import (
-                ADAPTIVE_WORKERS,
-                ADAPTIVE_UPSTREAM_INFLIGHT,
-                ADAPTIVE_TOKEN_POOL_SIZE,
                 ADAPTIVE_MAX_QUEUE,
+                ADAPTIVE_TOKEN_POOL_SIZE,
+                ADAPTIVE_UPSTREAM_INFLIGHT,
+                ADAPTIVE_WORKERS,
             )
         except Exception:
             return
@@ -968,63 +967,16 @@ IF_SECURITY_HEADERS_ENABLED = settings.if_security_headers_enabled
 IF_CSP_ENABLED = settings.if_csp_enabled
 
 
-# ── 纯常量（无环境变量映射）────────────────────────────────
-MAX_IMAGE_BYTES = 4 * 1024 * 1024
-MAX_PROMPT_LEN = 2000
-
-ASPECT_RATIOS: dict[str, str] = {
-    "1:1": "1024x1024",
-    "3:4": "768x1024",
-    "4:3": "1024x768",
-    "9:16": "576x1024",
-    "16:9": "1024x576",
-}
-
-MODEL_PRESETS: dict[str, dict] = {
-    "default": {
-        "name": "默认",
-        "description": "不注入任何风格，原样提交提示词",
-        "prefix": "",
-        "applies_to": ["txt2img", "img2img"],
-    },
-    "anime": {
-        "name": "动漫",
-        "description": "日系动漫插画风格，高完成度线稿与上色",
-        "prefix": "anime style, high quality anime illustration, vibrant colors, detailed lineart, ",
-        "applies_to": ["txt2img"],
-    },
-    "realistic": {
-        "name": "写实摄影",
-        "description": "超写实照片质感，高细节、电影级光影",
-        "prefix": "photorealistic, ultra detailed, 8k, cinematic lighting, sharp focus, ",
-        "applies_to": ["txt2img"],
-    },
-    "watercolor": {
-        "name": "水彩",
-        "description": "水彩画风格，柔和晕染、通透层次",
-        "prefix": "watercolor painting style, soft washes, delicate brushwork, translucent layers, ",
-        "applies_to": ["txt2img", "img2img"],
-    },
-    "ink": {
-        "name": "水墨",
-        "description": "中国传统水墨画风，留白、写意、淡雅",
-        "prefix": "traditional chinese ink wash painting style, minimalist, elegant negative space, ",
-        "applies_to": ["txt2img"],
-    },
-    "cyberpunk": {
-        "name": "赛博朋克",
-        "description": "赛博朋克霓虹风格，未来都市、强对比色调",
-        "prefix": "cyberpunk neon style, futuristic city, neon glow, high contrast, ",
-        "applies_to": ["txt2img", "img2img"],
-    },
-}
-
-
-def apply_model(prompt: str, model: str) -> str:
-    """模型风格预设 → prompt 前缀注入（default 不加前缀）。供 worker/main 共用。"""
-    prefix = MODEL_PRESETS.get(model, {}).get("prefix", "")
-    return prefix + prompt if prefix else prompt
-
+# ── 纯常量 + apply_model（P0-2: 拆分到 .presets，re-export 保持向后兼容）──
+# MAX_IMAGE_BYTES / MAX_PROMPT_LEN / ASPECT_RATIOS / MODEL_PRESETS / apply_model
+# 详见 api/config/presets.py（dispatch/worker/imagefree/health/models 消费）
+from .presets import (  # noqa: F401
+    ASPECT_RATIOS,
+    MAX_IMAGE_BYTES,
+    MAX_PROMPT_LEN,
+    MODEL_PRESETS,
+    apply_model,
+)
 
 # ── 兼容：`from api.config import config` 使 config 指代包模块本身 ──
 config = sys.modules[__name__]

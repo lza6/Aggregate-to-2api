@@ -1,27 +1,34 @@
-"""tryingopen.com 文本对话提供商适配。"""
+"""tryingopen.com 文本对话提供商适配（包入口）。
+
+P0-6：原 ``api/providers/tryingopen.py``（810 行）拆为包：
+- 本 ``__init__.py`` 保留 ``TryingopenChatProvider`` 类与运行时模块级绑定
+  （``proxy_pool``/``asyncio``/``config``），因 ``chat_stream`` 内经模块 globals
+  解析这些名字，tests/test_tryingopen.py 的 ``monkeypatch.setattr(tryingopen, ...)``
+  才能命中；类不能下沉到子模块，否则 monkeypatch 失效。
+- ``_helpers.py`` 提取纯辅助函数/常量/dataclass/异常（不依赖 monkeypatch 命中点）。
+
+旧 import 路径全部保留：``from api.providers.tryingopen import TryingopenChatProvider``、
+``import api.providers.tryingopen as t; t._AttemptResult`` 等均可用。
+"""
 
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 import logging
-import mimetypes
-import re
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 
-from .. import config
-from ..prompts import compose_system_text
-from ..proxy_pool import proxy_pool
-from .base import (
+from ... import config
+from ...prompts import compose_system_text
+from ...proxy_pool import proxy_pool
+from ..base import (
     CAP_CHAT,
     CAP_CHAT_TOOLS,
     CAP_CHAT_VISION,
@@ -30,235 +37,27 @@ from .base import (
     ProviderError,
     ProviderRateLimited,
 )
-
-log = logging.getLogger("providers.tryingopen")
-
-DEFAULT_BASE_URL = "https://www.tryingopen.com"
-OPEN_PATH = "/api/open"
-DEFAULT_EFFORT = "balanced"
-_HTTP_TIMEOUT = (10, 120)
-_CHUNK_RE = re.compile(r"/_next/static/chunks/[A-Za-z0-9._~-]+\.js")
-_MODEL_RE = re.compile(r'\{id:"([a-z0-9][a-z0-9.\-]*/[a-z0-9][a-z0-9.\-]*)",' r'name:"([^"]+)"')
-
-
-# 站点目录不可访问时仍需提供可用的静态目录。
-_FALLBACK_CATALOG: tuple[dict[str, Any], ...] = (
-    # P0-3：演示性 meta.system_prompt_template 配置——按模型家族挂不同人格模板
-    # 用户可通过 refresh_models 动态目录覆盖；无 system_prompt_template 键走原 [SYSTEM INSTRUCTIONS] 路径
-    {"id": "z-ai/glm-5.3-flash", "name": "GLM-5.3 Flash", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "kimi_k2_teach", "thinking_mode": "interleaved", "refusal_stance": "default_help"},
-    {"id": "z-ai/glm-5.2", "name": "GLM-5.2", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "kimi_k2_teach", "thinking_mode": "interleaved"},
-    {"id": "qwen/qwen3.8-27b", "name": "Qwen3.8 27B", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "kimi_k2_teach"},
-    {"id": "nvidia/nemotron-3.5-lightning", "name": "Nemotron 3.5 Lightning", "context": "128k"},
-    {"id": "deepseek/deepseek-v4-flash-0731", "name": "DeepSeek V4 Flash", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "anthropic_v5_chat", "thinking_mode": "interleaved"},
-    {"id": "deepseek/deepseek-v4-pro-0813", "name": "DeepSeek V4 Pro", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "anthropic_v5_chat", "thinking_mode": "interleaved", "max_thinking_length": 12000},
-    {"id": "google/gemma-4-31b-it", "name": "Gemma 4 31B IT", "context": "128k"},
-    {"id": "google/gemma-4-26b-a4b-it", "name": "Gemma 4 26B A4B IT", "context": "128k"},
-    {"id": "openai/gpt-oss-120b", "name": "GPT OSS 120B", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "anthropic_v5_chat"},
-    {"id": "meta/muse-glimmer-30b", "name": "Muse Glimmer 30B", "context": "128k"},
-    {
-        "id": "moonshotai/kimi-k3",
-        "name": "Kimi K3",
-        "context": "256k",
-        "supportsTools": True,
-        "messageLimit": 5,
-        "cheaperFallbackId": "minimax/minimax-m3",
-        "system_prompt_template": "kimi_k2_teach",
-        "thinking_mode": "interleaved",
-        "max_thinking_length": 16000,
-    },
-    {"id": "minimax/minimax-m3", "name": "MiniMax M3", "context": "128k", "supportsTools": True,
-     "system_prompt_template": "kimi_k2_teach"},
-    {"id": "thinkingmachines/inkling-small", "name": "Inkling Small", "context": "64k"},
+from ._helpers import (
+    _CHUNK_RE,
+    _FALLBACK_CATALOG,
+    _HTTP_TIMEOUT,
+    _MODEL_RE,
+    DEFAULT_BASE_URL,
+    DEFAULT_EFFORT,
+    OPEN_PATH,
+    _AttemptResult,
+    _content_text,
+    _last_json_object,
+    _media_type,
+    _message_parts,
+    _parse_context_window,
+    _parse_plaintext_tool_calls,
+    _resolve,
+    _tool_instruction,
+    _TryingopenRateLimited,
 )
 
-
-@dataclass
-class _AttemptResult:
-    reasoning: str = ""
-    text: str = ""
-    usage: dict[str, int] | None = None
-    finish_reason: str = "stop"
-
-
-class _TryingopenRateLimited(Exception):
-    """单次 tryingopen 请求被限流，交给外层切换出口。"""
-
-    def __init__(self, message: str = "tryingopen 请求被限流") -> None:
-        super().__init__(message)
-        self.message = message
-
-
-async def _resolve(value: Any) -> Any:
-    """兼容真实异步实现与测试替身。"""
-    return await value if inspect.isawaitable(value) else value
-
-
-def _parse_context_window(value: Any) -> int | None:
-    if value is None:
-        return None
-    text = str(value).strip().lower().replace(" ", "")
-    match = re.fullmatch(r"(\d+(?:\.\d+)?)(k|m)?", text)
-    if not match:
-        return None
-    number = float(match.group(1))
-    unit = match.group(2)
-    if unit == "k":
-        number *= 1024
-    elif unit == "m":
-        number *= 1024 * 1024
-    return int(number)
-
-
-def _media_type(url: str) -> str:
-    if url.startswith("data:"):
-        header = url[5:].split(",", 1)[0]
-        media = header.split(";", 1)[0].strip()
-        if media:
-            return media
-    suffix = urlparse(url).path.rsplit(".", 1)[-1].lower() if "." in urlparse(url).path else ""
-    return {
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-        "webp": "image/webp",
-        "gif": "image/gif",
-        "avif": "image/avif",
-    }.get(suffix, mimetypes.guess_type(url)[0] or "application/octet-stream")
-
-
-def _content_text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if content is None:
-        return ""
-    if isinstance(content, list):
-        return "".join(
-            str(part.get("text", "")) for part in content if isinstance(part, dict) and part.get("type") == "text"
-        )
-    return str(content)
-
-
-def _message_parts(content: Any) -> list[dict[str, str]]:
-    if isinstance(content, str):
-        return [{"type": "text", "text": content}]
-    if content is None:
-        return []
-    if not isinstance(content, list):
-        return [{"type": "text", "text": str(content)}]
-    parts: list[dict[str, str]] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        item_type = item.get("type")
-        if item_type == "text":
-            parts.append({"type": "text", "text": str(item.get("text", ""))})
-        elif item_type == "image_url":
-            image = item.get("image_url")
-            url = image.get("url") if isinstance(image, dict) else image
-            if isinstance(url, str) and url:
-                parts.append({"type": "file", "mediaType": _media_type(url), "url": url})
-    return parts
-
-
-def _tool_instruction(tools: list[Any], tool_choice: Any) -> str:
-    serialized = json.dumps(tools, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    instruction = (
-        "[TOOL CALLING MODE]\n"
-        f"Available tools (JSON): {serialized}\n"
-        "If you need to call a tool, respond with ONLY a single JSON object and no other text, "
-        'no markdown fences: {"tool_call":{"name":"<exact tool name>","arguments":{...}}}\n'
-        "If no tool call is needed, answer normally as plain text."
-    )
-    if isinstance(tool_choice, dict):
-        name = (tool_choice.get("function") or {}).get("name")
-        if isinstance(name, str) and name:
-            instruction += f'\nYou MUST call the tool named "{name}".'
-    elif tool_choice == "required":
-        instruction += "\nYou MUST call one or more tools."
-    return instruction
-
-
-def _tool_candidate(value: Any) -> bool:
-    if not isinstance(value, dict):
-        return False
-    if isinstance(value.get("tool_call"), dict):
-        return True
-    for key in ("tool", "tool_name"):
-        nested = value.get(key)
-        if isinstance(nested, dict) and isinstance(nested.get("name"), str):
-            return True
-    return isinstance(value.get("name") or value.get("tool") or value.get("tool_name"), str) and any(
-        key in value for key in ("arguments", "args", "parameters")
-    )
-
-
-def _looks_like_tool_call(value: Any) -> bool:
-    values = value if isinstance(value, list) else [value]
-    return any(_tool_candidate(item) for item in values)
-
-
-def _last_json_object(text: str) -> tuple[Any | None, int | None]:
-    """从文本中选择最后一个合法且像工具调用的 JSON 对象。"""
-    if not text:
-        return None, None
-    normalized = text
-    decoder = json.JSONDecoder()
-    last_valid: tuple[Any, int] | None = None
-    tool_candidates: list[tuple[int, int, Any]] = []
-    for match in re.finditer(r"[\{\[]", normalized):
-        try:
-            value, end = decoder.raw_decode(normalized, match.start())
-        except (TypeError, ValueError, json.JSONDecodeError):
-            continue
-        if isinstance(value, (dict, list)):
-            last_valid = (value, match.start())
-            if _looks_like_tool_call(value):
-                tool_candidates.append((match.start(), end, value))
-    if tool_candidates:
-        outer_candidates = [
-            candidate
-            for candidate in tool_candidates
-            if not any(other[0] < candidate[0] and candidate[1] <= other[1] for other in tool_candidates)
-        ]
-        start, end, value = max(outer_candidates, key=lambda item: item[0])
-        return value, start
-    return last_valid or (None, None)
-
-
-def _parse_plaintext_tool_calls(text: str) -> list[dict[str, str]] | None:
-    found, _ = _last_json_object(text)
-    if found is None:
-        return None
-    items = found if isinstance(found, list) else [found]
-    calls: list[dict[str, str]] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        inner = item
-        if isinstance(inner.get("tool_call"), dict):
-            inner = inner["tool_call"]
-        elif isinstance(inner.get("tool"), dict):
-            inner = inner["tool"]
-        name = inner.get("name") or inner.get("tool") or inner.get("tool_name")
-        arguments = inner.get("arguments")
-        if arguments is None:
-            arguments = inner.get("args")
-        if arguments is None:
-            arguments = inner.get("parameters")
-        if not isinstance(name, str) or not name:
-            continue
-        if isinstance(arguments, (dict, list)):
-            arguments = json.dumps(arguments, ensure_ascii=False, separators=(",", ":"))
-        if not isinstance(arguments, str):
-            arguments = "{}"
-        calls.append({"name": name, "arguments": arguments})
-    return calls or None
+log = logging.getLogger("providers.tryingopen")
 
 
 class TryingopenChatProvider(ChatProvider):
@@ -556,7 +355,8 @@ class TryingopenChatProvider(ChatProvider):
                 yield {"type": "reasoning", "text": result.reasoning}
             _, position = _last_json_object(call_source)
             before = call_source[:position].strip() if position is not None else ""
-            before = re.sub(r"```(?:json)?\s*$", "", before, flags=re.IGNORECASE).strip()
+            import re as _re
+            before = _re.sub(r"```(?:json)?\s*$", "", before, flags=_re.IGNORECASE).strip()
             if before:
                 yield {"type": "text", "text": before}
             for index, call in enumerate(calls):
@@ -737,25 +537,26 @@ class TryingopenChatProvider(ChatProvider):
 
     @staticmethod
     def _parse_catalog_chunk(chunk: str) -> list[dict[str, Any]]:
+        import re as _re
         records: list[dict[str, Any]] = []
         for match in _MODEL_RE.finditer(chunk):
             raw_id, name = match.groups()
             end = chunk.find("}", match.end())
             segment = chunk[match.start() : end if end >= 0 else min(len(chunk), match.end() + 1000)]
             record: dict[str, Any] = {"id": raw_id, "name": name}
-            context = re.search(r'context:"([^"]+)"', segment)
+            context = _re.search(r'context:"([^"]+)"', segment)
             if context:
                 record["context"] = context.group(1)
             for key in ("supportsTools", "supportsImages"):
-                if re.search(rf"{key}:(?:!0|true)", segment):
+                if _re.search(rf"{key}:(?:!0|true)", segment):
                     record[key] = True
-            price = re.search(r"pricePerMTok:([0-9.]+)", segment)
+            price = _re.search(r"pricePerMTok:([0-9.]+)", segment)
             if price:
                 record["pricePerMTok"] = float(price.group(1))
-            limit = re.search(r"messageLimit:(\d+)", segment)
+            limit = _re.search(r"messageLimit:(\d+)", segment)
             if limit:
                 record["messageLimit"] = int(limit.group(1))
-            fallback = re.search(r'cheaperFallbackId:"([^"]+)"', segment)
+            fallback = _re.search(r'cheaperFallbackId:"([^"]+)"', segment)
             if fallback:
                 record["cheaperFallbackId"] = fallback.group(1)
             records.append(record)
@@ -805,6 +606,22 @@ class TryingopenChatProvider(ChatProvider):
 __all__ = [
     "TryingopenChatProvider",
     "_FALLBACK_CATALOG",
+    "_AttemptResult",
+    "_TryingopenRateLimited",
     "_last_json_object",
     "_parse_plaintext_tool_calls",
+    "DEFAULT_BASE_URL",
+    "OPEN_PATH",
+    "DEFAULT_EFFORT",
+    "_HTTP_TIMEOUT",
+    "_CHUNK_RE",
+    "_MODEL_RE",
+    "_resolve",
+    "_parse_context_window",
+    "_media_type",
+    "_content_text",
+    "_message_parts",
+    "_tool_instruction",
+    "_tool_candidate",
+    "_looks_like_tool_call",
 ]
