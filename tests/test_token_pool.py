@@ -352,8 +352,8 @@ class TestMainObservability:
 @pytest.mark.asyncio
 async def test_worker_records_rejected_token(tmp_db, monkeypatch):
     """上游拒绝 token（human verification failed）→ solver_guard.rejected_total 计数（重试换 token 信号）。"""
-    from api.worker import Engine
     from api.solver_guard import solver_guard
+    from api.worker import Engine
 
     async def _solve(*a, **k):
         return ("mock-token", 0.03)

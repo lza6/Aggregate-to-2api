@@ -473,7 +473,7 @@ class DB:
             now = time.time()
             import datetime
 
-            dt = datetime.datetime.fromtimestamp(now, tz=datetime.timezone.utc)
+            dt = datetime.datetime.fromtimestamp(now, tz=datetime.UTC)
             day = dt.strftime("%Y-%m-%d")
             month = dt.strftime("%Y-%m")
             trace_id = ""

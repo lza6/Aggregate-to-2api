@@ -22,10 +22,10 @@ os.environ["IF_MOCK_REGISTER"] = "1"
 from api import config  # noqa: E402
 from api.dispatch_edit import (  # noqa: E402
     _EDIT_MUTEX_DIR,
-    _EditProxyPool,
     _acquire_edit_mutex,
     _edit_mutex_path,
     _edit_mutex_stale,
+    _EditProxyPool,
     _is_edit_slot_wedged,
     _release_edit_mutex,
 )
@@ -155,7 +155,7 @@ class TestEditProxyPool:
         try:
             await asyncio.wait_for(pool.acquire_proxy(), timeout=0.5)
             blocked = False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             blocked = True
         assert blocked
         pool.release_proxy(p1)

@@ -163,10 +163,10 @@ class TestSettingsJson:
         """P1-1: 模块级 IF_TRYINGOPEN_* 常量与 Settings 字段同步。"""
         import api.config as cfg
 
-        assert cfg.IF_TRYINGOPEN_ENABLED == cfg.settings.if_tryingopen_enabled
-        assert cfg.IF_TRYINGOPEN_HOURLY_PER_IP == cfg.settings.if_tryingopen_hourly_per_ip
-        assert cfg.IF_TRYINGOPEN_MAX_ATTEMPTS == cfg.settings.if_tryingopen_max_attempts
-        assert cfg.IF_TRYINGOPEN_SYNC_MINUTES == cfg.settings.if_tryingopen_sync_minutes
+        assert cfg.settings.if_tryingopen_enabled == cfg.IF_TRYINGOPEN_ENABLED
+        assert cfg.settings.if_tryingopen_hourly_per_ip == cfg.IF_TRYINGOPEN_HOURLY_PER_IP
+        assert cfg.settings.if_tryingopen_max_attempts == cfg.IF_TRYINGOPEN_MAX_ATTEMPTS
+        assert cfg.settings.if_tryingopen_sync_minutes == cfg.IF_TRYINGOPEN_SYNC_MINUTES
 
 
 class TestEnvExampleSync:

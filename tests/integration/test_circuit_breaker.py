@@ -1,8 +1,9 @@
 """集成测试：熔断器行为验证。"""
 
-import pytest
-import httpx
 import asyncio
+
+import httpx
+import pytest
 
 
 @pytest.mark.integration

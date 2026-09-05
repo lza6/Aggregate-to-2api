@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.error_tracker import record, count_of, snapshot, reset, watched_codes
+from api.error_tracker import count_of, record, reset, snapshot, watched_codes
 
 
 # ── error_tracker 单元 ──────────────────────────────
@@ -54,28 +54,31 @@ class TestHandlerTracks:
         reset()
 
     def test_app_error_recorded(self):
-        from api.handlers import app_error_handler
-        from api.errors import AppError, ErrorCodes
-
         # 直接调用 handler（不经 HTTP），验证只记录不抛
         import asyncio
+
+        from api.errors import AppError, ErrorCodes
+        from api.handlers import app_error_handler
 
         exc = AppError(ErrorCodes.UNAUTHORIZED, "no key", 401)
         asyncio.run(app_error_handler(None, exc))
         assert count_of(ErrorCodes.UNAUTHORIZED) == 1
 
     def test_starlette_http_exception_recorded(self):
-        from api.handlers import starlette_http_exception_handler
-        from starlette.exceptions import HTTPException as StarletteHTTPException
         import asyncio
+
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+
+        from api.handlers import starlette_http_exception_handler
 
         exc = StarletteHTTPException(404, "not found")
         asyncio.run(starlette_http_exception_handler(None, exc))
         assert count_of("SYS.003") == 1  # 404 → NOT_FOUND
 
     def test_generic_exception_recorded(self):
-        from api.handlers import generic_exception_handler
         import asyncio
+
+        from api.handlers import generic_exception_handler
 
         asyncio.run(generic_exception_handler(None, ValueError("boom")))
         assert count_of("SYS.001") >= 1
@@ -84,8 +87,9 @@ class TestHandlerTracks:
         """S1 修复：参数/请求体校验 422 应纳入错误码聚合（VAL.004）。"""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from api.routes.generate import router
+
         from api.handlers import register_exception_handlers
+        from api.routes.generate import router
 
         app = FastAPI()
         register_exception_handlers(app)
@@ -98,8 +102,8 @@ class TestHandlerTracks:
 
 # ── 任务全链路日志端点点位 ──────────────────────────
 def make_logs_app() -> FastAPI:
-    from api.routes.tasks import router
     from api.handlers import register_exception_handlers
+    from api.routes.tasks import router
 
     app = FastAPI()
     register_exception_handlers(app)  # AppError → 统一错误结构（422 而非 500）

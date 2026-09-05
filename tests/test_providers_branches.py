@@ -9,8 +9,8 @@
 import httpx
 import pytest
 
-from api.providers.base import ProviderError, ProviderRateLimited
 from api.providers import registry
+from api.providers.base import ProviderError, ProviderRateLimited
 from api.providers.registry import bootstrap
 
 bootstrap()

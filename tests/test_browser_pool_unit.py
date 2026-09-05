@@ -14,7 +14,6 @@ import pytest
 
 from api.browser_pool import BrowserPool
 
-
 # ── 构造与属性 ───────────────────────────────────────────────
 
 

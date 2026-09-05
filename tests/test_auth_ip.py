@@ -7,10 +7,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.auth import _client_ip_of, public_keymask
-from api.handlers import register_exception_handlers
-from api.routes.generate import router as generate_router
-from api.routes.chat import router as chat_router
 from api.config import Settings
+from api.handlers import register_exception_handlers
+from api.routes.chat import router as chat_router
+from api.routes.generate import router as generate_router
 
 
 def make_app() -> FastAPI:
@@ -87,8 +87,9 @@ def test_meta_anonymous_no_full_key(monkeypatch):
     monkeypatch.setenv("IF_API_KEYS", "sk-test-abc")
     config_module.settings = Settings()
 
-    from api.routes.health import router as health_router
     from fastapi import FastAPI
+
+    from api.routes.health import router as health_router
 
     app = FastAPI()
     from api.handlers import register_exception_handlers

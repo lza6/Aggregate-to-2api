@@ -14,8 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api import main as _main  # noqa: F401  (触发 app 装配)
-from api.main import app
 from api.email_pool import email_pool
+from api.main import app
 
 
 @pytest.fixture(scope="module")

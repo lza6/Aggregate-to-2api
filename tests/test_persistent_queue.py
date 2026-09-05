@@ -379,8 +379,8 @@ class TestEnginePersistentQueueIntegration:
     @pytest.mark.asyncio
     async def test_persistent_queue_restart_recovery(self, engine_with_persistent):
         """模拟停服重启：队列 DB 中的 pending 可被新 Engine 恢复。"""
-        from api.worker import Engine
         from api.db.queue_store import QueueStore
+        from api.worker import Engine
 
         e, qpath = engine_with_persistent
         # 写入任务

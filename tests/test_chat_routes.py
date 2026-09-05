@@ -7,13 +7,12 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from api import chat_usage
 from api.errors import AppError
 from api.handlers import app_error_handler
 from api.providers.base import CAP_CHAT, ChatProvider, ModelSpec
 from api.providers.registry import registry
-from api import chat_usage
 from api.routes import chat
-
 
 MODEL = "tryingopen/qwen/qwen3.8-27b"
 

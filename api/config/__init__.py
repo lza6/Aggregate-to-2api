@@ -245,6 +245,8 @@ class Settings(BaseSettings):
     proxy_cooldown_seconds: int = Field(120, validation_alias="IF_PROXY_COOLDOWN_SECONDS")
     if_proxy_max_use_per_day: int = Field(1, validation_alias="IF_PROXY_MAX_USE_PER_DAY")
     if_proxy_use_cooldown_map: str = Field("0,30,90,300,900", validation_alias="IF_PROXY_USE_COOLDOWN_MAP")
+    # P1-4: 出口粘滞窗口（秒）——同 session_id 复用同出口，防上游 IP 跳变风控；0=关闭
+    if_proxy_sticky_window: int = Field(300, validation_alias="IF_PROXY_STICKY_WINDOW")
     # ── Cloudflare trace 出口探测器（v6.7.x）──
     # 通过 cdn-cgi/trace 探测每个免费代理的真实出口 IP/colo，回填进 ProxyEntry，
     # 让 snapshot 透出真实出口信息（覆盖 md5 假 latency）。默认关闭（零网络开销）。
@@ -512,6 +514,7 @@ class Settings(BaseSettings):
             proxy_cooldown_seconds=self.proxy_cooldown_seconds,
             proxy_max_use_per_day=self.if_proxy_max_use_per_day,
             proxy_use_cooldown_map=self.if_proxy_use_cooldown_map,
+            proxy_sticky_window=self.if_proxy_sticky_window,
             account_db_file=self.account_db_file,
             email_db_file=self.email_db_file,
             nanobanana_account_target=self.nanobanana_account_target,
@@ -880,6 +883,7 @@ FREE_PROXY_REFRESH_MIN = settings.free_proxy_refresh_min
 PROXY_COOLDOWN_SECONDS = settings.proxy_cooldown_seconds
 IF_PROXY_MAX_USE_PER_DAY = settings.if_proxy_max_use_per_day
 IF_PROXY_USE_COOLDOWN_MAP = settings.if_proxy_use_cooldown_map
+IF_PROXY_STICKY_WINDOW = settings.if_proxy_sticky_window
 # Cloudflare trace 出口探测器（v6.7.x）
 IF_PROXY_TRACE_ENABLED = settings.if_proxy_trace_enabled
 IF_PROXY_TRACE_TTL = settings.if_proxy_trace_ttl
@@ -1137,6 +1141,7 @@ __all__ = [
     "PROXY_COOLDOWN_SECONDS",
     "IF_PROXY_MAX_USE_PER_DAY",
     "IF_PROXY_USE_COOLDOWN_MAP",
+    "IF_PROXY_STICKY_WINDOW",
     "IF_PROXY_TRACE_ENABLED",
     "IF_PROXY_TRACE_TTL",
     "IF_PROXY_TRACE_MAX_PER_ROUND",

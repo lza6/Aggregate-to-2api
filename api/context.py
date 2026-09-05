@@ -11,10 +11,9 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 # ── ContextVar ─────────────────────────────────────────────
-request_context_var: contextvars.ContextVar[Optional["RequestContext"]] = contextvars.ContextVar(
+request_context_var: contextvars.ContextVar[RequestContext | None] = contextvars.ContextVar(
     "request_context", default=None
 )
 
@@ -43,7 +42,7 @@ class RequestContext:
 
 
 # ── Public API ────────────────────────────────────────────
-def get_current_context() -> Optional[RequestContext]:
+def get_current_context() -> RequestContext | None:
     """获取当前请求的上下文。无活跃请求时返回 None。"""
     return request_context_var.get()
 

@@ -6,7 +6,6 @@ import time
 
 import pytest
 
-
 # 测试隔离：临时 DB 路径（fixture 里动态生成）
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 
@@ -425,8 +424,8 @@ class TestAccountPoolGrowth:
 @pytest.mark.asyncio
 async def test_autoregister_pauses_without_proxy(tmp_path, monkeypatch):
     """P-TEST-A7: 无任何可用代理且非 mock → 补号循环暂停（不注册）。"""
-    from api.account_pool import AccountPool
     from api import proxy_pool as pp_mod
+    from api.account_pool import AccountPool
 
     # 确保代理池为空 + 非 mock 模式
     monkeypatch.setattr(pp_mod.proxy_pool, "entries", [])

@@ -14,8 +14,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from api.errors import AppError, ErrorCodes
 from api.handlers import app_error_handler

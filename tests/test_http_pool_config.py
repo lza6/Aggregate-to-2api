@@ -46,6 +46,7 @@ class TestHttpPoolConfig:
 
         # 重新加载 config 模块以让 os.getenv 重新执行
         import importlib
+
         import api.config as cfg
 
         importlib.reload(cfg)
@@ -75,8 +76,8 @@ class TestTurnstileClientPoolConfig:
     async def test_pool_limits_use_config(self, monkeypatch):
         """_get_client 创建的 httpx.Limits 使用 config.IF_HTTP_MAX_CONNECTIONS
         和 config.IF_HTTP_KEEPALIVE。"""
-        import api.turnstile_client as tc
         import api.config as cfg
+        import api.turnstile_client as tc
 
         monkeypatch.setattr(cfg, "IF_HTTP_MAX_CONNECTIONS", 42)
         monkeypatch.setattr(cfg, "IF_HTTP_KEEPALIVE", 7)
@@ -111,8 +112,8 @@ class TestImagefreeClientPoolConfig:
     @pytest.mark.asyncio
     async def test_pool_limits_use_config(self, monkeypatch):
         """_get_client 创建的 httpx.Limits 使用 config 中的连接池配置。"""
-        import api.imagefree_client as ic
         import api.config as cfg
+        import api.imagefree_client as ic
 
         monkeypatch.setattr(cfg, "IF_HTTP_MAX_CONNECTIONS", 77)
         monkeypatch.setattr(cfg, "IF_HTTP_KEEPALIVE", 13)
@@ -132,8 +133,9 @@ class TestSemaphoreManager:
 
     def test_default_semaphore_value(self, monkeypatch):
         """信号量初始值取自 IF_UPSTREAM_MAX_INFLIGHT。"""
-        import api.config as cfg
         import importlib
+
+        import api.config as cfg
         import api.semaphore_manager as sm
 
         monkeypatch.setattr(cfg, "IF_UPSTREAM_MAX_INFLIGHT", 15)
@@ -174,7 +176,7 @@ class TestSemaphoreManager:
         try:
             await asyncio.wait_for(upstream_semaphore.acquire(), timeout=0.1)
             assert False, "预期超时但 acquire 立即返回"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
         elapsed = asyncio.get_event_loop().time() - t0

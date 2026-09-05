@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from api.slow_log import SlowSample, SlowLog
+from api.slow_log import SlowLog, SlowSample
 
 
 def _sample(task_id: str = "t1", total_ms: float = 6000.0, **kw) -> SlowSample:

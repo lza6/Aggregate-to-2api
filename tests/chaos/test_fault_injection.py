@@ -11,8 +11,9 @@
 """
 
 import asyncio
-import pytest
+
 import httpx
+import pytest
 
 
 @pytest.mark.chaos

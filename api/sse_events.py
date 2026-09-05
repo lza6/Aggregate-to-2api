@@ -185,7 +185,7 @@ async def task_events_generator(task_id: str, request) -> Any:
                 break
             try:
                 msg = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 yield _sse_encode("ping", {"msg": "heartbeat"}, -1)
                 continue
             yield msg

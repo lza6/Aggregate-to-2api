@@ -19,7 +19,6 @@ from api.providers.falai import (  # noqa: E402
     _KasadaSigner,
 )
 
-
 # ── Kasada 纯算签名 ────────────────────────────────────────────────
 
 class TestKasadaSigner:
@@ -127,7 +126,7 @@ class TestFalaiProviderModels:
 
     def test_capabilities(self) -> None:
         p = FalaiProvider()
-        from api.providers.base import CAP_TXT2VID, CAP_IMG2VID
+        from api.providers.base import CAP_IMG2VID, CAP_TXT2VID
         txt = p.models["falai/minimax-h3-max-txt"]
         assert CAP_TXT2VID in txt.capabilities
         img = p.models["falai/minimax-h3-max-img"]
@@ -243,8 +242,9 @@ class TestFalaiProviderGenerate:
 
     @pytest.mark.asyncio
     async def test_generate_rate_limited(self) -> None:
-        from api.providers.base import ProviderRateLimited
         import time
+
+        from api.providers.base import ProviderRateLimited
         p = FalaiProvider()
         sess = FalaiSession(
             fal_free="free",

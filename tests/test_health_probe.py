@@ -16,9 +16,8 @@ import pytest
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 os.environ.setdefault("IF_MOCK_REGISTER", "1")
 
-from api.providers.base import CAP_TXT2IMG, CAP_IMG2IMG, GenerationResult, ModelSpec, Provider
+from api.providers.base import CAP_IMG2IMG, CAP_TXT2IMG, GenerationResult, ModelSpec, Provider
 from api.providers.registry import Registry
-
 
 # ── Mock 提供商 ──────────────────────────────────────
 MODEL_A = ModelSpec(

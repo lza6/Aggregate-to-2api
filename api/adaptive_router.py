@@ -64,7 +64,13 @@ def _run_async(func, *args):
 
 @dataclass
 class ProviderNodeStats:
-    """单个 provider 的路由统计。"""
+    """单个 provider 的路由统计。
+
+    v8.0 P1-3：追加 Thompson Sampling（Beta 分布后验）+ UCB1（冷启动置信上界）参数。
+    - alpha/beta：Beta 分布参数，成功 alpha+=1，失败 beta+=1；后验采样选 provider。
+    - total_pulls：UCB1 全局计数（所有 provider 累计拉取次数），冷启动强探索。
+    冷启动（样本 < 阈值）用 UCB1，样本充足切 Thompson（贝叶斯后验更精准）。
+    """
 
     provider_id: str
     success_count: int = 0
@@ -75,6 +81,11 @@ class ProviderNodeStats:
     circuit_open_until: float = 0.0
     consecutive_failures: int = 0
     last_result_ts: float = 0.0
+    # v8.0 P1-3: Thompson Sampling（Beta 分布后验）
+    alpha: float = 1.0
+    beta: float = 1.0
+    # v8.0 P1-3: UCB1 全局计数（本 provider 被选次数）
+    pulls: int = 0
 
 
 @dataclass
@@ -392,6 +403,7 @@ class AdaptiveRouter:
             if is_success:
                 stats.success_count += 1
                 stats.consecutive_failures = 0
+                stats.alpha += 1.0  # v8.0 P1-3: Beta 后验更新（成功）
                 stats.ewma_latency_ms = self.alpha * max(0.0, latency_ms) + (1 - self.alpha) * stats.ewma_latency_ms
                 if stats.circuit_state == "HALF_OPEN":
                     # HALF_OPEN 时成功一个 → 熔断确认恢复
@@ -399,6 +411,7 @@ class AdaptiveRouter:
             else:
                 stats.failure_count += 1
                 stats.consecutive_failures += 1
+                stats.beta += 1.0  # v8.0 P1-3: Beta 后验更新（失败）
                 # 失败惩罚：EWMA 时延放大 1.5x（封顶 5s），快速感知抖动
                 stats.ewma_latency_ms = max(_INIT_EWMA, stats.ewma_latency_ms * 1.5)
                 # 熔断判定：失败率 > 阈值且样本足够
@@ -479,7 +492,58 @@ class AdaptiveRouter:
     def _snapshot_scores(self, candidates: list[str]) -> dict[str, float]:
         return {pid: self._calculate_score(pid) for pid in candidates}
 
-    def _is_available(self, pid: str, now: float) -> tuple[bool, "ProviderNodeStats"]:
+    # ── v8.0 P1-3: Thompson Sampling + UCB1 ──────────────────────
+    _THOMPSON_MIN_SAMPLES = 5  # 样本 >= 此值切 Thompson，否则 UCB1 冷启动
+
+    def _select_thompson(self, candidates: list[str]) -> str:
+        """Thompson Sampling：从 Beta(alpha,beta) 后验采样，选采样值最大的候选。
+
+        Beta 分布后验采样 = 成功率的概率分布抽样，自然平衡探索/利用：
+        - 高成功率 provider 后验集中高值，大概率被选（利用）
+        - 低样本 provider 后验方差大，偶尔被选（探索）
+        负载惩罚二次过滤：采样 top-K 后用 _calculate_score 选（避免选到 in_flight 过高的）。
+        """
+        import random as _random
+
+        samples = {}
+        for pid in candidates:
+            st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
+            # Beta(alpha, beta) 采样：alpha/beta 均 >=1（Laplace 平滑），用 random.betavariate
+            samples[pid] = _random.betavariate(max(1.0, st.alpha), max(1.0, st.beta))
+        # 二次过滤：采样值 top-2 中按负载惩罚选（防 Thompson 选中过载节点）
+        ranked = sorted(candidates, key=lambda pid: samples[pid], reverse=True)
+        top = ranked[: min(2, len(ranked))]
+        return max(top, key=lambda pid: self._calculate_score(pid))
+
+    def _select_ucb1(self, candidates: list[str]) -> str:
+        """UCB1 冷启动：置信上界选 provider，样本少时强探索。
+
+        UCB1 = success_rate + sqrt(2 * ln(total_pulls) / n_i)
+        - n_i 小（少样本）→ 置信上界大 → 强制探索
+        - total_pulls=0 时（全冷启动）随机选（防 ln(0)）
+        """
+        import random as _random
+
+        total_pulls = sum(self.nodes[p].pulls for p in candidates if p in self.nodes)
+        if total_pulls == 0:
+            return candidates[int(_random.random() * len(candidates))]
+        log_n = math.log(max(1, total_pulls))
+        best_pid = candidates[0]
+        best_ucb = -1.0
+        for pid in candidates:
+            st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
+            n_i = max(1, st.pulls)
+            success_rate = (st.success_count + 1.0) / (n_i + 2.0)
+            ucb = success_rate + math.sqrt(2.0 * log_n / n_i)
+            # 负载惩罚二次过滤
+            load_penalty = 1.0 / (1.0 + 0.1 * st.in_flight_requests)
+            score = ucb * load_penalty
+            if score > best_ucb:
+                best_ucb = score
+                best_pid = pid
+        return best_pid
+
+    def _is_available(self, pid: str, now: float) -> tuple[bool, ProviderNodeStats]:
         """检查 provider 是否可用（熔断未开/已恢复）。"""
         st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
         if st.circuit_state == "OPEN":
@@ -542,26 +606,26 @@ class AdaptiveRouter:
                 self._record_inflight_locked(picked)
                 return picked
 
-            # 探索：epsilon 衰减（样本越多探索越少）
+            # v8.0 P1-3：Thompson Sampling + UCB1 替代 Epsilon-Greedy
+            # 冷启动（总样本 < 阈值）用 UCB1 强探索；样本充足切 Thompson 后验采样
             sample_total = sum(
                 self.nodes[p].success_count + self.nodes[p].failure_count for p in valid if p in self.nodes
             )
-            eps = self.base_explore_rate * max(0.05, (1.0 - sample_total / 200.0))
-            if explore is not None:
-                eps = explore
-            # explore=False（测试/确定性路径）时强制不探索；其余默认探索
-            do_explore = (eps > 0) and (sample_total < 10 or self._rand() < eps)
-
-            scores = self._snapshot_scores(valid)
-            if do_explore:
-                # 随机选一个有效候选（探测恢复）
-                import random as _random
-
-                picked = valid[int(_random.random() * len(valid))]
-                reason = "explore"
-            else:
+            if explore is False:
+                # 测试/确定性路径：强制选最高分（不探索）
+                scores = self._snapshot_scores(valid)
                 picked = max(valid, key=lambda pid: scores[pid])
                 reason = "best_score"
+            elif sample_total < self._THOMPSON_MIN_SAMPLES:
+                # 冷启动：UCB1 强探索
+                picked = self._select_ucb1(valid)
+                reason = "ucb1_explore"
+                scores = self._snapshot_scores(valid)
+            else:
+                # 样本充足：Thompson Sampling 后验采样 + 负载惩罚
+                picked = self._select_thompson(valid)
+                reason = "thompson"
+                scores = self._snapshot_scores(valid)
             self._record(
                 RoutingRecord(
                     ts=now,
@@ -580,6 +644,7 @@ class AdaptiveRouter:
     def _record_inflight_locked(self, pid: str) -> None:
         st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
         st.in_flight_requests += 1
+        st.pulls += 1  # v8.0 P1-3: UCB1 全局计数
 
     @staticmethod
     def _rand() -> float:
@@ -602,6 +667,9 @@ class AdaptiveRouter:
                     "circuit_open_until": st.circuit_open_until,
                     "consecutive_failures": st.consecutive_failures,
                     "score": round(self._calculate_score(pid), 4),
+                    "alpha": st.alpha,  # v8.0 P1-3: Thompson Beta 参数
+                    "beta": st.beta,  # v8.0 P1-3: Thompson Beta 参数
+                    "pulls": st.pulls,  # v8.0 P1-3: UCB1 计数
                 }
                 for pid, st in self.nodes.items()
             }

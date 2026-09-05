@@ -80,7 +80,7 @@ async def _drive_batch(e: Engine, db, task_id: str, expected_status: str) -> dic
         stop_event.set()
         try:
             await asyncio.wait_for(wtask, timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             wtask.cancel()
             try:
                 await wtask

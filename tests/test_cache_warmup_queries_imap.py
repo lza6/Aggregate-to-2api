@@ -18,7 +18,6 @@ from api.db.queries import QueueDB, task_to_public
 from api.email_sources.custom_imap import CustomImapSource
 from api.email_sources.temptf import TempTfSource
 
-
 # ── cache_warmup.warmup_cache ────────────────────────────────
 
 

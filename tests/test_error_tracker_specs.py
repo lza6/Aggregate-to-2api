@@ -14,7 +14,6 @@ import pytest
 import api.error_tracker as et
 import api.system_spec as ss
 
-
 # ── error_tracker：后端聚合 ─────────────────────────────────
 
 
@@ -199,8 +198,8 @@ def test_reload_high_memory_tier(monkeypatch):
 
 def test_reload_memory_fallback_proc_meminfo(monkeypatch):
     """psutil 缺失 + /proc/meminfo 不存在（Windows）→ 2048 兜底。"""
-    import importlib
     import builtins
+    import importlib
 
     real_import = builtins.__import__
 

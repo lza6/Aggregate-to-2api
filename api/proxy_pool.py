@@ -67,6 +67,8 @@ class ProxyEntry:
         "real_exit",
         "trace_ts",
         "trace_colo",
+        "health_score",
+        "last_success_ts",
     )
 
     def __init__(self, url: str, source: str = "residential") -> None:
@@ -84,6 +86,9 @@ class ProxyEntry:
         self.real_exit = False  # exit_ip != host → 真实出口不同（代理转发成功）
         self.trace_ts = 0.0  # trace 探测时间戳；snapshot 用它覆盖 md5 假 latency
         self.trace_colo = ""  # Cloudflare colo 代码（如 "SJC"）
+        # ── P1-4: 健康评分（EWMA 成功率）── 初值 1.0（满分）；成功 0.7*old+0.3*1，失败 0.7*old+0.3*0
+        self.health_score = 1.0
+        self.last_success_ts = 0.0  # 最近成功时间戳（粘滞/恢复判定用）
 
     @property
     def cooling(self) -> bool:
@@ -117,6 +122,7 @@ class ProxyEntry:
             "cooling": now < self.cooldown_until,
             "cooldown_seconds": max(0, int(self.cooldown_until - now)),
             "fails": self.consecutive_fails,
+            "health_score": round(self.health_score, 3),
         }
 
 
@@ -125,6 +131,8 @@ class ProxyPool:
         self.entries: list[ProxyEntry] = []
         self._idx = 0
         self._lock = asyncio.Lock()
+        # P1-4: 出口粘滞——session_id → (url, last_used_ts)，同会话优先复用同出口
+        self._sticky: dict[str, tuple[str, float]] = {}
         if proxy_file:
             self.load_file(proxy_file)
 
@@ -183,6 +191,7 @@ class ProxyPool:
         1. 优先选 use_count == 0 的 IP（从未使用过 / 24h 重置后）
         2. 全部用过一轮后，选冷却最早结束的可用 IP
         3. 全在冷却 → 返回冷却最早结束的（权宜用）
+        v1-4: 候选按 health_score 降序排序，健康分低的降级到池底（不剔除给恢复机会）
         """
         if not self.entries:
             return None
@@ -196,13 +205,13 @@ class ProxyPool:
                     candidates = pref
 
             if candidates:
-                # 优先选从未使用过的 IP
+                # 优先选从未使用过的 IP；其次按健康分降序（健康低的降级到池底）
                 unused = [e for e in candidates if e.use_count == 0]
                 if unused:
-                    pick = min(unused, key=lambda e: e.last_used_at)
+                    pick = max(unused, key=lambda e: e.health_score)
                 else:
-                    # 全部用过一轮，选冷却最早结束的
-                    pick = min(candidates, key=lambda e: e.cooldown_until)
+                    # 全部用过一轮，按健康分降序 + 冷却最早结束
+                    pick = max(candidates, key=lambda e: (e.health_score, -e.cooldown_until))
             else:
                 # 全在冷却 → 选最早结束冷却的
                 pick = min(self.entries, key=lambda e: e.cooldown_until)
@@ -217,11 +226,13 @@ class ProxyPool:
     async def mark_failure(self, url: str, rate_limited: bool = True) -> None:
         """请求失败：冷却该 IP；失败不增加 use_count（请求没成功不计入使用次数）。
         429 时 cooldown_until 设置为当前时间 + 递增冷却时间（基于当前 use_count + 1 的冷却等级）。
+        v1-4: 失败 EWMA 下调 health_score = 0.7*old + 0.3*0.0。
         """
         async with self._lock:
             for e in self.entries:
                 if e.url == url:
                     e.consecutive_fails += 1
+                    e.health_score = 0.7 * e.health_score + 0.3 * 0.0
                     if rate_limited:
                         # 429：用递增冷却，基于假设的"下一次使用"的冷却等级
                         next_level = min(e.use_count + 1, max(USE_COOLDOWN_MAP.keys(), default=5))
@@ -235,6 +246,8 @@ class ProxyPool:
             for e in self.entries:
                 if e.url == url:
                     e.consecutive_fails = 0
+                    e.health_score = 0.7 * e.health_score + 0.3 * 1.0
+                    e.last_success_ts = time.time()
                     return
 
     async def apply_trace_result(self, url: str, geo: dict) -> None:
@@ -257,8 +270,10 @@ class ProxyPool:
                 e.trace_colo = str(geo.get("colo") or "")
                 if not e.real_exit:
                     e.consecutive_fails += 1
+                    e.health_score = 0.7 * e.health_score + 0.3 * 0.0
                 else:
                     e.consecutive_fails = 0
+                    e.health_score = 0.7 * e.health_score + 0.3 * 1.0
                 return
 
     def snapshot(self, page: int = 1, page_size: int = 20) -> dict:
@@ -330,6 +345,41 @@ class ProxyPool:
             "items": items,
             "top": items[:20],  # 兼容旧接口
         }
+
+
+    async def get_sticky_proxy(self, session_id: str, prefer_source: str | None = None) -> str | None:
+        """P1-4: 出口粘滞——同 session_id 优先返回上次用的代理。
+
+        粘滞窗口 IF_PROXY_STICKY_WINDOW（默认 300s）过期则重新选。避免触发上游"IP 跳变"风控。
+        注意：不持 self._lock 调 acquire（acquire 自带锁，嵌套会死锁）；命中粘滞时单独加锁更新。
+        """
+        if not self.entries or not session_id:
+            return None
+        now = time.time()
+        sticky_window = float(getattr(config, "IF_PROXY_STICKY_WINDOW", 300) or 0)
+        hit = self._sticky.get(session_id)
+        if hit and sticky_window > 0 and (now - hit[1]) < sticky_window:
+            # 粘滞命中：复用同出口（若该出口仍可用）
+            url, _ = hit
+            async with self._lock:
+                for e in self.entries:
+                    if e.url == url and e.available(now):
+                        e.last_used_at = now
+                        e.use_count += 1
+                        e.daily_uses += 1
+                        e.cooldown_until = now + _cooldown_for(e.use_count)
+                        self._sticky[session_id] = (url, now)
+                        return url
+        # 粘滞未命中/过期 → 新选一个（acquire 自带锁，不在此持锁）
+        url = await self.acquire(prefer_source=prefer_source)
+        if url:
+            self._sticky[session_id] = (url, now)
+            # 清理过期的 sticky 条目（防无界增长）
+            if len(self._sticky) > 1000:
+                expired = [k for k, v in self._sticky.items() if (now - v[1]) >= sticky_window]
+                for k in expired:
+                    self._sticky.pop(k, None)
+        return url
 
 
 # 模块级单例（main 启动时 load_file / free_proxy_fetcher.start）

@@ -13,7 +13,8 @@ import asyncio
 import hashlib
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlsplit
 
 from .. import config, turnstile_client
@@ -126,7 +127,7 @@ class _TokenPool:
             try:
                 # 监听 active_q 或 standby_q 的补充
                 token, ts = await asyncio.wait_for(self.active_q.get(), timeout=remaining)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # 再次尝试从 standby 看看是否刚补充完成
                 if self._swap_buffers():
                     continue

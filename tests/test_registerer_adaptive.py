@@ -11,6 +11,7 @@
 
 import pytest
 
+from api.email_pool import email_pool
 from api.registerer import (
     AdaptiveRegistrationBackoff,
     NanobananaRegisterer,
@@ -18,7 +19,6 @@ from api.registerer import (
     RegistrationSession,
     RegistrationStage,
 )
-from api.email_pool import email_pool
 
 
 def test_adaptive_backoff_classification():

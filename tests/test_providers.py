@@ -8,9 +8,9 @@ import pytest
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 os.environ.setdefault("IF_MOCK_REGISTER", "1")
 
+from api.meta import engine
 from api.providers import registry
 from api.providers.registry import bootstrap
-from api.meta import engine
 
 
 @pytest.fixture(autouse=True)
@@ -204,7 +204,7 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
     """P1-D: 非 imagefree 路径按 priority 控制并发。
     P0 立即执行（不信号量），P1 有限并发（4），P2 串行排队（1）。
     """
-    from api.dispatch import _dispatch_generate, _provider_sem, _HIGH_CONCURRENCY, _NORMAL_CONCURRENCY
+    from api.dispatch import _HIGH_CONCURRENCY, _NORMAL_CONCURRENCY, _dispatch_generate, _provider_sem
 
     monkeypatch.setattr("api.dispatch.db", tmp_db)
     engine.db = tmp_db

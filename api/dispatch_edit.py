@@ -86,7 +86,7 @@ async def _acquire_edit_mutex(key: str, timeout: float | None = None) -> str | N
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             try:
                 # v7.7 P2：try/finally 保底关 fd——os.write 抛异常时 fd 此前会泄漏
-                os.write(fd, f"{os.getpid()} {time.time()} {token}".encode("utf-8"))
+                os.write(fd, f"{os.getpid()} {time.time()} {token}".encode())
             finally:
                 os.close(fd)
             return token

@@ -14,8 +14,8 @@ os.environ.setdefault("IF_MOCK_REGISTER", "1")
 
 from api.providers import action_sniffer as asn
 from api.providers.action_sniffer import (
-    ActionSniffer,
     STATIC_ACTION_IDS,
+    ActionSniffer,
     extract_js_urls,
     extract_server_actions,
     is_stale_action_response,

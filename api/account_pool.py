@@ -26,8 +26,8 @@ import os
 import random
 import sqlite3
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import aiosqlite
 

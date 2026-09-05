@@ -56,52 +56,48 @@ class LeaseStore:
             await self._conn.commit()
 
     async def close(self) -> None:
-        async with self._open_lock:
-            async with self._tx_lock:
-                if self._conn:
-                    await self._conn.close()
-                    self._conn = None
+        async with self._open_lock, self._tx_lock:
+            if self._conn:
+                await self._conn.close()
+                self._conn = None
 
     async def acquire(self, key: str, holder: str, token: str, ttl: float) -> bool:
         """原子获取锁。当前无有效锁（expires_at 已过期或不存在）才成功。"""
         await self.open()
         now = time.time()
-        async with self._tx_lock:
-            async with self._conn.execute("BEGIN IMMEDIATE"):
-                cur = await self._conn.execute("SELECT expires_at FROM edit_leases WHERE key=?", (key,))
-                row = await cur.fetchone()
-                if row and row["expires_at"] > now:
-                    await self._conn.rollback()
-                    return False
-                await self._conn.execute(
-                    "INSERT OR REPLACE INTO edit_leases(key, holder, token, expires_at, created_at)"
-                    " VALUES(?, ?, ?, ?, ?)",
-                    (key, holder, token, now + ttl, now),
-                )
-                await self._conn.commit()
-                return True
+        async with self._tx_lock, self._conn.execute("BEGIN IMMEDIATE"):
+            cur = await self._conn.execute("SELECT expires_at FROM edit_leases WHERE key=?", (key,))
+            row = await cur.fetchone()
+            if row and row["expires_at"] > now:
+                await self._conn.rollback()
+                return False
+            await self._conn.execute(
+                "INSERT OR REPLACE INTO edit_leases(key, holder, token, expires_at, created_at)"
+                " VALUES(?, ?, ?, ?, ?)",
+                (key, holder, token, now + ttl, now),
+            )
+            await self._conn.commit()
+            return True
 
     async def renew(self, key: str, token: str, new_ttl: float) -> bool:
         """持锁者续租。仅当 token 匹配且锁未过期时延长 expires_at。"""
         await self.open()
         now = time.time()
-        async with self._tx_lock:
-            async with self._conn.execute("BEGIN IMMEDIATE"):
-                cur = await self._conn.execute(
-                    "UPDATE edit_leases SET expires_at=? WHERE key=? AND token=? AND expires_at>?",
-                    (now + new_ttl, key, token, now),
-                )
-                await self._conn.commit()
-                return cur.rowcount > 0
+        async with self._tx_lock, self._conn.execute("BEGIN IMMEDIATE"):
+            cur = await self._conn.execute(
+                "UPDATE edit_leases SET expires_at=? WHERE key=? AND token=? AND expires_at>?",
+                (now + new_ttl, key, token, now),
+            )
+            await self._conn.commit()
+            return cur.rowcount > 0
 
     async def release(self, key: str, token: str) -> bool:
         """按 token 释放。防止误删他人新锁。"""
         await self.open()
-        async with self._tx_lock:
-            async with self._conn.execute("BEGIN IMMEDIATE"):
-                cur = await self._conn.execute("DELETE FROM edit_leases WHERE key=? AND token=?", (key, token))
-                await self._conn.commit()
-                return cur.rowcount > 0
+        async with self._tx_lock, self._conn.execute("BEGIN IMMEDIATE"):
+            cur = await self._conn.execute("DELETE FROM edit_leases WHERE key=? AND token=?", (key, token))
+            await self._conn.commit()
+            return cur.rowcount > 0
 
     async def get(self, key: str) -> dict | None:
         await self.open()

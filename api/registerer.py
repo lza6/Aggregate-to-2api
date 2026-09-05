@@ -23,8 +23,7 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
-from datetime import timezone as _datetime_tz
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -249,7 +248,7 @@ def _parse_iso_ts(value: Any) -> float | None:
         s = str(value).strip()
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
-        return datetime.fromisoformat(s).replace(tzinfo=_datetime_tz.utc).timestamp()
+        return datetime.fromisoformat(s).replace(tzinfo=UTC).timestamp()
     except Exception:
         return None
 

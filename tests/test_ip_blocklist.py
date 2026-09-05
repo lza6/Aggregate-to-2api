@@ -16,13 +16,12 @@ import pytest
 import pytest_asyncio
 from starlette.requests import Request
 
+import api.request_guard as rg
 from api import config
-from api.errors import AppError, ErrorCodes
 
 # 模块级单例（在 fixture 中原地改 _path 实现每用例隔离 DB）
 from api.db.ip_blocklist_store import ip_blocklist_store as store
-import api.request_guard as rg
-
+from api.errors import AppError, ErrorCodes
 
 # ── 工具 / fixtures ────────────────────────────────────────────
 
@@ -351,9 +350,10 @@ class TestRequestGuard:
         monkeypatch.setattr(config.settings, "if_admin_keys", "")
         monkeypatch.setattr(config.settings, "if_admin_key_open", True)  # 开放模式跑闭环
         from fastapi import FastAPI
-        from httpx import AsyncClient, ASGITransport
-        from api.routes.security import router as security_router
+        from httpx import ASGITransport, AsyncClient
+
         from api.handlers import register_exception_handlers
+        from api.routes.security import router as security_router
 
         app = FastAPI()
         register_exception_handlers(app)
@@ -384,9 +384,10 @@ async def security_client(blocklist_store, monkeypatch):
     monkeypatch.setattr(config.settings, "if_admin_keys", "")
     monkeypatch.setattr(config.settings, "if_admin_key_open", True)  # 显式开放（本地运维模式）
     from fastapi import FastAPI
-    from httpx import AsyncClient, ASGITransport
-    from api.routes.security import router as security_router
+    from httpx import ASGITransport, AsyncClient
+
     from api.handlers import register_exception_handlers
+    from api.routes.security import router as security_router
 
     app = FastAPI()
     register_exception_handlers(app)
@@ -474,9 +475,10 @@ class TestSecurityEndpoints:
     async def test_security_dedicated_admin_key(self, blocklist_store, monkeypatch):
         """ISSUE-02 加固：独立 IF_ADMIN_KEYS 优先生效；无任何 Key 时默认 403 拒绝。"""
         from fastapi import FastAPI
-        from httpx import AsyncClient, ASGITransport
-        from api.routes.security import router as security_router
+        from httpx import ASGITransport, AsyncClient
+
         from api.handlers import register_exception_handlers
+        from api.routes.security import router as security_router
 
         app = FastAPI()
         register_exception_handlers(app)
@@ -504,9 +506,10 @@ class TestSecurityEndpoints:
         monkeypatch.setattr(config.settings, "if_admin_keys", "")
         monkeypatch.setattr(config.settings, "if_admin_key_open", False)
         from fastapi import FastAPI
-        from httpx import AsyncClient, ASGITransport
-        from api.routes.security import router as security_router
+        from httpx import ASGITransport, AsyncClient
+
         from api.handlers import register_exception_handlers
+        from api.routes.security import router as security_router
 
         app = FastAPI()
         register_exception_handlers(app)

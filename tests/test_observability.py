@@ -93,8 +93,8 @@ class TestHealthz:
     @pytest.mark.asyncio
     async def test_cf_probe_cache_ttl(self):
         """TTL 内二次调用不重复探测（缓存命中），force=True 强制刷新。"""
-        from api.routes.health import _probe_cf_solver, _cf_probe_cache
         from api import config
+        from api.routes.health import _cf_probe_cache, _probe_cf_solver
 
         config.HEALTHZ_CACHE_TTL = 5
         _cf_probe_cache.update(ok=True, at=time.time())
@@ -110,6 +110,7 @@ class TestHealthz:
 class TestDiskLogger:
     def test_setup_creates_dir_and_writes(self, tmp_path):
         import logging
+
         from api.disk_logger import setup_disk_logging, teardown_disk_logging
 
         # 单元测试不 import api.main（无 basicConfig），裸进程 root level=WARNING
@@ -122,8 +123,8 @@ class TestDiskLogger:
         try:
             logging.getLogger("disk.test").info("hello-disk")
             h.flush()
-            import os
             import glob
+            import os
 
             files = glob.glob(os.path.join(log_dir, "imagefree-api.log*"))
             assert files, f"日志目录无文件: {os.listdir(log_dir) if os.path.isdir(log_dir) else log_dir}"
@@ -138,6 +139,7 @@ class TestDiskLogger:
 
     def test_teardown_removes_handler(self, tmp_path):
         import logging
+
         from api.disk_logger import setup_disk_logging, teardown_disk_logging
 
         h = setup_disk_logging(str(tmp_path / "logs2"))
@@ -147,8 +149,9 @@ class TestDiskLogger:
 
     def test_rotation_keeps_backup_count(self, tmp_path):
         """TimedRotatingFileHandler 配置了 backupCount=保留天数。"""
-        from api.disk_logger import setup_disk_logging
         import logging
+
+        from api.disk_logger import setup_disk_logging
 
         h = setup_disk_logging(str(tmp_path / "logs3"), retention_days=5)
         assert h.backupCount == 5

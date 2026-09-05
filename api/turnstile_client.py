@@ -142,7 +142,7 @@ async def solve_turnstile(
                 solver_guard.record_failure("rate_limit", dur, node_url=target_node)
                 log.warning("求解节点 [%s] 返回 429 限流，触发熔断并切换备用节点", target_node)
                 last_exc = e
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 dur = time.monotonic() - node_t0
                 solver_guard.record_failure("timeout", dur, node_url=target_node)
                 last_exc = e

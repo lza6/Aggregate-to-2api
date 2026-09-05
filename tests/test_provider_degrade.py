@@ -15,9 +15,9 @@ os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 os.environ.setdefault("IF_MOCK_REGISTER", "1")
 os.environ.setdefault("IF_PROVIDER_DEGRADE_THRESHOLD", "3")
 
+from api import config
 from api.providers import registry
 from api.providers.registry import bootstrap
-from api import config
 
 
 @pytest.fixture(autouse=True)

@@ -13,9 +13,10 @@ from typing import Any
 import pytest
 from fastapi import Request
 
-from api import request_guard
-
-from api import config  # noqa: E402 (kept after request_guard to keep import grouping)
+from api import (
+    config,  # noqa: E402 (kept after request_guard to keep import grouping)
+    request_guard,
+)
 from api.errors import AppError  # noqa: E402 (kept after request_guard to keep import grouping)
 
 

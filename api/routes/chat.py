@@ -7,7 +7,8 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Literal, Sequence
+from collections.abc import Sequence
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse

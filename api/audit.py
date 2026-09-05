@@ -5,7 +5,7 @@ B2: record 支持 trace_id 透传，写入 JSON 行的 trace_id 字段，可 gre
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 log = logging.getLogger("imagefree_api.audit")
@@ -30,7 +30,7 @@ class AuditLog:
             except Exception:
                 trace_id = ""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "action": action,
             "actor": actor,
             "target": target,

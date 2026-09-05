@@ -1,6 +1,7 @@
 """集成测试：完整文生图流程（全 mock 模式）。"""
 
 import asyncio
+
 import pytest
 
 

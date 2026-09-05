@@ -2,10 +2,11 @@
 
 import asyncio
 import time
+
 import pytest
 
-from api.solver_guard import SolverGuard
 from api import turnstile_client
+from api.solver_guard import SolverGuard
 from api.worker.token_pool import TokenPoolManager
 
 

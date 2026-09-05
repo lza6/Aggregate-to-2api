@@ -21,7 +21,6 @@ os.environ["IF_DB_FILE"] = _tmp_db
 os.environ["IF_ACCOUNT_AUTO"] = "0"
 os.environ["IF_MOCK_REGISTER"] = "1"
 
-from api.errors import AppError  # noqa: E402 (needs env vars set above)
 from api.dispatch import (  # noqa: E402 (needs env vars set above)
     _normalize_model,
     _parse_input_image,
@@ -29,6 +28,7 @@ from api.dispatch import (  # noqa: E402 (needs env vars set above)
     _validate_model,
     _validate_ratio,
 )
+from api.errors import AppError  # noqa: E402 (needs env vars set above)
 from api.meta import _uptime_human  # noqa: E402 (needs env vars set above)
 
 
@@ -218,7 +218,7 @@ class TestRequestBodyLimit:
     def _mw(self):
         import starlette.middleware.body_limit as _bl
 
-        MW = getattr(_bl, "RequestBodyLimitMiddleware", None) or getattr(_bl, "BodySizeLimitMiddleware")
+        MW = getattr(_bl, "RequestBodyLimitMiddleware", None) or _bl.BodySizeLimitMiddleware
         return MW
 
     def _app(self, limit):

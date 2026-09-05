@@ -30,9 +30,9 @@ def _live_fetcher(pool):
 from api.free_proxy_fetcher import (  # noqa: E402
     FREE_PROXY_SOURCES,
     _is_valid_public_ip,
-    parse_source,
     parse_geonode_json,
     parse_ipport_text,
+    parse_source,
 )
 from api.proxy_pool import ProxyPool  # noqa: E402
 
@@ -217,7 +217,7 @@ class TestFetcherLifecycle:
         # _loop 无法在测试上下文真正调度：直接验证循环体休眠配置（周期控制）
         try:
             await asyncio.wait_for(asyncio.shield(f._loop()), timeout=0.2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         await f.stop()
         assert f._client is None

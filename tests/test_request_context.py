@@ -421,8 +421,9 @@ class TestRequestContextMiddleware:
     @pytest.mark.asyncio
     async def test_concurrent_requests_isolation(self):
         """并发请求的 context 互不污染。"""
-        from api.context import RequestContextMiddleware
         import asyncio
+
+        from api.context import RequestContextMiddleware
 
         async def make_request(client_ip: str, trace_id: str | None) -> str | None:
             headers = [(b"x-trace-id", trace_id.encode())] if trace_id else []
@@ -477,7 +478,7 @@ class TestLogRecordFilter:
 
     def test_filter_adds_request_id(self):
         """RequestIdLogFilter 向 LogRecord 追加 request_id。"""
-        from api.context import RequestIdLogFilter, request_context_var, RequestContext
+        from api.context import RequestContext, RequestIdLogFilter, request_context_var
 
         # 设置上下文
         ctx = RequestContext(
@@ -509,9 +510,9 @@ class TestLogRecordFilter:
 
     def test_filter_noop_when_no_context(self):
         """无上下文时 filter 不修改消息。"""
-        from api.context import RequestIdLogFilter
-
         import logging
+
+        from api.context import RequestIdLogFilter
 
         record = logging.LogRecord(
             name="test",
@@ -529,7 +530,7 @@ class TestLogRecordFilter:
 
     def test_filter_preserves_existing_trace_suffix(self):
         """已有 OTel trace 后缀时，filter 追加在 OTel 之后。"""
-        from api.context import RequestIdLogFilter, request_context_var, RequestContext
+        from api.context import RequestContext, RequestIdLogFilter, request_context_var
 
         ctx = RequestContext(
             request_id="req-abc-123",

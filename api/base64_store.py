@@ -85,7 +85,7 @@ def read_base64(task_id: str) -> str | None:
     if path is None:
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
     except OSError as e:
         log.warning("base64 文件读取失败 %s: %s", path, e)

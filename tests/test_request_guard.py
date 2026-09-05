@@ -17,9 +17,9 @@ import time
 import pytest
 from starlette.requests import Request
 
+import api.request_guard as rg
 from api import config
 from api.errors import AppError
-import api.request_guard as rg
 
 
 def _make_request(ip: str) -> Request:

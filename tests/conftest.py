@@ -240,12 +240,13 @@ def pytest_sessionfinish(session, exitstatus):
     connection pool join（Windows + asyncio session loop 尤甚）。此处一并关闭，并兜底 os._exit
     避免 teardown 阶段永不返回（测试结果已落盘，进程退出不影响结果语义）。
     """
-    import os
     import asyncio
+    import os
 
     async def _close_all():
         try:
-            from api import account_pool as ap, email_pool as ep
+            from api import account_pool as ap
+            from api import email_pool as ep
 
             await ap.account_pool._close_conn_safe()
             await ep.email_pool._close_conn_safe()
@@ -277,7 +278,7 @@ async def app_with_mocks(_app_instance):
     这样集成 lifespan 的共享 registry 单例不会污染后续单元测试（单元测试
     需要验证 provider 未绑定 engine 的分支），同时保留 session DB/worker 性能。
     """
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     imagefree_provider = _app_instance.registry.providers.get("imagefree")
     sentinel = object()

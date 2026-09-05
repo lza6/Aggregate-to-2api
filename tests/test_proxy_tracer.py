@@ -129,7 +129,7 @@ class TestTracerLifecycle:
         assert t._client is not None
         try:
             await asyncio.wait_for(asyncio.shield(t._loop()), timeout=0.3)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         await t.stop()
         assert t.task is None

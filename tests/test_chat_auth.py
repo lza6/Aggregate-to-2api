@@ -181,8 +181,8 @@ def client_auth_handler(monkeypatch):
 def test_completions_open_without_key(client_auth_handler, monkeypatch):
     # v7.7.1：公益定位——聊天端点不再强制 IF_API_KEYS 业务 Key，无 key 也放行（不限 key）。
     # mock provider + chat_model spec，避免真实上游调用
-    from api.providers.registry import registry
     from api.providers.base import ModelSpec
+    from api.providers.registry import registry
 
     class FakeProvider:
         async def chat_collect(self, model, messages, **kw):
@@ -202,8 +202,8 @@ def test_completions_open_without_key(client_auth_handler, monkeypatch):
 
 def test_completions_open_with_any_key(client_auth_handler, monkeypatch):
     # v7.7.1：聊天不再校验 key 对错，任意/错误 key 同样放行（仅 per-IP 频控）。
-    from api.providers.registry import registry
     from api.providers.base import ModelSpec
+    from api.providers.registry import registry
 
     class FakeProvider:
         async def chat_collect(self, model, messages, **kw):

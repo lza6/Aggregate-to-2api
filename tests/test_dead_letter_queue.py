@@ -93,9 +93,9 @@ class TestDeadLetterQueueWorker:
     @pytest.mark.asyncio
     async def test_worker_pushes_dlq_on_retry_exhaustion(self, tmp_db, monkeypatch):
         """worker 重试满后应 push_dlq。"""
-        from api.worker import Engine
-        from api import turnstile_client as w_turnstile
         from api import imagefree_client as w_imagefree
+        from api import turnstile_client as w_turnstile
+        from api.worker import Engine
 
         # Mock solve 始终返回 token
         async def _solve(*a, **k):
@@ -129,9 +129,9 @@ class TestDeadLetterQueueWorker:
     @pytest.mark.asyncio
     async def test_worker_skip_dlq_when_disabled(self, tmp_db, monkeypatch):
         """IF_DLQ_ENABLED=0 时重试耗尽也不 push_dlq。"""
-        from api.worker import Engine
-        from api import turnstile_client as w_turnstile
         from api import imagefree_client as w_imagefree
+        from api import turnstile_client as w_turnstile
+        from api.worker import Engine
 
         async def _solve(*a, **k):
             return ("mock-token", 0.03)

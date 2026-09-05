@@ -1,7 +1,8 @@
 """集成测试：图生图完整流程。"""
 
-import base64
 import asyncio
+import base64
+
 import pytest
 
 

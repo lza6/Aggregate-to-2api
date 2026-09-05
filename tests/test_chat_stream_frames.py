@@ -19,7 +19,6 @@ from api.providers.base import CAP_CHAT, ChatProvider, ModelSpec
 from api.providers.registry import registry
 from api.routes import chat
 
-
 MODEL = "tryingopen/qwen/qwen3.8-27b"
 
 

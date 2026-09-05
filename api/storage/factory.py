@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from .. import config
 from .base import StorageAdapter
@@ -11,7 +10,7 @@ from .local import LocalStorageAdapter
 
 log = logging.getLogger("storage")
 
-_STORAGE_ADAPTER: Optional[StorageAdapter] = None
+_STORAGE_ADAPTER: StorageAdapter | None = None
 
 
 def get_storage_adapter() -> StorageAdapter:
@@ -38,7 +37,7 @@ def get_storage_adapter() -> StorageAdapter:
     return _STORAGE_ADAPTER
 
 
-def set_storage_adapter(adapter: Optional[StorageAdapter]) -> None:
+def set_storage_adapter(adapter: StorageAdapter | None) -> None:
     """用于测试或运行时注入自定义存储驱动。"""
     global _STORAGE_ADAPTER
     _STORAGE_ADAPTER = adapter

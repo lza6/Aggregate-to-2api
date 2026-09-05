@@ -163,8 +163,8 @@ class TestRecord:
 class TestRegistryIntegration:
     def test_provider_for_uses_adaptive_router(self):
         """registry.provider_for 应通过自适应路由选 provider，而非直接返回首选。"""
+        from api.providers import aifreeforever, imagefree, nanobanana
         from api.providers.registry import Registry
-        from api.providers import imagefree, aifreeforever, nanobanana
 
         reg = Registry()
         reg.register(imagefree.ImagefreeProvider())
@@ -193,8 +193,8 @@ class TestDegradedSelectBest:
 
     def _registry_with_stubs(self):
         """注册 1 个真实首选 + 3 个 stub 备用（健康），用 monkeypatch find_alternatives 控制候选。"""
-        from api.providers.registry import Registry
         from api.providers import imagefree
+        from api.providers.registry import Registry
 
         reg = Registry()
         reg.register(imagefree.ImagefreeProvider())
@@ -306,8 +306,8 @@ class TestDegradedSelectBest:
 
     def test_find_alternatives_returns_sorted_by_capability_overlap(self):
         """find_alternatives 按能力重叠数降序返回（重叠越多越优先）。"""
+        from api.providers import aifreeforever, imagefree, nanobanana
         from api.providers.registry import Registry
-        from api.providers import imagefree, aifreeforever, nanobanana
 
         reg = Registry()
         reg.register(imagefree.ImagefreeProvider())
@@ -366,9 +366,9 @@ class TestPersistence:
         from fastapi import FastAPI
         from httpx import ASGITransport, AsyncClient
 
-        from api.routes import admin
         from api.errors import AppError
         from api.handlers import app_error_handler
+        from api.routes import admin
 
         db_path = str(tmp_path / "rt.db")
         ar = AdaptiveRouter(db_path=db_path)

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 
-
 from api.solver_guard import SolverGuard, SolverNodeState
 
 

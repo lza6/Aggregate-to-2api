@@ -35,7 +35,7 @@ class Registry:
 
         self.adaptive_router = adaptive_router
         # v4.4: 文本对话提供商注册表（prefix → ChatProvider）+ 模型索引
-        self.chat_providers: dict[str, "ChatProvider"] = {}  # type: ignore[name-defined]
+        self.chat_providers: dict[str, ChatProvider] = {}  # type: ignore[name-defined]
         self._chat_models: dict[str, ModelSpec] = {}
 
     def _ensure_booted(self) -> None:

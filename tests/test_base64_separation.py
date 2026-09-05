@@ -236,7 +236,7 @@ async def test_clean_base64_files():
 # ── 测试 9: 目录不存在时自动创建 ───────────────────
 def test_auto_create_dir(monkeypatch):
     """IF_BASE64_DIR 不存在时，save_base64 自动创建目录。"""
-    from api.base64_store import save_base64, read_base64
+    from api.base64_store import read_base64, save_base64
 
     # 用一个肯定不存在的目录
     tmpdir = tempfile.mkdtemp(suffix="-b64-test")
@@ -264,10 +264,10 @@ def test_auto_create_dir(monkeypatch):
 # ── 测试 10: task_to_public 支持 file:// 路径 ──────
 def test_task_to_public_resolves_file():
     """task_to_public 将 file:// 路径解析为 base64 内容。"""
-    from api.db import task_to_public
-
     # 构造一个含 file:// 路径的 dict
     import tempfile
+
+    from api.db import task_to_public
 
     fd, fpath = tempfile.mkstemp(suffix=".txt")
     os.close(fd)

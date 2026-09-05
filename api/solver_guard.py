@@ -18,7 +18,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import deque
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from . import config
 

@@ -372,7 +372,7 @@ class Engine:
             try:
                 item = await asyncio.wait_for(self.queue.get(), timeout=0.1)
                 tasks.append(item)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if time.monotonic() - last_beat >= 30.0:
                     worker_health.beat(idx)
                     last_beat = time.monotonic()
@@ -459,7 +459,7 @@ class Engine:
                 return
             try:
                 priority, seq, task_id = await asyncio.wait_for(self.queue.get(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # 空闲心跳：每 30s beat 一次（远小于 stale 阈值 180s）
                 if time.monotonic() - last_beat >= 30.0:
                     worker_health.beat(idx)
@@ -481,7 +481,7 @@ class Engine:
                 async with asyncio.timeout(config.TASK_HARD_TIMEOUT):
                     await self._process(task_id)
                 worker_health.add_processed(idx)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log.error("task %s 硬超时（%ss），强制回收", task_id, config.TASK_HARD_TIMEOUT)
                 # P1-3 终态护栏：_finish 已落库 completed/error 后（broadcast 阶段才超时），
                 # 不得把真实结果二次覆盖成 error 并抹掉 image_url。先查终态，已是则不覆盖。

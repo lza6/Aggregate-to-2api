@@ -78,7 +78,7 @@ class _BufferPool:
 
     def __init__(self, max_size: int = 10, prealloc_size: int = 64 * 1024) -> None:
         self._slots = tuple(self._Slot(bytearray(prealloc_size)) for _ in range(max_size))
-        self._pool: "deque[_BufferPool._Slot]" = deque(self._slots)  # 仅登记空闲槽，初始全部空闲
+        self._pool: deque[_BufferPool._Slot] = deque(self._slots)  # 仅登记空闲槽，初始全部空闲
         self._prealloc_size = prealloc_size
 
     def acquire(self) -> bytearray:

@@ -1,8 +1,8 @@
 """测试 prometheus_client 指标系统。"""
 
 from api.metrics_ext import (
-    requests_total,
     generate_duration,
+    requests_total,
     token_pool_watermark,
 )
 

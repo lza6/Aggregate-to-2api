@@ -9,8 +9,8 @@ import 期即执行全部 re-export。本文件验证：
 
 from __future__ import annotations
 
-import api.config.settings as ns
 import api.config as root
+import api.config.settings as ns
 
 
 def test_settings_namespace_importable():
@@ -35,7 +35,8 @@ def test_settings_reexport_same_objects():
 
 def test_from_settings_import_path():
     """兼容路径 `from api.config.settings import X` 可用。"""
-    from api.config.settings import Settings, settings as s, DB_FILE
+    from api.config.settings import DB_FILE, Settings
+    from api.config.settings import settings as s
 
     assert Settings is root.Settings
     assert isinstance(s, root.Settings)  # 单例同一性受 reset 钩子影响，只验类型

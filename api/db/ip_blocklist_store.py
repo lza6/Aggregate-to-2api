@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
 
 import aiosqlite
 
@@ -27,7 +26,7 @@ log = logging.getLogger("db.ip_blocklist")
 class IPBlocklistStore:
     """异步 SQLite IP 封禁与风控存储。"""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self._path = db_path or config.DB_FILE
         self._lock = asyncio.Lock()
         self._initialized = False
@@ -122,7 +121,7 @@ class IPBlocklistStore:
         finally:
             await conn.close()
 
-    async def get(self, ip: str) -> Optional[dict]:
+    async def get(self, ip: str) -> dict | None:
         """获取单个 IP 的生效规则（若已过期则返回 None 并异步触发清理）。"""
         await self.init_schema()
         now = time.time()

@@ -473,7 +473,7 @@ async def test_edit_image_multi_non_imagefree_dispatches_multi(monkeypatch):
 @pytest.mark.asyncio
 async def test_renew_edit_lock_loop_heartbeat(monkeypatch):
     """_renew_edit_lock_loop 心跳续租：成功续租 + 易主停止。"""
-    from api.dispatch_edit import _renew_edit_lock_loop, _EDIT_LEASE_STORE
+    from api.dispatch_edit import _EDIT_LEASE_STORE, _renew_edit_lock_loop
 
     monkeypatch.setattr(dispatch_edit.config, "EDIT_LEASE_TTL", 0.03)
 
@@ -493,7 +493,7 @@ async def test_renew_edit_lock_loop_heartbeat(monkeypatch):
 @pytest.mark.asyncio
 async def test_renew_edit_lock_loop_exception_continues(monkeypatch):
     """续租异常不中断心跳（continue）。"""
-    from api.dispatch_edit import _renew_edit_lock_loop, _EDIT_LEASE_STORE
+    from api.dispatch_edit import _EDIT_LEASE_STORE, _renew_edit_lock_loop
 
     monkeypatch.setattr(dispatch_edit.config, "EDIT_LEASE_TTL", 0.02)
 

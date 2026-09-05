@@ -22,7 +22,6 @@ from api.cf_clearance_solver import (  # noqa: E402
     soco4,
 )
 
-
 # ── 加密链单元测试（纯算，验证与 CF JS 字节对齐）──────────────────────
 
 class TestCryptoPrimitives:

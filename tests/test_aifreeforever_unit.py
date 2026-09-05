@@ -44,7 +44,7 @@ def test_headers_does_not_mutate_class_constant(provider):
     original = dict(aff._BROWSER_HEADERS)
     provider._headers("tok")
     provider._headers()
-    assert aff._BROWSER_HEADERS == original  # 类常量不被污染
+    assert original == aff._BROWSER_HEADERS  # 类常量不被污染
 
 
 # ── _generate ────────────────────────────────────────────────

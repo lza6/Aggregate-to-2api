@@ -1,6 +1,6 @@
 """测试内置告警引擎。"""
 
-from api.alerting import AlertRule, AlertEngine
+from api.alerting import AlertEngine, AlertRule
 
 
 def test_alert_rule_condition():

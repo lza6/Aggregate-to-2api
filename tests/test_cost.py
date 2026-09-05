@@ -21,7 +21,6 @@ from api.errors import AppError
 from api.handlers import app_error_handler
 from api.routes import admin
 
-
 MODEL = "tryingopen/qwen/qwen3.8-27b"
 
 

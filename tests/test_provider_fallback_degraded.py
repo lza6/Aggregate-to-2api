@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from api.providers.base import ModelSpec, Provider, GenerationResult
+from api.providers.base import GenerationResult, ModelSpec, Provider
 from api.providers.registry import Registry
 
 

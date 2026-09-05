@@ -17,8 +17,7 @@ import time
 
 import pytest
 
-from api import bg_tasks
-from api import config
+from api import bg_tasks, config
 
 
 # ── 纯函数：距下一个本地 04:00 秒数 ──────────────────────────────

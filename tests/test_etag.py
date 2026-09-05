@@ -14,8 +14,8 @@ import json
 
 import pytest
 
-from api.routes.health import meta, system_info
 from api import system_spec as ss
+from api.routes.health import meta, system_info
 
 
 class FakeResponse:

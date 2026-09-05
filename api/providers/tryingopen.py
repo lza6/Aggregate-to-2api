@@ -10,9 +10,10 @@ import mimetypes
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
