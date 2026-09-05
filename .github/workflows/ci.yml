@@ -39,27 +39,25 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
-        # P0-11：强化输出可见性——历史 CI exit 2 但 stdout 不见。
-        # tee 管道在 Actions 上输出仍被吞，改为：重定向到文件 + step 末尾 cat 强制输出到 stdout。
-        # 关键：pytest 失败时 exit 2 触发 bash -e 中断，需用 `|| true` 让 cat 段仍执行。
+        # P0-11：v8.1.5 发现 PYTEST_EXIT=2 但 /tmp/pytest-unit.log 为空 → pytest 启动即崩
+        # （collecting 阶段），可能 import error / conftest 加载失败 / 段错误。
+        # 本地 .venv 全绿（1739 passed），CI exit 2 无输出 → 用 python -X faulthandler
+        # 直接跑 + 显示 traceback 到 stderr，绕过 pytest 的输出缓冲。
         run: |
-          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider > /tmp/pytest-unit.log 2>&1 || PYTEST_EXIT=$?
-          echo "PYTEST_EXIT=${PYTEST_EXIT:-0}"
-          echo "=== pytest 输出（前 80 行）==="
-          head -80 /tmp/pytest-unit.log
-          echo "=== pytest 输出（后 80 行）==="
-          tail -80 /tmp/pytest-unit.log
+          python -X faulthandler -m pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
+          echo "PYTEST_EXIT=${PYTEST_EXIT}"
           {
             echo "## 单元测试结果"
             echo '```'
-            tail -50 /tmp/pytest-unit.log
+            tail -60 /tmp/pytest-unit.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit ${PYTEST_EXIT:-0}
+          exit ${PYTEST_EXIT}
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
           IF_DB_FILE: "data/test.db"
+          PYTHONUNBUFFERED: "1"
 
       - name: 启动 mock cf_solver 并运行集成测试
         # v7.7 缓解组合串扰：integration 与 chaos 分两轮跑（各自 fresh 进程内状态），
