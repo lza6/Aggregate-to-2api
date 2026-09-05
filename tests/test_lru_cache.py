@@ -114,7 +114,7 @@ async def test_set_ttl_zero_immediate_expiry():
     """ttl=0 → 立即过期（边界）。"""
     cache = LRUCache(maxsize=128, ttl=60)
     await cache.set("k", "v", ttl=0)
-    await asyncio.sleep(0.01)  # 让 monotonic 推进
+    await asyncio.sleep(0.05)  # v7.7.13: 加大 sleep 防 monotonic 精度不足 + 组合串扰
     assert await cache.get("k") is None  # deadline=now+0，已流逝 → 过期
 
 
