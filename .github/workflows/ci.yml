@@ -39,17 +39,21 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
-        # P0-11 根治：.gitignore:109 `config/` 误伤 api/config/presets.py → CI 找不到模块
-        # → conftest autouse _reset_settings_singleton 调 reset_settings()→Settings()→import
-        # api.config.presets 失败 → 所有用例 setup 阶段 E → exit 2。已改 /config/ + 提交 presets.py。
-        # 保留 tee + GITHUB_STEP_SUMMARY 强化输出可见性，便于未来诊断。
+        # P0-11 根治：.gitignore `config/` 误伤 api/config/presets.py（已改 /config/ + 提交）。
+        # 强化输出：tee 落盘 + 失败用例摘要 cat 到 stdout（bash -e 会中断，故用 set +e 保 cat 段执行）。
         run: |
-          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
+          set +e
+          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log
+          PYTEST_EXIT=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${PYTEST_EXIT}"
+          echo "=== 失败用例摘要（FAILED/ERROR 行）==="
+          grep -E "FAILED|ERROR|assert|Error" /tmp/pytest-unit.log | tail -40 || true
+          echo "=== pytest 输出末尾 80 行 ==="
+          tail -80 /tmp/pytest-unit.log
           {
-            echo "## 单元测试结果"
+            echo "## 单元测试结果（exit=${PYTEST_EXIT}）"
             echo '```'
-            tail -60 /tmp/pytest-unit.log
+            tail -80 /tmp/pytest-unit.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit ${PYTEST_EXIT}
