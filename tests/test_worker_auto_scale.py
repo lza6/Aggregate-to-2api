@@ -22,6 +22,8 @@ def auto_scale_config(monkeypatch):
     monkeypatch.setattr(config, "IF_WORKER_SCALE_DOWN_THRESHOLD", 1)
     monkeypatch.setattr(config, "IF_WORKER_IDLE_SECONDS", 0.1)
     monkeypatch.setattr(config, "WORKERS", 4)  # 起始 worker 数
+    monkeypatch.setattr(config, "IF_PERSISTENT_QUEUE_ENABLED", False)  # 测试不持久化
+    monkeypatch.setattr(config, "IF_WORKER_SCALER_LEGACY", True)  # 测试旧单维逻辑
     return config
 
 
@@ -249,7 +251,8 @@ async def test_shrink_on_empty_workers_noop(tmp_db):
 
 
 @pytest.mark.asyncio
-async def test_resume_from_queue_without_db_returns_zero(tmp_db):
+async def test_resume_from_queue_without_db_returns_zero(tmp_db, monkeypatch):
+    monkeypatch.setattr(config, "IF_PERSISTENT_QUEUE_ENABLED", False)
     """未启用持久化队列（_queue_db=None）→ 恢复 0 条。"""
     from api.worker import Engine
 

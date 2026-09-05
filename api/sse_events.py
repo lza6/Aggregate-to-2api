@@ -26,6 +26,15 @@ MAX_QUEUE = 50
 _MAX_EVENTS_PER_TASK = 50
 HEARTBEAT_INTERVAL = 15.0
 
+# v8.0 P1-6: 心跳 sequence number 全局计数器（客户端可检测丢包）
+_hb_seq = 0
+
+
+def _next_heartbeat_seq() -> int:
+    global _hb_seq
+    _hb_seq += 1
+    return _hb_seq
+
 
 def _sse_encode(event: str, data: dict, event_id: int) -> str:
     """标准 SSE 编码：event + id + data。"""
@@ -186,7 +195,8 @@ async def task_events_generator(task_id: str, request) -> Any:
             try:
                 msg = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
             except TimeoutError:
-                yield _sse_encode("ping", {"msg": "heartbeat"}, -1)
+                # v8.0 P1-6: 心跳带 sequence number，客户端可检测丢包
+                yield _sse_encode("ping", {"msg": "heartbeat", "seq": _next_heartbeat_seq()}, -1)
                 continue
             yield msg
             # 尝试解析事件类型，result/error → 结束流

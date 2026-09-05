@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, WebSocket
 from fastapi.responses import StreamingResponse
 
 from ..db import task_to_public
@@ -148,3 +148,19 @@ async def task_events_endpoint(task_id: str, request: Request) -> StreamingRespo
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── v8.0 P1-6: 每任务 WebSocket 双向事件通道（与 SSE 并存）──
+@router.websocket("/v1/tasks/{task_id}/ws")
+async def task_ws_events_endpoint(websocket: WebSocket, task_id: str):
+    """WebSocket 双向任务事件流：客户端可发 cancel/query，服务端推送事件 + 心跳 sequence。
+
+    - 连接后回放历史事件 + 实时推送
+    - 客户端发 {"action":"cancel"} 取消 / {"action":"query"} 查询状态
+    - 心跳带 sequence number（客户端检测丢包）
+    - result/error 终态后自动断开
+    """
+    from ..ws_events import ws_task_events
+
+    await ws_task_events(websocket, task_id)
+

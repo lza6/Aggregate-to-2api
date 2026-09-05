@@ -1,6 +1,6 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v7.7.16
+# 版本: v7.7.17
 # 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
 #       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
 #       须从 deploy/ 目录运行：cd deploy && docker compose up -d

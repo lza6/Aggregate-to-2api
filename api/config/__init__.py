@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     if_worker_scale_up_threshold: int = Field(200, validation_alias="IF_WORKER_SCALE_UP_THRESHOLD")
     if_worker_scale_down_threshold: int = Field(20, validation_alias="IF_WORKER_SCALE_DOWN_THRESHOLD")
     if_worker_idle_seconds: int = Field(90, validation_alias="IF_WORKER_IDLE_SECONDS")
+    # v8.0 P1-5: 缩容防抖动持续秒数（低负载必须持续该秒数才缩容，避免瞬时抖动）
+    if_worker_scale_down_hold: int = Field(30, validation_alias="IF_WORKER_SCALE_DOWN_HOLD")
+    # v8.0 P1-5: 旧单维扩缩容 fallback（True 走 queue-depth-only 旧逻辑；False 走多维评分）
+    if_worker_scaler_legacy: bool = Field(False, validation_alias="IF_WORKER_SCALER_LEGACY")
     # v8.0 P1-8：持久化队列默认开启——重启不丢未完成任务（queue.db 持久化 + replay）
     if_persistent_queue_enabled: bool = Field(True, validation_alias="IF_PERSISTENT_QUEUE_ENABLED")
     if_persistent_queue_db: str = Field("data/queue.db", validation_alias="IF_PERSISTENT_QUEUE_DB")
@@ -809,6 +813,8 @@ IF_WORKERS_MAX = settings.if_workers_max
 IF_WORKER_SCALE_UP_THRESHOLD = settings.if_worker_scale_up_threshold
 IF_WORKER_SCALE_DOWN_THRESHOLD = settings.if_worker_scale_down_threshold
 IF_WORKER_IDLE_SECONDS = settings.if_worker_idle_seconds
+IF_WORKER_SCALE_DOWN_HOLD = settings.if_worker_scale_down_hold
+IF_WORKER_SCALER_LEGACY = settings.if_worker_scaler_legacy
 IF_PERSISTENT_QUEUE_ENABLED = settings.if_persistent_queue_enabled
 IF_PERSISTENT_QUEUE_DB = settings.if_persistent_queue_db
 IF_WORKER_BATCH_ENABLED = settings.if_worker_batch_enabled
@@ -1094,6 +1100,8 @@ __all__ = [
     "IF_WORKER_SCALE_UP_THRESHOLD",
     "IF_WORKER_SCALE_DOWN_THRESHOLD",
     "IF_WORKER_IDLE_SECONDS",
+    "IF_WORKER_SCALE_DOWN_HOLD",
+    "IF_WORKER_SCALER_LEGACY",
     "IF_PERSISTENT_QUEUE_ENABLED",
     "IF_PERSISTENT_QUEUE_DB",
     "IF_WORKER_BATCH_ENABLED",
