@@ -46,14 +46,28 @@ def _clean_db(path: str) -> None:
 
 
 class _SlowProcessEngine(Engine):
-    """将 _process 重写为挂起 500ms 模拟慢任务。"""
+    """将 _process 重写为挂起 500ms 模拟慢任务。
+
+    v7.7.16: 覆盖 start 跳过 token_pool（避免连真实 cf_solver 失败影响 worker 调度）。
+    """
+
+    async def start(self) -> None:
+        self._started = True
+        self._workers = [self._create_worker(i) for i in range(config.WORKERS)]
 
     async def _process(self, task_id: str) -> None:
         await asyncio.sleep(0.5)
 
 
 class _FastProcessEngine(Engine):
-    """将 _process 重写为瞬间完成并标记 completed。"""
+    """将 _process 重写为瞬间完成并标记 completed。
+
+    v7.7.16: 覆盖 start 跳过 token_pool（避免连真实 cf_solver 失败）。
+    """
+
+    async def start(self) -> None:
+        self._started = True
+        self._workers = [self._create_worker(i) for i in range(config.WORKERS)]
 
     async def _process(self, task_id: str) -> None:
         await self.db.mark_finished(task_id, "completed", "https://r2/img.png", None, 0.01)
