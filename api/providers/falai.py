@@ -166,6 +166,9 @@ class FalaiProvider(Provider):
     display_name = "fal.ai"
     base_url = DEFAULT_BASE
     models: dict[str, ModelSpec] = {}
+    # P1-A4：fal.ai 风险档案 Tier=paid（真实付费上游，CLAUDE.md 默认预算=0 红线）
+    # PreToolUse 硬门禁据 risk_level()="paid" 拦截真实付费调用（用户批准后才放行）
+    risk_tier = "paid"
 
     def __init__(self) -> None:
         super().__init__()

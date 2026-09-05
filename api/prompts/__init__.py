@@ -74,12 +74,22 @@ def compose_system_text(
     base = load_template("base")  # 宪法基线（AGENTS.md 5 条编译进顶层）
     template_body = load_template(template_name)  # 模板正文（可能为空串，仅记 warn 不崩）
 
+    # P1-A1：填充 meta.skills 占位——按 skill 名聚合描述段注入 {skills} 变量
+    # IF_AGENT_SKILLS_ENABLED=0 或 meta.skills 为空时回退原占位串（零回归）
+    skills_text = "（P1-A1 启用后填充）"
+    try:
+        from ..skills import get_skills_for
+
+        skills_text = get_skills_for(list((meta or {}).get("skills") or []))
+    except Exception as exc:  # skills 包加载失败不崩主链路（降级占位串）
+        log.warning("skills 加载失败，回退占位串: %s", exc)
+
     variables: dict[str, Any] = {
         "thinking_mode": str((meta or {}).get("thinking_mode") or "none"),
         "max_thinking_length": int((meta or {}).get("max_thinking_length") or 8000),
         "refusal_stance": _coerce_stance((meta or {}).get("refusal_stance")),
         "citation_style": str((meta or {}).get("citation_style") or "none"),
-        "skills": list((meta or {}).get("skills") or []) or ["（P1-1 启用后填充）"],
+        "skills": skills_text,
     }
 
     # 剥离模板头部说明块（`> 变量：{...}` 示例行未插值，不应进入最终 system）

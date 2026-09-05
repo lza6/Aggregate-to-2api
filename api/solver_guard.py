@@ -15,11 +15,13 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
 from collections import deque
 from collections.abc import Sequence
 from typing import Any
+from urllib.parse import urlparse
 
 from . import config
 
@@ -27,6 +29,62 @@ log = logging.getLogger("solver_guard")
 
 # 失败原因分类（与 turnstile_client 上报对齐）
 REASON_CATEGORIES = ("timeout", "transport", "http_error", "rate_limit", "solver_rejected", "other")
+
+
+def _is_private_ip(host: str) -> bool:
+    """检查 host 是否为私有/回环/链路本地 IP（SSRF 守卫）。
+
+    P1-A6（M13）：参考 captcha-solver server.py:127 SOLVER_ALLOW_PRIVATE，
+    防 solver 节点配置成内网地址被外部请求触发 SSRF。
+    生产允许 127.0.0.1（本地 cf_solver），但禁止 169.254.x.x/10.x/172.16-31.x
+    等云元数据 IP（防 solver 被诱导访问云元数据端点泄露凭据）。
+    """
+    if not host:
+        return False
+    # 去端口
+    if ":" in host and not host.count(":") > 1:  # IPv4:port
+        host = host.rsplit(":", 1)[0]
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # 非 IP（域名），不判私有（域名由 DNS 解析后的 IP 再判，此处只防显式 IP）
+        return False
+    # P1-A6（M13）SSRF 守卫策略：
+    # - 回环 127.0.0.1 放行（本地 cf_solver）
+    # - 私有网段 10.x/192.168.x/172.16-31.x 放行（内网部署）
+    # - 链路本地 169.254.x.x 拒绝（云元数据防 SSRF 探凭据）
+    # - 多播/保留 拒绝
+    # 注：169.254.x.x 既是 is_private 又是 is_link_local，必须先判 link_local 拦截
+    if ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        return True  # 禁止（云元数据/多播/保留）
+    if ip.is_loopback or ip.is_private:
+        return False  # 允许（回环/内网）
+    return False
+
+
+def validate_solver_url(url: str) -> bool:
+    """P1-A6（M13）：校验 solver 节点 URL 是否安全（SSRF 守卫）。
+
+    返回 True=安全可加，False=不安全拒绝。
+    - 必须 http/https scheme
+    - host 非空
+    - host 非 169.254.x.x 等云元数据 IP（防 SSRF 探云凭据）
+    """
+    if not url or not url.strip():
+        return False
+    try:
+        parsed = urlparse(url.strip())
+    except (ValueError, TypeError):
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname or ""
+    if not host:
+        return False
+    if _is_private_ip(host):
+        log.warning("SSRF 守卫拒绝 solver URL（链路本地/云元数据 IP）: %s", url)
+        return False
+    return True
 
 
 class SolverNodeState:
@@ -252,22 +310,34 @@ class SolverGuard:
             node._reset()
 
     def configure_nodes(self, urls: Sequence[str], weights: dict[str, int] | None = None) -> None:
-        """动态配置或更新节点池列表。"""
+        """动态配置或更新节点池列表。
+
+        P1-A6（M13）：每个 URL 经 SSRF 守卫 validate_solver_url 校验，
+        链路本地/云元数据 IP 被拒绝加载（防 solver 被诱导探云凭据）。
+        """
         weights = weights or {}
-        cleaned_urls = [u.rstrip("/") for u in urls if u and u.strip()]
+        # SSRF 守卫：过滤不安全 URL（169.254.x.x 等云元数据）
+        cleaned_urls: list[str] = []
+        for u in urls:
+            if u and u.strip():
+                if validate_solver_url(u):
+                    cleaned_urls.append(u)
+                else:
+                    log.warning("SSRF 守卫拒绝加载 solver 节点 URL: %s", u)
         if not cleaned_urls:
             cleaned_urls = [config.CF_SOLVER_URL.rstrip("/")]
 
         new_nodes: dict[str, SolverNodeState] = {}
         for u in cleaned_urls:
-            w = weights.get(u, 1)
-            if u in self._nodes:
-                existing = self._nodes[u]
+            url = u.rstrip("/")
+            w = weights.get(url, weights.get(u, 1))
+            if url in self._nodes:
+                existing = self._nodes[url]
                 existing.weight = max(1, w)
-                new_nodes[u] = existing
+                new_nodes[url] = existing
             else:
-                new_nodes[u] = SolverNodeState(
-                    url=u,
+                new_nodes[url] = SolverNodeState(
+                    url=url,
                     weight=w,
                     circuit_threshold=self.circuit_threshold,
                     probe_interval=self.probe_interval,

@@ -154,6 +154,36 @@ class Provider(abc.ABC):
         """是否需要号池账号（积分制、用完即弃的平台必须 True）。"""
         return any(m.account_required for m in self.models.values())
 
+    # ── P1-A5 Provider Adaptor 接口（Convert 方法，参考 new-api adapter.go）──
+    # 新增 provider 只实现这些 Convert 方法即可接入，编排逻辑单份复用。
+    # 默认实现为 None（不转换），向后兼容：旧 provider 不实现则调用方走原路径。
+    def convert_claude_request(self, request: dict[str, Any]) -> dict[str, Any] | None:
+        """Claude Messages 请求 → 上游原生格式。
+
+        默认 None=不转换（旧 provider 走各 provider 内部 chat_stream 自行转换）。
+        子类覆写以统一 Claude 协议适配（减少每 provider 重复 _convert_messages）。
+        """
+        return None
+
+    def convert_gemini_request(self, request: dict[str, Any]) -> dict[str, Any] | None:
+        """Gemini GenerateContent 请求 → 上游原生格式。默认 None=不转换。"""
+        return None
+
+    def convert_openai_response(self, response: dict[str, Any]) -> dict[str, Any] | None:
+        """上游原生响应 → OpenAI 风格信封。默认 None=不转换。"""
+        return None
+
+    # ── P1-A4 provider 风险档案 Tier（参考 OWASP-MCP-Governance）──
+    # 公益低（imagefree/aifreeforever 免费）= "free"
+    # 中（tryingopen 免费但有限额）= "metered"
+    # 付费高（fal.ai 真实付费，预算=0 红线）= "paid"
+    # 默认 "free"，子类覆写为 "paid" 即触发 PreToolUse 硬门禁拦截真实付费调用
+    risk_tier: str = "free"
+
+    def risk_level(self) -> str:
+        """返回 provider 风险 Tier（供 guard 硬门禁决策）。"""
+        return getattr(self, "risk_tier", "free")
+
 
 # ── 文本对话（chat）能力枚举 ──────────────────────
 CAP_CHAT = "chat"

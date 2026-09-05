@@ -23,6 +23,11 @@ class AdaptiveRetryStrategy:
         "timeout": {"backoff_base": 10, "max_retries": 3, "jitter": 0.3},
         "server_error": {"backoff_base": 15, "max_retries": 4, "jitter": 0.4},
         "network_error": {"backoff_base": 5, "max_retries": 2, "jitter": 0.5},
+        # P1-A5（M11）：新增 forbidden / payload_too_large 两种 kind
+        # forbidden：401/403/权限不足（permanent 语义，但区分出 kind 便于上层决策）
+        # payload_too_large：413 请求体过大（不重试，直接拒绝并提示用户改参数）
+        "forbidden": {"backoff_base": 0, "max_retries": 0, "jitter": 0.0},
+        "payload_too_large": {"backoff_base": 0, "max_retries": 0, "jitter": 0.0},
     }
 
     # 各类错误的消息标记
@@ -31,6 +36,8 @@ class AdaptiveRetryStrategy:
     TIMEOUT_MARKERS = ("timeout",)
     SERVER_ERROR_MARKERS = ("5xx", "503", "502", "504", "500")
     NETWORK_ERROR_MARKERS = ("connectionerror", "connection refused", "connection reset")
+    # P1-A5（M11）：payload_too_large 标记（413 请求体过大）
+    PAYLOAD_TOO_LARGE_MARKERS = ("413", "payload too large", "request entity too large", "content too large")
     # 401/403 无权限、400/404 永久错误一律不重试（重试纯浪费 CF 求解与号池资源）
     PERMANENT_MARKERS = ("401", "403", "422", "400", "404", "unauthorized", "forbidden", "authentication", "permission")
 
@@ -44,6 +51,7 @@ class AdaptiveRetryStrategy:
         - timeout: timeout
         - server_error: 5xx
         - network_error: ConnectionError, connection refused, connection reset
+        - payload_too_large: 413（P1-A5 新增，不重试）
         - permanent: 422, 400, 404
         - 默认: timeout（保守重试）
         """
@@ -57,13 +65,16 @@ class AdaptiveRetryStrategy:
                 if status_code is not None:
                     if status_code == 429:
                         return "rate_limited"
+                    # P1-A5（M11）：413 payload too large，不重试
+                    if status_code == 413:
+                        return "payload_too_large"
                     if 500 <= status_code < 600:
                         return "server_error"
                     if status_code in (422, 404):
                         return "permanent"
-                    # 401/403：无权限 / 被拒 —— 永久错误，重试只会浪费 CF 求解资源
+                    # 401/403：无权限 / 被拒 —— P1-A5 归类为 forbidden kind（permanent 语义）
                     if status_code in (401, 403):
-                        return "permanent"
+                        return "forbidden"
                     if status_code == 400:
                         err_body = str(error).lower()
                         if "rate_limit" in err_body or "rate limit" in err_body:
@@ -99,6 +110,11 @@ class AdaptiveRetryStrategy:
             if marker in msg:
                 return "network_error"
 
+        # P1-A5（M11）：payload_too_large 消息标记匹配
+        for marker in AdaptiveRetryStrategy.PAYLOAD_TOO_LARGE_MARKERS:
+            if marker in msg:
+                return "payload_too_large"
+
         for marker in AdaptiveRetryStrategy.PERMANENT_MARKERS:
             if marker in msg:
                 return "permanent"
@@ -118,6 +134,9 @@ class AdaptiveRetryStrategy:
         error_type = AdaptiveRetryStrategy.classify(error)
 
         if error_type == "permanent":
+            return False
+        # P1-A5（M11）：forbidden / payload_too_large 不重试（max_retries=0）
+        if error_type in ("forbidden", "payload_too_large"):
             return False
 
         # 使用 error_type 对应的 max_retries（如果存在），取两者最小值
@@ -185,7 +204,10 @@ class AdaptiveRetryStrategy:
     def classify_error(error: object) -> str:
         """兼容旧版 classify_error 接口，返回 transient/permanent。"""
         error_type = AdaptiveRetryStrategy.classify(error)
-        return "permanent" if error_type == "permanent" else "transient"
+        # P1-A5：forbidden / payload_too_large 也归 permanent（不重试语义）
+        if error_type in ("permanent", "forbidden", "payload_too_large"):
+            return "permanent"
+        return "transient"
 
     @staticmethod
     def backoff_delay(attempt: int, base_delay: float) -> float:

@@ -28,12 +28,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import os
 import sqlite3
 import threading
 import time
 from dataclasses import dataclass
+
+log = logging.getLogger("adaptive_router")
 
 _MAX_RECORDS = 1000
 _OPEN_COOLDOWN = 30.0  # 熔断时长（秒）
@@ -70,6 +73,10 @@ class ProviderNodeStats:
     - alpha/beta：Beta 分布参数，成功 alpha+=1，失败 beta+=1；后验采样选 provider。
     - total_pulls：UCB1 全局计数（所有 provider 累计拉取次数），冷启动强探索。
     冷启动（样本 < 阈值）用 UCB1，样本充足切 Thompson（贝叶斯后验更精准）。
+
+    v8.1 P1-A5（M10）：新增 cooldown_until（CooldownCache 熔断）+ retry_after_seconds
+    （尊重上游 Retry-After 头，参考 litellm CooldownCache）。cooldown_until > now 时
+    provider 被 select_best 视为不可用（与 circuit_state OPEN 互补）。
     """
 
     provider_id: str
@@ -86,6 +93,12 @@ class ProviderNodeStats:
     beta: float = 1.0
     # v8.0 P1-3: UCB1 全局计数（本 provider 被选次数）
     pulls: int = 0
+    # v8.1 P1-A5（M10）: CooldownCache 熔断 + Retry-After 尊重
+    # cooldown_until：连续失败或上游 429 Retry-After 触发的冷却到期时间戳。
+    # 0.0=未冷却；> now 时 select_best 跳过此 provider（与 circuit_state OPEN 互补）。
+    cooldown_until: float = 0.0
+    # retry_after_seconds：最近一次上游 Retry-After 头解析值（秒），供 node_snapshot 观测
+    retry_after_seconds: float = 0.0
 
 
 @dataclass
@@ -433,6 +446,57 @@ class AdaptiveRouter:
             stats = self.nodes.setdefault(provider_id, ProviderNodeStats(provider_id=provider_id))
             stats.in_flight_requests = max(0, stats.in_flight_requests + delta)
 
+    def record_cooldown(self, provider_id: str, retry_after_seconds: float | None = None) -> None:
+        """v8.1 P1-A5（M10）：CooldownCache 熔断——连续失败或上游 429 时冷却 provider。
+
+        参考 litellm CooldownCache：
+        - 连续失败触发冷却 _OPEN_COOLDOWN 秒（与 circuit_state OPEN 互补）
+        - 上游 Retry-After 头非空时，尊重其值（取 max(retry_after, _OPEN_COOLDOWN)）
+        - cooldown_until > now 期间，select_best 视此 provider 为不可用
+        - 成功时 record_result 清零 consecutive_failures，但 cooldown 需等到期自动解
+
+        注意：retry_after_seconds 显式传入短值（如测试 0.01s）时，以传入值为准
+        （允许短冷却测试）；仅当未传 retry_after 时才用默认 _OPEN_COOLDOWN。
+        """
+        with self._lock:
+            stats = self.nodes.setdefault(provider_id, ProviderNodeStats(provider_id=provider_id))
+            now = time.time()
+            if retry_after_seconds is not None and retry_after_seconds > 0:
+                stats.retry_after_seconds = float(retry_after_seconds)
+                # 显式传入时以传入值为准（允许短冷却测试）；不强制 max 下限
+                cooldown_seconds = float(retry_after_seconds)
+            else:
+                cooldown_seconds = _OPEN_COOLDOWN
+            stats.cooldown_until = now + cooldown_seconds
+            log.info(
+                "provider %s 进入 CooldownCache 冷却 %.0fs（retry_after=%s）",
+                provider_id,
+                cooldown_seconds,
+                retry_after_seconds,
+            )
+
+    def is_in_cooldown(self, provider_id: str) -> bool:
+        """v8.1 P1-A5（M10）：provider 是否在 CooldownCache 冷却期。"""
+        with self._lock:
+            stats = self.nodes.get(provider_id)
+            if stats is None:
+                return False
+            return stats.cooldown_until > time.time()
+
+    def record_retry_after(self, provider_id: str, retry_after_header: str | None) -> None:
+        """v8.1 P1-A5（M10）：解析上游 Retry-After 头并触发冷却。
+
+        供 dispatch / provider 调用链在收到 429 + Retry-After 时上报，
+        让路由引擎尊重上游限流语义（而非固定 30s 冷却）。
+        """
+        if not retry_after_header:
+            return
+        from .retry_policy import AdaptiveRetryStrategy
+
+        seconds = AdaptiveRetryStrategy.delay_from_retry_after(retry_after_header)
+        if seconds is not None and seconds > 0:
+            self.record_cooldown(provider_id, retry_after_seconds=seconds)
+
     def record_direct(self, provider_id: str, model_id: str, request_id: str = "") -> None:
         """记录一次「直接路由」决策（selected = requested，不做跨提供商自动降级）。
 
@@ -544,8 +608,11 @@ class AdaptiveRouter:
         return best_pid
 
     def _is_available(self, pid: str, now: float) -> tuple[bool, ProviderNodeStats]:
-        """检查 provider 是否可用（熔断未开/已恢复）。"""
+        """检查 provider 是否可用（熔断未开/已恢复 + 未在 CooldownCache 冷却期）。"""
         st = self.nodes.setdefault(pid, ProviderNodeStats(provider_id=pid))
+        # v8.1 P1-A5（M10）：CooldownCache 冷却期内不可用（与 circuit_state 互补）
+        if st.cooldown_until > now:
+            return False, st
         if st.circuit_state == "OPEN":
             if now >= st.circuit_open_until:
                 st.circuit_state = "HALF_OPEN"
@@ -670,6 +737,8 @@ class AdaptiveRouter:
                     "alpha": st.alpha,  # v8.0 P1-3: Thompson Beta 参数
                     "beta": st.beta,  # v8.0 P1-3: Thompson Beta 参数
                     "pulls": st.pulls,  # v8.0 P1-3: UCB1 计数
+                    "cooldown_until": st.cooldown_until,  # v8.1 P1-A5: CooldownCache
+                    "retry_after_seconds": st.retry_after_seconds,  # v8.1 P1-A5: Retry-After
                 }
                 for pid, st in self.nodes.items()
             }

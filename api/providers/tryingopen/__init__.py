@@ -66,6 +66,8 @@ class TryingopenChatProvider(ChatProvider):
     display_name = "TryingOpen"
     base_url = DEFAULT_BASE_URL
     models: dict[str, ModelSpec] = {}
+    # P1-A4：tryingopen 免费但有限额（每小时每 IP），风险档案 Tier=metered
+    risk_tier = "metered"
 
     def __init__(self) -> None:
         super().__init__()

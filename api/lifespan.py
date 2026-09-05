@@ -81,6 +81,15 @@ async def lifespan(_app):
         from .request_guard import set_storage_adapter as _set_storage
 
         _set_storage(None)
+    # v8.1 P1-A3：记忆巩固后台 worker 启动（IF_MEMORY_CONSOLIDATION_ENABLED=1 时）
+    try:
+        from .agent.memory import MEMORY_CONSOLIDATION_ENABLED, memory_store
+
+        if MEMORY_CONSOLIDATION_ENABLED:
+            await memory_store.start_consolidation_loop()
+            log.info("P1-A3: 记忆巩固后台 worker 已启动")
+    except Exception as e:
+        log.warning("P1-A3: 记忆巩固 worker 启动失败（可忽略）: %s", e)
     _warmup_task = asyncio.create_task(warmup_cache(gallery_cache, db))
     _background_task = asyncio.create_task(
         run_background_tasks(db, engine, registry, solver_guard, worker_health, gallery_cache)
@@ -267,6 +276,14 @@ async def lifespan(_app):
             _set_storage(None)
     except Exception as e:
         log.warning("P1-1: Redis storage 适配器关闭失败（可忽略）: %s", e)
+
+    # v8.1 P1-A3：关闭记忆巩固后台 worker（若启动过）
+    try:
+        from .agent.memory import memory_store
+
+        await memory_store.stop_consolidation_loop()
+    except Exception as e:
+        log.warning("P1-A3: 记忆巩固 worker 关闭失败（可忽略）: %s", e)
 
     logging.getLogger().removeHandler(ws_log_handler)
     teardown_disk_logging(_disk_log_handler)
