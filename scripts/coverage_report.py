@@ -1,4 +1,5 @@
 import coverage
+
 cov = coverage.Coverage(data_file=".coverage")
 cov.load()
 data = cov.get_data()

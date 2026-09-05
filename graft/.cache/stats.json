@@ -1,6 +1,6 @@
 {
-  "nodeCount": 4766,
-  "edgeCount": 10280,
+  "nodeCount": 4806,
+  "edgeCount": 10404,
   "languages": [
     "javascript",
     "python",
@@ -8,11 +8,11 @@
     "typescript",
     "vue"
   ],
-  "totalCount": 4766,
+  "totalCount": 4806,
   "readyCount": 0,
-  "staleCount": 0,
+  "staleCount": 60,
   "dirty": true,
   "syncing": false,
-  "syncedAt": "2026-09-04T15:10:27.882Z",
-  "lastFile": "verification-log.md"
+  "syncedAt": "2026-09-05T08:44:52.281Z",
+  "lastFile": "test_ws_events.py"
 }

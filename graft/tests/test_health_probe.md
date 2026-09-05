@@ -1,41 +1,41 @@
 # tests/test_health_probe.py
 
-- MockProviderA · class · L44-L72 — class MockProviderA(Provider)
-- __init__ · method · L51-L55 — def __init__(self) -> None
-- generate · method · L57-L68 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
-- health_check · method · L70-L72 — async def health_check(self) -> str
-- MockProviderB · class · L75-L111 — class MockProviderB(Provider)
-- __init__ · method · L90-L94 — def __init__(self) -> None
-- generate · method · L96-L107 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
-- health_check · method · L109-L111 — async def health_check(self) -> str
-- MockProviderC · class · L114-L140 — class MockProviderC(Provider)
-- __init__ · method · L121-L124 — def __init__(self) -> None
-- generate · method · L126-L136 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
-- health_check · method · L138-L140 — async def health_check(self) -> str
-- fresh_registry · function · L144-L151 — def fresh_registry()
-- TestHealthCheckExecution · class · L155-L219 — class TestHealthCheckExecution
-- test_health_check_all_updates_status · method · L159-L177 — async def test_health_check_all_updates_status(self, fresh_registry)
-- _healthy · function · L167-L169 — async def _healthy(_self=p)
-- test_health_check_inherits_down · method · L180-L190 — async def test_health_check_inherits_down(self, fresh_registry)
-- _broken_check · function · L185-L186 — async def _broken_check()
-- test_health_check_exception_sets_down · method · L193-L203 — async def test_health_check_exception_sets_down(self, fresh_registry)
-- _broken_check · function · L198-L199 — async def _broken_check()
-- test_healthy_providers · method · L205-L219 — def test_healthy_providers(self, fresh_registry)
-- TestAutoFailover · class · L223-L282 — class TestAutoFailover
-- test_provider_for_healthy_preferred · method · L226-L231 — def test_provider_for_healthy_preferred(self, fresh_registry)
-- test_provider_for_down_fallback · method · L233-L241 — def test_provider_for_down_fallback(self, fresh_registry)
-- test_provider_for_prefer_healthy_false · method · L243-L250 — def test_provider_for_prefer_healthy_false(self, fresh_registry)
-- test_provider_for_no_alternative · method · L252-L261 — def test_provider_for_no_alternative(self, fresh_registry)
-- test_find_alternative_returns_correct_model · method · L263-L271 — def test_find_alternative_returns_correct_model(self, fresh_registry)
-- test_find_alternative_no_healthy_alternative · method · L273-L282 — def test_find_alternative_no_healthy_alternative(self, fresh_registry)
-- TestRecoveryFallback · class · L286-L320 — class TestRecoveryFallback
-- test_recovery_fallback · method · L289-L301 — def test_recovery_fallback(self, fresh_registry)
-- test_mark_down_and_up · method · L303-L312 — def test_mark_down_and_up(self, fresh_registry)
-- test_healthy_providers_excludes_degraded · method · L314-L320 — def test_healthy_providers_excludes_degraded(self, fresh_registry)
-- TestFailoverTaskDelivery · class · L324-L366 — class TestFailoverTaskDelivery
-- test_alternative_provider_generates · method · L328-L344 — async def test_alternative_provider_generates(self, fresh_registry)
-- test_preferred_recovers_and_handles_tasks · method · L347-L366 — async def test_preferred_recovers_and_handles_tasks(self, fresh_registry)
-- TestHealthCheckDisabled · class · L370-L393 — class TestHealthCheckDisabled
-- test_health_check_enabled_config · method · L373-L377 — def test_health_check_enabled_config(self)
-- test_health_check_all_still_works · method · L380-L393 — async def test_health_check_all_still_works(self, fresh_registry)
-- _healthy · function · L386-L388 — async def _healthy(_self=p)
+- MockProviderA · class · L43-L71 — class MockProviderA(Provider)
+- __init__ · method · L50-L54 — def __init__(self) -> None
+- generate · method · L56-L67 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
+- health_check · method · L69-L71 — async def health_check(self) -> str
+- MockProviderB · class · L74-L110 — class MockProviderB(Provider)
+- __init__ · method · L89-L93 — def __init__(self) -> None
+- generate · method · L95-L106 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
+- health_check · method · L108-L110 — async def health_check(self) -> str
+- MockProviderC · class · L113-L139 — class MockProviderC(Provider)
+- __init__ · method · L120-L123 — def __init__(self) -> None
+- generate · method · L125-L135 — async def generate( self, model: str, prompt: str, aspect_ratio: str = "1:1", images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
+- health_check · method · L137-L139 — async def health_check(self) -> str
+- fresh_registry · function · L143-L150 — def fresh_registry()
+- TestHealthCheckExecution · class · L154-L218 — class TestHealthCheckExecution
+- test_health_check_all_updates_status · method · L158-L176 — async def test_health_check_all_updates_status(self, fresh_registry)
+- _healthy · function · L166-L168 — async def _healthy(_self=p)
+- test_health_check_inherits_down · method · L179-L189 — async def test_health_check_inherits_down(self, fresh_registry)
+- _broken_check · function · L184-L185 — async def _broken_check()
+- test_health_check_exception_sets_down · method · L192-L202 — async def test_health_check_exception_sets_down(self, fresh_registry)
+- _broken_check · function · L197-L198 — async def _broken_check()
+- test_healthy_providers · method · L204-L218 — def test_healthy_providers(self, fresh_registry)
+- TestAutoFailover · class · L222-L281 — class TestAutoFailover
+- test_provider_for_healthy_preferred · method · L225-L230 — def test_provider_for_healthy_preferred(self, fresh_registry)
+- test_provider_for_down_fallback · method · L232-L240 — def test_provider_for_down_fallback(self, fresh_registry)
+- test_provider_for_prefer_healthy_false · method · L242-L249 — def test_provider_for_prefer_healthy_false(self, fresh_registry)
+- test_provider_for_no_alternative · method · L251-L260 — def test_provider_for_no_alternative(self, fresh_registry)
+- test_find_alternative_returns_correct_model · method · L262-L270 — def test_find_alternative_returns_correct_model(self, fresh_registry)
+- test_find_alternative_no_healthy_alternative · method · L272-L281 — def test_find_alternative_no_healthy_alternative(self, fresh_registry)
+- TestRecoveryFallback · class · L285-L319 — class TestRecoveryFallback
+- test_recovery_fallback · method · L288-L300 — def test_recovery_fallback(self, fresh_registry)
+- test_mark_down_and_up · method · L302-L311 — def test_mark_down_and_up(self, fresh_registry)
+- test_healthy_providers_excludes_degraded · method · L313-L319 — def test_healthy_providers_excludes_degraded(self, fresh_registry)
+- TestFailoverTaskDelivery · class · L323-L365 — class TestFailoverTaskDelivery
+- test_alternative_provider_generates · method · L327-L343 — async def test_alternative_provider_generates(self, fresh_registry)
+- test_preferred_recovers_and_handles_tasks · method · L346-L365 — async def test_preferred_recovers_and_handles_tasks(self, fresh_registry)
+- TestHealthCheckDisabled · class · L369-L392 — class TestHealthCheckDisabled
+- test_health_check_enabled_config · method · L372-L376 — def test_health_check_enabled_config(self)
+- test_health_check_all_still_works · method · L379-L392 — async def test_health_check_all_still_works(self, fresh_registry)
+- _healthy · function · L385-L387 — async def _healthy(_self=p)

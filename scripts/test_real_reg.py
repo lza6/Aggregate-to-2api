@@ -1,10 +1,12 @@
 import asyncio
-import httpx
 import re
 import time
-from api.turnstile_client import solve_turnstile
+
+import httpx
+
 from api import config
 from api.account_pool import account_pool
+from api.turnstile_client import solve_turnstile
 
 
 async def main():

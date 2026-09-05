@@ -54,7 +54,7 @@ async def main():
     registered = set()
     if args.resume and os.path.exists(CHECKPOINT):
         try:
-            with open(CHECKPOINT, "r") as f:
+            with open(CHECKPOINT) as f:
                 data = json.load(f)
                 registered = set(data.get("emails", []))
             log.info("从 checkpoint 恢复：已注册 %d 个", len(registered))
@@ -62,8 +62,8 @@ async def main():
             log.warning("checkpoint 加载失败: %s, 从头开始", e)
 
     # 初始化注册器
-    from api.registerer import NanobananaRegisterer
     from api.account_pool import account_pool
+    from api.registerer import NanobananaRegisterer
 
     registerer = NanobananaRegisterer()
     start_time = time.time()

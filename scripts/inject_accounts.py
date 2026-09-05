@@ -61,8 +61,8 @@ def main() -> int:
     if args.mock:
         os.environ["IF_MOCK_REGISTER"] = "1"
 
-    from api.account_pool import AccountPool
     from api import config
+    from api.account_pool import AccountPool
 
     pool = AccountPool(args.db)
 
@@ -73,6 +73,7 @@ def main() -> int:
         return 0
 
     import asyncio
+
     from api.registerer import build_registerers
 
     reg = build_registerers().get(args.provider)
@@ -81,8 +82,8 @@ def main() -> int:
         return 1
 
     async def _run():
-        from api.proxy_pool import proxy_pool
         from api.free_proxy_fetcher import FreeProxyFetcher
+        from api.proxy_pool import proxy_pool
 
         # H4(审计修复): --use-proxy-pool 必须显式加载代理源，否则 proxy_pool.enabled 恒 False（静默 no-op）。
         if args.use_proxy_pool:

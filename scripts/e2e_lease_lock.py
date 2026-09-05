@@ -7,9 +7,8 @@
 
 import asyncio
 import os
-import tempfile
-
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,7 +17,7 @@ os.environ.setdefault("IF_MOCK_REGISTER", "1")
 os.environ["IF_EDIT_LEASE_ENABLED"] = "1"
 
 from api import config
-from api.dispatch_edit import _acquire_edit_lock, _EDIT_LEASE_STORE, _release_edit_lock
+from api.dispatch_edit import _EDIT_LEASE_STORE, _acquire_edit_lock, _release_edit_lock
 
 
 async def main() -> None:

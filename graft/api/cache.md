@@ -1,25 +1,28 @@
 # api/cache.py
 
-- _DbPending · class · L17-L24 — class _DbPending
-- __init__ · method · L22-L24 — def __init__(self) -> None
-- LRUCache · class · L27-L273 — class LRUCache
-- __init__ · method · L41-L49 — def __init__(self, maxsize: int = 128, ttl: float = 5.0, persist_db: object | None = None) -> None
-- maxsize · method · L52-L53 — def maxsize(self) -> int
-- ttl · method · L56-L57 — def ttl(self) -> float
-- _serialize · method · L62-L68 — def _serialize(value: Any) -> str | None
-- _deserialize · method · L71-L77 — def _deserialize(raw: str) -> Any
-- get · method · L81-L92 — async def get(self, key: str) -> Any | None
-- set · method · L94-L117 — async def set(self, key: str, value: Any, ttl: float | None = None) -> None
-- invalidate · method · L119-L124 — async def invalidate(self, key: str) -> None
-- invalidate_prefix · method · L126-L134 — async def invalidate_prefix(self, prefix: str) -> None
-- clear · method · L136-L139 — async def clear(self) -> None
-- restore_from_db · method · L143-L165 — async def restore_from_db(self) -> int
-- _flush_pending_to_db · method · L167-L182 — async def _flush_pending_to_db(self) -> None
-- flush_to_db · method · L184-L186 — async def flush_to_db(self) -> None
-- start_reaper · method · L190-L194 — def start_reaper(self) -> None
-- stop_reaper · method · L196-L207 — async def stop_reaper(self) -> None
-- _flush_all_to_db · method · L209-L228 — async def _flush_all_to_db(self) -> None
-- _reaper_loop · method · L230-L244 — async def _reaper_loop(self) -> None
-- _purge_expired · method · L246-L257 — async def _purge_expired(self) -> None
-- size · method · L262-L263 — def size(self) -> int
-- snapshot · method · L265-L273 — async def snapshot(self) -> dict
+- _DbPending · class · L19-L26 — class _DbPending
+- __init__ · method · L24-L26 — def __init__(self) -> None
+- LRUCache · class · L29-L346 — class LRUCache
+- __init__ · method · L47-L65 — def __init__( self, maxsize: int = 128, ttl: float = 5.0, persist_db: object | None = None, max_bytes: int | None = None, ) -> None
+- _sizeof · method · L68-L77 — def _sizeof(value: Any) -> int
+- _evict_one · method · L79-L86 — def _evict_one(self) -> tuple[str, Any] | None
+- _enforce_limits · method · L88-L111 — async def _enforce_limits(self) -> None
+- maxsize · method · L114-L115 — def maxsize(self) -> int
+- ttl · method · L118-L119 — def ttl(self) -> float
+- _serialize · method · L124-L130 — def _serialize(value: Any) -> str | None
+- _deserialize · method · L133-L139 — def _deserialize(raw: str) -> Any
+- get · method · L143-L154 — async def get(self, key: str) -> Any | None
+- set · method · L156-L190 — async def set(self, key: str, value: Any, ttl: float | None = None) -> None
+- invalidate · method · L192-L197 — async def invalidate(self, key: str) -> None
+- invalidate_prefix · method · L199-L207 — async def invalidate_prefix(self, prefix: str) -> None
+- clear · method · L209-L212 — async def clear(self) -> None
+- restore_from_db · method · L216-L238 — async def restore_from_db(self) -> int
+- _flush_pending_to_db · method · L240-L255 — async def _flush_pending_to_db(self) -> None
+- flush_to_db · method · L257-L259 — async def flush_to_db(self) -> None
+- start_reaper · method · L263-L267 — def start_reaper(self) -> None
+- stop_reaper · method · L269-L280 — async def stop_reaper(self) -> None
+- _flush_all_to_db · method · L282-L301 — async def _flush_all_to_db(self) -> None
+- _reaper_loop · method · L303-L317 — async def _reaper_loop(self) -> None
+- _purge_expired · method · L319-L330 — async def _purge_expired(self) -> None
+- size · method · L335-L336 — def size(self) -> int
+- snapshot · method · L338-L346 — async def snapshot(self) -> dict

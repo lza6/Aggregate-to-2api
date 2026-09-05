@@ -25,12 +25,12 @@ from unittest.mock import AsyncMock, patch
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
-from api.db import DB
-from api.worker import Engine
+import api.config as cfg
 import api.imagefree_client as ifc
 import api.turnstile_client as tsc
-import api.config as cfg
 import api.worker as worker_mod
+from api.db import DB
+from api.worker import Engine
 
 
 # ── H1: token TTL ──────────────────────────────────
@@ -509,8 +509,9 @@ class ModelPresetTest(unittest.TestCase):
         self.assertEqual(cfg.apply_model("a cat", "nope"), "a cat")
 
     def test_models_endpoint_shape(self):
-        from api.main import models
         import asyncio
+
+        from api.main import models
 
         resp = asyncio.run(models())
         self.assertEqual(resp["count"], len(cfg.MODEL_PRESETS))
@@ -535,8 +536,9 @@ class EditPersistenceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_edit_job_persists_and_queryable(self):
         """图生图任务经 _run_edit_job 落库 type='img'，DB 可查回、终态正确。"""
-        import api.main as m
         import uuid as _uuid
+
+        import api.main as m
 
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
         from api import imagefree_client as ifc
@@ -566,8 +568,9 @@ class EditPersistenceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_edit_failure_persists_error(self):
         """图生图失败也应落库 error，错误原因可查。"""
-        import api.main as m
         import uuid as _uuid
+
+        import api.main as m
         from api import imagefree_client as ifc
 
         job_id = _uuid.uuid4().hex
@@ -590,8 +593,9 @@ class EditInputTest(unittest.TestCase):
 
     @staticmethod
     def _call(image: str):
-        from api.main import _parse_input_image
         from fastapi import HTTPException
+
+        from api.main import _parse_input_image
 
         try:
             return _parse_input_image(image)

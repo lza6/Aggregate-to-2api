@@ -11,7 +11,7 @@
 - TestHealthz · class · L81-L104 — class TestHealthz
 - test_healthz_has_deep_metrics · method · L83-L91 — async def test_healthz_has_deep_metrics(self)
 - test_cf_probe_cache_ttl · method · L94-L104 — async def test_cf_probe_cache_ttl(self)
-- TestDiskLogger · class · L110-L156 — class TestDiskLogger
-- test_setup_creates_dir_and_writes · method · L111-L137 — def test_setup_creates_dir_and_writes(self, tmp_path)
-- test_teardown_removes_handler · method · L139-L146 — def test_teardown_removes_handler(self, tmp_path)
-- test_rotation_keeps_backup_count · method · L148-L156 — def test_rotation_keeps_backup_count(self, tmp_path)
+- TestDiskLogger · class · L110-L159 — class TestDiskLogger
+- test_setup_creates_dir_and_writes · method · L111-L138 — def test_setup_creates_dir_and_writes(self, tmp_path)
+- test_teardown_removes_handler · method · L140-L148 — def test_teardown_removes_handler(self, tmp_path)
+- test_rotation_keeps_backup_count · method · L150-L159 — def test_rotation_keeps_backup_count(self, tmp_path)

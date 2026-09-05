@@ -11,8 +11,8 @@ import json
 import os
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def check_url(url: str, timeout: float = 5.0) -> tuple[int, bytes]:
@@ -136,7 +136,7 @@ def test_websocket_handshake() -> list[str]:
             else:
                 print("  [OK] WebSocket handshake successful")
             writer.close()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             errors.append("WebSocket 连接超时")
         except ConnectionRefusedError:
             errors.append("WebSocket 连接被拒绝（服务未运行）")

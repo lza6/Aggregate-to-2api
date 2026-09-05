@@ -1,3 +1,3 @@
 # scripts/retry_real_generate.py
 
-- main · function · L10-L43 — def main() -> int
+- main · function · L11-L44 — def main() -> int

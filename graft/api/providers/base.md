@@ -1,33 +1,33 @@
 # api/providers/base.py
 
-- ModelSpec · class · L40-L53 — class ModelSpec
-- GenerationResult · class · L57-L64 — class GenerationResult
-- ProviderError · class · L67-L68 — class ProviderError(RuntimeError)
-- ProviderRateLimited · class · L71-L72 — class ProviderRateLimited(ProviderError)
-- Provider · class · L75-L154 — class Provider(abc.ABC)
-- __init__ · method · L82-L92 — def __init__(self, config: dict | None = None) -> None
-- startup · method · L95-L96 — async def startup(self) -> None
-- shutdown · method · L98-L99 — async def shutdown(self) -> None
-- supports · method · L102-L103 — def supports(self, capability: str) -> bool
-- generate · method · L107-L117 — async def generate( self, model: str, prompt: str, aspect_ratio: str, images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
-- credits · method · L120-L122 — async def credits(self) -> int | None
-- health · method · L124-L126 — async def health(self) -> dict
-- health_check · method · L129-L131 — async def health_check(self) -> str
-- mark_down · method · L133-L138 — def mark_down(self, reason: str) -> None
-- mark_up · method · L140-L145 — def mark_up(self) -> None
-- needs_proxy_per_request · method · L148-L150 — def needs_proxy_per_request(self) -> bool
-- needs_account · method · L152-L154 — def needs_account(self) -> bool
-- ChatProvider · class · L163-L280 — class ChatProvider(abc.ABC)
-- __init__ · method · L183-L185 — def __init__(self) -> None
-- startup · method · L188-L189 — async def startup(self) -> None
-- shutdown · method · L191-L192 — async def shutdown(self) -> None
-- supports · method · L194-L195 — def supports(self, capability: str) -> bool
-- all_models · method · L198-L199 — def all_models(self) -> list[ModelSpec]
-- refresh_models · method · L202-L203 — async def refresh_models(self) -> int
-- chat_stream · method · L207-L216 — def chat_stream( self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw, ) -> AsyncIterator[dict]
-- chat_collect · method · L218-L262 — async def chat_collect( self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw, ) -> dict
-- credits · method · L265-L267 — async def credits(self) -> int | None
-- health · method · L269-L270 — async def health(self) -> dict
-- health_check · method · L272-L273 — async def health_check(self) -> str
-- mark_down · method · L275-L277 — def mark_down(self, reason: str) -> None
-- mark_up · method · L279-L280 — def mark_up(self) -> None
+- ModelSpec · class · L41-L54 — class ModelSpec
+- GenerationResult · class · L58-L65 — class GenerationResult
+- ProviderError · class · L68-L69 — class ProviderError(RuntimeError)
+- ProviderRateLimited · class · L72-L73 — class ProviderRateLimited(ProviderError)
+- Provider · class · L76-L155 — class Provider(abc.ABC)
+- __init__ · method · L83-L93 — def __init__(self, config: dict | None = None) -> None
+- startup · method · L96-L97 — async def startup(self) -> None
+- shutdown · method · L99-L100 — async def shutdown(self) -> None
+- supports · method · L103-L104 — def supports(self, capability: str) -> bool
+- generate · method · L108-L118 — async def generate( self, model: str, prompt: str, aspect_ratio: str, images: list[bytes] | None = None, resolution: str = "1K", download: bool = False, **kw, ) -> GenerationResult
+- credits · method · L121-L123 — async def credits(self) -> int | None
+- health · method · L125-L127 — async def health(self) -> dict
+- health_check · method · L130-L132 — async def health_check(self) -> str
+- mark_down · method · L134-L139 — def mark_down(self, reason: str) -> None
+- mark_up · method · L141-L146 — def mark_up(self) -> None
+- needs_proxy_per_request · method · L149-L151 — def needs_proxy_per_request(self) -> bool
+- needs_account · method · L153-L155 — def needs_account(self) -> bool
+- ChatProvider · class · L164-L281 — class ChatProvider(abc.ABC)
+- __init__ · method · L184-L186 — def __init__(self) -> None
+- startup · method · L189-L190 — async def startup(self) -> None
+- shutdown · method · L192-L193 — async def shutdown(self) -> None
+- supports · method · L195-L196 — def supports(self, capability: str) -> bool
+- all_models · method · L199-L200 — def all_models(self) -> list[ModelSpec]
+- refresh_models · method · L203-L204 — async def refresh_models(self) -> int
+- chat_stream · method · L208-L217 — def chat_stream( self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw, ) -> AsyncIterator[dict]
+- chat_collect · method · L219-L263 — async def chat_collect( self, model: str, messages: list[dict], tools: list | None = None, tool_choice: Any = None, effort: str = "balanced", **kw, ) -> dict
+- credits · method · L266-L268 — async def credits(self) -> int | None
+- health · method · L270-L271 — async def health(self) -> dict
+- health_check · method · L273-L274 — async def health_check(self) -> str
+- mark_down · method · L276-L278 — def mark_down(self, reason: str) -> None
+- mark_up · method · L280-L281 — def mark_up(self) -> None

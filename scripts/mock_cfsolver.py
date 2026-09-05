@@ -27,9 +27,9 @@ import sys
 import time
 import uuid
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-import uvicorn
 
 app = FastAPI(title="Mock Turnstile Solver")
 

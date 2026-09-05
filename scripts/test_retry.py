@@ -15,9 +15,9 @@ import unittest
 import uuid
 from unittest.mock import patch
 
+import api.worker as worker_mod
 from api.db import DB
 from api.worker import Engine
-import api.worker as worker_mod
 
 REJECTED_MSG = (
     "generate 提交失败: Human verification failed. " "Please complete the setup or refresh the page to try again."
