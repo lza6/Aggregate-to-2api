@@ -206,6 +206,10 @@ async def test_single_worker_hard_timeout_does_not_overwrite_completed(tmp_db, m
     tmp_db._pool_size = 1
 
     class _CompletedThenSlowEngine(Engine):
+        async def start(self) -> None:
+            self._started = True
+            self._workers = [self._create_worker(i) for i in range(config.WORKERS)]
+
         async def _process(self, task_id: str) -> None:
             # 先落库 completed（真实结果），再挂起触发 hard timeout
             await self.db.mark_finished(task_id, "completed", "https://r2/c1.png", None, 0.01)
