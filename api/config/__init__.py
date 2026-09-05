@@ -225,6 +225,20 @@ class Settings(BaseSettings):
     if_log_dir: str = Field("data/logs", validation_alias="IF_LOG_DIR")
     if_log_retention_days: int = Field(14, validation_alias="IF_LOG_RETENTION_DAYS")
 
+    # ── v8.1 P1-A agent 化能力跃迁开关 ──
+    # P1-A1 skills 四件套体系（api/skills/<scene>/SKILL.md + frontmatter 索引）
+    if_agent_skills_enabled: bool = Field(True, validation_alias="IF_AGENT_SKILLS_ENABLED")
+    # P1-A2 意图分类→Provider/Skill 路由层（规则正则兜底 + LLM 仅处理模糊意图）
+    if_agent_intent_classifier: bool = Field(True, validation_alias="IF_AGENT_INTENT_CLASSIFIER")
+    # P1-A3 L0-L3 记忆分层 + 异步巩固管道（复用 imagefree.db 加 mem_* 表）
+    if_memory_consolidation_enabled: bool = Field(True, validation_alias="IF_MEMORY_CONSOLIDATION_ENABLED")
+    # 记忆巩固后台 worker 周期（秒，默认 300s）
+    if_memory_consolidation_interval: float = Field(300.0, validation_alias="IF_MEMORY_CONSOLIDATION_INTERVAL")
+    # P1-A4 provider 风险档案 Tier + PreToolUse 硬门禁（paid Tier 默认拦截真实付费）
+    if_provider_risk_tier: bool = Field(True, validation_alias="IF_PROVIDER_RISK_TIER")
+    # P1-A7 独立终检 Agent（交付前 LLM 审查，用 tryingopen 免费上游）
+    if_critic_agent_enabled: bool = Field(True, validation_alias="IF_CRITIC_AGENT_ENABLED")
+
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")
     db_file: str = Field("data/imagefree.db", validation_alias="IF_DB_FILE")
@@ -413,7 +427,7 @@ class Settings(BaseSettings):
             self.max_queue = ADAPTIVE_MAX_QUEUE
 
     @model_validator(mode="after")
-    def _resolve_proxy_and_init_groups(self) -> "Settings":
+    def _resolve_proxy_and_init_groups(self) -> Settings:
         """代理 fallback 解析 + 服务器规格自适应并发（未显式设置时）+ 分组配置初始化。"""
         # ── 代理 fallback ──
         if not self.proxy:
