@@ -54,8 +54,12 @@ jobs:
           python -m pytest --version
           echo "=== collect only（验证 collecting 是否崩，含完整 traceback）==="
           python -X faulthandler -m pytest tests/ --co -q -p no:cacheprovider -m "not integration and not chaos and not slow" --tb=short 2>&1 || echo "COLLECT_EXIT=$?"
-          echo "=== 跑 1 个小测试验证 pytest 能启动（含完整 traceback）==="
-          python -X faulthandler -m pytest tests/test_async_sync_contamination.py -v -p no:cacheprovider --timeout=30 --tb=long 2>&1 || echo "SMOKE_EXIT=$?"
+          echo "=== 诊断：reset_settings 是否能跑 ==="
+          python -c "import api.config; api.config.reset_settings(); print('reset_settings OK')" 2>&1 || echo "RESET_FAIL=$?"
+          echo "=== 诊断：Settings() 是否能构造 ==="
+          python -c "from api.config import Settings; s=Settings(); print('Settings OK', s.host, s.port)" 2>&1 || echo "SETTINGS_FAIL=$?"
+          echo "=== smoke test with --setup-show（看哪个 fixture setup 失败）==="
+          python -X faulthandler -m pytest tests/test_async_sync_contamination.py -v -p no:cacheprovider --timeout=30 --tb=long --setup-show 2>&1 || echo "SMOKE_EXIT=$?"
           echo "=== 正式单测 ==="
           python -X faulthandler -m pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${PYTEST_EXIT}"
