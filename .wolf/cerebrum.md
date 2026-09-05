@@ -44,3 +44,24 @@
 - **2026-09-05**：批次0+批次1 落地范围确认——v8.0.0 已闭环 P0 架构治理，本轮做 P0-0（.wolf 修复）+ P1-A1~A7（agent 化跃迁）
 - **2026-09-05**：agent 化扩展遵循"只追加不重构"三铁律——不重构公共接口、不造轮子、先测后改；所有新功能 IF_*_ENABLED 缺省关闭
 - **2026-09-05**：版本号 v8.0.0→v8.1.0（批次1 agent 化跃迁）
+
+## 2026-09-06 P0-11 CI 历史遗留根治诊断链（v8.1.1→v8.2.3）
+
+### 根因（经 13 轮 CI 诊断定位）
+1. **v8.1.1 lock 漂移**：landing/frontend package-lock.json version 滞后 8/9 版本，npm ci 装包与本地不一致 → frontend-version-gate exit 4
+2. **v8.2.0 .gitignore 误伤**：`.gitignore:109 config/` 规则误伤 `api/config/presets.py`（Python 包路径含 config/ 段）→ CI clone 缺文件 → `api/config/__init__.py:973 import presets` 失败 → conftest autouse `_reset_settings_singleton` 调 `reset_settings()→Settings()` 失败 → 全用例 setup 阶段 E → exit 2
+3. **v8.2.1-v8.2.2 遗漏提交**：`api/config/__init__.py`（agent 开关 8 字段）+ `api/config/settings.py`（ruff 排序 220 行）本地 ruff --fix 修复后未 git add → CI ruff 仍报 import block
+4. **v8.2.3 集成 flaky**：`test_account_growth::test_account_pool_growth_field` CI 上 404（本地全绿），1/37 flaky
+
+### 修复（v8.1.1→v8.2.3 累计）
+- v8.1.1: landing/frontend lock version 同步 + ci.yml version-gate 强化输出
+- v8.2.0: `.gitignore config/` → `/config/` + 提交 `api/config/presets.py`（根治 exit 2）
+- v8.2.1: ruff --fix solver.py import 排序 + ci.yml set+e 保 cat 段
+- v8.2.2: 提交遗漏的 `__init__.py` + `settings.py` + ci.yml junitxml 解析单测
+- v8.2.3: ci.yml 集成 step 加 junitxml 解析（定位 exit 1 真因）
+
+### 关键教训（Do-Not-Repeat）
+- `.gitignore` 的 `config/` 规则会误伤所有 `*/config/` 子路径，必须用 `/config/` 锚定顶层
+- ruff --fix 后必须 `git add` 提交，否则 CI clone 缺改动本地全绿 CI 失败
+- pytest 9 + tee 在 GitHub Actions 上 stdout 被截断，需用 `--junitxml` + Python 解析 xml 绕过
+- CI exit 2 无 stdout 多是 conftest autouse fixture setup 失败（import 错），用 `--setup-show` + `python -c "import api.config"` 诊断
