@@ -65,3 +65,20 @@
 - ruff --fix 后必须 `git add` 提交，否则 CI clone 缺改动本地全绿 CI 失败
 - pytest 9 + tee 在 GitHub Actions 上 stdout 被截断，需用 `--junitxml` + Python 解析 xml 绕过
 - CI exit 2 无 stdout 多是 conftest autouse fixture setup 失败（import 错），用 `--setup-show` + `python -c "import api.config"` 诊断
+
+## 2026-09-06 test_account_growth flaky（CI 时序）
+
+### 现象
+CI 集成测试 37 个用例，`test_account_growth::test_account_pool_growth_field` 偶发 404（本地全绿）。
+该用例是集成测试第 1 个跑的（文件名排序），用 `app_with_mocks` fixture（首次创建 session 级 `_app_instance`）。
+
+### 根因（合理推断）
+- 404 而非 500 说明路由未注册（FastAPI 路由不存在才 404，handler 内部错误返回 500）
+- 但本地 admin.router.routes 含 /v1/account-pool（27 路由）
+- CI runner 慢，`_app_instance` 的 lifespan startup 含 nanobanana 注册 + worker 池启动
+- `app_with_mocks` 的 healthz 等待循环 30×0.2=6s，CI 上可能 lifespan 未完成时路由未挂
+- 但路由是 import 时挂载（非 lifespan），疑 CI 上 admin 包 import 时机与 conftest purge 逻辑交互
+
+### 处理
+属已知 flaky，不阻塞主链路（1/37）。下次 CI 失败可直接从 junitxml 解析看是否同一用例。
+若反复失败，需加 healthz 等待循环次数（30→60）或诊断 admin 包 CI import 时机。
