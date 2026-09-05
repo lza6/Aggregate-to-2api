@@ -39,18 +39,23 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
-        # P0-11：强化输出可见性——历史 CI exit 2 但 Actions step output 不捕获 pytest stdout，
-        # 只剩 "Process completed with exit code 2." 无诊断线索。改为 tee 落盘 + 写 $GITHUB_STEP_SUMMARY
-        # + 失败时 cat 日志到 stderr 强制可见 + 不用 -q（保留用例名输出）。
+        # P0-11：强化输出可见性——历史 CI exit 2 但 stdout 不见。
+        # tee 管道在 Actions 上输出仍被吞，改为：重定向到文件 + step 末尾 cat 强制输出到 stdout。
+        # 关键：pytest 失败时 exit 2 触发 bash -e 中断，需用 `|| true` 让 cat 段仍执行。
         run: |
-          set -o pipefail
-          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider 2>&1 | tee /tmp/pytest-unit.log
+          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider > /tmp/pytest-unit.log 2>&1 || PYTEST_EXIT=$?
+          echo "PYTEST_EXIT=${PYTEST_EXIT:-0}"
+          echo "=== pytest 输出（前 80 行）==="
+          head -80 /tmp/pytest-unit.log
+          echo "=== pytest 输出（后 80 行）==="
+          tail -80 /tmp/pytest-unit.log
           {
             echo "## 单元测试结果"
             echo '```'
             tail -50 /tmp/pytest-unit.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit ${PYTEST_EXIT:-0}
         env:
           IF_ACCOUNT_AUTO: "0"
           IF_MOCK_REGISTER: "1"
