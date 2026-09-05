@@ -106,5 +106,5 @@ codegraph.lock
 frontend/e2e_shots*/
 
 # External tool artifact (not project code)
-config/
+/config/
 .cursor/

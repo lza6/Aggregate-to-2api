@@ -39,29 +39,12 @@ jobs:
           pip install pytest pytest-asyncio pytest-cov httpx pytest-timeout pytest-benchmark
 
       - name: 单元测试（排除集成/混沌；slow=真实网络也不跑）
-        # P0-11：v8.1.5/v8.1.6 发现 PYTEST_EXIT=2 但 /tmp/pytest-unit.log 为空 →
-        # pytest 进程无 stdout 输出即退出（SIGKILL/OOM/段错误，非正常测试失败）。
-        # 关键诊断：先用 -p no:cacheprovider --co（仅 collect 不跑）验证是否 collecting 阶段崩；
-        # 再用 ulimit -a + free -m 看资源；最后跑一个小子集确认 pytest 能否启动。
+        # P0-11 根治：.gitignore:109 `config/` 误伤 api/config/presets.py → CI 找不到模块
+        # → conftest autouse _reset_settings_singleton 调 reset_settings()→Settings()→import
+        # api.config.presets 失败 → 所有用例 setup 阶段 E → exit 2。已改 /config/ + 提交 presets.py。
+        # 保留 tee + GITHUB_STEP_SUMMARY 强化输出可见性，便于未来诊断。
         run: |
-          echo "=== 环境诊断 ==="
-          ulimit -a || true
-          echo "--- mem ---"
-          free -m || true
-          echo "--- python version ---"
-          python --version
-          echo "--- pytest 版本 ---"
-          python -m pytest --version
-          echo "=== collect only（验证 collecting 是否崩，含完整 traceback）==="
-          python -X faulthandler -m pytest tests/ --co -q -p no:cacheprovider -m "not integration and not chaos and not slow" --tb=short 2>&1 || echo "COLLECT_EXIT=$?"
-          echo "=== 诊断：reset_settings 是否能跑 ==="
-          python -c "import api.config; api.config.reset_settings(); print('reset_settings OK')" 2>&1 || echo "RESET_FAIL=$?"
-          echo "=== 诊断：Settings() 是否能构造 ==="
-          python -c "from api.config import Settings; s=Settings(); print('Settings OK', s.host, s.port)" 2>&1 || echo "SETTINGS_FAIL=$?"
-          echo "=== smoke test with --setup-show（看哪个 fixture setup 失败）==="
-          python -X faulthandler -m pytest tests/test_async_sync_contamination.py -v -p no:cacheprovider --timeout=30 --tb=long --setup-show 2>&1 || echo "SMOKE_EXIT=$?"
-          echo "=== 正式单测 ==="
-          python -X faulthandler -m pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
+          pytest tests/ -m "not integration and not chaos and not slow" --cov=api --cov-report=term --cov-fail-under=80 --timeout=120 --timeout-method=thread -p faulthandler -p no:cacheprovider --tb=short -rA 2>&1 | tee /tmp/pytest-unit.log; PYTEST_EXIT=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${PYTEST_EXIT}"
           {
             echo "## 单元测试结果"
@@ -75,7 +58,6 @@ jobs:
           IF_MOCK_REGISTER: "1"
           IF_DB_FILE: "data/test.db"
           PYTHONUNBUFFERED: "1"
-          PYTHONFAULTHANDLER: "1"
 
       - name: 启动 mock cf_solver 并运行集成测试
         # v7.7 缓解组合串扰：integration 与 chaos 分两轮跑（各自 fresh 进程内状态），
