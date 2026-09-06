@@ -38,12 +38,16 @@ _ip_locks_guard = threading.Lock()
 _ip_locks: dict[str, threading.Lock] = {}
 
 # P1-1（v8.0）：可选 Redis 集中式存储适配器单例（IF_STORAGE_BACKEND=redis 且 IF_REDIS_URL 非空时由
-# lifespan startup 注入）。缺省 None → check_rate_limit 决策路径仍走单机内存分片桶（零依赖、零回归）。
-# 注：check_rate_limit 是同步入口（被 sync check_generate_request 调用），不能直接 await Redis 异步
-# rate_limiter.is_allowed。故本轮 P1-1 只做"装配 + 启停 + 降级内存"：adapter 被注入后可用于 async 路径
-# （如未来 chat guard async 化、或可观测侧的集中计数）。真实"集中式 Redis 429 决策"需 async 化
-# check_rate_limit 调用链（generate.py _prepare 等），属 L3 跨模块改动，留待后续。
+# lifespan startup 注入）。缺省 None → check_rate_limit 决策路径走单机内存分片桶（零依赖、零回归）。
+# P0-S1（v8.2.3）：热路径真接线——_l1_check 与基线滑窗在 adapter 非 None 时调
+# adapter.rate_limiter.is_allowed（ZSET+Lua 原子滑窗），实现双实例集中式限流。
+# 同步→异步桥：check_rate_limit 是同步入口（被 sync check_generate_request 调用，FastAPI sync 路由
+# 跑在线程池 worker thread，无 running loop），用线程局部 loop 的 run_until_complete 承载；
+# 当前线程已有 running loop（async 上下文直接调用）时起子线程跑避免死锁。任何异常 log.warning 一次后
+# 降级到现有内存分片桶（不 fail-open，保真限流）。
 _storage_adapter = None
+_redis_fallback_warned = False
+_loop_local = threading.local()
 _WINDOW_SECONDS = 60.0
 _DEFAULT_REQUESTS_PER_MINUTE = 10
 _DAY_SECONDS = 86400.0
@@ -54,13 +58,59 @@ def set_storage_adapter(adapter) -> None:
 
     传入 None 即清空（lifespan shutdown 或测试 teardown），回退到单机内存模式。
     """
-    global _storage_adapter
+    global _storage_adapter, _redis_fallback_warned
     _storage_adapter = adapter
+    _redis_fallback_warned = False
 
 
 def get_storage_adapter():
     """读取当前 storage 适配器（None=单机内存模式）。供 async 路径或可观测侧使用。"""
     return _storage_adapter
+
+
+def _await_sync(coro, timeout: float = 2.0):
+    """在同步热路径中执行 async 协程（仅 redis 模式用）。
+
+    - 当前线程无 running loop（FastAPI sync 路由 worker thread / 普通 sync 测试）：
+      复用线程局部 event loop 跑 run_until_complete，避免每次新建 loop 开销。
+    - 当前线程已有 running loop（async 上下文直接调用 check_rate_limit）：起 daemon 子线程
+      用 asyncio.run 跑，避免阻塞/死锁主 loop；超时 → TimeoutError。
+    协程在调用线程创建、在执行线程 await 一次（叶子协程，无跨线程状态共享）。异常向上抛，
+    由调用方 try/except 降级内存。
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        loop = getattr(_loop_local, "loop", None)
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            _loop_local.loop = loop
+        return loop.run_until_complete(coro)
+
+    holder: dict[str, object] = {}
+
+    def _runner() -> None:
+        try:
+            holder["v"] = asyncio.run(coro)
+        except BaseException as e:  # noqa: BLE001  向上抛给调用方降级
+            holder["e"] = e
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+    if "e" in holder:
+        raise holder["e"]  # type: ignore[misc]
+    if "v" not in holder:
+        raise TimeoutError("redis adapter call timeout")
+    return holder["v"]
+
+
+def _warn_redis_fallback_once(exc: BaseException) -> None:
+    """redis 适配器调用异常时降级内存；每轮装配仅 warning 一次，避免每请求刷日志。"""
+    global _redis_fallback_warned
+    if not _redis_fallback_warned:
+        _redis_fallback_warned = True
+        log.warning("request_guard: redis 适配器调用异常，本轮降级内存限流: %s", exc)
 
 
 def _ip_lock(ip: str) -> threading.Lock:
@@ -71,6 +121,7 @@ def _ip_lock(ip: str) -> threading.Lock:
             lock = threading.Lock()
             _ip_locks[ip] = lock
         return lock
+
 
 # 常见私网/保留前缀：XFF 段命中这些视为「不可信源」，不作为最终客户端身份
 _PRIVATE_PREFIX_HINTS = (
@@ -200,10 +251,25 @@ def _l1_check(key: str, now: float) -> bool:
     - 回填按墙上时间差：tokens = min(capacity, tokens + (now-last)*refill)。
     - 每次请求扣 1 token；tokens<1 视为超桶（429）。
     - 回填为 0 时退化为纯突发桶（cap 次放行后即 429）。
+    - P0-S1：redis 模式（adapter 非 None）走 adapter.rate_limiter.is_allowed 集中令牌桶；
+      异常降级到下面的内存桶。is_allowed 内部 ZSET+Lua 原子，cap 用 _l1_capacity 转 limit。
     """
     capacity = _l1_capacity()
     if capacity <= 0:
         return True  # L1 关闭，交由上层滑窗判定
+    adapter = _storage_adapter
+    if adapter is not None:
+        try:
+            rate_limiter = adapter.rate_limiter
+            refill = _l1_refill_per_sec()
+            # redis 滑窗语义无令牌回填；refill>0 时窗口=capacity/refill 秒补满一次令牌，
+            # 窗口越短越宽松，故仅 refill>0 用细窗，refill=0 用 capacity 秒突发桶窗口。
+            window = (capacity / refill) if refill > 0 else max(capacity, 1.0)
+            allowed = _await_sync(rate_limiter.is_allowed(f"l1:{key}", limit=int(capacity), window=window))
+            return bool(allowed)
+        except Exception as e:  # noqa: BLE001  降级内存桶
+            _warn_redis_fallback_once(e)
+
     refill = _l1_refill_per_sec()
     with _ip_lock(key):
         bucket = _l1_token_buckets.setdefault(key, [capacity, now])
@@ -452,6 +518,7 @@ def check_rate_limit(request: Request) -> None:
     if _l1_capacity() > 0 and not _l1_check(key, now):
         _record_auto_block_violation(key, "rate-limit-exceeded")
         from .error_tracker import record as _err_record
+
         _err_record("RATE.001")
         raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{_l1_capacity()} 突发令牌），请稍后重试", 429)
 
@@ -459,6 +526,21 @@ def check_rate_limit(request: Request) -> None:
     limit = _limit()
     if limit <= 0:
         return
+
+    adapter = _storage_adapter
+    if adapter is not None:
+        # P0-S1：redis 集中滑窗（ZSET+Lua 原子）。异常降级内存滑窗（下方 per-IP 锁路径）。
+        try:
+            rate_limiter = adapter.rate_limiter
+            allowed = _await_sync(rate_limiter.is_allowed(f"rate:{key}", limit=limit, window=_WINDOW_SECONDS))
+            if not bool(allowed):
+                _record_auto_block_violation(key, "rate-limit-exceeded")
+                raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{limit}/分钟），请稍后重试", 429)
+            return
+        except AppError:
+            raise  # 429 向上抛，不走降级
+        except Exception as e:  # noqa: BLE001  降级内存滑窗
+            _warn_redis_fallback_once(e)
 
     limited = False
     with _ip_lock(key):

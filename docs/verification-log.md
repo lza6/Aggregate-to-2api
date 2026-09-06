@@ -96,3 +96,17 @@
 - cov-fail-under 已统一 80（v7.6）：ci.yml 与 deploy.yml 同口径
 - IF_REQUESTS_PER_MINUTE 默认对齐 20（v7.6）：.env.production.example 与 compose 一致
 - 孤儿 env 变量清单已在 deploy/.env.example 尾部标注（v7.6）：IF_MINIMAXH3_*/IF_MAX_IMAGE_BYTES/IF_USER_AGENT/IF_MAX_PROMPT_LEN/IF_ASPECT_RATIOS/IF_KOOKEEY_* 填了不生效
+
+## v8.3.0 P0-S1 storage 热路径真接线验证（2026-09-06）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-06 | P0-S1 storage 热路径分叉（request_guard _l1_check/滑窗 真调 adapter.rate_limiter.is_allowed） | request_guard 全家+redis_adapter+chat_auth+adaptive_router+agent+async_sync：193 passed 0F | 单机 sqlite 模式零回归；ruff 0 error；mypy strict 0 issue |
+| 2026-09-06 | E2E 本地实测（mock cfsolver 8001 + API 8100） | livez/healthz/models/generate/chat/agent-intent/agent-skills/agent-memory/metrics 全 200 | 生图 imagefree/default completed 有图；chat glm-5.3-flash 200 有 reasoning_content；agent intent llm_used=true scene=image |
+| 2026-09-06 | 前端 vitest + build | 197 passed 13 files / build 16s | frontend dist 含 8.3.0；landing dist 含 8.3.0 |
+| 2026-09-06 | 集成测试 tests/integration/ | 37 passed（cfsolver mock） | 全绿 |
+
+## 新增「验证过勿重跑」结论（v8.3.0）
+
+- storage 热路径真接线（v8.3.0 P0-S1）：request_guard _l1_check:267/268 + 滑窗:535/536 调 adapter.rate_limiter.is_allowed，**勿再当半成品**——双实例集中式限流已就绪（真实 Redis 端到端待 L3 生产灰度验证）
+- agent intent/critic 已有真实 LLM 调用路径（intent.py:107-148/critic.py:107-138 provider.chat_collect 走 tryingopen），**勿再提 Mock 悬空**——待验证是 E2E 验收覆盖非是否真调

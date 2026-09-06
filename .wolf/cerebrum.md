@@ -82,3 +82,32 @@ CI 集成测试 37 个用例，`test_account_growth::test_account_pool_growth_fi
 ### 处理
 属已知 flaky，不阻塞主链路（1/37）。下次 CI 失败可直接从 junitxml 解析看是否同一用例。
 若反复失败，需加 healthz 等待循环次数（30→60）或诊断 admin 包 CI import 时机。
+
+## 2026-09-06 P0-S1 storage 热路径真接线（v8.2.3→v8.3.0）
+
+### 根因
+v8.0 P1-1 只完成「装配层」（lifespan 注入 RedisStorageAdapter + request_guard set/get 函数），「消费层」（热路径真调适配器）未落地。request_guard 的 _check_l1(259-272)/滑窗(530-545) 仍走内存 dict，IF_STORAGE_BACKEND=redis 时空有适配器单例但限流不共享 → 双实例集中式限流名存实亡。
+
+### 修复（P0-S1）
+- api/request_guard.py(+90/-6)：
+  - _await_sync(coro) 同步→异步桥（无 running loop 复用线程局部 loop；有 loop 起 daemon 子线程跑，避免死锁主 loop）
+  - _warn_redis_fallback_once 适配器异常降级内存（每轮装配仅 warning 一次，不 fail-open 保真限流）
+  - _l1_check 热路径分叉：adapter 非 None 调 adapter.rate_limiter.is_allowed("l1:"+key)，refill>0 用细窗 capacity/refill，refill=0 用 max(capacity,1.0) 突发桶窗
+  - 基线滑窗热路径分叉：adapter 非 None 调 adapter.rate_limiter.is_allowed("rate:"+key, limit, window)；AppError 直接 re-raise，其他异常降级内存滑窗
+- tests/test_request_guard_redis_mode.py（新建 15 用例）：L1 热路径 5 + 滑窗热路径 5 + 降级 warning 去重 1 + _await_sync 桥接 3，用 Mock 适配器不连真实 Redis
+- tests/test_request_guard_storage_mode.py（已存在 v7.3 建）
+
+### 验证（v8.3.0）
+- request_guard 全家 + redis_adapter + chat_auth + adaptive_router + agent + async_sync_contamination：193 passed 0F
+- IF_STORAGE_BACKEND=sqlite 单机模式零回归
+- ruff 0 error / mypy strict(errors+retry_policy) 0 issue
+- E2E 实测：/v1/livez=200 /v1/healthz=200 /v1/models=200(48 模型) /v1/generate(imagefree/default)=completed 有图 /v1/chat/completions(glm-5.3-flash)=200 有 reasoning_content /v1/agent/intent=200 llm_used=true scene=image /v1/agent/skills=200 /v1/agent/memory=200 /metrics=200
+
+### Do-Not-Repeat
+- 2026-09-06：storage 接线时 check_rate_limit 是 sync 入口被 FastAPI sync 路由线程池调用（无 running loop），调 async adapter.is_allowed 必须用 _await_sync 桥接——无 loop 复用线程局部 loop（避免每请求新建 loop 开销），有 loop 起子线程跑（避免阻塞主 loop）
+- 2026-09-06：storage 适配器异常降级**不 fail-open**——降级到内存桶按本机 RPS 限流，比放行安全（双实例集中式限流挂掉时退化为单机限流，保真限流语义）
+- 2026-09-06：agent intent.py:107-148 已有真实 provider.chat_collect 路径（走 tryingopen 免费上游，IF_MOCK_UPSTREAM=0 默认真实），**非 Mock 悬空**——指南修正「待验证=补 E2E 验收」而非「是否真调 LLM」
+
+### Decision Log
+- 2026-09-06：P0-S1 storage 真接线采用「不 fail-open + 同步→异步桥」方案，不改 check_rate_limit 同步签名、不改 generate.py 调用链（避免 L3 跨模块改动）。真实 Redis 集中式限流端到端属 L3 生产灰度，本地用 Mock 验证热路径真调+降级，待验证
+- 2026-09-06：版本 bump 8.2.3→8.3.0（P0-S1 = MINOR 向后兼容，缺省 sqlite 零回归），7 处一致 + dist 重建
