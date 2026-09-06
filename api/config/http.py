@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -18,3 +20,16 @@ class HTTPSettings(BaseModel):
     max_connections: int = 100
     keepalive: int = 20
     upstream_max_inflight: int = 30
+
+    @classmethod
+    def from_settings(cls, s: Any) -> HTTPSettings:
+        """从 Settings 实例提取字段构造 HTTPSettings。"""
+        return cls(
+            host=s.host,
+            port=s.port,
+            proxy=s.proxy,
+            user_agent=s.user_agent,
+            max_connections=s.if_http_max_connections,
+            keepalive=s.if_http_keepalive,
+            upstream_max_inflight=s.if_upstream_max_inflight,
+        )

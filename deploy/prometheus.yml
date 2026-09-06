@@ -1,0 +1,29 @@
+# Prometheus 抓取配置 — 仅启用 obs profile 时生效
+# 启动：docker compose --profile obs up -d
+# 验证：docker compose --profile obs exec prometheus wget -qO- http://localhost:9090/api/v1/targets | head -50
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: imagefree
+    env: production
+
+scrape_configs:
+  - job_name: imagefree-api
+    metrics_path: /metrics
+    # compose 网络内 service 名解析；api 服务在 8100 暴露 /metrics
+    static_configs:
+      - targets: ['api:8100']
+        labels:
+          service: imagefree-api
+    # 5xx 突增告警用 record rule 计算速率
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: imagefree-api
+
+  # self-monitor
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

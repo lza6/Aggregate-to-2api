@@ -176,6 +176,28 @@ async def cost_overview():
     }
 
 
+@router.get("/v1/cost-forecast", include_in_schema=False)
+async def cost_forecast(request: Request):
+    """P3-D3: 成本预算燃烧预测（管理 Key 鉴权）。
+
+    基于近 30 天 chat_usage 日级 cost_usd 历史，按当前日均消耗速率预测何时
+    超出 IF_COST_BUDGET_USD 阈值。预算=0 时 disabled=True，前端降级显示"未设预算"。
+
+    口径与 /v1/cost 一致——token 成本来自 chat_usage.cost_usd 按天聚合；图片成本
+    为累计折算值（无日级历史），未纳入趋势预测。纯本地 DB 查询 + 数学预测，不调用
+    付费 API，不改 DB schema。
+    """
+    check_admin_key(request, scope="cost-forecast")
+    from ...chat_usage import chat_usage_tracker as _tracker  # noqa: PLC0415
+    from ...cost_forecast import predict_budget_burn  # noqa: PLC0415
+
+    daily_costs = (
+        await _tracker.cost_daily(30) if hasattr(_tracker, "cost_daily") else []
+    )
+    budget = float(config.IF_COST_BUDGET_USD or 0.0)
+    return predict_budget_burn(daily_costs, budget)
+
+
 @router.get("/v1/account-pool")
 async def account_pool_dashboard(
     page: int = Query(1, ge=1),

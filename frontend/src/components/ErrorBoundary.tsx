@@ -9,7 +9,7 @@
 - 可定制：fallback 渲染函数 `(error, onReset) => ReactNode`，onError 回调可用于独立审查。
 - 重试：reset 会重新渲染 children（若仍抛错则再次捕获）；「回到总览」用 useNavigate 跳 "/"。
  */
-import { Component, type ReactNode, type ErrorInfo } from 'react';
+import { Component, useState, type ReactNode, type ErrorInfo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { reportFrontendError } from '../lib/telemetry';
 
@@ -27,21 +27,59 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-/** 内置 fallback：警告横幅 + 「重试 / 回到总览」按钮（依赖 Router 上下文）。 */
+/** 内置 fallback：警告横幅 + 「重试 / 回到总览 / 复制错误」按钮（依赖 Router 上下文）。
+ * P2-C1 增强：增加「复制错误栈」按钮（便于用户反馈 bug），重试计数显示（多次重试仍失败时提示）。
+ */
 function DefaultFallback({ error, onReset }: { error: Error; onReset: () => void }) {
   const navigate = useNavigate();
   const goHome = () => navigate('/', { replace: true });
   const msg = error?.message || '未知渲染错误';
+  const stack = error?.stack || '';
+  const [retryCount, setRetryCount] = useState(0);
+  const handleReset = () => {
+    setRetryCount(c => c + 1);
+    onReset();
+  };
+  const copyStack = async () => {
+    try {
+      const text = `${msg}\n\n${stack}`;
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    } catch {
+      /* 静默 */
+    }
+  };
   return (
     <div className="eb-fallback tf-card" role="alert">
       <div className="eb-fallback-icon">🧯</div>
       <div className="eb-fallback-body">
         <div className="eb-fallback-title">页面渲染异常</div>
         <div className="eb-fallback-msg">{msg}</div>
-        <div className="eb-fallback-hint">已自动上报该错误，任务队列与其它页面不受影响。</div>
+        <div className="eb-fallback-hint">
+          已自动上报该错误，任务队列与其它页面不受影响。
+          {retryCount >= 2 && ' 多次重试仍失败，建议刷新整页或回到总览。'}
+        </div>
+        {stack && (
+          <details className="eb-fallback-details">
+            <summary>查看错误栈</summary>
+            {/* 去掉首行（与 msg 重复的错误消息），仅展示调用栈 */}
+            <pre className="eb-fallback-stack">{stack.split('\n').slice(1).join('\n').trim() || stack}</pre>
+          </details>
+        )}
       </div>
       <div className="eb-fallback-actions">
-        <button type="button" className="tf-btn tf-btn-primary" onClick={onReset}>🔄 重试</button>
+        <button type="button" className="tf-btn tf-btn-primary" onClick={handleReset}>🔄 重试</button>
+        <button type="button" className="tf-btn tf-btn-secondary" onClick={copyStack} title="复制错误栈以便反馈">📋 复制错误</button>
         <button type="button" className="tf-btn tf-btn-secondary" onClick={goHome}>🏠 回到总览</button>
       </div>
       <style>{`
@@ -51,6 +89,9 @@ function DefaultFallback({ error, onReset }: { error: Error; onReset: () => void
         .eb-fallback-title { font-size: 15px; font-weight: 700; color: var(--danger-text); letter-spacing: -0.01em; }
         .eb-fallback-msg { font-size: 12.5px; color: var(--danger-text); opacity: 0.92; margin-top: 4px; word-break: break-word; }
         .eb-fallback-hint { font-size: 11.5px; color: var(--danger-text); opacity: 0.75; margin-top: 6px; }
+        .eb-fallback-details { margin-top: 10px; }
+        .eb-fallback-details summary { cursor: pointer; font-size: 11.5px; color: var(--danger-text); opacity: 0.8; user-select: none; }
+        .eb-fallback-stack { margin: 8px 0 0; padding: 10px 12px; background: rgba(0,0,0,0.18); border-radius: 6px; font-size: 11px; font-family: ui-monospace, monospace; color: var(--danger-text); overflow-x: auto; max-height: 180px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
         .eb-fallback-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
         @media (max-width: 520px) { .eb-fallback-actions { width: 100%; } .eb-fallback-actions .tf-btn { flex: 1; justify-content: center; } }
       `}</style>

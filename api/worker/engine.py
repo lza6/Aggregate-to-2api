@@ -56,6 +56,9 @@ from .queue import (
     _safe_proxy_label,
     _WorkerHandle,
 )
+
+# P0-F4: 扩缩容编排逻辑（run_auto_scale_once）下沉到 scaler.py
+from .scaler import run_auto_scale_once
 from .token_pool import TokenPoolManager
 
 # 兼容垫片：旧 import 路径 `from api.worker.engine import ...` 仍可用。
@@ -472,111 +475,13 @@ class Engine:
     async def _auto_scale_once(self) -> None:
         """单次伸缩检查（可被测试直接调用）。
 
-        v8.0 P1-5：升级为多维评分扩缩容（queue/latency/token/proxy/memory），
-        保留旧单维逻辑作为 fallback（IF_WORKER_SCALER_LEGACY=1 时走旧逻辑）。
-        - 扩容：综合分 > 0.6 且 未达上限 → 增 2 个
-        - 缩容：综合分 < 0.3 且 持续 IF_WORKER_SCALE_DOWN_HOLD 秒 → 缩 1 个
+        P0-F4: 编排逻辑（多维评分 / 旧单维 fallback / _idle_workers_count）
+        下沉到 worker/scaler.py 的 run_auto_scale_once。本方法为签名兼容垫片，
+        直接委托——签名 (self) 不变，test_worker_auto_scale 的 14 个用例全绿。
+        - 默认多维：综合分 > 0.6 且未达上限 → 增 2 个；< 0.3 且持续 hold → 缩 1 个
+        - IF_WORKER_SCALER_LEGACY=1 走旧单维（队列深度阈值）逻辑
         """
-        # v8.0 P1-5: 多维评分路径（默认）
-        if not getattr(config, "IF_WORKER_SCALER_LEGACY", False):
-            await self._auto_scale_multi_dim()
-            return
-
-        qsize = self.queue.qsize()
-        current = len(self._workers)
-
-        # 扩容：排队 > 阈值 且 未达上限 → 增 2 个（最多增 2 / 30s）
-        if qsize > config.IF_WORKER_SCALE_UP_THRESHOLD and current < config.IF_WORKERS_MAX:
-            target = min(current + 2, config.IF_WORKERS_MAX)
-            added = target - current
-            for _ in range(added):
-                next_idx = max((w.id for w in self._workers), default=-1) + 1
-                self._workers.append(self._create_worker(next_idx))
-            log.info("自动扩容: %d → %d（排队 %d > %d）", current, target, qsize, config.IF_WORKER_SCALE_UP_THRESHOLD)
-            return
-
-        # 缩容：已过最小值才考虑（未过最小值无需缩容）
-        if current <= config.IF_WORKERS_MIN:
-            return
-
-        # 缩容触发条件：排队 < 阈值，或至少 1 个 worker 空闲超阈值
-        idle_count = self._idle_workers_count()
-        if qsize < config.IF_WORKER_SCALE_DOWN_THRESHOLD:
-            reason = f"排队 {qsize} < {config.IF_WORKER_SCALE_DOWN_THRESHOLD}"
-        elif idle_count >= 1:
-            reason = f"{idle_count} 个 worker 空闲超过 {config.IF_WORKER_IDLE_SECONDS}s"
-        else:
-            return  # 既不扩容也不满足缩容条件 → 本轮不动作
-
-        self._shrink_one_worker()
-        worker_health.register([w.id for w in self._workers])
-        log.info("自动缩容: %d → %d（%s）", current, len(self._workers), reason)
-
-    async def _auto_scale_multi_dim(self) -> None:
-        """v8.0 P1-5: 多维评分扩缩容。
-
-        收集 queue/latency/token/proxy/memory 指标，调 scaler 决策。
-        memory_pressure 通过 psutil 获取（可选，无 psutil 时默认 0）。
-        """
-        from .scaler import collect_metrics, should_scale_down, should_scale_up
-
-        qsize = self.queue.count()
-        current = len(self._workers)
-        capacity = self.queue.capacity()
-
-        # 上游时延 EWMA：从 solver/adaptive_router 无直接值，用 token_pool 的等待超时计数近似
-        upstream_latency_ewma_ms = float(getattr(self.token_pool_manager, "wait_timeout_total", 0)) * 1000.0
-
-        # token 池水位
-        direct_pool = self.token_pool_manager.pools.get("direct")
-        token_size = direct_pool.size() if direct_pool else 0
-        token_target = config.TOKEN_POOL_SIZE
-
-        # 代理池健康
-        try:
-            proxy_health_ratio = self._proxy_pool.health_ratio() if hasattr(self._proxy_pool, "health_ratio") else 1.0
-        except Exception:
-            proxy_health_ratio = 1.0
-
-        # 内存压力（可选 psutil）
-        memory_pressure = 0.0
-        try:
-            import psutil
-
-            memory_pressure = psutil.virtual_memory().percent / 100.0
-        except Exception:
-            memory_pressure = 0.0
-
-        metrics = collect_metrics(
-            queue_count=qsize,
-            queue_capacity=capacity,
-            upstream_latency_ewma_ms=upstream_latency_ewma_ms,
-            token_pool_size=token_size,
-            token_target=token_target,
-            proxy_health_ratio=proxy_health_ratio,
-            memory_pressure=memory_pressure,
-        )
-
-        if should_scale_up(metrics, current):
-            target = min(current + 2, config.IF_WORKERS_MAX)
-            added = target - current
-            for _ in range(added):
-                next_idx = max((w.id for w in self._workers), default=-1) + 1
-                self._workers.append(self._create_worker(next_idx))
-            log.info("自动扩容(多维): %d → %d（score=%.2f, q=%d/%d）", current, target, __import__("api.worker.scaler", fromlist=["compute_score"]).compute_score(metrics), qsize, capacity)
-            return
-
-        now = time.monotonic()
-        if should_scale_down(metrics, current, self._scale_state, now):
-            self._shrink_one_worker()
-            worker_health.register([w.id for w in self._workers])
-            log.info("自动缩容(多维): %d → %d（score=%.2f, 持续 %ss）", current, len(self._workers), __import__("api.worker.scaler", fromlist=["compute_score"]).compute_score(metrics), config.IF_WORKER_SCALE_DOWN_HOLD)
-
-    def _idle_workers_count(self) -> int:
-        """统计空闲超过 IF_WORKER_IDLE_SECONDS 的 worker 数。"""
-        now = time.monotonic()
-        idle_threshold = config.IF_WORKER_IDLE_SECONDS
-        return sum(1 for w in self._workers if now - w.last_active > idle_threshold)
+        await run_auto_scale_once(self)
 
     def _shrink_one_worker(self) -> None:
         """通知一个 worker 退出并移除。优先缩容最空闲的 worker。"""

@@ -1,11 +1,15 @@
 """imagefree_api 配置包。全部可用环境变量覆盖，便于部署。
 
 由原单体 api/config.py 拆分而来：
-- 子配置类（DBSettings 等）各放入独立子模块。
-- Settings 类、模块级单例 `settings`、全部模块级常量与 `apply_model` 保留在本模块
+- 子配置类（DBSettings 等）各放入独立子模块，并暴露 ``from_settings(cls, s)`` 工厂
+  把 Settings 字段聚合进对应子配置（P0-F1 下沉：原 _resolve_proxy_and_init_groups 内联
+  构造逻辑全部移至各子模块的 from_settings）。
+- Settings 类、模块级单例 ``settings``、全部模块级常量与 ``apply_model`` 保留在本模块
   （`from api.config import Settings / settings / BASE_URL ...` 完全向后兼容）。
 - `from api.config import config` 兼容：config 指向本包模块本身。
 - `from api.config.settings import ...` 兼容：见 api/config/settings.py。
+- Settings 级聚合函数（apply_adaptive_defaults / validate_settings / settings_json）
+  下沉至 base.py（duck typing，避免循环 import）。
 
 使用 pydantic-settings 集中管理配置，保持 IF_ 前缀环境变量向后兼容。
 """
@@ -19,7 +23,7 @@ from typing import Any
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .base import _env_int
+from .base import apply_adaptive_defaults, settings_json, validate_settings
 from .cache import CacheSettings
 from .db import DBSettings
 from .edit import EditSettings
@@ -134,7 +138,7 @@ class Settings(BaseSettings):
     sync_timeout: int = Field(300, validation_alias="IF_SYNC_TIMEOUT")
 
     # ── 队列 / Worker（服务器规格自适应默认值）──
-    # 默认值在运行时由 system_spec 的 ADAPTIVE_* 覆盖（见 _resolve_adaptive_defaults）
+    # 默认值在运行时由 system_spec 的 ADAPTIVE_* 覆盖（见 apply_adaptive_defaults）
     max_queue: int = Field(2000, validation_alias="IF_MAX_QUEUE")
     admin_queue_max: int = Field(200, validation_alias="IF_ADMIN_QUEUE_MAX")
     high_queue_max: int = Field(500, validation_alias="IF_HIGH_QUEUE_MAX")
@@ -246,7 +250,7 @@ class Settings(BaseSettings):
     routing_db_file: str = Field("", validation_alias="IF_ROUTING_DB")
     if_base64_dir: str = Field("data/imgs", validation_alias="IF_BASE64_DIR")
     if_base64_file_ttl: int = Field(86400, validation_alias="IF_BASE64_FILE_TTL")
-    # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80%
+    # S-14: base64 文件目录配额上限（GB），超过后按最旧优先清理至 80 %
     if_img_max_gb: float = Field(5.0, validation_alias="IF_IMG_MAX_GB")
     db_retention_days: int = Field(365, validation_alias="IF_DB_RETENTION_DAYS")
     db_cleanup_interval: int = Field(21600, validation_alias="IF_DB_CLEANUP_INTERVAL")
@@ -390,45 +394,13 @@ class Settings(BaseSettings):
             return v
         return v.strip().lower() in {"1", "true", "yes", "on"}
 
-    def _apply_adaptive_defaults(self) -> None:
-        """按服务器规格自适应并发参数（仅当用户未显式设置环境变量时）。
-
-        2C2G → worker=4, upstream=12, token=3, queue=1000
-        4C4G → worker=8,  upstream=32, token=8,  queue=2000
-        4C8G → worker=16, upstream=64, token=16, queue=5000
-        8C16G+ → worker=16（封顶）, upstream=64, token=8, queue=5000
-        注：worker 自适应仅在未显式设 IF_WORKERS 时生效；IF_WORKER_AUTO 默认关闭，
-        故运行期不在 4~16 间动态伸缩，只决定初始 worker 数。
-        """
-        explicit = bool(
-            _env_int("IF_WORKERS")
-            or _env_int("IF_UPSTREAM_MAX_INFLIGHT")
-            or _env_int("IF_TOKEN_POOL_SIZE")
-            or _env_int("IF_MAX_QUEUE")
-        )
-        if explicit:
-            return
-        try:
-            from ..system_spec import (
-                ADAPTIVE_MAX_QUEUE,
-                ADAPTIVE_TOKEN_POOL_SIZE,
-                ADAPTIVE_UPSTREAM_INFLIGHT,
-                ADAPTIVE_WORKERS,
-            )
-        except Exception:
-            return
-        if self.workers == 10:
-            self.workers = ADAPTIVE_WORKERS
-        if self.if_upstream_max_inflight == 30:
-            self.if_upstream_max_inflight = ADAPTIVE_UPSTREAM_INFLIGHT
-        if self.token_pool_size == 6:
-            self.token_pool_size = ADAPTIVE_TOKEN_POOL_SIZE
-        if self.max_queue == 2000:
-            self.max_queue = ADAPTIVE_MAX_QUEUE
-
     @model_validator(mode="after")
     def _resolve_proxy_and_init_groups(self) -> Settings:
-        """代理 fallback 解析 + 服务器规格自适应并发（未显式设置时）+ 分组配置初始化。"""
+        """代理 fallback 解析 + 服务器规格自适应并发（未显式设置时）+ 分组配置初始化。
+
+        子配置构造下沉至各子模块的 ``from_settings(cls, s)`` 工厂方法（P0-F1），
+        本方法仅做 proxy fallback + 自适应默认 + 委托构造。
+        """
         # ── 代理 fallback ──
         if not self.proxy:
             for var in ("HTTPS_PROXY", "HTTP_PROXY"):
@@ -438,191 +410,19 @@ class Settings(BaseSettings):
                     break
 
         # ── 服务器规格自适应并发（仅当用户未显式设置对应环境变量时生效）──
-        self._apply_adaptive_defaults()
+        apply_adaptive_defaults(self)
 
-        # ── Solver URLs 规范化 ──
-        resolved_solver_urls: list[str] = []
-        if isinstance(self.cf_solver_urls, str):
-            resolved_solver_urls = [u.strip() for u in self.cf_solver_urls.split(",") if u.strip()]
-        elif isinstance(self.cf_solver_urls, (list, tuple)):
-            resolved_solver_urls = [str(u).strip() for u in self.cf_solver_urls if str(u).strip()]
-
-        # 若 CF_SOLVER_URLS 未显式自定义（仅默认值）但指定了单个 CF_SOLVER_URL，则以 CF_SOLVER_URL 为准
-        if not resolved_solver_urls or resolved_solver_urls == ["http://127.0.0.1:8001"]:
-            if self.cf_solver_url:
-                resolved_solver_urls = [self.cf_solver_url]
-        elif self.cf_solver_url and self.cf_solver_url not in resolved_solver_urls:
-            # 确保主 URL 在列表首位或列表中
-            pass
-        if not resolved_solver_urls:
-            resolved_solver_urls = [self.cf_solver_url or "http://127.0.0.1:8001"]
-
-        # 解析权重（支持 JSON 字符串或 "url1=1,url2=2" 格式）
-        resolved_weights: dict[str, int] = {}
-        if isinstance(self.solver_node_weights, str) and self.solver_node_weights:
-            try:
-                import json
-
-                resolved_weights = json.loads(self.solver_node_weights)
-            except Exception:
-                for part in self.solver_node_weights.split(","):
-                    if "=" in part:
-                        k, v = part.split("=", 1)
-                        try:
-                            resolved_weights[k.strip()] = int(v.strip())
-                        except ValueError:
-                            pass
-        elif isinstance(self.solver_node_weights, dict):
-            resolved_weights = {str(k): int(v) for k, v in self.solver_node_weights.items()}
-
-        # ── 分组配置 ──
-        self._db = DBSettings(
-            file=self.db_file,
-            stats_file=self.stats_file,
-            retention_days=self.db_retention_days,
-            cleanup_interval=self.db_cleanup_interval,
-            batch_enabled=self.if_db_batch_enabled,
-            batch_window=self.if_db_batch_window,
-            pool_size=self.if_db_pool_size,
-            pool_timeout=self.if_db_pool_timeout,
-            base64_dir=self.if_base64_dir,
-            base64_file_ttl=self.if_base64_file_ttl,
-            idempotency_enabled=self.if_idempotency_enabled,
-            idempotency_ttl=self.if_idempotency_ttl,
-            routing_db_file=self.routing_db_file,
-        )
-        self._http = HTTPSettings(
-            host=self.host,
-            port=self.port,
-            proxy=self.proxy,
-            user_agent=self.user_agent,
-            max_connections=self.if_http_max_connections,
-            keepalive=self.if_http_keepalive,
-            upstream_max_inflight=self.if_upstream_max_inflight,
-        )
-        self._solver = SolverSettings(
-            base_url=self.base_url,
-            sitekey=self.sitekey,
-            cf_solver_url=resolved_solver_urls[0] if resolved_solver_urls else self.cf_solver_url,
-            cf_solver_urls=resolved_solver_urls,
-            solver_node_weights=resolved_weights,
-            solver_rate_limit_cooldown_seconds=self.solver_rate_limit_cooldown_seconds,
-            solver_idle_timeout_seconds=self.solver_idle_timeout_seconds,
-            turnstile_timeout=self.turnstile_timeout,
-            turnstile_poll_interval=self.turnstile_poll_interval,
-            solve_circuit_threshold=self.solve_circuit_threshold,
-            solve_circuit_probe_seconds=self.solve_circuit_probe_seconds,
-            solve_stats_window_seconds=self.solve_stats_window_seconds,
-            healthz_cache_ttl=self.healthz_cache_ttl,
-            token_prefetch_concurrency=self.token_prefetch_concurrency,
-            prefetch_after_solve_delay=self.if_prefetch_after_solve_delay,
-            prefetch_ema_alpha=self.if_prefetch_ema_alpha,
-        )
-        self._cache = CacheSettings(
-            size=self.if_lru_cache_size,
-            ttl=self.if_lru_cache_ttl,
-            redis_enabled=self.if_redis_enabled,
-            redis_url=self.if_redis_url,
-        )
-        self._provider = ProviderSettings(
-            proxy_file=self.proxy_file,
-            free_proxy_enabled=self.free_proxy_enabled,
-            free_proxy_refresh_min=self.free_proxy_refresh_min,
-            proxy_cooldown_seconds=self.proxy_cooldown_seconds,
-            proxy_max_use_per_day=self.if_proxy_max_use_per_day,
-            proxy_use_cooldown_map=self.if_proxy_use_cooldown_map,
-            proxy_sticky_window=self.if_proxy_sticky_window,
-            account_db_file=self.account_db_file,
-            email_db_file=self.email_db_file,
-            nanobanana_account_target=self.nanobanana_account_target,
-            account_auto=self.account_auto,
-            mock_register=self.mock_register,
-            degrade_threshold=self.if_provider_degrade_threshold,
-            recover_interval=self.if_provider_recover_interval,
-            default_model=self.default_model,
-            reg_backoff_cf=self.reg_backoff_cf,
-            reg_backoff_email=self.reg_backoff_email,
-            reg_backoff_ip=self.reg_backoff_ip,
-            reg_backoff_transient_base=self.reg_backoff_transient_base,
-            reg_backoff_transient_max=self.reg_backoff_transient_max,
-            proxy_trace_enabled=self.if_proxy_trace_enabled,
-            proxy_trace_ttl=self.if_proxy_trace_ttl,
-            proxy_trace_max_per_round=self.if_proxy_trace_max_per_round,
-            proxy_trace_concurrency=self.if_proxy_trace_concurrency,
-            falai_enabled=self.if_falai_enabled,
-            falai_hcaptcha_sitekey=self.if_falai_hcaptcha_sitekey,
-            falai_hcaptcha_mode=self.if_falai_hcaptcha_mode,
-            falai_browser_headful=self.if_falai_browser_headful,
-            falai_browser_pool_size=self.if_falai_browser_pool_size,
-            falai_verify_timeout=self.if_falai_verify_timeout,
-            falai_poll_interval=self.if_falai_poll_interval,
-            falai_poll_timeout=self.if_falai_poll_timeout,
-        )
-        self._pool = PoolSettings(
-            token_pool_size=self.token_pool_size,
-            token_ttl=self.token_ttl,
-            token_wait_timeout=self.token_wait_timeout,
-        )
-        self._queue = QueueSettings(
-            max_queue=self.max_queue,
-            admin_queue_max=self.admin_queue_max,
-            high_queue_max=self.high_queue_max,
-            normal_queue_max=self.normal_queue_max,
-            workers=self.workers,
-            worker_auto=self.if_worker_auto,
-            workers_min=self.if_workers_min,
-            workers_max=self.if_workers_max,
-            worker_scale_up_threshold=self.if_worker_scale_up_threshold,
-            worker_scale_down_threshold=self.if_worker_scale_down_threshold,
-            worker_idle_seconds=self.if_worker_idle_seconds,
-            persistent_queue_enabled=self.if_persistent_queue_enabled,
-            persistent_queue_db=self.if_persistent_queue_db,
-            dlq_enabled=self.if_dlq_enabled,
-            dlq_max_retries=self.if_dlq_max_retries,
-            dlq_retention_days=self.if_dlq_retention_days,
-        )
-        self._observability = ObservabilitySettings(
-            health_check_interval=self.if_health_check_interval,
-            health_check_enabled=self.if_health_check_enabled,
-            alert_check_interval=self.if_alert_check_interval,
-        )
-        self._edit = EditSettings(
-            edit_timeout=self.edit_timeout,
-            task_hard_timeout=self.task_hard_timeout,
-            edit_concurrency_wait=self.edit_concurrency_wait,
-            edit_mutex_enabled=self.edit_mutex_enabled,
-            edit_lease_enabled=self.edit_lease_enabled,
-            edit_lease_ttl=self.edit_lease_ttl,
-            edit_lock_max_age=self.edit_lock_max_age,
-            edit_retry_max=self.edit_retry_max,
-            edit_retry_interval=self.edit_retry_interval,
-            edit_proxy_file=self.edit_proxy_file,
-            edit_proxy_parallel=self.edit_proxy_parallel,
-            edit_proxy_max_inflight=self.if_edit_proxy_max_inflight,
-            edit_proxy_pool_size=self.edit_proxy_pool_size,
-            edit_proxy_pool_idle_ttl=self.edit_proxy_pool_idle_ttl,
-            generate_timeout=self.generate_timeout,
-            generate_poll_interval=self.generate_poll_interval,
-            generate_max_attempts=self.generate_max_attempts,
-            txt_retry_max=self.if_txt_retry_max,
-            txt_retry_backoff_base=self.if_txt_retry_backoff_base,
-            sync_timeout=self.sync_timeout,
-            max_image_bytes=4 * 1024 * 1024,
-        )
-        self._security = SecuritySettings(
-            gallery_password=self.if_gallery_password,
-            ip_whitelist=self.if_ip_whitelist,
-            trusted_proxies=self.if_trusted_proxies,
-            auto_block_enabled=self.if_auto_block_enabled,
-            auto_block_threshold=self.if_auto_block_threshold,
-            auto_block_window_seconds=self.if_auto_block_window_seconds,
-            auto_block_ttl_seconds=self.if_auto_block_ttl_seconds,
-            cors_origins=self.if_cors_origins,
-            security_headers_enabled=self.if_security_headers_enabled,
-            csp_enabled=self.if_csp_enabled,
-            api_keys=[k.strip() for k in (self.if_api_keys or "").split(",") if k.strip()],
-            chat_requests_per_minute=self.if_chat_rate_limit,
-        )
+        # ── 分组配置（各子模块 from_settings 工厂，原内联构造逻辑下沉）──
+        self._db = DBSettings.from_settings(self)
+        self._http = HTTPSettings.from_settings(self)
+        self._solver = SolverSettings.from_settings(self)
+        self._cache = CacheSettings.from_settings(self)
+        self._provider = ProviderSettings.from_settings(self)
+        self._pool = PoolSettings.from_settings(self)
+        self._queue = QueueSettings.from_settings(self)
+        self._observability = ObservabilitySettings.from_settings(self)
+        self._edit = EditSettings.from_settings(self)
+        self._security = SecuritySettings.from_settings(self)
         # 模块级便捷引用（供 main.py 读取）
         global CORS_ORIGINS
         CORS_ORIGINS = self.if_cors_origins or "*"
@@ -679,46 +479,12 @@ class Settings(BaseSettings):
         return self._security
 
     def settings_json(self) -> dict:
-        """导出完整配置快照（供 /v1/meta 扩展）。"""
-        return {
-            "db": self.db.model_dump(),
-            "http": self.http.model_dump(),
-            "solver": self.solver.model_dump(),
-            "cache": self.cache.model_dump(),
-            "provider": self.provider.model_dump(),
-            "pool": self.pool.model_dump(),
-            "queue": self.queue.model_dump(),
-            "observability": self.observability.model_dump(),
-            "edit": self.edit.model_dump(),
-            "security": self.security.to_env(),
-            "chat": {
-                "tryingopen_enabled": self.if_tryingopen_enabled,
-                "tryingopen_hourly_per_ip": self.if_tryingopen_hourly_per_ip,
-                "tryingopen_max_attempts": self.if_tryingopen_max_attempts,
-                "tryingopen_sync_minutes": self.if_tryingopen_sync_minutes,
-            },
-        }
+        """导出完整配置快照（供 /v1/meta 扩展）。实现下沉至 base.py。"""
+        return settings_json(self)
 
     def validate(self) -> list[str]:
-        """启动时校验关键配置，返回错误列表。"""
-        errors: list[str] = []
-        if not self.base_url:
-            errors.append("BASE_URL（IF_BASE_URL）不能为空")
-        if not self.sitekey:
-            errors.append("SITEKEY（IF_SITEKEY）不能为空")
-        if not self.cf_solver_url:
-            errors.append("CF_SOLVER_URL（IF_CF_SOLVER_URL）不能为空")
-        if self.port < 1 or self.port > 65535:
-            errors.append(f"PORT（IF_PORT）={self.port} 超出有效范围 1-65535")
-        if self.max_queue < 1:
-            errors.append(f"MAX_QUEUE（IF_MAX_QUEUE）={self.max_queue} 必须 >= 1")
-        if self.workers < 1:
-            errors.append(f"WORKERS（IF_WORKERS）={self.workers} 必须 >= 1")
-        if self.token_pool_size < 1:
-            errors.append(f"TOKEN_POOL_SIZE（IF_TOKEN_POOL_SIZE）={self.token_pool_size} 必须 >= 1")
-        if self.if_workers_max < self.if_workers_min:
-            errors.append(f"IF_WORKERS_MAX（{self.if_workers_max}）" f" < IF_WORKERS_MIN（{self.if_workers_min}）")
-        return errors
+        """启动时校验关键配置，返回错误列表。实现下沉至 base.py。"""
+        return validate_settings(self)
 
 
 # ── 模块级单例 ──────────────────────────────────────────
@@ -984,7 +750,7 @@ IF_CSP_ENABLED = settings.if_csp_enabled
 # ── 纯常量 + apply_model（P0-2: 拆分到 .presets，re-export 保持向后兼容）──
 # MAX_IMAGE_BYTES / MAX_PROMPT_LEN / ASPECT_RATIOS / MODEL_PRESETS / apply_model
 # 详见 api/config/presets.py（dispatch/worker/imagefree/health/models 消费）
-from .presets import (  # noqa: F401
+from .presets import (  # noqa: F401  (re-export for backward compat)
     ASPECT_RATIOS,
     MAX_IMAGE_BYTES,
     MAX_PROMPT_LEN,
@@ -997,182 +763,7 @@ config = sys.modules[__name__]
 
 
 # ── 导出所有模块级变量名 ──────────────────────────────────
-__all__ = [
-    "DBSettings",
-    "HTTPSettings",
-    "SolverSettings",
-    "CacheSettings",
-    "ProviderSettings",
-    "PoolSettings",
-    "QueueSettings",
-    "ObservabilitySettings",
-    "EditSettings",
-    "SecuritySettings",
-    "Settings",
-    "settings",
-    "BASE_URL",
-    "SITEKEY",
-    "CF_SOLVER_URL",
-    "CF_SOLVER_URLS",
-    "SOLVER_NODE_WEIGHTS",
-    "SOLVER_RATE_LIMIT_COOLDOWN_SECONDS",
-    "SOLVER_IDLE_TIMEOUT_SECONDS",
-    "HOST",
-    "PORT",
-    "PROXY",
-    "USER_AGENT",
-    "IF_HTTP_MAX_CONNECTIONS",
-    "IF_HTTP_KEEPALIVE",
-    "IF_UPSTREAM_MAX_INFLIGHT",
-    "IF_MAX_REQUEST_BODY",
-    "TURNSTILE_TIMEOUT",
-    "TURNSTILE_POLL_INTERVAL",
-    "HEALTHZ_CACHE_TTL",
-    "TOKEN_PREFETCH_CONCURRENCY",
-    "IF_PREFETCH_AFTER_SOLVE_DELAY",
-    "IF_PREFETCH_EMA_ALPHA",
-    "SOLVE_CIRCUIT_THRESHOLD",
-    "SOLVE_CIRCUIT_PROBE_SECONDS",
-    "SOLVE_STATS_WINDOW_SECONDS",
-    "GENERATE_TIMEOUT",
-    "GENERATE_POLL_INTERVAL",
-    "EDIT_TIMEOUT",
-    "TASK_HARD_TIMEOUT",
-    "EDIT_CONCURRENCY_WAIT",
-    "EDIT_MUTEX_ENABLED",
-    "EDIT_LEASE_ENABLED",
-    "EDIT_LEASE_TTL",
-    "EDIT_LOCK_MAX_AGE",
-    "EDIT_RETRY_MAX",
-    "EDIT_RETRY_INTERVAL",
-    "EDIT_PROXY_FILE",
-    "EDIT_PROXY_PARALLEL",
-    "IF_EDIT_PROXY_MAX_INFLIGHT",
-    "EDIT_PROXY_POOL_SIZE",
-    "EDIT_PROXY_POOL_IDLE_TTL",
-    "GENERATE_MAX_ATTEMPTS",
-    "IF_TXT_RETRY_MAX",
-    "IF_TXT_RETRY_BACKOFF_BASE",
-    "TOKEN_WAIT_TIMEOUT",
-    "SYNC_TIMEOUT",
-    "MAX_QUEUE",
-    "ADMIN_QUEUE_MAX",
-    "HIGH_QUEUE_MAX",
-    "NORMAL_QUEUE_MAX",
-    "WORKERS",
-    "IF_WORKER_AUTO",
-    "IF_WORKERS_MIN",
-    "IF_WORKERS_MAX",
-    "IF_WORKER_SCALE_UP_THRESHOLD",
-    "IF_WORKER_SCALE_DOWN_THRESHOLD",
-    "IF_WORKER_IDLE_SECONDS",
-    "IF_WORKER_SCALE_DOWN_HOLD",
-    "IF_WORKER_SCALER_LEGACY",
-    "IF_PERSISTENT_QUEUE_ENABLED",
-    "IF_PERSISTENT_QUEUE_DB",
-    "IF_WORKER_BATCH_ENABLED",
-    "IF_WORKER_BATCH_SIZE",
-    "TOKEN_POOL_SIZE",
-    "TOKEN_TTL",
-    "GALLERY_LIMIT",
-    "IF_GALLERY_PASSWORD",
-    "IF_GALLERY_SIGNING_SECRET",
-    "IF_GALLERY_SIGNING_TTL",
-    "IF_USD_PER_CREDIT",
-    "IF_COST_BUDGET_USD",
-    "IF_LRU_CACHE_SIZE",
-    "IF_LRU_CACHE_TTL",
-    "IF_TENSORFEED_CACHE_TTL",
-    "IF_TENSORFEED_BASE",
-    "IF_HEALTH_CHECK_INTERVAL",
-    "IF_HEALTH_CHECK_ENABLED",
-    "IF_ALERT_CHECK_INTERVAL",
-    "IF_ALERT_WEBHOOK_URL",
-    "IF_LOG_DIR",
-    "IF_LOG_RETENTION_DAYS",
-    "MOCK_UPSTREAM",
-    "OTEL_ENABLED",
-    "OTEL_SERVICE_NAME",
-    "OTEL_EXPORTER_OTLP_ENDPOINT",
-    "OTEL_CONSOLE_EXPORTER",
-    "OTEL_SAMPLE_RATE",
-    "OTEL_ERROR_SAMPLE_RATE",
-    "STATS_FILE",
-    "DB_FILE",
-    "IF_ROUTING_DB",
-    "IF_BASE64_DIR",
-    "IF_BASE64_FILE_TTL",
-    "IF_IMG_MAX_GB",
-    "DB_RETENTION_DAYS",
-    "DB_CLEANUP_INTERVAL",
-    "IF_DB_BATCH_ENABLED",
-    "IF_DB_BATCH_WINDOW",
-    "IF_DB_POOL_SIZE",
-    "IF_DB_POOL_TIMEOUT",
-    "PROXY_FILE",
-    "FREE_PROXY_ENABLED",
-    "FREE_PROXY_REFRESH_MIN",
-    "PROXY_COOLDOWN_SECONDS",
-    "IF_PROXY_MAX_USE_PER_DAY",
-    "IF_PROXY_USE_COOLDOWN_MAP",
-    "IF_PROXY_STICKY_WINDOW",
-    "IF_PROXY_TRACE_ENABLED",
-    "IF_PROXY_TRACE_TTL",
-    "IF_PROXY_TRACE_MAX_PER_ROUND",
-    "IF_PROXY_TRACE_CONCURRENCY",
-    "ACCOUNT_DB_FILE",
-    "EMAIL_DB_FILE",
-    "NANOBANANA_ACCOUNT_TARGET",
-    "ACCOUNT_AUTO",
-    "MOCK_REGISTER",
-    "IF_MAIL_AI_EXTRACT",
-    "IF_PROVIDER_DEGRADE_THRESHOLD",
-    "IF_PROVIDER_RECOVER_INTERVAL",
-    "IF_IDEMPOTENCY_ENABLED",
-    "IF_IDEMPOTENCY_TTL",
-    "IF_DLQ_ENABLED",
-    "IF_DLQ_MAX_RETRIES",
-    "IF_DLQ_RETENTION_DAYS",
-    "IF_DLQ_REQUEUE",
-    "IF_SLOW_LOG_ENABLED",
-    "IF_SLOW_REQUEST_MS",
-    "IF_SLOW_LOG_SIZE",
-    "DEFAULT_MODEL",
-    "IF_FALAI_ENABLED",
-    "IF_FALAI_HCAPTCHA_SITEKEY",
-    "IF_FALAI_HCAPTCHA_MODE",
-    "IF_FALAI_BROWSER_HEADFUL",
-    "IF_FALAI_BROWSER_POOL_SIZE",
-    "IF_FALAI_VERIFY_TIMEOUT",
-    "IF_FALAI_POLL_INTERVAL",
-    "IF_FALAI_POLL_TIMEOUT",
-    "IF_REQUESTS_PER_MINUTE",
-    "IF_RATE_TOKEN_CAPACITY",
-    "IF_RATE_TOKEN_REFILL_PER_SEC",
-    "IF_STORAGE_BACKEND",
-    "IF_REDIS_URL",
-    "IF_REDIS_ENABLED",
-    "IF_IP_WHITELIST",
-    "IF_TRUSTED_PROXIES",
-    "IF_ADMIN_KEYS",
-    "IF_ADMIN_KEY_OPEN",
-    "IF_ADMIN_CONTACT",
-    "IF_AUTO_BLOCK_ENABLED",
-    "IF_AUTO_BLOCK_THRESHOLD",
-    "IF_AUTO_BLOCK_WINDOW_SECONDS",
-    "IF_AUTO_BLOCK_TTL_SECONDS",
-    "IF_AUTO_BLOCK_PERMANENT",
-    "CORS_ORIGINS",
-    "IF_SECURITY_HEADERS_ENABLED",
-    "IF_CSP_ENABLED",
-    "IF_TRYINGOPEN_ENABLED",
-    "IF_TRYINGOPEN_HOURLY_PER_IP",
-    "IF_TRYINGOPEN_MAX_ATTEMPTS",
-    "IF_TRYINGOPEN_SYNC_MINUTES",
-    "MAX_IMAGE_BYTES",
-    "MAX_PROMPT_LEN",
-    "ASPECT_RATIOS",
-    "MODEL_PRESETS",
-    "apply_model",
-    "config",
-]
+# 与 settings.py 一致：程序化生成 __all__，覆盖所有非下划线开头的模块级名字
+# （含顶部 import 的子配置类、Settings、工厂函数、模块级常量、presets re-export、config）。
+# 这样 `from api.config import *` 与显式 __all__ 行为一致，且无需手工维护 180+ 行名单。
+__all__ = [name for name in globals() if not name.startswith("_")]

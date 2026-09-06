@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -29,3 +31,30 @@ class EditSettings(BaseModel):
     txt_retry_backoff_base: int = 5
     sync_timeout: int = 300
     max_image_bytes: int = 4 * 1024 * 1024
+
+    @classmethod
+    def from_settings(cls, s: Any) -> EditSettings:
+        """从 Settings 实例提取字段构造 EditSettings。"""
+        return cls(
+            edit_timeout=s.edit_timeout,
+            task_hard_timeout=s.task_hard_timeout,
+            edit_concurrency_wait=s.edit_concurrency_wait,
+            edit_mutex_enabled=s.edit_mutex_enabled,
+            edit_lease_enabled=s.edit_lease_enabled,
+            edit_lease_ttl=s.edit_lease_ttl,
+            edit_lock_max_age=s.edit_lock_max_age,
+            edit_retry_max=s.edit_retry_max,
+            edit_retry_interval=s.edit_retry_interval,
+            edit_proxy_file=s.edit_proxy_file,
+            edit_proxy_parallel=s.edit_proxy_parallel,
+            edit_proxy_max_inflight=s.if_edit_proxy_max_inflight,
+            edit_proxy_pool_size=s.edit_proxy_pool_size,
+            edit_proxy_pool_idle_ttl=s.edit_proxy_pool_idle_ttl,
+            generate_timeout=s.generate_timeout,
+            generate_poll_interval=s.generate_poll_interval,
+            generate_max_attempts=s.generate_max_attempts,
+            txt_retry_max=s.if_txt_retry_max,
+            txt_retry_backoff_base=s.if_txt_retry_backoff_base,
+            sync_timeout=s.sync_timeout,
+            max_image_bytes=4 * 1024 * 1024,
+        )

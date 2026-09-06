@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -42,3 +44,41 @@ class ProviderSettings(BaseModel):
     falai_verify_timeout: int = 90
     falai_poll_interval: float = 2.0
     falai_poll_timeout: int = 120
+
+    @classmethod
+    def from_settings(cls, s: Any) -> ProviderSettings:
+        """从 Settings 实例提取字段构造 ProviderSettings。"""
+        return cls(
+            proxy_file=s.proxy_file,
+            free_proxy_enabled=s.free_proxy_enabled,
+            free_proxy_refresh_min=s.free_proxy_refresh_min,
+            proxy_cooldown_seconds=s.proxy_cooldown_seconds,
+            proxy_max_use_per_day=s.if_proxy_max_use_per_day,
+            proxy_use_cooldown_map=s.if_proxy_use_cooldown_map,
+            proxy_sticky_window=s.if_proxy_sticky_window,
+            account_db_file=s.account_db_file,
+            email_db_file=s.email_db_file,
+            nanobanana_account_target=s.nanobanana_account_target,
+            account_auto=s.account_auto,
+            mock_register=s.mock_register,
+            degrade_threshold=s.if_provider_degrade_threshold,
+            recover_interval=s.if_provider_recover_interval,
+            default_model=s.default_model,
+            reg_backoff_cf=s.reg_backoff_cf,
+            reg_backoff_email=s.reg_backoff_email,
+            reg_backoff_ip=s.reg_backoff_ip,
+            reg_backoff_transient_base=s.reg_backoff_transient_base,
+            reg_backoff_transient_max=s.reg_backoff_transient_max,
+            proxy_trace_enabled=s.if_proxy_trace_enabled,
+            proxy_trace_ttl=s.if_proxy_trace_ttl,
+            proxy_trace_max_per_round=s.if_proxy_trace_max_per_round,
+            proxy_trace_concurrency=s.if_proxy_trace_concurrency,
+            falai_enabled=s.if_falai_enabled,
+            falai_hcaptcha_sitekey=s.if_falai_hcaptcha_sitekey,
+            falai_hcaptcha_mode=s.if_falai_hcaptcha_mode,
+            falai_browser_headful=s.if_falai_browser_headful,
+            falai_browser_pool_size=s.if_falai_browser_pool_size,
+            falai_verify_timeout=s.if_falai_verify_timeout,
+            falai_poll_interval=s.if_falai_poll_interval,
+            falai_poll_timeout=s.if_falai_poll_timeout,
+        )

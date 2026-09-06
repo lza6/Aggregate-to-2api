@@ -30,6 +30,7 @@ from .query import (  # noqa: E402,F401
     _gallery_verify_sig,
     account_pool_dashboard,
     audit_search,
+    cost_forecast,
     cost_overview,
     diagnostics,
     email_sources,

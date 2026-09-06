@@ -29,6 +29,24 @@ class SecuritySettings(BaseModel):
     # v4.4: 聊天端点每分钟限流（0 = 不限）
     chat_requests_per_minute: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
 
+    @classmethod
+    def from_settings(cls, s: Any) -> SecuritySettings:
+        """从 Settings 实例提取字段构造 SecuritySettings。"""
+        return cls(
+            gallery_password=s.if_gallery_password,
+            ip_whitelist=s.if_ip_whitelist,
+            trusted_proxies=s.if_trusted_proxies,
+            auto_block_enabled=s.if_auto_block_enabled,
+            auto_block_threshold=s.if_auto_block_threshold,
+            auto_block_window_seconds=s.if_auto_block_window_seconds,
+            auto_block_ttl_seconds=s.if_auto_block_ttl_seconds,
+            cors_origins=s.if_cors_origins,
+            security_headers_enabled=s.if_security_headers_enabled,
+            csp_enabled=s.if_csp_enabled,
+            api_keys=[k.strip() for k in (s.if_api_keys or "").split(",") if k.strip()],
+            chat_requests_per_minute=s.if_chat_rate_limit,
+        )
+
     def to_env(self) -> dict[str, Any]:
         """导出 env 风格大写键（IP_WHITELIST / TRUSTED_PROXIES / ...）。
 

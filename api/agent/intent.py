@@ -101,15 +101,18 @@ async def _llm_classify(prompt: str) -> IntentResult:
     # 真实 LLM 路径（用户批准后启用）：调 tryingopen 上游分类
     try:
         from ..providers.registry import bootstrap, registry
+        from .metrics import inc_intent_classification, inc_llm_call
 
         bootstrap()
         # 找一个支持 chat 的 tryingopen 模型
         chat_models = registry.all_chat_models()
         if not chat_models:
+            inc_intent_classification("fallback")
             return IntentResult("unknown", "", "", 0.3, "llm_no_model", True)
         model_id = chat_models[0].id
         provider = registry.chat_providers.get(model_id.split("/", 1)[0])
         if provider is None:
+            inc_intent_classification("fallback")
             return IntentResult("unknown", "", "", 0.3, "llm_no_provider", True)
         system_prompt = (
             "你是意图分类器。把用户 prompt 分类为以下场景之一，只输出 JSON：\n"
@@ -119,6 +122,7 @@ async def _llm_classify(prompt: str) -> IntentResult:
             '"confidence":0.0-1.0}\n'
             "只输出 JSON，不要其他文字。"
         )
+        inc_llm_call("intent", "classify")
         result = await provider.chat_collect(
             model_id,
             [
@@ -134,6 +138,7 @@ async def _llm_classify(prompt: str) -> IntentResult:
         end = text.rfind("}")
         if start >= 0 and end > start:
             data = json.loads(text[start : end + 1])
+            inc_intent_classification("success")
             return IntentResult(
                 scene=str(data.get("scene", "unknown")),
                 provider_hint=str(data.get("provider_hint", "")),
@@ -143,7 +148,9 @@ async def _llm_classify(prompt: str) -> IntentResult:
                 llm_used=True,
                 extra={"raw": text},
             )
+        inc_intent_classification("fallback")
     except Exception as exc:
+        inc_intent_classification("llm_error")
         log.warning("LLM 意图分类失败，回退 unknown: %s", exc)
     return IntentResult("unknown", "", "", 0.3, "llm_fallback", True)
 

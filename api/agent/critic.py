@@ -71,6 +71,9 @@ async def review_generation(
     try:
         return await _llm_review(prompt, asset_url, scene, provider, duration_ms, retry_count)
     except Exception as exc:
+        from .metrics import inc_critic_review
+
+        inc_critic_review("llm_error")
         log.warning("critic LLM 审查失败，回退 Mock: %s", exc)
         return _mock_review(prompt, scene, provider, duration_ms, retry_count)
 
@@ -114,14 +117,17 @@ async def _llm_review(
 ) -> CriticResult:
     """真实 LLM 终检：用 tryingopen 上游审查产物质量。"""
     from ..providers.registry import bootstrap, registry
+    from .metrics import inc_critic_review, inc_llm_call
 
     bootstrap()
     chat_models = registry.all_chat_models()
     if not chat_models:
+        inc_critic_review("fallback")
         return _mock_review(prompt, scene, provider, duration_ms, retry_count)
     model_id = chat_models[0].id
     chat_provider = registry.chat_providers.get(model_id.split("/", 1)[0])
     if chat_provider is None:
+        inc_critic_review("fallback")
         return _mock_review(prompt, scene, provider, duration_ms, retry_count)
 
     system_prompt = (
@@ -135,6 +141,7 @@ async def _llm_review(
         f"场景: {scene}\nprovider: {provider}\nprompt: {prompt}\n"
         f"asset_url: {asset_url or 'N/A'}\n耗时: {duration_ms}ms\n重试次数: {retry_count}"
     )
+    inc_llm_call("critic", "review")
     result = await chat_provider.chat_collect(
         model_id,
         [
@@ -149,6 +156,7 @@ async def _llm_review(
     end = text.rfind("}")
     if start >= 0 and end > start:
         data = json.loads(text[start : end + 1])
+        inc_critic_review("success")
         return CriticResult(
             pass_check=bool(data.get("pass", True)),
             score=float(data.get("score", 0.8)),
@@ -157,6 +165,7 @@ async def _llm_review(
             reasoning=str(data.get("reasoning", "")),
             llm_used=True,
         )
+    inc_critic_review("fallback")
     return _mock_review(prompt, scene, provider, duration_ms, retry_count)
 
 

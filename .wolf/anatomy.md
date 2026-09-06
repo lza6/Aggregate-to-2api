@@ -24,11 +24,11 @@
 
 ## 引擎 worker/
 
-- `worker/engine.py` — 引擎（有界队列+worker 池 4-16+token 池，v8.0 P1-5 多维扩缩容）
+- `worker/engine.py` — 引擎主循环（拆分后 738 行，扩缩容/DLQ 已迁出）
 - `worker/queue.py` — CountedPriorityQueue/QueueFull/_WorkerHandle
-- `worker/dlq.py` — 死信队列 build_dlq_message/push_dlq_on_exhaust
+- `worker/dlq.py` — 死信队列 build_dlq_message/push_dlq_on_exhaust（从 engine.py 拆出）
 - `worker/generator.py` — generate_once/generate_once_b3/generate_with_429_proxy_fallback
-- `worker/scaler.py` — 多维扩缩容评分
+- `worker/scaler.py` — 多维扩缩容评分（从 engine.py 拆出，P0-F4）
 - `worker/token_pool.py` — Turnstile token 预取池
 
 ## 提供商 providers/
@@ -41,15 +41,15 @@
 
 ## 号池/邮箱池
 
-- `account_pool/` — 号池包（fsm/scoring/pool，P0-1 拆分；pool.py 有 `_pkg_attr()` 运行时读包命名空间保 monkeypatch 契约）
+- `account_pool/` — 号池包（mixin 拆分：_base/_constants/borrow/store/signin/stats/engine + pool.py 兼容垫片；`_pkg_attr()` 运行时读包命名空间保 monkeypatch 契约；fsm/scoring 独立）
 - `registerer/` — 注册器包（types/utils/flow/cf_solve/email_verify，`_mock_register()` 运行时解析）
 - `email_pool.py` + `email_sources/` — 邮箱池 + 7 临时邮箱源
 
 ## 数据层 db/
 
-- `db/core.py` — 连接池/批量写/WAL checkpoint
+- `db/core.py` — 连接池/批量写/WAL checkpoint（拆分后 371 行，业务方法迁 queries.py 的 DBQueriesMixin）
 - `db/migrations.py` — P0-3 DDL 下沉（init_schema：requests/idempotency/dlq/cache_store/chat_usage + 兼容补列）
-- `db/queries.py` / `queue_store.py` / `lease_store.py` / `ip_blocklist_store.py` — 各存储
+- `db/queries.py` — DBQueriesMixin（DB 业务方法）+ QueueDB + task_to_public（DB 继承 DBQueriesMixin）
 
 ## 路由引擎/求解器/存储
 
@@ -57,7 +57,13 @@
 - `solver_guard.py` — SolverGuard 多节点联邦 + 熔断 + IdleTimeout
 - `cf_clearance_solver.py` — CF clearance 求解
 - `turnstile_client.py` — Turnstile token 求解客户端
-- `storage/` — 存储适配层（base 抽象 + local sqlite/memory + redis_adapter + factory）
+- `storage/` — 存储适配层（base 抽象 + local sqlite/memory + redis_adapter + factory；P0-S1 request_guard 热路径已接 adapter.rate_limiter，降级内存桶）
+- `agent/` — agent 子系统（intent LLM 分类/critic LLM 审查/guard 风险分级/memory 记忆巩固 L0-L3/routes /v1/agent/* 端点；chat_collect 走 tryingopen 免费上游，IF_MOCK_UPSTREAM=1 才 Mock）
+- `vector/` — 向量检索（P3-D1，store+embed，sqlite-vec 或 pHash 降级，GET /v1/gallery/similar，IF_VECTOR_SEARCH_ENABLED 缺省关）
+- `deploy/grafana/` — Grafana 仪表盘 + provisioning（P1-O4，imagefree-overview + slo-budget）
+- `deploy/litestream.yml` — litestream 异地秒级备份（P1-O1，R2/S3 占位凭证）
+- `deploy/prometheus.yml` — Prometheus 抓取配置（P1-O5 obs profile）
+- `deploy/docs/` — monitoring.md（UptimeRobot P1-O2）+ litestream-restore.md（恢复 SOP）+ cloudflare-cdn.md（P1-O3，L3 待拍板）
 
 ## 提示词/可观测性
 

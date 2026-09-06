@@ -1,0 +1,68 @@
+# Litestream 配置 — 异地秒级 SQLite WAL 复制
+# ─────────────────────────────────────────────────────────────────
+# 用途：把 imagefree.db 的 SQLite WAL 实时复制到对象存储（R2/S3），
+#       做到异地灾备 + 秒级 RPO（远优于宿主机 crontab 每日 03:00 全量热备）。
+# 启用：docker compose --profile backup up -d
+# 凭证：通过环境变量注入（compose 已透传 LITESTREAM_ACCESS_KEY_ID / SECRET_ACCESS_KEY），
+#       把真实值填到 deploy/.env（不要硬编码到此文件）：
+#         LITESTREAM_ACCESS_KEY_ID=<R2/S3 access key>
+#         LITESTREAM_SECRET_ACCESS_KEY=<R2/S3 secret key>
+# ─────────────────────────────────────────────────────────────────
+# 恢复流程见 deploy/docs/litestream-restore.md
+# ─────────────────────────────────────────────────────────────────
+
+dbs:
+  # 主任务库（任务/审计/slow_log/日志记录）
+  - path: /data/imagefree.db
+    replicas:
+      - type: s3
+        # Cloudflare R2（S3 兼容）；切 AWS S3 把 endpoint 改成 region 配置
+        endpoint: ${LITESTREAM_S3_ENDPOINT:-https://<ACCOUNT_ID>.r2.cloudflarestorage.com}
+        bucket: ${LITESTREAM_S3_BUCKET:-imagefree-backups}
+        path: ${LITESTREAM_S3_PATH:-imagefree/imagefree.db}
+        # 凭证经环境变量注入（compose env 透传 .env）
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        # R2 不需要 region；AWS S3 填 region: us-east-1
+        region: ${LITESTREAM_S3_REGION:-auto}
+        sync-interval: 1s
+        retention: 72h
+        retention-check-interval: 1h
+        snapshot-interval: 1h
+
+  # 号池库（账号注册/状态/封禁）
+  - path: /data/account_pool.db
+    replicas:
+      - type: s3
+        endpoint: ${LITESTREAM_S3_ENDPOINT:-https://<ACCOUNT_ID>.r2.cloudflarestorage.com}
+        bucket: ${LITESTREAM_S3_BUCKET:-imagefree-backups}
+        path: ${LITESTREAM_S3_PATH:-imagefree/account_pool.db}
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        region: ${LITESTREAM_S3_REGION:-auto}
+        sync-interval: 1s
+        retention: 72h
+        retention-check-interval: 1h
+        snapshot-interval: 1h
+
+  # 邮箱池库
+  - path: /data/email_registry.db
+    replicas:
+      - type: s3
+        endpoint: ${LITESTREAM_S3_ENDPOINT:-https://<ACCOUNT_ID>.r2.cloudflarestorage.com}
+        bucket: ${LITESTREAM_S3_BUCKET:-imagefree-backups}
+        path: ${LITESTREAM_S3_PATH:-imagefree/email_registry.db}
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        region: ${LITESTREAM_S3_REGION:-auto}
+        sync-interval: 1s
+        retention: 72h
+        retention-check-interval: 1h
+        snapshot-interval: 1h
+
+# 不监控 edit_leases.db（短时互斥租约，丢秒级数据无害）
+
+logging:
+  level: INFO
+  type: text
+  stdout: true

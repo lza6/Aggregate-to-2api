@@ -79,6 +79,70 @@
     </script>
 
     <title>听风AI — 多提供商 AI 生成网关 | OpenAI 兼容 API · 文生图 · 图生图 · AI 对话</title>
+
+    <!-- P2-C2: 关键 CSS inline —— LCP 关键路径（首屏 nav + hero + 玻璃背景）-->
+    <!-- 内联使首屏渲染不阻塞在外部 CSS 请求上，把 LCP 压到 < 1.5s -->
+    <style>
+      /* 关键 base token（完整版在 base.css，这里只内联首屏需要的） */
+      :root {
+        --bg: #0a0e1a; --bg-2: #050811;
+        --card: rgba(255, 255, 255, 0.045);
+        --line: rgba(255, 255, 255, 0.09); --line-2: rgba(255, 255, 255, 0.16);
+        --brand: #60a5fa; --brand-2: #93c5fd; --brand-3: #bfdbfe;
+        --brand-soft: rgba(96, 165, 250, 0.16); --brand-glow: rgba(96, 165, 250, 0.42);
+        --accent: #f472b6;
+        --text: #ffffff; --text-2: #dbe4f0; --muted: #94a3b8; --muted-2: #64748b;
+        --radius: 18px; --radius-pill: 999px;
+        --space-2: 10px; --space-3: 16px; --space-4: 24px; --space-5: 32px; --space-6: 48px; --space-7: 72px;
+        --container: 1160px;
+        --dur: 0.32s; --dur-fast: 0.18s; --dur-slow: 0.6s;
+        --ease-spring: cubic-bezier(0.16, 1, 0.3, 1); --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+      body {
+        margin: 0; background: var(--bg); color: var(--text);
+        font-family: var(--sans); line-height: 1.6;
+        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+        overflow-x: hidden;
+      }
+      #app { min-height: 100vh; display: flex; flex-direction: column; position: relative; background: radial-gradient(ellipse at 50% -10%, #0f1626 0%, #0a0e1a 55%, #050811 100%); }
+      .container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 var(--space-4); }
+      /* nav 首屏即可见 */
+      .nav { position: sticky; top: 0; z-index: 50; padding: var(--space-4) 0; border-bottom: 1px solid transparent; background: rgba(10, 14, 26, 0.4); backdrop-filter: blur(12px) saturate(140%); -webkit-backdrop-filter: blur(12px) saturate(140%); }
+      .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: var(--space-3); }
+      .logo { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, var(--brand), var(--accent)); color: #fff; font-size: 20px; font-weight: 800; box-shadow: 0 4px 16px var(--brand-glow); flex-shrink: 0; }
+      .brand-text { display: flex; flex-direction: column; gap: 2px; }
+      .brand-name { font-size: 18px; font-weight: 800; letter-spacing: 0.01em; display: flex; align-items: center; gap: 8px; }
+      .brand-tag { font-size: 11px; font-weight: 600; color: var(--brand-2); background: var(--brand-soft); padding: 2px 8px; border-radius: var(--radius-pill); border: 1px solid rgba(96, 165, 250, 0.2); }
+      .brand-sub { font-size: 12.5px; color: var(--muted); }
+      .nav-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 600; transition: transform var(--dur-fast) var(--ease-spring); white-space: nowrap; }
+      .btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; box-shadow: 0 4px 18px var(--brand-glow); }
+      .btn-ghost { border: 1px solid var(--line-2); color: var(--text-2); background: var(--card); }
+      /* hero 首屏 fade-up 不依赖外部 CSS */
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+      .fade-up { animation: fadeUp var(--dur-slow) var(--ease-spring) both; }
+      .text-grad { background: linear-gradient(120deg, var(--text), var(--brand-2) 60%, var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+      .hero { padding: var(--space-7) 0 var(--space-5); text-align: center; }
+      .hero-title { font-size: clamp(32px, 5.5vw, 56px); font-weight: 800; letter-spacing: -0.02em; margin: 0 0 var(--space-3); line-height: 1.1; }
+      .hero-sub { font-size: clamp(15px, 2.2vw, 18px); color: var(--muted); max-width: 720px; margin: 0 auto; }
+      .hero-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 6px 14px; margin-bottom: var(--space-4); }
+      .bg-field { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      .aura { position: fixed; top: -20%; left: 50%; transform: translateX(-50%); width: 90%; height: 60vh; background: radial-gradient(closest-side at 50% 30%, var(--brand-glow), transparent 70%), radial-gradient(closest-side at 18% 50%, rgba(244, 114, 182, 0.10), transparent 60%); filter: blur(8px); pointer-events: none; z-index: 0; }
+      :focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; border-radius: 6px; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+        .fade-up { animation: none; opacity: 1; transform: none; }
+      }
+    </style>
+
+    <!-- P2-C2: 字体预加载 —— 系统字体栈为主，无远程字体；preconnect 仅用于 og:image 等跨域资源 -->
+    <link rel="preload" href="/src/styles/base.css" as="style" />
+    <link rel="stylesheet" href="/src/styles/base.css" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="/src/styles/base.css" /></noscript>
   </head>
   <body>
     <div id="app"></div>

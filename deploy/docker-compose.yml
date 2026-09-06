@@ -1,18 +1,38 @@
 # imagefree_api 部署编排 — 生产级配置
 # 服务：cfsolver(8001, 内部) + api(8100, 公网)
-# 版本: v8.3.0
+# 版本: v8.5.0
 # 注意：build context 指向仓库根（..），直接用根 api/ 源码构建，
 #       已废除 deploy/api 镜像副本（v6.8.0 起，原 sync_deploy.py 同步机制废弃）。
 #       须从 deploy/ 目录运行：cd deploy && docker compose up -d
 # P2-1 DB 备份：data/backups 卷持久化，宿主机 crontab 每日 03:00 全量热备：
 #   0 3 * * * cd /home/ubuntu/imagefree-api && python scripts/backup_db.py --db data/imagefree.db --out-dir data/backups
 #   恢复见 scripts/restore_db.py --backup <备份> --target data/imagefree.db（见 docs/SOP.md「DB 备份与恢复」）
+#
+# P1-O5 可选 profile（缺省 = 仅 api + cfsolver，零依赖回归）：
+#   docker compose --profile obs up -d       # Prometheus + Grafana（挂 /metrics + 自动加载仪表盘）
+#   docker compose --profile redis up -d     # Redis 7（P0-S1 storage 热路径接线后可用；当前 IF_STORAGE_BACKEND=sqlite 不消费）
+#   docker compose --profile backup up -d    # Litestream sidecar（异地秒级 SQLite WAL 复制，配 deploy/litestream.yml）
+#   docker compose --profile obs --profile backup --profile redis up -d  # 全量可观测 + 备份 + 缓存
 
 services:
   cfsolver:
-    # P1-6 多节点容灾：默认单实例；横向扩展时复制此 service（cfsolver2/cfsolver3...），
-    # 并在 api 的 IF_CF_SOLVER_URLS 逗号列出全部节点 URL，solver_guard 自动加权最少在途调度+failover。
-    # IdleTimeout（IF_SOLVER_IDLE_TIMEOUT_SECONDS）可让空闲节点降级为备选，按需停池。
+    # P1-6 / P1-O6 多节点容灾：
+    # - 单实例：默认配置（docker compose up -d）。
+    # - 多节点横向扩展有两种方式：
+    #   (a) Docker Swarm：把下面注释的 deploy.replicas: 3 打开（需 docker swarm init）。
+    #       compose v2 在非 swarm 模式下会忽略 deploy.replicas，单机仍起 1 个。
+    #   (b) 单机多副本：复制此 service 块为 cfsolver2 / cfsolver3，container_name 各自不同，
+    #       再把 api 的 IF_CF_SOLVER_URLS 改为逗号分隔列表：
+    #         IF_CF_SOLVER_URLS=http://cfsolver:8001,http://cfsolver2:8001,http://cfsolver3:8001
+    #       solver_guard 已支持多节点加权最少在途调度 + 熔断 failover（不需改 api/ 源码）。
+    # - IdleTimeout（IF_SOLVER_IDLE_TIMEOUT_SECONDS）可让空闲节点降级为备选，按需停池。
+    # deploy:                            # 取消注释启用 swarm 副本（需 swarm 模式）
+    #   replicas: 3
+    #   update_config:
+    #     parallelism: 1
+    #     delay: 10s
+    #   restart_policy:
+    #     condition: any
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cfsolver
@@ -107,6 +127,129 @@ services:
       driver: json-file
       options:
         max-size: "10m"
+        max-file: "3"
+    networks:
+      - imagefree
+
+  # ─────────────────────────────────────────────────────────────
+  # P1-O5 可选 profile 服务（缺省不启动；需 --profile <name> 显式启用）
+  # 所有 profile 服务均挂 imagefree 网络，可解析 api / cfsolver 服务名。
+  # ─────────────────────────────────────────────────────────────
+
+  # P0-S1 接线后启用的缓存后端；当前 IF_STORAGE_BACKEND=sqlite 不消费此服务。
+  # 启用：docker compose --profile redis up -d
+  # 接线：.env 设 IF_STORAGE_BACKEND=redis + IF_REDIS_ENABLED=1 + IF_REDIS_URL=redis://redis:6379/0
+  redis:
+    image: redis:7-alpine
+    container_name: imagefree-redis
+    profiles: ["redis"]
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: '1'
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - imagefree
+
+  # 可观测性栈：Prometheus 抓 /metrics + Grafana 加载 provisioning
+  # 启用：docker compose --profile obs up -d
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: imagefree-prometheus
+    profiles: ["obs"]
+    restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: '1'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - imagefree
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: imagefree-grafana
+    profiles: ["obs"]
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: '1'
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+    ports:
+      - "3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - imagefree
+
+  # Litestream sidecar：复制 SQLite WAL 到异地对象存储（R2/S3）
+  # 启用：docker compose --profile backup up -d
+  # 必须先填 deploy/litestream.yml 的占位凭证（LITESTREAM_ACCESS_KEY_ID 等）
+  litestream:
+    image: litestream/litestream:latest
+    container_name: imagefree-litestream
+    profiles: ["backup"]
+    restart: unless-stopped
+    depends_on:
+      - api
+    mem_limit: 128m
+    mem_reservation: 64m
+    cpus: '0.5'
+    # 共享 api 的 SQLite 文件卷（只读复制 WAL，不写入业务数据）
+    volumes:
+      - ./data:/data:ro
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: ["replicate"]
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID=${LITESTREAM_ACCESS_KEY_ID:-}
+      - LITESTREAM_SECRET_ACCESS_KEY=${LITESTREAM_SECRET_ACCESS_KEY:-}
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
         max-file: "3"
     networks:
       - imagefree

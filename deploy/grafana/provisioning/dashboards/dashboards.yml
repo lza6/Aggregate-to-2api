@@ -1,0 +1,15 @@
+# Grafana 仪表盘自动加载（provisioning）
+# 从 /etc/grafana/dashboards/ 扫描 JSON 文件并自动注册。
+# compose 已把 ./grafana/dashboards 挂载到该路径，新增 JSON 放入即生效（无需重启 Grafana）。
+apiVersion: 1
+dashboards:
+  - name: imagefree-overview
+    folder: imagefree
+    type: file
+    options:
+      path: /etc/grafana/dashboards/imagefree-overview.json
+  - name: slo-budget
+    folder: imagefree
+    type: file
+    options:
+      path: /etc/grafana/dashboards/slo-budget.json

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Skeleton, Empty } from './components/Feedback';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { CommandPalette } from './components/CommandPalette';
 import { Dashboard } from './pages/Dashboard';
 import { KeyBanner } from './components/KeyBanner';
 
@@ -34,6 +35,8 @@ export default function App() {
         <Layout>
           {/* v7.8: 全站管理 Key 横幅 —— 保存一次全站写操作生效；未配置时常驻黄色提示 */}
           <KeyBanner />
+          {/* P2-C1: Cmd+K 命令面板 —— 全局快速跳转 */}
+          <CommandPalette />
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<Dashboard />} />

@@ -1,0 +1,428 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "SLO 错误预算消耗 / 熔断事件 / DLQ 堆积。基于 api/slo_budget.py 4 类 SLO 与 metrics_ext 真实指标。",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "doc",
+      "tags": [],
+      "targetBlank": true,
+      "title": "全景仪表盘",
+      "tooltip": "打开 Overview",
+      "url": "/d/imagefree-overview",
+      "type": "link"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "row",
+      "title": "SLO 错误预算（4 类，30 天滚动窗口）",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 50}
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "100 * (1 - clamp_min((1 - (sum(rate(imagefree_requests_total{status=\"completed\"}[30m])) / clamp_min(sum(rate(imagefree_requests_total[30m])), 1e-9))) / 0.01, 0))",
+          "legendFormat": "剩余预算%",
+          "refId": "A"
+        }
+      ],
+      "title": "请求成功率 · 错误预算剩余（目标 ≥99%，预算 1%）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 50}
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "100 * clamp_min(1 - (histogram_quantile(0.95, sum by (le) (rate(imagefree_generate_duration_seconds_bucket[30m]))) * 1000) / 30000, 0)",
+          "legendFormat": "剩余预算%",
+          "refId": "A"
+        }
+      ],
+      "title": "P95 时延 · 余头（目标 ≤30s）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 50}
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "100 * clamp_min(1 - imagefree_queued / clamp_min(imagefree_processing + imagefree_queued, 1), 0)",
+          "legendFormat": "剩余预算%",
+          "refId": "A"
+        }
+      ],
+      "title": "队列等待 · 余头（目标 ≤5s，按 queued/total 近似）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "green", "value": 50}
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 1},
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "100 * (1 - clamp_min((1 - imagefree_solve_window_success_rate) / 0.05, 0))",
+          "legendFormat": "剩余预算%",
+          "refId": "A"
+        }
+      ],
+      "title": "求解成功率 · 错误预算剩余（目标 ≥95%）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false, "viz2": false},
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "line+area"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 50},
+              {"color": "red", "value": 100}
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "id": 5,
+      "options": {"legend": {"calcs": ["last", "min", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "pluginVersion": "10.0.0",
+      "fieldDefaults": [],
+      "targets": [
+        {
+          "expr": "100 * (1 - clamp_min((1 - (sum(rate(imagefree_requests_total{status=\"completed\"}[30m])) / clamp_min(sum(rate(imagefree_requests_total[30m])), 1e-9))) / 0.01, 0))",
+          "legendFormat": "请求成功率",
+          "refId": "A"
+        },
+        {
+          "expr": "100 * clamp_min(1 - (histogram_quantile(0.95, sum by (le) (rate(imagefree_generate_duration_seconds_bucket[30m]))) * 1000) / 30000, 0)",
+          "legendFormat": "P95 时延",
+          "refId": "B"
+        },
+        {
+          "expr": "100 * clamp_min(1 - imagefree_queued / clamp_min(imagefree_processing + imagefree_queued, 1), 0)",
+          "legendFormat": "队列等待",
+          "refId": "C"
+        },
+        {
+          "expr": "100 * (1 - clamp_min((1 - imagefree_solve_window_success_rate) / 0.05, 0))",
+          "legendFormat": "求解成功率",
+          "refId": "D"
+        }
+      ],
+      "title": "4 类 SLO 错误预算剩余（% 越高越好；50=yellow 阈，0=red 烧光）",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "title": "熔断事件 / 求解器健康",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "green", "index": 0, "text": "CLOSED"}, "1": {"color": "red", "index": 1, "text": "OPEN"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 17},
+      "id": 6,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "imagefree_solver_circuit_open", "legendFormat": "circuit", "refId": "A"}],
+      "title": "Solver 熔断状态（OPEN=red）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 5}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 17},
+      "id": 7,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "imagefree_solve_consecutive_failures", "legendFormat": "fails", "refId": "A"}],
+      "title": "Solver 连续失败次数（≥5 触熔断）",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false, "viz2": false},
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+      "id": 8,
+      "options": {"legend": {"calcs": ["last", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "imagefree_solver_circuit_open", "legendFormat": "circuit_open", "refId": "A"}],
+      "title": "熔断事件历史（1=OPEN，0=CLOSED）",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false, "viz2": false},
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "errors/min"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+      "id": 9,
+      "options": {"legend": {"calcs": ["last", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {"expr": "sum by (reason) (rate(imagefree_errors_total[5m])) * 60", "legendFormat": "{{reason}}", "refId": "A"}
+      ],
+      "title": "错误原因分布（按 reason，每分钟）",
+      "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "title": "DLQ 堆积 / 缺口提示",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "datasource": {"type": "marcusolsson-json-datasource", "uid": "-- JSON --"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 34},
+      "id": 10,
+      "options": {
+        "content": "# DLQ 堆积指标缺口\n\n**当前 api/metrics_ext.py 未注册 `imagefree_dlq_size` Gauge**，本面板的 DLQ 堆积图暂用占位文本。\n\n## 临时查询方式（DLQ 实时数据）\n\n```\ncurl http://<host>:8100/v1/dlq/list?limit=20\n```\n（管理端点，需 IF_ADMIN_KEYS 鉴权）\n\n## 补指标建议（不在本次 deploy/ 范围）\n\n在 `api/metrics_ext.py` 追加：\n```python\ndlq_size = _metric(Gauge, \"imagefree_dlq_size\", \"死信队列堆积量\")\n```\n在 `imagefree_metrics()` 内调用前需先 `await db.list_dlq(limit=10000)` 取行数后 `dlq_size.set(len(rows))`。\n补完后把本面板的占位 text 替换为 stat/timeseries 面板，expr=`imagefree_dlq_size`。\n\n## SLO 错误预算公式说明\n\n本仪表盘的预算剩余公式与 `api/slo_budget.py` 的 `_compute_budget_higher_better` / `_compute_budget_lower_better` 同源：\n- 越高越好型：`remaining_pct = 100 - (target - actual) / (1 - target) * 100`\n- 越低越好型：`remaining_pct = (1 - actual / threshold) * 100`\n- 状态：≥50 green，1-50 yellow，≤0 red\n\nPromQL 直接套用上式，与 `/v1/healthz` 的 `slo_budget` 字段一致。",
+        "mode": "markdown"
+      },
+      "title": "DLQ 缺口提示 + SLO 公式说明",
+      "type": "text"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["imagefree", "slo", "error-budget"],
+  "templating": {"list": []},
+  "time": {"from": "now-12h", "to": "now"},
+  "timepicker": {"refresh_intervals": ["5s", "10s", "15s", "30s", "1m", "5m"]},
+  "timezone": "browser",
+  "title": "imagefree SLO Budget",
+  "uid": "slo-budget",
+  "version": 1,
+  "weekStart": ""
+}

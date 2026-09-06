@@ -1,9 +1,9 @@
 import { Suspense, lazy } from 'react';
-import { fetchCost } from '../api';
+import { fetchCost, fetchCostForecast } from '../api';
 import { StatCard } from '../components/StatCard';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
-import type { CostOverview } from '../api';
+import type { CostForecast, CostOverview } from '../api';
 
 // recharts 重依赖懒加载（与 Dashboard 一致，主包不静态携带）
 const LazyBarChart = lazy(() => import('../components/BarChart').then(m => ({ default: m.BarChart })));
@@ -16,6 +16,8 @@ function formatUsd(n: number | undefined | null): string {
 
 export function CostsPage() {
   const { data: cost, loading, error, reload } = useApi<CostOverview>(() => fetchCost(), { intervalMs: 15000 });
+  // P3-D3: 预算燃烧预测（管理 Key 鉴权；预算=0 时后端返回 disabled=true，前端降级）
+  const { data: forecast } = useApi<CostForecast>(() => fetchCostForecast(), { intervalMs: 60000 });
 
   if (error && !cost) return <ErrorRetry message={error.message} onRetry={reload} />;
   if (loading && !cost) {
@@ -183,6 +185,124 @@ export function CostsPage() {
         </div>
       )}
 
+      {/* P3-D3: 预算燃烧预测（管理 Key 鉴权；预算=0 时降级为"未设预算"） */}
+      <div className="section-block tf-card cost-forecast-card">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">🔮 预算燃烧预测</h2>
+            <span className="section-sub">
+              {forecast?.disabled
+                ? '未设预算（IF_COST_BUDGET_USD=0），不启用燃烧预测'
+                : '基于近 30 天日均消耗速率预测何时超预算'}
+            </span>
+          </div>
+          {!forecast?.disabled && forecast?.projected_exceed_date && (
+            <span
+              className="tf-badge"
+              style={{
+                background: (forecast.days_remaining ?? 0) <= 7 ? 'var(--danger-bg)' : 'var(--warning-bg)',
+                color: (forecast.days_remaining ?? 0) <= 7 ? 'var(--danger-text)' : 'var(--warning-text)',
+              }}
+            >
+              预计 {forecast.projected_exceed_date} 超预算
+            </span>
+          )}
+        </div>
+
+        {forecast?.disabled ? (
+          <div className="cost-forecast-disabled">
+            <span className="cf-disabled-icon">⚠️</span>
+            <div className="cf-disabled-body">
+              <div className="cf-disabled-title">未设预算阈值</div>
+              <div className="cf-disabled-msg">
+                设置环境变量 <code>IF_COST_BUDGET_USD</code>（美元，&gt;0）后重启服务即可启用燃烧预测。
+                当前仅展示近 30 天日均消耗参考值。
+              </div>
+            </div>
+            <span className="cf-disabled-avg">日均 {formatUsd(forecast?.daily_avg_30d)}</span>
+          </div>
+        ) : forecast ? (
+          <>
+            <div className="cf-stats-row">
+              <div className="cf-stat">
+                <span className="cf-stat-label">日均消耗（30d）</span>
+                <span className="cf-stat-value">{formatUsd(forecast.daily_avg_30d)}</span>
+              </div>
+              <div className="cf-stat">
+                <span className="cf-stat-label">近 30 天累计</span>
+                <span className="cf-stat-value">{formatUsd(forecast.current_spent_30d)}</span>
+              </div>
+              <div className="cf-stat">
+                <span className="cf-stat-label">预算阈值</span>
+                <span className="cf-stat-value">{formatUsd(forecast.budget_usd)}</span>
+              </div>
+              <div className="cf-stat">
+                <span className="cf-stat-label">预计超预算</span>
+                <span className="cf-stat-value">
+                  {forecast.projected_exceed_date ?? '无法预测'}
+                </span>
+              </div>
+              <div className="cf-stat">
+                <span className="cf-stat-label">剩余天数</span>
+                <span
+                  className="cf-stat-value"
+                  style={{
+                    color:
+                      forecast.days_remaining == null
+                        ? 'var(--text-muted)'
+                        : forecast.days_remaining <= 7
+                          ? 'var(--danger-text)'
+                          : forecast.days_remaining <= 14
+                            ? 'var(--warning-text)'
+                            : 'var(--success-text)',
+                  }}
+                >
+                  {forecast.days_remaining == null ? '-' : `${forecast.days_remaining} 天`}
+                </span>
+              </div>
+            </div>
+
+            {/* 燃烧进度条：当前累计 vs 预算阈值 */}
+            {forecast.budget_usd > 0 && (
+              <div className="cf-burn-bar">
+                {(() => {
+                  const spentPct = Math.min(
+                    100,
+                    (forecast.current_spent_30d / forecast.budget_usd) * 100,
+                  );
+                  const over = forecast.current_spent_30d >= forecast.budget_usd;
+                  return (
+                    <>
+                      <div className="cf-burn-track">
+                        <div
+                          className={`cf-burn-fill ${over ? 'cf-burn-over' : ''}`}
+                          style={{ width: `${Math.max(2, spentPct)}%` }}
+                        />
+                        {/* 预算警戒线（100% 处） */}
+                        <div className="cf-burn-budget-line" title="预算阈值" />
+                      </div>
+                      <div className="cf-burn-legend">
+                        <span>累计 {formatUsd(forecast.current_spent_30d)}</span>
+                        <span>预算 {formatUsd(forecast.budget_usd)}</span>
+                        <span style={{ color: over ? 'var(--danger-text)' : 'var(--text-muted)' }}>
+                          {over ? '已超支' : `${spentPct.toFixed(1)}%`}
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {forecast.note && (
+              <div className="cf-note">{forecast.note}</div>
+            )}
+          </>
+        ) : (
+          <Skeleton lines={3} height={40} />
+        )}
+      </div>
+
       {/* by_provider 表格 */}
       <div className="section-block">
         <div className="section-header">
@@ -251,6 +371,25 @@ export function CostsPage() {
         .cba-title { font-size: 14px; font-weight: 700; }
         .cba-msg { font-size: 12.5px; opacity: 0.92; margin-top: 2px; }
         .cba-pct { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cost-forecast-card { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+        .cost-forecast-disabled { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--bg-subtle); border-radius: var(--radius-lg); }
+        .cf-disabled-icon { font-size: 22px; flex-shrink: 0; }
+        .cf-disabled-body { flex: 1; min-width: 0; }
+        .cf-disabled-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+        .cf-disabled-msg { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+        .cf-disabled-msg code { background: var(--bg-card); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; }
+        .cf-disabled-avg { font-size: 13px; font-weight: 600; color: var(--primary-600); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cf-stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+        .cf-stat { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-md); }
+        .cf-stat-label { font-size: 11px; color: var(--text-muted); }
+        .cf-stat-value { font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .cf-burn-bar { display: flex; flex-direction: column; gap: 6px; }
+        .cf-burn-track { position: relative; height: 12px; background: var(--bg-subtle); border-radius: var(--radius-full); overflow: hidden; }
+        .cf-burn-fill { height: 100%; background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%); border-radius: var(--radius-full); transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .cf-burn-fill.cf-burn-over { background: linear-gradient(90deg, #ef4444 0%, #f59e0b 100%); }
+        .cf-burn-budget-line { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--warning); pointer-events: none; }
+        .cf-burn-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .cf-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
       `}</style>
     </div>
   );

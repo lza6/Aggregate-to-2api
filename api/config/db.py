@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -21,3 +23,22 @@ class DBSettings(BaseModel):
     base64_file_ttl: int = 86400
     idempotency_enabled: bool = False
     idempotency_ttl: int = 900
+
+    @classmethod
+    def from_settings(cls, s: Any) -> DBSettings:
+        """从 Settings 实例提取字段构造 DBSettings。"""
+        return cls(
+            file=s.db_file,
+            stats_file=s.stats_file,
+            retention_days=s.db_retention_days,
+            cleanup_interval=s.db_cleanup_interval,
+            batch_enabled=s.if_db_batch_enabled,
+            batch_window=s.if_db_batch_window,
+            pool_size=s.if_db_pool_size,
+            pool_timeout=s.if_db_pool_timeout,
+            base64_dir=s.if_base64_dir,
+            base64_file_ttl=s.if_base64_file_ttl,
+            idempotency_enabled=s.if_idempotency_enabled,
+            idempotency_ttl=s.if_idempotency_ttl,
+            routing_db_file=s.routing_db_file,
+        )

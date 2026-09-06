@@ -314,3 +314,27 @@ p { margin: 0; }
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ============================================================
+   P2-C2: 原生滚动揭示（替代 motion-v whileInView）
+   useReveal() 返回 ref + shown，组件用 :class 切换 .reveal-init/.reveal-in
+   ============================================================ */
+.reveal {
+  transition: opacity var(--dur-slow) var(--ease-spring), transform var(--dur-slow) var(--ease-spring);
+  will-change: opacity, transform;
+}
+.reveal-init {
+  opacity: 0;
+  transform: translateY(28px);
+}
+.reveal-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-init, .reveal-in {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}

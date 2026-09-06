@@ -242,6 +242,35 @@ class ChatUsageTracker:
         row = await cursor.fetchone()
         return round(float(row[0] or 0), 6)
 
+    async def cost_daily(self, days: int = 30) -> list[dict[str, Any]]:
+        """按天聚合 cost_usd + calls（P3-D3 预算燃烧预测用）。
+
+        返回近 N 天（含今天）升序日期列表，每项含 day/cost_usd/calls。
+        仅返回有数据的天（无调用的日期不填充空行），与 cost_monthly 同口径。
+        """
+        days = max(1, int(days))
+        import datetime as _dt
+
+        cutoff_dt = _dt.date.today() - _dt.timedelta(days=days)
+        cutoff = cutoff_dt.strftime("%Y-%m-%d")
+        db = await self._get_db()
+        await db._ensure_flushed()
+        conn = await db._get_read_conn()
+        cursor = await conn.execute(
+            "SELECT day, COALESCE(SUM(cost_usd), 0), COUNT(*) FROM chat_usage "
+            "WHERE day IS NOT NULL AND day >= ? GROUP BY day ORDER BY day ASC",
+            (cutoff,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "day": row[0],
+                "cost_usd": round(float(row[1] or 0), 6),
+                "calls": int(row[2] or 0),
+            }
+            for row in rows
+        ]
+
     async def cost_by_provider(self, months: int = 12) -> list[dict[str, Any]]:
         """按 provider 聚合 cost_usd + calls + tokens（M6-F3 /v1/cost 的 by_provider）。"""
         months = max(1, int(months))

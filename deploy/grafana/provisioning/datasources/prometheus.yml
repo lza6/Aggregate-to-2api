@@ -1,0 +1,15 @@
+# Grafana 数据源自动加载（provisioning）
+# 启用 obs profile 后，Grafana 启动即自动连接同网络的 Prometheus。
+# 验证：docker compose --profile obs up -d 后，Grafana → Connections → Data sources 应见 prometheus。
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+      manageAlerts: false

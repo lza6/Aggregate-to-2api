@@ -2,25 +2,37 @@
 /**
  * Hero3D — 抽象粒子流场背景（裸 Three.js，懒加载）
  * 语义：AI 生成 · 数据流转汇聚（呼应网关聚合多提供商）
- * - ~2200 粒子沿流场漂移，颜色在天蓝 ↔ 粉珊瑚间渐变
+ * - 粒子沿流场漂移，颜色在天蓝 ↔ 粉珊瑚间渐变
  * - 鼠标 parallax 相机微移
  * - 三档降级：reduced-motion / WebGL 不可用 → CSS aura
  * - three 动态 import 不进 LCP 关键路径；forceContextLoss 防 GL 句柄累积
+ *
+ * P2-C2: 粒子数按视口断点细化 —— 小屏 800 / 中屏 1400 / 大屏 2200
+ * （原固定 2200 在手机上 GPU 压力大，掉帧明显；按断点降级）
  */
-import { ref, onMounted, onBeforeUnmount, shallowRef } from 'vue'
+import { ref, onMounted, onBeforeUnmount, shallowRef, computed } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 
 const props = withDefaults(defineProps<{
   count?: number
   area?: number
 }>(), {
-  count: 2200,
+  count: 0,  // 0 = 按断点自适应
   area: 18
 })
 
 const canvasHost = ref<HTMLElement | null>(null)
 const ok = ref(true)
 const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
+// P2-C2: 断点细化粒子数
+const small = useMediaQuery('(max-width: 768px)')
+const medium = useMediaQuery('(max-width: 1280px)')
+const adaptiveCount = computed(() => {
+  if (props.count > 0) return props.count  // 显式传入则用之
+  if (small.value) return 800
+  if (medium.value) return 1400
+  return 2200
+})
 
 // ctx 持有不可代理的 three 对象；phase 与 build/loop 共享同一份引用
 interface Ctx { THREE: any; scene: any; camera: any; renderer: any; points: any; phase: Float32Array }
@@ -88,7 +100,7 @@ onMounted(async () => {
     renderer.setClearColor(0x000000, 0)
     host.appendChild(renderer.domElement)
 
-    const n = props.count
+    const n = adaptiveCount.value
     const positions = new Float32Array(n * 3)
     const colors = new Float32Array(n * 3)
     const phase = new Float32Array(n)

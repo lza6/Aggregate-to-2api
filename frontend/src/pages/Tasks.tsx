@@ -1,8 +1,14 @@
 import { fetchTasks } from '../api';
-import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
+import { Skeleton, ErrorRetry } from '../components/Feedback';
+import { Skeleton as SkeletonStructured } from '../components/Skeleton';
+import { EmptyState } from '../components/EmptyState';
 import { useApi } from '../hooks/useApi';
+import { useVirtualList } from '../hooks/useVirtualList';
 import { useState, useEffect } from 'react';
 import type { Task } from '../api';
+
+const TASK_ROW_H = 52;
+const TASK_CONTAINER_H = 560;
 
 export function TasksPage() {
   const [status, setStatus] = useState('');
@@ -16,6 +22,12 @@ export function TasksPage() {
 
   const tasks: Task[] = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  // P2-C1: 大列表虚拟化 —— 50+ 行任务列表用虚拟滚动减少 DOM 节点
+  // hooks 顺序恒定：在条件 return 之前调用
+  const vlist = useVirtualList(tasks, { itemHeight: TASK_ROW_H, containerHeight: TASK_CONTAINER_H, overscan: 6 });
+  const topPad = vlist.startIndex * TASK_ROW_H;
+  const bottomPad = (tasks.length - vlist.endIndex) * TASK_ROW_H;
 
   const getStatusBadge = (s: string) => {
     switch (s) {
@@ -57,69 +69,100 @@ export function TasksPage() {
             <option value="completed">✅ 已完成 (Completed)</option>
             <option value="error">❌ 失败 (Error)</option>
           </select>
-          <button onClick={reload} className="tf-btn tf-btn-secondary">
+          <button onClick={reload} className="tf-btn tf-btn-secondary" aria-label="刷新任务列表">
             <span>🔄</span> 刷新
           </button>
         </div>
       </div>
 
       <div className="tf-table-container">
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tf-table">
-            <thead>
-              <tr>
-                <th>任务 ID</th>
-                <th>运行状态</th>
-                <th>目标模型</th>
-                <th style={{ minWidth: 260 }}>提示词 (Prompt)</th>
-                <th>执行耗时</th>
-                <th>调用方 IP</th>
-                <th>创建时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map(t => (
-                <tr key={t.id}>
-                  <td>
-                    <code style={{ fontSize: 11.5, color: 'var(--primary-600)' }}>
-                      {t.id ? t.id.slice(0, 8) : '-'}
-                    </code>
-                  </td>
-                  <td>{getStatusBadge(t.status)}</td>
-                  <td>
-                    <span className="task-model-pill">{t.model}</span>
-                  </td>
-                  <td>
-                    <div className="task-prompt-text" title={t.prompt ?? undefined}>
-                      {t.prompt || <span style={{ color: 'var(--text-muted)' }}>-</span>}
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-                      {t.duration_sec != null ? `${t.duration_sec.toFixed(1)}s` : '-'}
-                    </span>
-                  </td>
-                  <td>
-                    <code className="task-ip-pill" title={t.client_ip ?? '未记录'}>
-                      {t.client_ip ? t.client_ip : (t.client_location ?? '—')}
-                    </code>
-                  </td>
-                  <td style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    {t.created_at ? new Date(t.created_at * 1000).toLocaleString() : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+        {/* P2-C1: 骨架屏替代 spinner —— 首次加载时显示结构化表格行骨架 */}
         {loading && !data && (
-          <div style={{ padding: '16px 20px' }}>
-            <Skeleton lines={5} height={20} />
+          <div style={{ padding: '8px 12px' }}>
+            <SkeletonStructured variant="rows" count={6} columns={7} height={20} />
           </div>
         )}
-        {!loading && !tasks.length && !error && (
-          <Empty text="未找到相关任务" hint="提交生成请求后，任务状态将实时在此更新" />
+
+        {data && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="tf-table">
+              <thead>
+                <tr>
+                  <th>任务 ID</th>
+                  <th>运行状态</th>
+                  <th>目标模型</th>
+                  <th style={{ minWidth: 260 }}>提示词 (Prompt)</th>
+                  <th>执行耗时</th>
+                  <th>调用方 IP</th>
+                  <th>创建时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.length === 0 && !loading && !error && (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon="📋"
+                        text="未找到相关任务"
+                        hint="提交生成请求后，任务状态将实时在此更新"
+                        ctaLabel="前往生成"
+                        onCta={() => { window.location.hash = ''; window.location.pathname = '/admin/generate'; }}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {/* 虚拟化滚动体：把可见行单独渲染在 tfoot 之外的虚拟容器中。
+                  保留 thead 固定 + 虚拟滚动体避免 50+ 行 DOM 堆积。 */}
+              {tasks.length > 0 && (
+                <tbody
+                  ref={vlist.containerRef as unknown as React.Ref<HTMLTableSectionElement>}
+                  onScroll={vlist.onScroll}
+                  style={{ display: 'block', maxHeight: TASK_CONTAINER_H, overflowY: 'auto' }}
+                >
+                  {topPad > 0 && <tr style={{ height: topPad }} aria-hidden="true"><td colSpan={7} /></tr>}
+                  {vlist.visible.map(t => (
+                    <tr key={t.id}>
+                      <td>
+                        <code style={{ fontSize: 11.5, color: 'var(--primary-600)' }}>
+                          {t.id ? t.id.slice(0, 8) : '-'}
+                        </code>
+                      </td>
+                      <td>{getStatusBadge(t.status)}</td>
+                      <td>
+                        <span className="task-model-pill">{t.model}</span>
+                      </td>
+                      <td>
+                        <div className="task-prompt-text" title={t.prompt ?? undefined}>
+                          {t.prompt || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                          {t.duration_sec != null ? `${t.duration_sec.toFixed(1)}s` : '-'}
+                        </span>
+                      </td>
+                      <td>
+                        <code className="task-ip-pill" title={t.client_ip ?? '未记录'}>
+                          {t.client_ip ? t.client_ip : (t.client_location ?? '—')}
+                        </code>
+                      </td>
+                      <td style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                        {t.created_at ? new Date(t.created_at * 1000).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {bottomPad > 0 && <tr style={{ height: bottomPad }} aria-hidden="true"><td colSpan={7} /></tr>}
+                </tbody>
+              )}
+            </table>
+          </div>
+        )}
+
+        {loading && data && (
+          <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+            <Skeleton lines={1} height={12} />
+          </div>
         )}
       </div>
 

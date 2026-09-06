@@ -62,6 +62,9 @@ export function SecurityPage() {
     if (!ip) { notify('请填写要封禁的 IP 地址', 'error'); return; }
     if (!isValidIp(ip)) { notify(`IP 格式非法: ${ip}（需 IPv4/IPv6 字面量）`, 'error'); return; }
     setSubmitting(true);
+    // P2-C3: aria-live 区域宣告封禁进度
+    const liveRegion = document.getElementById('sec-live');
+    if (liveRegion) liveRegion.textContent = `正在封禁 ${ip}…`;
     try {
       const res = await blockIp({
         ip,
@@ -71,10 +74,12 @@ export function SecurityPage() {
         ttl_seconds: ttl,
       });
       notify(`已封禁 ${ip}（${BLOCK_TYPE_META[res.record.block_type].label}）`, 'success');
+      if (liveRegion) liveRegion.textContent = `已封禁 ${ip}`;
       setIpInput(''); setReason(''); setTtl(0); setDailyLimit(1);
       reload();
     } catch (e) {
       notify('封禁失败: ' + (e instanceof Error ? e.message : String(e)), 'error');
+      if (liveRegion) liveRegion.textContent = `封禁 ${ip} 失败`;
     }
     setSubmitting(false);
   };
@@ -83,12 +88,17 @@ export function SecurityPage() {
     if (unblockingIp) return;
     if (!confirm(`确定解封 ${ip}？该 IP 将立即恢复访问。`)) return;
     setUnblockingIp(ip);
+    // P2-C3: aria-live 区域宣告解封进度
+    const liveRegion = document.getElementById('sec-live');
+    if (liveRegion) liveRegion.textContent = `正在解封 ${ip}…`;
     try {
       const res = await unblockIp(ip);
       notify(res.removed ? `已解封 ${ip}` : (res.note ?? `${ip} 不在封禁表中`), 'success');
+      if (liveRegion) liveRegion.textContent = `已解封 ${ip}`;
       reload();
     } catch (e) {
       notify('解封失败: ' + (e instanceof Error ? e.message : String(e)), 'error');
+      if (liveRegion) liveRegion.textContent = `解封 ${ip} 失败`;
     }
     setUnblockingIp(null);
   };
@@ -204,6 +214,8 @@ export function SecurityPage() {
       </div>
 
       <div className="sec-grid">
+        {/* P2-C3: aria-live 区域 —— 封禁/解封进度宣告给屏幕阅读器 */}
+        <div id="sec-live" className="sr-only" aria-live="polite" aria-atomic="true" />
         {/* 封禁表单 */}
         <div className="sec-card tf-card">
           <div className="sec-card-title">⛔ 动态封禁 IP</div>
@@ -216,7 +228,13 @@ export function SecurityPage() {
                 value={ipInput}
                 onChange={e => setIpInput(e.target.value)}
                 className="tf-input"
+                aria-label="要封禁的 IP 地址"
+                aria-invalid={ipInput.length > 0 && !isValidIp(ipInput) ? 'true' : 'false'}
+                aria-describedby="ip-input-hint"
               />
+              <small id="ip-input-hint" className="sec-field-hint">
+                {ipInput && !isValidIp(ipInput) ? '⚠️ IP 格式不合法（需 IPv4 或 IPv6）' : '支持 IPv4 点分十进制 或 IPv6 冒号十六进制'}
+              </small>
             </label>
             <div className="sec-field-row">
               <label className="sec-field">
@@ -259,9 +277,10 @@ export function SecurityPage() {
                 value={queryIp}
                 onChange={e => setQueryIp(e.target.value)}
                 className="tf-input"
+                aria-label="要查询状态的 IP 地址"
               />
             </label>
-            <button onClick={handleQuery} className="tf-btn tf-btn-secondary tf-btn-sm">查询</button>
+            <button onClick={handleQuery} className="tf-btn tf-btn-secondary tf-btn-sm" aria-label="查询 IP 封禁状态">查询</button>
             {queryResult && (
               <div className="sec-query-result">
                 <div className="sec-query-ip">IP: <code>{queryResult.ip}</code></div>
@@ -329,6 +348,7 @@ export function SecurityPage() {
                           onClick={() => handleUnblock(r.ip)}
                           disabled={busy || unblockingIp !== null}
                           className="tf-btn tf-btn-secondary tf-btn-sm"
+                          aria-label={`解封 IP ${r.ip}`}
                         >
                           {busy ? '解封中...' : '🔓 解封'}
                         </button>
@@ -377,6 +397,8 @@ export function SecurityPage() {
         .sec-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-secondary); }
         .sec-field-row { display: flex; gap: 12px; }
         .sec-field-row .sec-field { flex: 1; }
+        .sec-field-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
         .sec-query-result { margin-top: 6px; padding: 10px 12px; background: var(--bg-subtle); border: 1px solid var(--border-default); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
         .sec-query-ip { font-size: 12px; color: var(--text-secondary); }
         .sec-query-blocked { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }

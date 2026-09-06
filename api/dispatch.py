@@ -326,6 +326,13 @@ async def _dispatch_generate(req: GenerateRequest) -> str:
                     registry.adaptive_router.record_result(provider.prefix, (time.monotonic() - t0) * 1000.0, True)
                 except Exception:
                     pass
+                # P3-D1：向量入库（旁路，IF_VECTOR_SEARCH_ENABLED=1 时生效，异常不影响主链路）
+                try:
+                    from .routes.gallery import on_task_completed
+
+                    await on_task_completed(task_id, req.prompt)
+                except Exception as _e:
+                    log.debug("向量入库失败 task_id=%s: %s", task_id, _e)
             else:
                 await db.mark_finished(task_id, "error", None, res.error or "生成失败", time.monotonic() - t0)
                 try:

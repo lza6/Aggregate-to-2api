@@ -248,6 +248,8 @@ class MemoryStore:
 
     async def _consolidate_with_llm(self) -> dict[str, int]:
         """真实 LLM 巩固：用 tryingopen 上游压缩 L0→L1。"""
+        from .metrics import inc_llm_call, inc_memory_consolidation
+
         # 取 L0 待巩固记录
         async with self._lock:
             def _fetch() -> list:
@@ -258,6 +260,7 @@ class MemoryStore:
 
             rows = await asyncio.to_thread(_fetch)
         if not rows:
+            inc_memory_consolidation("fallback")
             return {"L0_to_L1": 0, "pruned": 0}
 
         # 调 tryingopen 上游压缩（用户批准后才启用，付费 API 红线）
@@ -267,10 +270,12 @@ class MemoryStore:
             bootstrap()
             chat_models = registry.all_chat_models()
             if not chat_models:
+                inc_memory_consolidation("fallback")
                 return await self._consolidate_mock()
             model_id = chat_models[0].id
             provider = registry.chat_providers.get(model_id.split("/", 1)[0])
             if provider is None:
+                inc_memory_consolidation("fallback")
                 return await self._consolidate_mock()
             # 按 scene 分组压缩
             from collections import defaultdict
@@ -286,6 +291,7 @@ class MemoryStore:
                     "你是记忆巩固器。把多条原始观察压缩为原子事实，去重 + 保留重要信息。"
                     "每条原子事实一行，格式：importance|content。importance 0.0-1.0。"
                 )
+                inc_llm_call("memory", "consolidate")
                 result = await provider.chat_collect(
                     model_id,
                     [
@@ -325,8 +331,10 @@ class MemoryStore:
                         conn.commit()
 
                 await asyncio.to_thread(_clear_l0)
+            inc_memory_consolidation("success")
             return {"L0_to_L1": promoted, "pruned": 0}
         except Exception as exc:
+            inc_memory_consolidation("llm_error")
             log.warning("LLM 巩固失败回退 Mock: %s", exc)
             return await self._consolidate_mock()
 

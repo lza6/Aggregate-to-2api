@@ -148,6 +148,31 @@ export async function fetchCost(): Promise<CostOverview> {
   return apiFetch<CostOverview>('/v1/cost');
 }
 
+// ── P3-D3: 成本预算燃烧预测（对应后端 /v1/cost-forecast，管理 Key 鉴权）──
+export interface CostForecast {
+  /** 近 30 天日均消耗（USD；30 天分母，缺失天视为 0）。 */
+  daily_avg_30d: number;
+  /** 按当前速率预测的超预算日期（YYYY-MM-DD）；无法预测时为 null。 */
+  projected_exceed_date: string | null;
+  /** 从今天起还能花多少天超预算（小数 1 位）；无法预测或已关闭时为 null。 */
+  days_remaining: number | null;
+  /** 预算阈值（IF_COST_BUDGET_USD；0=关闭）。 */
+  budget_usd: number;
+  /** 近 30 天累计消耗（USD）。 */
+  current_spent_30d: number;
+  /** 是否关闭预测（预算=0）。 */
+  disabled: boolean;
+  /** 口径与状态说明。 */
+  note?: string;
+}
+
+export async function fetchCostForecast(): Promise<CostForecast> {
+  return apiFetch<CostForecast>('/v1/cost-forecast', {
+    headers: adminHeaders(),
+    caller: '成本预测获取失败',
+  });
+}
+
 export interface AccountPoolProviderStats {
   total: number;
   ok: number;
