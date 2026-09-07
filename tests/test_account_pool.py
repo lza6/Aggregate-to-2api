@@ -202,8 +202,20 @@ async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
     monkeypatch.setattr("api.config.IF_PROXY_MAX_USE_PER_DAY", 2)
     task = asyncio.create_task(p._autoregister_loop("nanobanana"))
     try:
-        deadline = time.monotonic() + 6
-        while time.monotonic() < deadline and len(await p.get("nanobanana")) < 2:
+        # v9.0.0 R4: 最终一致性轮询（deadline 6s→10s + 连续 2 次稳定才断言），
+        # 根治 CI 慢机器 6s 偶发不够的时序 flaky（cerebrum 既定 poll-until-stable 模式，非削弱断言）。
+        deadline = time.monotonic() + 10
+        stable_count = 0
+        last_len = 0
+        while time.monotonic() < deadline:
+            cur_len = len(await p.get("nanobanana"))
+            if cur_len >= 2 and cur_len == last_len:
+                stable_count += 1
+                if stable_count >= 2:
+                    break
+            else:
+                stable_count = 0
+            last_len = cur_len
             await asyncio.sleep(0.3)
         assert len(await p.get("nanobanana")) >= 2
         assert await p.total_credits("nanobanana") >= 8
@@ -559,4 +571,3 @@ class TestAsyncWrappers:
         active = await pool.async_get("nanobanana")
         assert len(active) == 1
         assert active[0]["status"] == "active"
-

@@ -40,6 +40,7 @@ logging.getLogger("uvicorn.access").propagate = False
 # httpx 访问日志无运维增量（上游调用日志由 providers 层自行记录），禁用冒泡。
 logging.getLogger("httpx").propagate = False
 
+
 # ── P3-3: 生产安全响应头中间件 ──────────────────────────
 # 仅当 config.IF_SECURITY_HEADERS_ENABLED 为 True 时注入；关闭=不注入任何安全头（最小回滚）。
 # CSP 独立开关 config.IF_CSP_ENABLED（默认关闭），经许可后才注入宽松 CSP，避免误杀面板/画廊。
@@ -104,12 +105,21 @@ class SecurityHeadersMiddleware:
 
 
 # ── App 组装 ──
+# R7（v9.0.0）：生产 OpenAPI 收紧——IF_DOCS_ENABLED=0 时禁用 /docs /redoc /openapi.json，
+# 避免生产环境 Swagger/ReDoc/openapi.json 全开暴露端点契约。缺省 True（开发零回归）。
+if getattr(config, "IF_DOCS_ENABLED", True):
+    _docs_url, _redoc_url, _openapi_url = "/docs", "/redoc", "/openapi.json"
+else:
+    _docs_url = _redoc_url = _openapi_url = None  # 全部禁用（404）
 app = FastAPI(
     title="imagefree API",
-    version="8.6.3",
+    version="8.6.4",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
     "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
 )
 app.add_middleware(
     CORSMiddleware,

@@ -196,6 +196,9 @@ class Settings(BaseSettings):
     if_security_headers_enabled: bool = Field(True, validation_alias="IF_SECURITY_HEADERS_ENABLED")
     # P3-3: 宽松 CSP 响应头开关（默认关闭，避免误杀管理面板 inline script / 画廊 CDN 图片）。
     if_csp_enabled: bool = Field(False, validation_alias="IF_CSP_ENABLED")
+    # v9.0.0 R7: OpenAPI /docs /redoc /openapi.json 生产收紧开关。
+    # 默认 True（开发零回归）；生产设 IF_DOCS_ENABLED=0 禁用 Swagger/ReDoc/openapi.json 暴露。
+    if_docs_enabled: bool = Field(True, validation_alias="IF_DOCS_ENABLED")
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
     if_api_keys: str = Field("", validation_alias="IF_API_KEYS")
     if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
@@ -384,6 +387,7 @@ class Settings(BaseSettings):
         "if_falai_browser_headful",
         "if_security_headers_enabled",
         "if_csp_enabled",
+        "if_docs_enabled",
         "if_tryingopen_enabled",
         mode="before",
     )
@@ -745,6 +749,7 @@ IF_TRYINGOPEN_SYNC_MINUTES = settings.if_tryingopen_sync_minutes
 # ── P3-3 安全头开关（模块级便捷引用）────────────────
 IF_SECURITY_HEADERS_ENABLED = settings.if_security_headers_enabled
 IF_CSP_ENABLED = settings.if_csp_enabled
+IF_DOCS_ENABLED = settings.if_docs_enabled
 
 
 # ── 纯常量 + apply_model（P0-2: 拆分到 .presets，re-export 保持向后兼容）──
