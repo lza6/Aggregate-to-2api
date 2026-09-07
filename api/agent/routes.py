@@ -22,6 +22,10 @@ from pydantic import BaseModel, Field
 from .. import auth
 from ..errors import AppError, ErrorCodes
 
+# 导入即注册 Prometheus 指标到全局 REGISTRY（否则 agent 指标要等首次 LLM 调用才注册，
+# /metrics 在服务刚启动时看不到 agent_* 指标——v9.0.0-A 修复：启动即注册）
+from . import metrics as _agent_metrics  # noqa: F401
+
 router = APIRouter()
 log = logging.getLogger("imagefree_api.agent")
 

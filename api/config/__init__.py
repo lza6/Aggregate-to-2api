@@ -245,6 +245,12 @@ class Settings(BaseSettings):
     if_provider_risk_tier: bool = Field(True, validation_alias="IF_PROVIDER_RISK_TIER")
     # P1-A7 独立终检 Agent（交付前 LLM 审查，用 tryingopen 免费上游）
     if_critic_agent_enabled: bool = Field(True, validation_alias="IF_CRITIC_AGENT_ENABLED")
+    # v9.0.0-A 智能体 DAG 编排（/v1/agent/dag/*，缺省开启；0 关闭时路由 404）
+    if_agent_dag_enabled: bool = Field(True, validation_alias="IF_AGENT_DAG_ENABLED")
+    # v9.0.0-A DAG LLM 规划器（IF_MOCK_UPSTREAM=1 时纯 Mock；0 时可走 tryingopen 免费上游）
+    if_agent_planner_enabled: bool = Field(True, validation_alias="IF_AGENT_PLANNER_ENABLED")
+    # v9.0.0-A planner 真实 LLM 的默认模型（约定 tryingopen/default，registry 无此 id 时回退首个 chat model）
+    if_agent_planner_model: str = Field("tryingopen/default", validation_alias="IF_PLANNER_LLM_MODEL")
 
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")

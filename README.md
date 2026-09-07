@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-8.6.5-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-9.0.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -124,6 +124,10 @@ uvicorn api.main:app --host 0.0.0.0 --port 8100
 | `GET /v1/chat/auth/status` | — | **鉴权状态探测（是否需要 Key，不泄露 Key 本体）** |
 | `GET /v1/chat/usage` | — | **全站聊天实时用量（Token消耗、调用量、时延、各模型分布）** |
 | `GET /v1/chat/remaining` | — | **基于代理池多出口自动推算的实时可用额度预测** |
+| `POST /v1/agent/dag/run` | 异步 | **智能体 DAG 编排：提交多节点任务（依赖/fail_fast/并发/重试），后台执行返回 run_id**（v9.0.0-A） |
+| `GET /v1/agent/dag/{run_id}` | — | **查询 DAG run 状态（含每节点状态/结果/耗时）** |
+| `POST /v1/agent/dag/plan` | 同步 | **自然语言→DAG 节点列表（LLM 规划器，Mock 优先零真实付费）** |
+| `GET /v1/agent/health` | — | **agent 子系统健康（intent/memory/critic/guard 开关快照）** |
 
 ### 🔑 鉴权与开放策略（v7.7.21）
 
@@ -151,6 +155,26 @@ export ANTHROPIC_API_KEY=any-placeholder
 > 📖 **内置 API 调用指南页**：管理面板 `/admin/api-guide` 提供 Base URL + 一键复制的 curl/Python/JS 示例，新接入方可直接照抄。
 
 > 🌐 **生产真实 IP 恢复**（v7.7+）：`deploy/docker-compose.yml` 固定子网 `172.28.0.0/16` + `Dockerfile.api` 的 uvicorn `--proxy-headers --forwarded-allow-ips=172.28.0.0/16` + `.env` 的 `IF_TRUSTED_PROXIES=172.28.0.1` 三者配合，让 Caddy 反代追加的 `X-Forwarded-For` 被正确解析，任务列表显示真实公网 IP 而非"内网私有地址"。
+
+**DAG 编排示例（v9.0.0-A，公益开放）：**
+
+```bash
+# 1. 自然语言 → DAG 节点（Mock 规划，零真实付费）
+curl -X POST http://127.0.0.1:8100/v1/agent/dag/plan -H "Content-Type: application/json" \
+  -d '{"prompt":"画一只猫并终检质量"}'
+
+# 2. 提交 DAG run（串行链：scene → llm → critic）；非法节点/环形依赖 → 422 中文提示
+curl -X POST http://127.0.0.1:8100/v1/agent/dag/run -H "Content-Type: application/json" \
+  -d '{"name":"链式任务","nodes":[{"id":"A","kind":"scene","depends_on":[]},{"id":"B","kind":"llm","depends_on":["A"]},{"id":"C","kind":"critic","depends_on":["B"]}]}'
+# → {"run_id":"...","status":"pending"}
+
+# 3. 轮询 run 终态（每节点 status/result/duration_ms）
+curl http://127.0.0.1:8100/v1/agent/dag/{run_id}
+```
+
+---
+
+## 🔌 API 端点（续）
 | `GET /v1/providers` | — | 提供商状态看板 |
 | `GET /v1/stats` | — | 用量统计（按日/月拆分） |
 | `GET /v1/gallery` | — | 最近作品画廊（支持密码保护） |
