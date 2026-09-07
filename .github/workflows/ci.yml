@@ -200,6 +200,45 @@ jobs:
       - name: Vitest 单测
         run: cd frontend && npm run test
 
+  # ── v9.0.0 R6：前端 E2E + 自动化审计 CI 门禁 ──────────────────────
+  # 背景：frontend/e2e-smoke.cjs（22 断言）+ a11y-audit.cjs + perf-audit.cjs + resp-audit.cjs
+  # 此前无 CI 门禁，只能本地手动跑。本 job 补齐：缓存 chromium + 跑 4 个 .cjs 审计。
+  # E2E_BASE 指向 vite preview（先 build + preview :4510），断言降级 UI + a11y + 懒加载。
+  frontend-e2e:
+    name: 前端 E2E + 自动化审计（e2e-smoke + a11y + perf + resp）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        run: cd frontend && npm ci
+      - name: 安装 Playwright chromium（系统级，供 .cjs 脚本用）
+        run: cd frontend && npx playwright-core install --with-deps chromium
+      - name: 构建 frontend dist
+        run: cd frontend && npm run build
+      - name: 起 vite preview :4510（后台）
+        run: |
+          cd frontend && nohup npx vite preview --port 4510 --strictPort > /tmp/preview.log 2>&1 &
+          sleep 5
+          curl -s -o /dev/null -w "preview=%{http_code}\n" http://localhost:4510/
+      - name: e2e-smoke（22 断言：降级 UI + a11y + 懒加载 + skip-link）
+        run: cd frontend && E2E_BASE=http://localhost:4510 node e2e-smoke.cjs
+      - name: a11y-audit（axe-core WCAG 2.2 AA 0 critical）
+        run: cd frontend && E2E_BASE=http://localhost:4510 node a11y-audit.cjs
+        continue-on-error: true  # 软门禁：失败先告警不阻塞（a11y 仍需渐进收紧）
+      - name: perf-audit（Lighthouse LCP/INP/CLS）
+        run: cd frontend && E2E_BASE=http://localhost:4510 node perf-audit.cjs
+        continue-on-error: true  # 软门禁：Lighthouse 在 CI runner 性能波动大
+      - name: resp-audit（4 断点截图 375/768/1024/1440）
+        run: cd frontend && E2E_BASE=http://localhost:4510 node resp-audit.cjs
+        continue-on-error: true  # 软门禁：截图归档，不阻塞
+
   docker:
     name: Docker 构建验证
     runs-on: ubuntu-latest

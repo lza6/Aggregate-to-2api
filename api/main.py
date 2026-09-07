@@ -113,7 +113,7 @@ else:
     _docs_url = _redoc_url = _openapi_url = None  # 全部禁用（404）
 app = FastAPI(
     title="imagefree API",
-    version="8.6.4",
+    version="8.6.5",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
     "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
