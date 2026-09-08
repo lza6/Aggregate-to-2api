@@ -168,7 +168,46 @@
 
     --sidebar-bg: #05070d;
     --sidebar-border: #151d2f;
+
+    /* v10.0.0 桌面版 · 暗色专业工作台 token（对齐选定 UI 方向） */
+    --bg-canvas-deep: #0f1420;
+    --bg-panel-deep: #1a2233;
+    --border-deep: #243047;
+    --text-strong-deep: #e2e8f0;
+    --mono-deep: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+    --accent-ok-deep: #10b981;
+    --accent-fail-deep: #ef4444;
+    --accent-run-deep: #3b82f6;
+    --accent-pending-deep: #94a3b8;
+    --grid-line-deep: rgba(96, 165, 250, 0.06);
   }
+}
+
+/* v10.0.0 桌面版 · 暗色专业工作台：DAG 节点卡玻璃拟态 + 状态点亮 + 细网格背景 */
+@media (prefers-color-scheme: dark) {
+  .agent-container {
+    background:
+      linear-gradient(rgba(0,0,0,0) 0%, rgba(15,20,32,0.6) 100%),
+      var(--bg-canvas-deep);
+    background-image:
+      linear-gradient(var(--grid-line-deep) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line-deep) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .dag-node-row {
+    background: rgba(26, 34, 51, 0.72);
+    border: 1px solid var(--border-deep);
+    border-radius: 10px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-family: var(--mono-deep);
+  }
+  .dag-node-status { font-weight: 600; letter-spacing: 0.02em; }
+  .dag-run-card { border-left-width: 3px; }
+  .dag-run-card.succeeded { border-left-color: var(--accent-ok-deep); }
+  .dag-run-card.failed   { border-left-color: var(--accent-fail-deep); }
+  .dag-run-card.running  { border-left-color: var(--accent-run-deep); }
+  .dag-run-card.pending  { border-left-color: var(--accent-pending-deep); }
 }
 
 /* ==========================================================================

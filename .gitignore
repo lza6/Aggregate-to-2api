@@ -118,3 +118,9 @@ frontend/e2e_shots*/
 !.benchmarks/resp-shots/
 !.benchmarks/e2e-desktop.png
 !.benchmarks/e2e-mobile.png
+
+# v10.0.0 桌面版（Tauri）产物
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/node_modules/
+desktop/backend/uvicorn.exe

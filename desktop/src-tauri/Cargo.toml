@@ -1,0 +1,23 @@
+[package]
+name = "tingfeng-desktop"
+version = "10.0.0"
+description = "听风AI 智能体工作台桌面版（Tauri 2.x + React19 管理面板）"
+edition = "2021"
+
+[lib]
+name = "tingfeng_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# sidecar 托管后端：spawn 子进程 + 健康探测（仅 Windows 需要，纯 std）
+# 不引入 tokio——Tauri 自带 async runtime；子进程管理用 std::process + 后台线程轮询。
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Threading"] }
