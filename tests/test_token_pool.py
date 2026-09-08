@@ -14,6 +14,24 @@ from api import config
 from api.worker import TokenPoolManager
 
 
+@pytest.fixture(autouse=True)
+def _reset_solver_guard():
+    """v10.0.0 flaky 根修：token_pool 单测的 acquire 依赖全局 solver_guard 电路。
+
+    集成测试（test_circuit_breaker 等）会在同一会话进程里把 mock solver 注入
+    故障并把 solver_guard 电路打到 OPEN；其恢复探测靠 sleep，时序上可能残留
+    OPEN → 后续 token_pool 单测 `if solver_guard.circuit_open and pool.size()==0:
+    return None` 直接拿不到 token 而批量失败（test_direct_pool 等 acquire None）。
+    每个用例前重置 solver_guard（_reset() 清节点电路与计数），保证单测从干净
+    电路开始——与 conftest 的 reset_settings/_reset_guard 同策略（隔离全局态）。
+    """
+    from api.solver_guard import solver_guard as _sg
+
+    _sg._reset()
+    yield
+    _sg._reset()
+
+
 class _EngineStub:
     """最小 engine 替身：只提供 manager 依赖的 queue 与 _started。"""
 

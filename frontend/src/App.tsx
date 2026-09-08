@@ -21,6 +21,7 @@ const EcosystemPage = lazy(() => import('./pages/Ecosystem').then(m => ({ defaul
 const CostsPage = lazy(() => import('./pages/Costs').then(m => ({ default: m.CostsPage })));
 const SlowPage = lazy(() => import('./pages/Slow').then(m => ({ default: m.SlowPage })));
 const ApiGuidePage = lazy(() => import('./pages/ApiGuide').then(m => ({ default: m.ApiGuidePage })));
+const AgentPage = lazy(() => import('./pages/Agent').then(m => ({ default: m.AgentPage })));
 
 function PageFallback() {
   return <Skeleton lines={4} height={18} />;
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="/ecosystem" element={<ErrorBoundary><EcosystemPage /></ErrorBoundary>} />
               <Route path="/costs" element={<ErrorBoundary><CostsPage /></ErrorBoundary>} />
               <Route path="/slow" element={<ErrorBoundary><SlowPage /></ErrorBoundary>} />
+              <Route path="/agent" element={<ErrorBoundary><AgentPage /></ErrorBoundary>} />
               <Route path="/api-guide" element={<ErrorBoundary><ApiGuidePage /></ErrorBoundary>} />
               {/* v7.7 UX：catch-all 404——未知路径不再渲染空白主区 */}
               <Route path="*" element={<Empty text="页面不存在" hint="请使用左侧导航访问有效页面" />} />

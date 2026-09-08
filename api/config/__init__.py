@@ -160,6 +160,11 @@ class Settings(BaseSettings):
     # worker 批量调度（可选优化）：启用后 worker 按小批次消费队列减少上下文切换
     if_worker_batch_enabled: bool = Field(False, validation_alias="IF_WORKER_BATCH_ENABLED")
     if_worker_batch_size: int = Field(5, validation_alias="IF_WORKER_BATCH_SIZE")
+    # v10.0.0：DAG run 持久化 store 后端（sqlite 持久化 / memory 内存降级）。独立 dag_runs.db
+    # 避免与主任务库争锁；cleanup 并入 bg_tasks 现有周期循环（IF_DB_CLEANUP_INTERVAL）
+    if_dag_store_backend: str = Field("sqlite", validation_alias="IF_DAG_STORE_BACKEND")
+    if_dag_store_db: str = Field("data/dag_runs.db", validation_alias="IF_DAG_STORE_DB")
+    if_dag_retention_days: int = Field(7, validation_alias="IF_DAG_RETENTION_DAYS")
 
     # ── Token 池 ──
     token_pool_size: int = Field(6, validation_alias="IF_TOKEN_POOL_SIZE")

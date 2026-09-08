@@ -8,3 +8,4 @@ export * from './tasks';
 export * from './chat';
 export * from './security';
 export * from './misc';
+export * from './agent';

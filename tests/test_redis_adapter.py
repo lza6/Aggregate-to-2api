@@ -22,6 +22,34 @@ import types
 import pytest
 
 from api.storage.base import DistributedLock, RateLimiter
+
+
+def _run_restoring(coro):
+    """asyncio.run 会 set_event_loop 到新 loop 且不恢复——包一层保存/恢复，
+    避免后续 pytest-asyncio 测试 create_task 挂到已关闭 loop（token_pool 批量失败根因）。
+
+    v10.0.0 flaky 修复：conftest 的 _reset_event_loop_after 在每用例后把 policy
+    当前 loop 置为 None（set_event_loop(None)），当 sync 测试在全量中继前序用例
+    之后运行、且当前无 loop 时，policy.get_event_loop() 在 Python 3.11 直接抛
+    RuntimeError("There is no current event loop")（如 test_startup_success_
+    injects_lock_and_limiter 在组合/全量下失败）。这里把「取 old loop」改为容错：
+    无 loop 视为 None，asyncio.run 后无需恢复（它自身会 set 新 loop 并在 finally
+    close + set_event_loop(None)），仅当确有未关闭的 old loop 才恢复。
+    由此组合/全量下不再因取 loop 抛错而中断，也消除对后续 async 测试的污染。
+    """
+    import asyncio
+
+    policy = asyncio.get_event_loop_policy()
+    try:
+        old = policy.get_event_loop()
+    except RuntimeError:
+        old = None
+    try:
+        return asyncio.run(coro)
+    finally:
+        if old is not None and not old.is_closed():
+            policy.set_event_loop(old)
+
 from api.storage.redis_adapter import RedisLock, RedisRateLimiter, RedisStorageAdapter
 
 # ── Fake redis.asyncio 客户端 ───────────────────────────────
@@ -126,13 +154,13 @@ def test_startup_success_injects_lock_and_limiter(monkeypatch):
 
     adapter = RedisStorageAdapter("redis://fake:6379/0")
     asyncio.get_event_loop_policy()
-    asyncio.run(adapter.startup())
+    _run_restoring(adapter.startup())
     try:
         assert isinstance(adapter.lock, DistributedLock)
         assert isinstance(adapter.rate_limiter, RateLimiter)
         assert adapter.name == "redis"
     finally:
-        asyncio.run(adapter.shutdown())
+        _run_restoring(adapter.shutdown())
     assert adapter._client is None  # shutdown 清理
 
 
@@ -146,7 +174,7 @@ def test_startup_failure_raises(monkeypatch):
 
     adapter = RedisStorageAdapter("redis://fake:6379/0")
     with pytest.raises(Exception):
-        asyncio.run(adapter.startup())
+        _run_restoring(adapter.startup())
 
 
 # ── RedisLock：acquire/release + 故障重试 ───────────────────

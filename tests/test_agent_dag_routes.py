@@ -22,6 +22,15 @@ os.environ.setdefault("IF_MOCK_UPSTREAM", "1")
 os.environ.setdefault("IF_DB_FILE", "data/test-agent-dag-routes.db")
 os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 os.environ.setdefault("IF_MOCK_REGISTER", "1")
+# v10.0.0：本文件 module-scope TestClient 会发起大量 HTTP 请求（含 _wait_run_finished
+# 轮询 + 列表端点），同一 127.0.0.1 共享 request_guard 滑窗（默认 10/分钟）会超阈值 429。
+# 单测聚焦功能正确性（限流有专属 test_ip_blocklist），按集成套件策略关限流。
+os.environ.setdefault("IF_REQUESTS_PER_MINUTE", "0")
+# v10.0.0：DAG run store 用独立内存实现（每 TestClient 进程内），避免全量单测
+# 多文件共享 data/dag_runs.db（sqlite 跨模块顺序串扰 → run_id 404）。持久化专测
+# 由 test_dag_run_persistence.py 负责（独立临时 db + 显式 close，不冲突）。
+os.environ.setdefault("IF_DAG_STORE_BACKEND", "memory")
+os.environ.setdefault("IF_DAG_STORE_DB", "data/test-agent-dag-routes-runs.db")
 
 
 @pytest.fixture(scope="module")
@@ -182,3 +191,78 @@ class TestDagDisableSwitch:
             json={"name": "off", "nodes": [{"id": "A", "kind": "llm", "depends_on": []}]},
         )
         assert r.status_code == 404
+
+    def test_dag_disabled_via_config_factory(self, client, monkeypatch):
+        """v10.0.0：开关走 config 工厂（reset_settings 后 get_settings 生效）。"""
+        import api.routes.agent_dag as routes_mod
+        from api.config import reset_settings
+
+        monkeypatch.setenv("IF_AGENT_DAG_ENABLED", "0")
+        reset_settings()
+        monkeypatch.setattr(routes_mod, "DAG_ENABLED", False)
+        r = client.post(
+            "/v1/agent/dag/run",
+            json={"name": "off", "nodes": [{"id": "A", "kind": "llm", "depends_on": []}]},
+        )
+        assert r.status_code == 404
+        monkeypatch.delenv("IF_AGENT_DAG_ENABLED", raising=False)
+        reset_settings()
+
+
+class TestDagListEndpoint:
+    """v10.0.0：GET /v1/agent/dag 列表（前端 Agent 页历史列表需要）。"""
+
+    def test_list_returns_runs(self, client):
+        r = client.post(
+            "/v1/agent/dag/run",
+            json={"name": "list-1", "nodes": [{"id": "A", "kind": "llm", "depends_on": []}]},
+        )
+        assert r.status_code == 200
+        run_id = r.json()["run_id"]
+        lr = client.get("/v1/agent/dag")
+        assert lr.status_code == 200, f"列表应 200: {lr.status_code} {lr.text[:300]}"
+        body = lr.json()
+        assert isinstance(body, dict) and isinstance(body.get("items"), list)
+        ids = [it["run_id"] for it in body["items"]]
+        assert run_id in ids, "列表应包含刚提交的 run"
+
+    def test_list_status_filter(self, client):
+        # 先造一个 succeeded 的 run
+        r = client.post(
+            "/v1/agent/dag/run",
+            json={"name": "filter", "nodes": [{"id": "A", "kind": "llm", "depends_on": []}]},
+        )
+        _wait_run_finished(client, r.json()["run_id"])
+        lr = client.get("/v1/agent/dag?status=succeeded")
+        assert lr.status_code == 200
+        body = lr.json()
+        assert body["items"], "succeeded 过滤应有结果"
+        assert all(it["status"] == "succeeded" for it in body["items"])
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_guard():
+    """v10.0.0：测试间重置 request_guard 内存令牌桶/滑窗，防跨用例 429。
+
+    多个 module-scope TestClient 共享同一进程，累积请求数会超 request_guard
+    限流阈值（新增 DAG 列表用例使请求量上升后触发）。与 test_ip_blocklist
+    的 _reset_guard_state 同模式。
+    """
+    import api.request_guard as _rg
+
+    _rg.reset_runtime_state()
+    yield
+    _rg.reset_runtime_state()
+
+
+@pytest.fixture(autouse=True)
+def _reset_dag_store():
+    """v10.0.0：每用例清 DAG run store（内存 store 进程级，防跨用例 run 残留串扰）。"""
+    from api.routes.agent_dag import _STORE
+
+    _clear = getattr(_STORE, "clear", None) or getattr(_STORE, "close", None)
+    if _clear:
+        try:
+            _clear()
+        except Exception:
+            pass

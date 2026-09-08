@@ -32,8 +32,25 @@ IF_PLANNER_ENABLED = os.getenv("IF_AGENT_PLANNER_ENABLED", "1").strip().lower() 
     "on",
 }
 
-# Mock 规划时 LLM 占位模型（仅真实路径用；Mock 不触碰 provider）
+# Mock 规划时 LLM 占位模型（仅真实路径用；Mock 不触碰 provider）。
+# v10.0.0 起真实路径优先读 config 工厂 if_agent_planner_model（IF_PLANNER_LLM_MODEL），
+# 运行时环境变量变更在 reset_settings() 后生效——不再用模块级 os.getenv 固化。
 PLANNER_LLM_MODEL = os.getenv("IF_PLANNER_LLM_MODEL", "tryingopen/default")
+
+
+def _resolve_planner_model() -> str:
+    """解析 planner 真实 LLM 模型 id：config 工厂优先，缺省回退模块常量。
+
+    修复 v9.0.0 遗留：config `if_agent_planner_model` 定义但从未被使用（见
+    《下一步改进指南》§5.3 V5）。走 get_settings() 使测试 reset_settings() 生效。
+    """
+    try:
+        from ..config import get_settings
+
+        model = get_settings().if_agent_planner_model
+        return model or PLANNER_LLM_MODEL
+    except Exception:
+        return PLANNER_LLM_MODEL
 
 # 场景 → 规划节点串（scene 根节点固定 + 场景相关处理节点 + 可选终检）
 # 依赖链：根 scene → 场景处理节点 →（可选）critic 终检
@@ -176,6 +193,12 @@ async def plan_with_llm(prompt: str, scene: str | None = None) -> dict[str, Any]
         log.warning("planner 未配置 LLM 模型，回退 Mock 规划")
         return await plan_with_mock(prompt, scene)
 
+    # v10.0.0：模型 id 走 config 工厂（IF_PLANNER_LLM_MODEL 运行时生效，非模块级固化）
+    model_id = _resolve_planner_model()
+    if not model_id:
+        log.warning("planner 模型为空，回退 Mock 规划")
+        return await plan_with_mock(prompt, scene)
+
     try:
         # importlib 拿**模块本身**（providers/__init__ 包属性 registry 被实例覆盖，
         # `from . import registry` 会绑到单例；模块属性才是测试可 monkeypatch 的位置）
@@ -200,7 +223,6 @@ async def plan_with_llm(prompt: str, scene: str | None = None) -> dict[str, Any]
             log.warning("planner 无可用 chat model，回退 Mock")
             return await plan_with_mock(prompt, scene)
 
-        model_id = PLANNER_LLM_MODEL
         if model_id not in [m.id for m in chat_models]:
             model_id = chat_models[0].id
         provider = registry.chat_providers.get(model_id.split("/", 1)[0])

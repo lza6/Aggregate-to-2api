@@ -212,3 +212,9 @@ def _client_ip_of(request: Request) -> str:
             if first and not first.lower().startswith(("127.", "10.", "192.168.", "::1", "unknown")):
                 return first
         return request.client.host if request.client else "unknown"
+
+
+def reset_chat_rate_state() -> None:
+    """测试钩子：清空聊天频控桶（进程级，防全量单测跨用例累积 429）。"""
+    with _lock:
+        _chat_buckets.clear()

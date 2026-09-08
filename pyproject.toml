@@ -1,7 +1,7 @@
 # imagefree_api 项目配置
 [project]
 name = "imagefree-2ai"
-version = "9.0.0"
+version = "10.0.0"
 description = "High concurrency image generation API"
 requires-python = ">=3.11"
 dependencies = [
@@ -47,7 +47,7 @@ exclude = ["tests/", "scripts/", "可参考的项目/", "deploy/", "graft/", "la
 # aiosqlite 内部属性 type: ignore[attr-defined]）；剩余 552 错误均为传导错误（config/telemetry
 # 等其他模块），待 v9.5.0 继续扩面收敛。
 [[tool.mypy.overrides]]
-module = ["api.errors", "api.retry_policy", "api.db.core", "api.db.queries"]
+module = ["api.errors", "api.retry_policy", "api.db.core", "api.db.queries", "api.agent.dag", "api.agent.planner", "api.routes.agent_dag_store_sqlite"]
 strict = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

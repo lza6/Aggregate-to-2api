@@ -73,6 +73,16 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                     nq = await _engine._queue_db.cleanup()
                     if nq.get("deleted"):
                         log.info("持久化队列周期清理: 删除 %d 个过期条目", nq["deleted"])
+                # v10.0.0：DAG run 持久化 TTL 清理（独立 dag_runs.db，retention 天数可配）
+                try:
+                    from .routes.agent_dag import _STORE as _dag_store
+                    from .routes.agent_dag import _await_maybe as _dag_maybe
+
+                    nd = await _dag_maybe(_dag_store.cleanup(retention_days=config.IF_DAG_RETENTION_DAYS))
+                    if nd:
+                        log.info("DAG run 周期清理: 删除 %d 个过期 run", nd)
+                except Exception as _dag_clean_err:
+                    log.warning("DAG run 周期清理失败（可忽略）: %s", _dag_clean_err)
                 snap = engine.snapshot()
                 ssnap = solver_guard.snapshot()
                 stats = await db.stats_overview()

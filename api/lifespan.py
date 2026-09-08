@@ -265,6 +265,18 @@ async def lifespan(_app):
 
     await shutdown_phase(3.0, "⑨ DB 连接池关闭", _close_db())
 
+    # v10.0.0：关闭 DAG run SQLite store（若装配为 sqlite 持久化后端）
+    try:
+        from .routes.agent_dag import _STORE as _dag_store
+
+        _close_dag = getattr(_dag_store, "close", None)
+        if _close_dag is not None:
+            _result = _close_dag()
+            if hasattr(_result, "__await__"):
+                await _result
+    except Exception as e:
+        log.warning("DAG run store 关闭失败（可忽略）: %s", e)
+
     # P1-1（v8.0）：关闭 Redis storage 适配器（若装配过）。
     try:
         from .request_guard import get_storage_adapter as _get_storage

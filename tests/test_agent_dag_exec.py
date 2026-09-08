@@ -10,9 +10,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-
-import pytest
 
 os.environ.setdefault("IF_MOCK_UPSTREAM", "1")
 os.environ.setdefault("IF_DB_FILE", "data/test-agent-dag-exec.db")
@@ -52,8 +51,10 @@ class TestExecNode:
     async def test_tool_kind_placeholder(self):
         from api.routes.agent_dag_exec import execute_node
 
-        result = await execute_node("n1", _state("tool"))
-        assert "v9.0.0-B" in result
+        # v10.0.0：tool 节点真实回路——无工具名时返回可用工具清单（不再返回 v9.0.0-B 占位串）
+        result = await execute_node("n1", _state("tool", "列出可用工具"))
+        assert "[tool]" in result
+        assert "可用工具" in result or "技能" in result or "skill" not in result.lower(), f"应返回工具回路结果: {result[:200]}"
 
     async def test_unknown_kind_returns_empty(self):
         from api.routes.agent_dag_exec import execute_node
@@ -81,3 +82,55 @@ class TestExecNode:
         # 不崩即可；文本可能为占位或真实上游回复
         assert isinstance(result, str) and result
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+
+
+class TestToolNodeRoundtrip:
+    """v10.0.0：tool 节点真实回路——可发现本地 skills + 按名称读取工具。
+
+    复用 api/skills/loader 的能力（SkillIndex.names / load_skill），零 provider 付费。
+    """
+
+    async def test_tool_lists_available_skills(self):
+        from api.routes.agent_dag_exec import _exec_tool
+
+        # 不指定工具名 → 返回可发现工具清单（JSON 文本）
+        result = await _exec_tool("列出可用工具")
+        assert "可用工具" in result, f"应返回工具清单: {result[:200]}"
+
+    async def test_tool_loads_skill_by_name(self):
+        from api.routes.agent_dag_exec import _exec_tool
+
+        # 指定真实存在的技能名 → 返回该 skill 的描述（真实读取本地技能库）
+        result = await _exec_tool("使用 image-quality-check 工具")
+        assert result and "image-quality-check" in result, f"应返回该 skill 描述: {result[:200]}"
+
+    async def test_tool_unknown_tool_fallback(self):
+        from api.routes.agent_dag_exec import _exec_tool
+
+        result = await _exec_tool("调用一个不存在的工具 xxx-no-such-tool")
+        assert result and "未找到" in result, f"未知工具应有明确提示: {result[:200]}"
+
+
+class TestNodeTimeoutGuard:
+    """v10.0.0：单节点执行超时兜底——防上游 hang 拖死整个 DAG run。"""
+
+    async def test_slow_node_timeout_falls_back(self, monkeypatch):
+        from api.routes import agent_dag_exec as exec_mod
+
+        # 把超时调成极小值，模拟节点内部 hang（asyncio.sleep 永不返回）
+        monkeypatch.setattr(exec_mod, "NODE_EXEC_TIMEOUT_SECONDS", 0.05)
+
+        async def _slow(*a, **k):
+            await asyncio.sleep(10)
+
+        monkeypatch.setattr(exec_mod, "_dispatch", _slow)
+        from api.routes.agent_dag_exec import execute_node
+
+        result = await execute_node("n1", {"node": {"id": "n1", "kind": "llm", "prompt": "x"}})
+        assert "timeout" in result or "降级" in result, f"超时节点应降级返回: {result[:200]}"
+
+    async def test_normal_node_unaffected(self):
+        from api.routes.agent_dag_exec import execute_node
+
+        result = await execute_node("n1", {"node": {"id": "n1", "kind": "scene", "prompt": "显示时间"}})
+        assert result.startswith("scene=")

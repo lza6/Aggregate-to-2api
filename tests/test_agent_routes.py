@@ -23,6 +23,9 @@ os.environ.setdefault("IF_AGENT_SKILLS_ENABLED", "1")
 os.environ.setdefault("IF_AGENT_INTENT_CLASSIFIER", "1")
 os.environ.setdefault("IF_MEMORY_CONSOLIDATION_ENABLED", "1")
 os.environ.setdefault("IF_PROVIDER_RISK_TIER", "1")
+# v10.0.0：module-scope TestClient 大量 HTTP 同 127.0.0.1，request_guard 滑窗默认
+# 10/分钟会 429（限流有专属 test_ip_blocklist），单测聚焦功能关闭（同集成套件策略）。
+os.environ.setdefault("IF_REQUESTS_PER_MINUTE", "0")
 os.environ.setdefault("IF_CRITIC_AGENT_ENABLED", "1")
 os.environ.setdefault("IF_MOCK_UPSTREAM", "1")  # LLM 路径走 Mock，不真实付费
 os.environ.setdefault("IF_DB_FILE", "data/test-agent-routes.db")
@@ -193,3 +196,13 @@ class TestAgentHealthEndpoint:
         assert tables["L1"] == "mem_atoms"
         assert tables["L2"] == "mem_scenarios"
         assert tables["L3"] == "mem_persona"
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_guard():
+    """v10.0.0：测试间重置 request_guard 内存状态，防跨用例 429（同 DAG routes 模式）。"""
+    import api.request_guard as _rg
+
+    _rg.reset_runtime_state()
+    yield
+    _rg.reset_runtime_state()

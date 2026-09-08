@@ -8,22 +8,14 @@
 
 from __future__ import annotations
 
-import asyncio
-
-import pytest
-
-from api.agent.dag import DagError
-from api.agent.planner import (
-    IF_PLANNER_ENABLED,
-    PLANNER_LLM_MODEL,
-    PLAN_SCENE_ORDER,
-    plan_with_llm,
-    plan_with_mock,
-)
-
 # planner 缺省走 Mock：环境未设 IF_MOCK_UPSTREAM 时默认 0（真实路径），
 # 测试显式设为 1 保证零真实 LLM 调用（付费 API 红线）。
 import os
+
+from api.agent.planner import (
+    PLAN_SCENE_ORDER,
+    plan_with_mock,
+)
 
 os.environ.setdefault("IF_MOCK_UPSTREAM", "1")
 

@@ -86,6 +86,15 @@
 - `api/skills/critic.py` — 独立终检 Agent
 - `api/captcha/` — 统一 solver 抽象层（M12，可选）
 
+## v9.0.0-A 智能体 DAG 编排（2026-09-07）
+
+- `api/agent/dag.py` — DAG 引擎（DAGNode/DagRun/Kahn 拓扑/并行扇出真并发/fail_fast 传播/指数退避重试/状态机）
+- `api/agent/planner.py` — LLM 规划器（Mock 优先 + tryingopen 真实路径降级；scene→节点串）
+- `api/routes/agent_dag.py` — `/v1/agent/dag/run` + `/v1/agent/dag/{run_id}` + `/v1/agent/dag/plan`（guard_chat_request 鉴权 + 开关 404 + 提交即拓扑校验）
+- `api/routes/agent_dag_store.py` — 进程内 run 存储（单例 `dag_run_store`，包级属性被遮蔽需用 `.dag_run_store` 实例）
+- `api/routes/agent_dag_exec.py` — 节点执行体（scene/llm/critic/memory/tool 分发，Mock 优先）
+- `tests/test_agent_dag*.py` — 56 用例（引擎/规划器/路由/执行体）
+
 ---
 
-*更新日期：2026-09-05*
+*更新日期：2026-09-07*

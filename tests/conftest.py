@@ -22,6 +22,28 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+# ── 模块级 env（早于任何 api.* import，保证 api.config 首次快照即生效）──
+# v10.0.0：单测全量共享同一进程 + 127.0.0.1 限流桶，跨文件 HTTP 用例累计请求会超
+# request_guard 滑窗默认 10/分钟 → 随机 429（新增 DAG 列表端点后请求量上阈值）。
+# 限流有专属单测（test_request_guard* / test_ip_blocklist），它们用
+# monkeypatch.setattr(config, ...) 显式覆盖快照仍有效；此处默认关限流专注功能链路。
+os.environ["IF_REQUESTS_PER_MINUTE"] = "0"
+# v10.0.0：单测全量默认 DAG run store 用内存（防跨文件共享 data/dag_runs.db 串扰，
+# 与 request_guard/chat 桶同策略——每个用例从干净 store 开始）。SQLite 持久化专测
+# test_dag_run_persistence.py 显式设 IF_DAG_STORE_BACKEND=sqlite + 独立临时 db 覆盖。
+os.environ["IF_DAG_STORE_BACKEND"] = "memory"
+
+# v10.0.0 flaky 根修：IF_DB_FILE 必须在任何 api.* import 之前、模块级就指向临时库。
+# 此前只在 _app_instance（运行时）才设 IF_DB_FILE，而 api/agent/memory.py、api/db/
+# ip_blocklist_store.py、config.DB_FILE 的默认路径（data/imagefree.db）在收集期已固化
+# → 集成 e2e 的 memory/observe endpoint 把数据写进真实 data/imagefree.db，且跨用例
+# 累积相同 content（query 时 count 逐轮膨胀，`assert 10 == 1` 失败），真实库被测试污染。
+# 统一早设临时库：集成与单测共享同一进程临时库（仍不污染真实数据文件），
+# 各用例用唯一 user_key/content 天然隔离（见 test_agent_e2e 的唯一 content）。
+if "IF_DB_FILE" not in os.environ:
+    _DB_FILE = tempfile.mktemp(suffix=".db")
+    os.environ["IF_DB_FILE"] = _DB_FILE
+
 
 @pytest_asyncio.fixture
 async def tmp_db():
@@ -56,10 +78,27 @@ def _reset_settings_singleton():
     """
     from api.config import reset_settings
 
+    # v10.0.0：顺带清 request_guard 内存滑窗/令牌桶（per-IP 全局 dict）。
+    # 全量单测共享同一进程与 127.0.0.1 桶，跨文件累积请求会触发 10/分钟滑窗
+    # 随机 429（如 test_chat_auth / agent 系）。每个用例从干净 guard 状态开始，
+    # 消除跨文件顺序污染；专门测限流行为的测试（test_request_guard*）本就从
+    # 干净状态开始，不受影响（test_ip_blocklist 自身的 autouse 重置变为幂等冗余）。
+    from api.request_guard import reset_runtime_state as _reset_guard
+
     reset_settings()
+    _reset_guard()
+    # v10.0.0：chat 频控桶也是进程级（auth._chat_buckets），全量 chat/agent 用例
+    # 累计请求超 60/分钟会 429——每个用例清空（同 request_guard 策略）
+    try:
+        from api.auth import reset_chat_rate_state as _reset_chat
+
+        _reset_chat()
+    except Exception:
+        pass
     yield
     # 用例后再重置一次，清掉用例内的 monkeypatch env 残留
     reset_settings()
+    _reset_guard()
 
 
 @pytest.fixture
@@ -306,3 +345,24 @@ async def app_with_mocks(_app_instance):
                     pass
             else:
                 imagefree_provider.engine = previous_engine
+
+
+@pytest.fixture(autouse=True)
+def _reset_event_loop_after():
+    """v10.0.0：防 sync 测试内 asyncio.run() 污染 pytest-asyncio session loop。
+
+    多个测试文件用 asyncio.run（test_redis_adapter/ws_events/mail_extract/benchmark 等），
+    asyncio.run 会 set_event_loop 到新 loop 且不恢复，全量时后续 async 测试
+    （token_pool 等 create_task）挂到已关闭 loop → 批量失败。每个测试后把 policy
+    的 loop 重置为「无 loop」，让 pytest-asyncio 下一 async 测试重新创建干净 session loop。
+    """
+    import asyncio as _asyncio
+
+    yield
+    try:
+        _policy = _asyncio.get_event_loop_policy()
+        _cur = _policy.get_event_loop()
+        if _cur is not None and _cur.is_closed():
+            _policy.set_event_loop(None)
+    except Exception:
+        pass

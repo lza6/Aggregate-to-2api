@@ -178,7 +178,12 @@ class LRUCache:
                         j = self._serialize(evicted[1])
                         if j is not None:
                             self._pending.upserts.append((evicted[0], j, self._ttl))
-            self._data[key] = (now + effective_ttl, value)
+            # v10.0.0 flaky 根修：ttl 钳制到 0 时存 `now + 0` 使 deadline == 当前 tick，
+            # get 用 `time.monotonic() > deadline` 严格大于——同一 tick 内 set→get 不会过期
+            # （全量高并发下 set 与 get 落同一单调时钟刻度的偶发边界）。改用必过期哨兵
+            # `now - 1`，保证 ttl<=0 的条目下一次 get 必然判过期（语义同「立即过期」，零回归）。
+            deadline = now + effective_ttl if effective_ttl > 0 else now - 1.0
+            self._data[key] = (deadline, value)
             # P2-5: 记录新 value 字节大小并维护总字节预算
             new_sz = self._sizeof(value)
             self._sizes[key] = new_sz

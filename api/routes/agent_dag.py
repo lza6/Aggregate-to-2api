@@ -23,28 +23,42 @@ from .. import auth
 from ..errors import AppError, ErrorCodes
 from . import agent_dag_store  # 模块级内存 run 存储（进程内，重启即清）
 
-# 直接用 store 实例（模块属性 upsert/get 被包级属性遮蔽，避免 `from . import`
-# 再吃一次包单例解析问题——cerebrum 教训：模块 attr 优先取实例方法）
-_STORE = agent_dag_store.dag_run_store
+
+# v10.0.0：DAG run store 双实现切换——IF_DAG_STORE_BACKEND=sqlite（默认）用持久化
+# store（重启可查，独立 dag_runs.db），=memory 用原内存实现。DB 异常自动降级内存。
+def _build_store() -> Any:
+    try:
+        from ..config import get_settings
+
+        if get_settings().if_dag_store_backend.lower() == "sqlite":
+            from .agent_dag_store_sqlite import DagRunSqliteStore
+
+            return DagRunSqliteStore(get_settings().if_dag_store_db)
+    except Exception:
+        pass
+    return agent_dag_store.dag_run_store
+
+
+_STORE = _build_store()
 
 router = APIRouter()
 log = logging.getLogger("routes.agent_dag")
 
-# DAG 开关（读自环境变量；缺省开启，向后兼容现有 agent 子系统）
-DAG_ENABLED = __import__("os").getenv("IF_AGENT_DAG_ENABLED", "1").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+# DAG 开关（读自 config 工厂；缺省开启，向后兼容现有 agent 子系统）。
+# 保持模块级 DAG_ENABLED/PLANNER_ENABLED 兼容旧测试 monkeypatch，但首值取自 get_settings()
+def _switches() -> tuple[bool, bool]:
+    try:
+        from ..config import get_settings
 
-# planner 开关
-PLANNER_ENABLED = __import__("os").getenv("IF_AGENT_PLANNER_ENABLED", "1").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+        s = get_settings()
+        return bool(s.if_agent_dag_enabled), bool(s.if_agent_planner_enabled)
+    except Exception:
+        return True, True
+
+
+_DAG_ENABLED, _PLANNER_ENABLED = _switches()
+DAG_ENABLED = _DAG_ENABLED
+PLANNER_ENABLED = _PLANNER_ENABLED
 
 
 # ── 请求模型 ────────────────────────────────────────────────
@@ -130,14 +144,14 @@ async def dag_run(payload: DagRunRequest, request: Request):
         raise AppError(ErrorCodes.BAD_REQUEST, exc.message, 422) from None
 
     # 注册 run（先注册后执行，保证 GET 立即可见）
-    _STORE.upsert(run)
+    await _await_maybe(_STORE.upsert(run))
 
     # 后台执行（不阻塞 HTTP 响应）；异常记入 run.error_summary
     async def _background() -> None:
         try:
             await _execute_run_safe(run)
         finally:
-            _STORE.upsert(run)
+            await _await_maybe(_STORE.upsert(run))
 
     from ..background import spawn
 
@@ -159,15 +173,45 @@ async def _execute_run_safe(run) -> None:
         log.error("DAG run %s 执行失败: %s", run.run_id, exc)
 
 
+# 双实现兼容桥：sqlite store 方法为 async，内存 store 为 sync（v9.0.0 原实现）。
+# _await_maybe 让路由层对两种 store 用同一 async 写法（await 一个非协程会 TypeError）。
+async def _await_maybe(value: Any) -> Any:
+    if hasattr(value, "__await__"):
+        return await value
+    return value
+
+
+@router.get("/v1/agent/dag")
+async def dag_list(limit: int = 20, status: str | None = None, request: Request = None):
+    """DAG run 列表（最近在前）。v10.0.0：Agent 页历史列表 / 运维排障。
+
+    - limit：1-100，默认 20
+    - status：可选过滤 pending/running/succeeded/failed/skipped
+    - 鉴权：guard_chat_request（公益开放，同 dag_get）
+    """
+    _dag_enabled_or_404()
+    if request is not None:
+        auth.guard_chat_request(request)
+
+    limit = max(1, min(int(limit), 100))
+    items = await _await_maybe(_STORE.list(limit=limit, status=status))
+    # 统一为 public_state dict 形状（sqlite store 已 dict；内存 store 返回 DagRun 对象）
+    rows = [r if isinstance(r, dict) else r.public_state() for r in items]
+    return {"items": rows, "count": len(rows)}
+
+
 @router.get("/v1/agent/dag/{run_id}")
 async def dag_get(run_id: str, request: Request):
     """查询 DAG run 状态（含每节点状态）。"""
     _dag_enabled_or_404()
     auth.guard_chat_request(request)
 
-    run = _STORE.get(run_id)
+    run = await _await_maybe(_STORE.get(run_id))
     if run is None:
         raise AppError(ErrorCodes.NOT_FOUND, "DAG run 不存在", 404)
+    # SQLite store 返回 dict（已是 public_state 形状）；内存 store 返回 DagRun 对象
+    if isinstance(run, dict):
+        return run
     return run.public_state()
 
 
