@@ -11,7 +11,7 @@
 // 仅 Windows 目标；UI 用系统 WebView2。
 
 use serde::Serialize;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 const BACKEND_ADDR: &str = "127.0.0.1:8100";
@@ -22,16 +22,15 @@ struct BackendState {
     solver_pid: Option<u32>,
 }
 
-impl Default for BackendState {
-    fn default() -> Self {
-        Self {
+fn state() -> &'static Mutex<BackendState> {
+    static STATE: OnceLock<Mutex<BackendState>> = OnceLock::new();
+    STATE.get_or_init(|| {
+        Mutex::new(BackendState {
             uvicorn_pid: None,
             solver_pid: None,
-        }
-    }
+        })
+    })
 }
-
-static STATE: Mutex<BackendState> = Mutex::new(BackendState::default());
 
 #[derive(Serialize, Clone)]
 struct BackendStatus {
@@ -53,16 +52,54 @@ fn spawn_uvicorn() -> Option<u32> {
     use std::process::{Command, Stdio};
 
     let use_sidecar = env_yes("IF_DESKTOP_USE_PYINSTALLER");
-    let (exe, args) = if use_sidecar {
-        ("backend/uvicorn.exe", vec![])
+    // python 解析为 owned String（供 Command::new 长期持有）
+    let python: String;
+    let args: Vec<String> = if use_sidecar {
+        python = "backend/uvicorn.exe".into();
+        vec![]
     } else {
-        (
-            "python",
-            vec!["-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8100"],
-        )
+        // 系统 PATH 可能没有 `python`（仅 .venv 存在）。优先：
+        // 1) IF_DESKTOP_PYTHON 显式指定可执行文件
+        // 2) 上溯 cwd 找仓库根 .venv/Scripts/python.exe
+        // 3) 兜底 `python`（能解析成功即可）
+        python = std::env::var("IF_DESKTOP_PYTHON").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| {
+            let mut cwd = std::env::current_dir().unwrap_or_default();
+            loop {
+                let venv = cwd.join(".venv").join("Scripts").join("python.exe");
+                if venv.exists() {
+                    break venv.to_string_lossy().into_owned();
+                }
+                if !cwd.pop() {
+                    break "python".into();
+                }
+            }
+        });
+        vec!["-m".into(), "uvicorn".into(), "api.main:app".into(), "--host".into(), "127.0.0.1".into(), "--port".into(), "8100".into()]
     };
 
-    let mut cmd = Command::new(exe);
+    // 后端以项目根为工作目录：Tauri 子进程默认 cwd = exe 所在目录，
+    // 相对导入 `api.main:app` 必须从仓库根解析。开发目录存在时回退该根；
+    // 打包安装版（无源码根）依赖 sidecar（backend/uvicorn.exe 自带 api 资源）。
+    let mut project_root: Option<std::path::PathBuf> = std::env::var("IF_DESKTOP_PROJECT_ROOT")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from);
+
+    // 未显式指定时，上溯 cwd 找含 api/main.py 的仓库根
+    if project_root.is_none() {
+        let mut cwd = std::env::current_dir().unwrap_or_default();
+        for _ in 0..6 {
+            if cwd.join("api").join("main.py").exists() {
+                project_root = Some(cwd);
+                break;
+            }
+            if !cwd.pop() {
+                break;
+            }
+        }
+    }
+
+    let mut cmd = Command::new(&python);
     cmd.args(&args)
         .env("IF_HOST", "127.0.0.1")
         .env("IF_PORT", "8100")
@@ -73,6 +110,9 @@ fn spawn_uvicorn() -> Option<u32> {
         )
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    if let Some(root) = project_root {
+        cmd.current_dir(root);
+    }
 
     let child = cmd.spawn().ok()?;
     Some(child.id())
@@ -80,12 +120,43 @@ fn spawn_uvicorn() -> Option<u32> {
 
 fn spawn_solver() -> Option<u32> {
     use std::process::{Command, Stdio};
-    let child = Command::new("python")
-        .args(["deploy/cf_solver/boterdrop_wrapper.py"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+    // 与 spawn_uvicorn 同策略：上溯找 .venv 的 python，找不到回退 `python`
+    let python = std::env::var("IF_DESKTOP_PYTHON").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| {
+        let mut cwd = std::env::current_dir().unwrap_or_default();
+        loop {
+            let venv = cwd.join(".venv").join("Scripts").join("python.exe");
+            if venv.exists() {
+                break venv.to_string_lossy().into_owned();
+            }
+            if !cwd.pop() {
+                break "python".into();
+            }
+        }
+    });
+    // 仅当仓库根存在 boterdrop_wrapper.py 才拉 solver（cwd 未切到仓库根时跳过）
+    let mut root = std::env::var("IF_DESKTOP_PROJECT_ROOT").ok().map(std::path::PathBuf::from);
+    if root.is_none() {
+        let mut cwd = std::env::current_dir().unwrap_or_default();
+        for _ in 0..6 {
+            if cwd.join("deploy").join("cf_solver").join("boterdrop_wrapper.py").exists() {
+                root = Some(cwd);
+                break;
+            }
+            if !cwd.pop() {
+                break;
+            }
+        }
+    }
+    let wrapper = root.as_ref()?.join("deploy").join("cf_solver").join("boterdrop_wrapper.py");
+    if !wrapper.exists() {
+        return None;
+    }
+    let mut cmd = Command::new(&python);
+    cmd.arg(&wrapper).stdout(Stdio::null()).stderr(Stdio::null());
+    if let Some(r) = root {
+        cmd.current_dir(r);
+    }
+    let child = cmd.spawn().ok()?;
     Some(child.id())
 }
 
@@ -137,7 +208,7 @@ fn backend_ready() -> bool {
 
 #[tauri::command]
 fn backend_status() -> BackendStatus {
-    let st = STATE.lock().unwrap();
+    let st = state().lock().unwrap();
     BackendStatus {
         ready: backend_ready(),
         backend_pid: st.uvicorn_pid,
@@ -147,11 +218,12 @@ fn backend_status() -> BackendStatus {
 }
 
 pub fn run() {
+    use tauri::Manager;
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             {
-                let mut st = STATE.lock().unwrap();
+                let mut st = state().lock().unwrap();
                 st.uvicorn_pid = spawn_uvicorn();
                 if !env_yes("IF_DESKTOP_NO_SOLVER") {
                     st.solver_pid = spawn_solver();
@@ -159,13 +231,16 @@ pub fn run() {
             }
 
             // 健康探测后台线程：就绪后显示主窗口（60s 超时兜底）
+            // 注意：闭包内 move 捕获 handle，不能在外层再次 move 进嵌套闭包——
+            // run_on_main_thread 闭包需 clone 一份 handle。
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let deadline = std::time::Instant::now() + Duration::from_secs(60);
                 while std::time::Instant::now() < deadline {
                     if backend_ready() {
+                        let h = handle.clone();
                         let _ = handle.run_on_main_thread(move || {
-                            if let Some(win) = handle.get_webview_window("main") {
+                            if let Some(win) = h.get_webview_window("main") {
                                 let _ = win.show();
                                 let _ = win.set_focus();
                             }
@@ -175,8 +250,9 @@ pub fn run() {
                     std::thread::sleep(Duration::from_millis(600));
                 }
                 // 超时仍显示（后端可能失败，UI 会显示 backend_status）
+                let h = handle.clone();
                 let _ = handle.run_on_main_thread(move || {
-                    if let Some(win) = handle.get_webview_window("main") {
+                    if let Some(win) = h.get_webview_window("main") {
                         let _ = win.show();
                     }
                 });
@@ -187,7 +263,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 // 主窗口关闭 → 终止后端子进程（防孤儿）
-                let st = STATE.lock().unwrap();
+                let st = state().lock().unwrap();
                 if let Some(p) = st.uvicorn_pid {
                     kill_pid(p);
                 }

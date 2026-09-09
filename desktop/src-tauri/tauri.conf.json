@@ -4,8 +4,8 @@
   "version": "10.0.0",
   "identifier": "com.tingfeng.ai.desktop",
   "build": {
-    "beforeDevCommand": "npm --prefix ../.. run dev",
-    "beforeBuildCommand": "npm --prefix ../.. run build",
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../../frontend/dist"
   },
@@ -31,7 +31,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/32x32.png", "icons/icon.png", "icons/icon.ico"]
   },
   "plugins": {
     "shell": {

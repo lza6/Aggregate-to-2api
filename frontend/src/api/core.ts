@@ -2,7 +2,17 @@
 // 子域模块（providers/tasks/chat/security/stats）从本文件 import apiFetch/authHeaders/adminHeaders，
 // index.ts barrel 聚合 re-export，避免 api.ts 与 api/ 同名路径歧义。
 
-const API_BASE = '';
+// v10.0.0 桌面版：Tauri 生产壳内 file:// 同源请求无法命中本地 API，
+// 检测 Tauri 运行时（window.__TAURI_INTERNALS__ 存在）时把相对路径指向 127.0.0.1:8100。
+// 浏览器环境仍走同源相对路径（dev server proxy / /admin 静态挂载），行为不变。
+function resolveApiBase(): string {
+  if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+    return 'http://127.0.0.1:8100';
+  }
+  return '';
+}
+
+const API_BASE = resolveApiBase();
 
 // ── 统一错误处理（P1-4）──────────────────────────────────────────────
 // 所有经 apiFetch 的请求：统一超时、统一错误规范化（非 2xx 抛 ApiError，
