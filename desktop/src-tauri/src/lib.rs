@@ -51,11 +51,27 @@ fn env_yes(name: &str) -> bool {
 fn spawn_uvicorn() -> Option<u32> {
     use std::process::{Command, Stdio};
 
-    let use_sidecar = env_yes("IF_DESKTOP_USE_PYINSTALLER");
+    let use_sidecar = !std::env::var("IF_DESKTOP_USE_PYINSTALLER").is_ok() || env_yes("IF_DESKTOP_USE_PYINSTALLER");
     // python 解析为 owned String（供 Command::new 长期持有）
     let python: String;
     let args: Vec<String> = if use_sidecar {
-        python = "backend/uvicorn.exe".into();
+        // sidecar 模式：exe 目录附近 backend/uvicorn.exe（PyInstaller 单文件，自足）。
+        // 开发时位于 src-tauri/target/release，上溯找 backend/；安装版在程序目录直接有。
+        python = {
+            let mut cwd = std::env::current_dir().unwrap_or_default();
+            let mut found = "backend/uvicorn.exe".to_string();
+            for _ in 0..6 {
+                let cand = cwd.join("backend").join("uvicorn.exe");
+                if cand.exists() {
+                    found = cand.to_string_lossy().into_owned();
+                    break;
+                }
+                if !cwd.pop() {
+                    break;
+                }
+            }
+            found
+        };
         vec![]
     } else {
         // 系统 PATH 可能没有 `python`（仅 .venv 存在）。优先：

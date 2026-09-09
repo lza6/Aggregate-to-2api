@@ -8,6 +8,7 @@ handlers.py、bg_tasks.py、models.py、meta.py、sse_events.py。
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -153,7 +154,12 @@ app.add_middleware(_BodyLimit, max_body_size=config.IF_MAX_REQUEST_BODY)
 app.include_router(api_router)
 
 # ── 挂载前端管理面板 ──
-_FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
+# v10.0.0 桌面版：PyInstaller 打包后 __file__ 在 _MEIPASS（临时解包目录），
+# 静态资源经 spec datas 打包进 `frontend/dist`；此处优先解析解包目录。
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    _FRONTEND_DIR = Path(sys._MEIPASS) / "frontend" / "dist"
+else:
+    _FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 if _FRONTEND_DIR.exists():
     try:
         from fastapi.staticfiles import StaticFiles
@@ -221,4 +227,7 @@ if _LANDING_DIR.exists():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    # v10.0.0 桌面版：默认绑定 127.0.0.1（桌面壳后端），可由 IF_HOST/IF_PORT 覆盖
+    host = getattr(config, "HOST", "127.0.0.1")
+    port = int(getattr(config, "PORT", "8100"))
+    uvicorn.run(app, host=host, port=port)
