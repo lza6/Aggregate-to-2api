@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  imagefree_api one-click launcher (Windows)
 #  1) start cf_solver (port 8001)
 #  2) run imagefree_api (port 8100) in foreground
