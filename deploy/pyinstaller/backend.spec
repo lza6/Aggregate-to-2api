@@ -11,11 +11,12 @@ import sys
 # spec 由 pyinstaller 执行时无 __file__——用 SPECPATH（PyInstaller 注入）
 ROOT = SPECPATH
 
-# ── 收集静态资源（管理面板 + 落地页 dist）───────────────
-frontend_dist = os.path.join(ROOT, "..", "..", "frontend", "dist")
-landing_dist = os.path.join(ROOT, "..", "..", "landing", "dist")
-skills_dir = os.path.join(ROOT, "..", "..", "api", "skills")
-prompts_dir = os.path.join(ROOT, "..", "..", "api", "prompts")
+# ── 收集静态资源（管理面板 + 落地页 dist + 技能 + 提示词 + cf_solver）──
+frontend_dist = "C:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/imagefree-2ai/frontend/dist"
+landing_dist = "C:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/imagefree-2ai/landing/dist"
+skills_dir = "C:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/imagefree-2ai/api/skills"
+prompts_dir = "C:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/imagefree-2ai/api/prompts"
+solver_dir = "C:/Users/Administrator.DESKTOP-EGNE9ND/Desktop/imagefree-2ai/deploy/cf_solver"
 
 datas = []
 for src, dst in [
@@ -23,14 +24,28 @@ for src, dst in [
     (landing_dist, "landing/dist"),
     (skills_dir, "api/skills"),
     (prompts_dir, "api/prompts"),
+    (solver_dir, "deploy/cf_solver"),
 ]:
     if os.path.isdir(src):
         datas.append((src, dst))
 
+# cf_solver 依赖的数据资源（camoufox 指纹 + playwright 浏览器 driver）
+try:
+    from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+
+    for pkg in ("camoufox", "apify_fingerprint_datapoints", "browserforge", "ua_parser", "playwright", "language_tags"):
+        datas += collect_data_files(pkg)
+    binaries = []
+    for pkg in ("camoufox", "playwright"):
+        binaries += collect_dynamic_libs(pkg)
+except Exception:
+    datas = datas
+    binaries = []
+
 a = Analysis(
     [os.path.join(ROOT, "api_server.py")],
     pathex=[ROOT, os.path.join(ROOT, "..", "..")],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=[
         # 运行时动态 import 的模块（懒加载/字符串 import），显式收集避免漏
@@ -43,10 +58,16 @@ a = Analysis(
         "aiosqlite",
         "multipart",
         "python_multipart",
+        # cf_solver（Turnstile 求解器）——桌面版内嵌，solvr 自足
+        "camoufox",
+        "camoufox.api",
+        "camoufox.sync_api",
+        "loguru",
+        "psutil",
     ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "numpy", "pandas", "PIL", "playwright"],
+    excludes=["tkinter", "matplotlib", "pandas", "PIL"],
     noarchive=False,
 )
 
