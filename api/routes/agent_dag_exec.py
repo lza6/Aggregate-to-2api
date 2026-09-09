@@ -48,6 +48,10 @@ async def _dispatch(kind: str, prompt: str) -> str:
     if kind == "scene":
         return await _exec_scene(prompt)
     if kind == "llm":
+        # v11.0.0：IF_MOCK_UPSTREAM=1 时走稳定 Mock（确定性输出，条件分支可验证）
+        mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+        if mock:
+            return await _exec_llm_stable(prompt)
         return await _exec_llm(prompt)
     if kind == "critic":
         return await _exec_critic(prompt)
@@ -55,8 +59,40 @@ async def _dispatch(kind: str, prompt: str) -> str:
         return await _exec_memory(prompt)
     if kind == "tool":
         return await _exec_tool(prompt)
+    if kind in ("retrieval", "rag"):
+        # v11.0.0 RAG 检索节点（复用 api/vector/，SimHash 零依赖，不触碰真实付费上游）
+        return await _exec_retrieval(prompt)
+    if kind == "image":
+        # v11.0.0 多模态节点：Mock 优先（IF_MOCK_UPSTREAM=1 返回占位 URL），真实路径仅 tryingopen
+        return await _exec_image(prompt)
+    if kind == "human_input":
+        # v11.0.0 人机协作节点：默认返回「等待人工确认」（真实 WS 待第二期）
+        return await _exec_human_input(prompt)
     log.warning("DAG 节点未知 kind %s，返回空串", kind)
     return ""
+
+
+async def _exec_retrieval(prompt: str) -> str:
+    """RAG 检索节点：复用 VectorStore（SimHash 嵌入 → find_duplicate 相似检索）。
+
+    返回最相似历史任务摘要，供下游节点参考。付费红线：纯本地计算（api/vector/embed 零依赖），
+    不触碰任何真实付费上游。
+    """
+    if not prompt or not prompt.strip():
+        return "[retrieval] 缺少检索关键词（prompt 为空）"
+    try:
+        from ..vector import embed as _embed
+        from ..vector.store import get_vector_store
+
+        store = get_vector_store()
+        dup = await store.find_duplicate(_embed.compute_embedding(prompt), threshold=0.3)
+        if not dup:
+            return f"[retrieval] 检索无结果：未找到与「{prompt[:50]}」相似的历史素材"
+        sim = round(float(dup.get("similarity", 0.0)), 4)
+        return f"[retrieval] 检索到相似素材 t={dup.get('task_id')} sim={sim} hash={dup.get('prompt_hash', '')}"
+    except Exception as exc:
+        log.warning("DAG retrieval 节点降级: %s", exc)
+        return f"[retrieval] 检索降级（{exc}）"
 
 
 async def _exec_scene(prompt: str) -> str:
@@ -96,6 +132,15 @@ async def _exec_llm(prompt: str) -> str:
     except Exception as exc:
         log.warning("DAG llm 节点执行失败，降级占位: %s", exc)
         return f"[llm-mock] 执行异常降级：{exc}"
+
+
+async def _exec_llm_stable(prompt: str) -> str:
+    """稳定 Mock 输出（v11.0.0 E2E/测试用）：固定返回含「成功」的结果字符串。
+
+    供 DAG 条件分支等确定性场景使用——真实 tryingopen 输出不确定，条件求值无法稳定验证。
+    仅当 IF_MOCK_UPSTREAM=1 时由 execute_node 强制走本函数（测试/E2E 确定性，不真实付费）。
+    """
+    return f"[llm-mock] 已稳定模拟处理：{prompt[:200]}（结果成功）"
 
 
 async def _exec_critic(prompt: str) -> str:
@@ -157,6 +202,50 @@ async def _exec_tool(prompt: str) -> str:
     except Exception as exc:  # noqa: BLE001 — 工具回路兜底不崩 DAG
         log.warning("DAG tool 节点执行失败（降级）: %s", exc)
         return f"[tool] 工具执行降级：{exc}"
+
+
+async def _exec_image(prompt: str) -> str:
+    """多模态图像节点（v11.0.0，Mock 优先）。
+
+    IF_MOCK_UPSTREAM=1（默认）→ 返回占位图 URL（零真实付费）；
+    真实路径走 registry 图片 provider（需 provider.generate，Mock 场景不触发）。
+    异常降级占位，不崩 DAG。
+    """
+    mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if mock or not prompt:
+        _digest = __import__("hashlib").sha1(prompt.encode("utf-8")).hexdigest()[:12]
+        return f"[image-mock] 已生成图像占位：https://tingfeng.ai/v1/img/{_digest}.png"
+    try:
+        from ..providers.registry import bootstrap, registry
+
+        bootstrap()
+        models = registry.all_models()
+        image_models = [m for m in models if getattr(m, "capabilities", None)]
+        if not image_models:
+            return "[image-mock] 无可用图像 model（降级占位）"
+        spec = image_models[0]
+        provider = registry.providers.get(spec.provider)
+        if provider is None:
+            return "[image-mock] 无对应图像 provider（降级占位）"
+        result = await provider.generate(
+            spec.id,
+            prompt,
+            aspect_ratio="1:1",
+            resolution="1K",
+            download=False,
+        )
+        return f"[image] 生成结果：{getattr(result, 'url', '') or str(result)[:200]}"
+    except Exception as exc:
+        log.warning("DAG image 节点执行失败（降级）: %s", exc)
+        return f"[image-mock] 图像节点异常降级：{exc}"
+
+
+async def _exec_human_input(prompt: str) -> str:
+    """人机协作节点（v11.0.0，P3 第二期占位）。
+
+    默认返回「等待人工确认」提示；真实 WS 双向通道留待第二期（见《下一步改进指南》§6.2-f）。
+    """
+    return f"[human] 等待人工确认：{prompt[:200] or '（无提示词）'}"
 
 
 def _extract_tool_candidate(prompt: str) -> str:

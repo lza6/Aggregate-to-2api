@@ -160,7 +160,7 @@ def check_admin_key(request: Request, *, scope: str = "admin-security") -> None:
 
 def check_chat_rate_limit(request: Request) -> None:
     """聊天端点每客户端限流（独立于生图 request_guard 的窗口）。"""
-    limit = int(getattr(config.settings, "chat_requests_per_minute", 60))
+    limit = int(getattr(config.settings, "if_chat_rate_limit", 60) or 60)
     if limit <= 0:
         return
     client = request.client
@@ -179,6 +179,29 @@ def check_chat_rate_limit(request: Request) -> None:
                 _chat_buckets.pop(k, None)
 
 
+def check_dag_rate_limit(request: Request) -> None:
+    """DAG 编排写端点限流（v11.0.0，独立于聊天/生图的窗口；S-1 反滥用）。
+
+    无 Key 可无限提交 DAG 会消耗上游免费额度 → 独立 per-IP 滑窗 `IF_DAG_REQUESTS_PER_MINUTE`
+    （默认 30/分钟，0 关闭），超限 429 并给出中文提示。读取顶层 Settings 字段
+    `if_dag_requests_per_minute`（config 工厂），setenv+reset_settings 后生效。
+    """
+    limit = int(getattr(config.settings, "if_dag_requests_per_minute", 30) or 30)
+    if limit <= 0:
+        return
+    client = request.client
+    key = client.host if client else "unknown"
+    key = f"dag:{key}"
+    now = time.monotonic()
+    with _lock:
+        bucket = _chat_buckets.setdefault(key, deque())
+        while bucket and now - bucket[0] >= _WINDOW_SECONDS:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            raise AppError(ErrorCodes.RATE_LIMITED, "DAG 提交过于频繁，请稍后重试", 429)
+        bucket.append(now)
+
+
 def guard_chat_request(request: Request) -> None:
     """聊天端点组合守卫：频控（v7.7.1：公益定位，聊天不再强制 IF_API_KEYS 业务 Key）。
 
@@ -186,6 +209,12 @@ def guard_chat_request(request: Request) -> None:
     /v1/chat/* 与 /v1/messages，不被 Key 限制。若站长需限流可配 IF_CHAT_RATE_LIMIT。
     """
     check_chat_rate_limit(request)
+
+
+def guard_dag_request(request: Request) -> None:
+    """DAG 端点组合守卫（v11.0.0 S-1）：公益定位保留 per-IP 限速 + DAG 独立限流。"""
+    check_chat_rate_limit(request)
+    check_dag_rate_limit(request)
 
 
 def guard_generate_request(request: Request) -> None:

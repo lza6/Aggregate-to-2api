@@ -28,6 +28,8 @@ class SecuritySettings(BaseModel):
     api_keys: list[str] = Field(default_factory=list, validation_alias="IF_API_KEYS")
     # v4.4: 聊天端点每分钟限流（0 = 不限）
     chat_requests_per_minute: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
+    # v11.0.0 S-1: DAG 编排端点每分钟限流（0 = 不限；独立于聊天/生图，防无 Key 刷上游免费额度）
+    dag_requests_per_minute: int = Field(30, validation_alias="IF_DAG_REQUESTS_PER_MINUTE")
 
     @classmethod
     def from_settings(cls, s: Any) -> SecuritySettings:
@@ -45,6 +47,7 @@ class SecuritySettings(BaseModel):
             csp_enabled=s.if_csp_enabled,
             api_keys=[k.strip() for k in (s.if_api_keys or "").split(",") if k.strip()],
             chat_requests_per_minute=s.if_chat_rate_limit,
+            dag_requests_per_minute=s.if_dag_requests_per_minute,
         )
 
     def to_env(self) -> dict[str, Any]:

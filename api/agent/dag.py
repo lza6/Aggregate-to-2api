@@ -31,7 +31,13 @@ log = logging.getLogger("agent.dag")
 # 输入校验常量（路由层也引用）
 MAX_RUN_NODES = 50  # 单 run 节点上限（防资源耗尽）
 MAX_RUN_NAME_LEN = 128
-VALID_KINDS = frozenset({"llm", "critic", "tool", "memory", "scene"})
+VALID_KINDS = frozenset(
+    {"llm", "critic", "tool", "memory", "scene"}
+    # v11.0.0 深化层：RAG 检索 / 多模态图像 / 人机协作节点入白名单
+    | {"retrieval", "image", "human_input"}
+)
+# 条件表达式操作符白名单（v11.0.0 条件分支：只支持 contains/equals，防注入）
+_CONDITION_OPS = (" contains ", " equals ")
 
 # 重试默认参数
 RETRY_BASE_SECONDS = 0.5
@@ -62,6 +68,9 @@ class DagNode:
     retry: int = 0
     retry_base_seconds: float = RETRY_BASE_SECONDS
     retry_max_seconds: float = RETRY_MAX_SECONDS
+    # v11.0.0 条件分支：表达式形如 "A contains 成功" / "B equals 完成"；
+    # 缺省 None 表示无条件（行为与 v10 完全一致，零回归）。
+    condition: str | None = None
 
     # 执行状态
     status: str = "pending"  # pending / running / succeeded / failed / skipped
@@ -94,6 +103,17 @@ class DagNode:
         self.status = "skipped"
         self.finished_at = time.time()
 
+    def condition_holds(self, deps: dict[str, DagNode]) -> bool:
+        """求值条件分支表达式（v11.0.0）。
+
+        - condition 为 None → True（无条件，保持 v10 行为）
+        - 表达式白名单只允许 contains/equals 两操作符（parse_nodes 已校验），
+          这里只做求值；依赖节点缺失 → 求值异常抛 DagError（路由 422）。
+        """
+        if not self.condition:
+            return True
+        return eval_condition(self.condition, {d: n.public_state() for d, n in deps.items()})
+
     def public_state(self) -> dict[str, Any]:
         """对外 JSON 形状（稳定契约，路由层直接返回）。"""
         return {
@@ -103,6 +123,7 @@ class DagNode:
             "depends_on": list(self.depends_on),
             "prompt": self.prompt,
             "model": self.model,
+            "condition": self.condition,
             "result": self.result,
             "error": self.error,
             "attempt": self.attempt,
@@ -137,7 +158,13 @@ class DagRun:
         self.status = "running"
 
     def mark_finished(self) -> None:
-        self.status = "succeeded" if all(n.status == "succeeded" for n in self.nodes.values()) else "failed"
+        # v11.0.0 条件分支：skipped 视为合法终态（条件不成立/依赖链跳过），
+        # 仅当存在真实 failed 节点时 run 才判 failed（fail_fast 语义保持：失败链仍 failed）。
+        self.status = (
+            "succeeded"
+            if all(n.status in ("succeeded", "skipped") for n in self.nodes.values())
+            else "failed"
+        )
         self.finished_at = time.time()
 
     def public_state(self) -> dict[str, Any]:
@@ -200,6 +227,15 @@ def parse_nodes(raw: list[dict[str, Any]]) -> list[DagNode]:
         if model is not None and not isinstance(model, str):
             raise DagError(f"节点 {node_id} 的 model 必须是字符串")
 
+        # v11.0.0 条件分支：仅接受 contains/equals 两操作符，防注入（表达式白名单）。
+        condition = item.get("condition")
+        if condition is not None:
+            if not isinstance(condition, str) or not condition.strip():
+                raise DagError(f"节点 {node_id} 的 condition 必须是非空字符串")
+            if len(condition) > 200:
+                raise DagError(f"节点 {node_id} 的 condition 过长（上限 200 字符）")
+            _validate_condition(condition, node_id)
+
         try:
             retry = int(item.get("retry", 0))
         except (TypeError, ValueError):
@@ -215,9 +251,51 @@ def parse_nodes(raw: list[dict[str, Any]]) -> list[DagNode]:
                 prompt=prompt,
                 model=model,
                 retry=retry,
+                condition=condition,
             )
         )
     return nodes
+
+
+def _validate_condition(expr: str, node_id: str) -> None:
+    """校验条件表达式格式（白名单操作符，防注入）。
+
+    合法形如 ``A contains 成功`` / ``B equals 完成``。
+    操作符两侧必须各有至少一个字符（"contains nothing here" 会被拒绝）。
+    """
+    for op in _CONDITION_OPS:
+        if op in expr:
+            left, _, right = expr.partition(op)
+            if left.strip() and right.strip():
+                return
+            break
+    raise DagError(f"节点 {node_id} 的 condition 非法：{expr}（仅支持 '<节点id> contains <文本>' 或 '<节点id> equals <文本>'）")
+
+
+def eval_condition(expr: str | None, node_states: dict[str, Any]) -> bool:
+    """求值条件表达式（v11.0.0）。
+
+    - expr 为 None/空 → True（无条件，与 condition_holds 空值语义一致）
+    - expr 形如 ``A contains 成功`` / ``B equals 完成``
+    - 依赖节点缺失或结果非字符串 → 抛 DagError（路由 422）
+    - 操作符白名单（parse_nodes/_validate_condition 已校验），无 eval/exec
+    """
+    if not expr:
+        return True
+    for op in _CONDITION_OPS:
+        if op in expr:
+            left, _, right = expr.partition(op)
+            node_id = left.strip()
+            needle = right.strip()
+            if node_id not in node_states:
+                raise DagError(f"条件表达式引用不存在的依赖节点：{node_id}")
+            value = node_states[node_id].get("result")
+            if value is None:
+                value = ""
+            if not isinstance(value, str):
+                value = str(value)
+            return needle in value if "contains" in op else value == needle
+    raise DagError(f"condition 表达式不支持的操作符：{expr}")
 
 
 def re_fullmatch(node_id: str) -> bool:
@@ -306,8 +384,26 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
     run.mark_running()
 
     semaphore = asyncio.Semaphore(max(1, run.max_parallel))
+    _TERMINAL = {"succeeded", "failed", "skipped"}
+
+    async def _wait_deps_terminal(node: DagNode, timeout: float = 120.0) -> bool:
+        """等待所有直接依赖到达终态（v11.0.0 条件分支/fail_fast 确定性基础）。
+
+        引擎并行扇出时下游任务可能与上游同时启动；条件分支/fail_fast 需在依赖
+        终态后才可判定。超时返回 False（调用方按依赖未完成处理，不悬挂 run）。
+        """
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            if all(d not in run.nodes or run.nodes[d].status in _TERMINAL for d in node.depends_on):
+                return True
+            if asyncio.get_running_loop().time() > deadline:
+                return False
+            await asyncio.sleep(0.05)
 
     async def _run_node(node: DagNode) -> None:
+        # v11.0.0：等待依赖终态后再做 skip/条件判定（消除并行扇出竞态）
+        await _wait_deps_terminal(node)
+
         # 启动前实时判定依赖终态：fail_fast 下依赖 failed → 本节点 skipped
         # （依赖可能已重试成功或失败，预标记无法预知，故在调用时检查）
         if run.fail_fast and any(
@@ -315,6 +411,14 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
         ):
             node.mark_skipped()
             return
+
+        # v11.0.0 条件分支：依赖全部终态后求值，条件不成立 → skipped
+        # （条件表达式仅依赖本节点的 depends_on，此刻依赖已是终态）
+        if node.condition:
+            deps_snapshot = {d: run.nodes[d] for d in node.depends_on if d in run.nodes}
+            if not node.condition_holds(deps_snapshot):
+                node.mark_skipped()
+                return
 
         node.mark_running()
         attempt = 0
@@ -367,6 +471,7 @@ __all__ = [
     "RETRY_MAX_SECONDS",
     "VALID_KINDS",
     "build_graph",
+    "eval_condition",
     "execute_run",
     "parse_nodes",
     "re_fullmatch",

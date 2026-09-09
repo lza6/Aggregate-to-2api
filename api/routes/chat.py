@@ -20,9 +20,48 @@ from ..errors import AppError, ErrorCodes
 from ..providers.base import ChatProvider, ProviderRateLimited
 from ..providers.registry import bootstrap as providers_bootstrap
 from ..providers.registry import registry
+from ..vector.store import get_vector_store  # noqa: F401  (v11.0.0 RAG：导出给测试 mock 用)
 
 router = APIRouter()
 log = logging.getLogger("imagefree_api.chat")
+
+# v11.0.0 RAG 增强开关（默认关闭；IF_RAG_ENABLED=1 时 chat 在 system 前注入向量检索上下文）。
+# 测试可通过 patch chat_mod._rag_flag_override 强制会话内开关（避免 setenv+reset 的异步时序泄漏）。
+_rag_flag_override: bool | None = None
+
+
+def _rag_enabled() -> bool:
+    """读取 IF_RAG_ENABLED（走 config 工厂，setenv+reset_settings 后生效）。"""
+    if _rag_flag_override is not None:
+        return _rag_flag_override
+    try:
+        from ..config import get_settings
+
+        return bool(getattr(get_settings(), "if_rag_enabled", False))
+    except Exception:
+        return False
+
+
+async def _rag_prefix_if_enabled(query: str) -> str:
+    """IF_RAG_ENABLED=1：用向量存储检索与 query 相似的历史素材，拼成 system 前缀。
+
+    返回空前串表示关闭或无结果（零行为变化）。Mock/异常一律降级空串，不崩 chat 主链路。
+    """
+    if not _rag_enabled():
+        return ""
+    try:
+        from ..vector import embed as _embed
+        from ..vector.store import get_vector_store
+
+        store = get_vector_store()
+        dup = await store.find_duplicate(_embed.compute_embedding(query or ""), threshold=0.3)
+        if not dup:
+            return ""
+        sim = round(float(dup.get("similarity", 0.0)), 4)
+        return f"[知识库检索] 参考素材 {dup.get('task_id', '')}（相似度 {sim}）：主题相关性高，可沿用其风格/构图。"
+    except Exception as exc:  # noqa: BLE001 — RAG 增强是可选能力，失败降级不崩聊天
+        log.warning("chat RAG 检索降级: %s", exc)
+        return ""
 
 _ROLE = Literal["user", "assistant", "system", "tool"]
 _REASONING_EFFORT = {
@@ -383,6 +422,10 @@ async def _openai_stream(
 async def chat_completions(request: ChatCompletionsRequest, raw_request: Request):
     auth.guard_chat_request(raw_request)
     messages = _messages_payload(request.messages)
+    # v11.0.0 RAG 增强：IF_RAG_ENABLED=1 时把检索上下文拼进 system（默认关闭零变化）
+    rag_prefix = await _rag_prefix_if_enabled(messages[0] if messages else "")
+    if rag_prefix:
+        messages = [{"role": "system", "content": rag_prefix}] + messages
     provider = _provider_for(request.model)
     if request.stream:
         return StreamingResponse(

@@ -207,6 +207,8 @@ class Settings(BaseSettings):
     # v4.4: 全局 API Key 防滥用（逗号分隔多个；空 = 开放模式）
     if_api_keys: str = Field("", validation_alias="IF_API_KEYS")
     if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
+    # v11.0.0 S-1: DAG 编排端点每分钟限流（0 = 不限；独立窗口防无 Key 刷上游免费额度）
+    if_dag_requests_per_minute: int = Field(30, validation_alias="IF_DAG_REQUESTS_PER_MINUTE")
 
     # ── tryingopen.com 匿名网关（v4.4 聊天）──────────────────
     # 开关：字符串 '1'/'true'/'on' → True（走 _bool_str_coerce）。原先 os.getenv 直读，现纳入模型。
@@ -256,6 +258,8 @@ class Settings(BaseSettings):
     if_agent_planner_enabled: bool = Field(True, validation_alias="IF_AGENT_PLANNER_ENABLED")
     # v9.0.0-A planner 真实 LLM 的默认模型（约定 tryingopen/default，registry 无此 id 时回退首个 chat model）
     if_agent_planner_model: str = Field("tryingopen/default", validation_alias="IF_PLANNER_LLM_MODEL")
+    # v11.0.0 RAG 增强：1=chat 在 system 前注入向量检索上下文（默认关闭，零行为变化）
+    if_rag_enabled: bool = Field(False, validation_alias="IF_RAG_ENABLED")
 
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")

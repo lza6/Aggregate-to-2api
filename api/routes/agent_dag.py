@@ -5,7 +5,7 @@
 - GET  /v1/agent/dag/{run_id} 查询 run 状态（含每节点状态）
 - POST /v1/agent/dag/plan     自然语言 → DAG（LLM 规划器，Mock 优先）
 
-鉴权：复用 auth.guard_chat_request（与 chat 端点同 Key；公益开放同生图）。
+鉴权：复用 auth.guard_dag_request（v11.0.0：chat 频控 + DAG 独立限流 S-1；公益开放同生图）。
 开关：IF_AGENT_DAG_ENABLED=0 → 404；IF_AGENT_PLANNER_ENABLED=0 → plan 404。
 三铁律：不重构现有 agent 模块；只追加；Mock 优先零真实付费。
 """
@@ -69,6 +69,8 @@ class DagNodeInput(BaseModel):
     prompt: str | None = Field(None, max_length=8000)
     model: str | None = Field(None, max_length=128)
     retry: int = Field(0, ge=0, le=5)
+    # v11.0.0 条件分支：形如 "A contains 成功" / "B equals 完成"（白名单操作符）
+    condition: str | None = Field(None, max_length=200)
 
 
 class DagRunRequest(BaseModel):
@@ -115,7 +117,10 @@ def _planner_enabled_or_404() -> None:
 async def dag_run(payload: DagRunRequest, request: Request):
     """提交 DAG run：解析节点 → 拓扑校验 → 后台执行 → 返回 run_id。"""
     _dag_enabled_or_404()
-    auth.guard_chat_request(request)
+    auth.guard_chat_request(request)  # 频控走 chat 基线（公益开放）
+    from ..auth import check_dag_rate_limit
+
+    check_dag_rate_limit(request)  # v11.0.0 S-1 独立 DAG 限流
 
     from ..agent.dag import DagError, build_graph, parse_nodes
 
@@ -146,11 +151,13 @@ async def dag_run(payload: DagRunRequest, request: Request):
     # 注册 run（先注册后执行，保证 GET 立即可见）
     await _await_maybe(_STORE.upsert(run))
 
-    # 后台执行（不阻塞 HTTP 响应）；异常记入 run.error_summary
+    # 后台执行（不阻塞 HTTP 响应）；异常记入 run.error_summary；
+    # v11.0.0 跨 run 记忆：run 结束把结果摘要沉淀 L0（复用 memory.memory_store.observe）
     async def _background() -> None:
         try:
             await _execute_run_safe(run)
         finally:
+            await _persist_run_memory(run)
             await _await_maybe(_STORE.upsert(run))
 
     from ..background import spawn
@@ -173,6 +180,33 @@ async def _execute_run_safe(run) -> None:
         log.error("DAG run %s 执行失败: %s", run.run_id, exc)
 
 
+async def _persist_run_memory(run) -> None:
+    """run 结束沉淀跨 run 记忆（v11.0.0 6.2-e）。
+
+    IF_MEMORY_CONSOLIDATION_ENABLED=1 时把 run 结果摘要 + 成败模式写入 L0 观察，
+    供后续 run/chat 复用。观察写入失败仅记 warning，不崩后台任务。
+    """
+    try:
+        from ..config import get_settings
+
+        if not get_settings().if_memory_consolidation_enabled:
+            return
+        from ..agent.memory import memory_store
+
+        status = run.status
+        summary = f"dag run {run.status}: nodes ops " + ",".join(
+            f"{n.status}" for n in run.nodes.values()
+        )
+        await memory_store.observe(
+            "dag",
+            "dag",
+            f"{run.name} {status} [{summary}]"[:800],
+            importance=0.6 if status == "succeeded" else 0.8,
+        )
+    except Exception as exc:  # noqa: BLE001 — 记忆沉淀是增强能力，失败不崩后台
+        log.warning("DAG run 记忆沉淀失败（降级）: %s", exc)
+
+
 # 双实现兼容桥：sqlite store 方法为 async，内存 store 为 sync（v9.0.0 原实现）。
 # _await_maybe 让路由层对两种 store 用同一 async 写法（await 一个非协程会 TypeError）。
 async def _await_maybe(value: Any) -> Any:
@@ -187,7 +221,7 @@ async def dag_list(limit: int = 20, status: str | None = None, request: Request 
 
     - limit：1-100，默认 20
     - status：可选过滤 pending/running/succeeded/failed/skipped
-    - 鉴权：guard_chat_request（公益开放，同 dag_get）
+    - 鉴权：guard_chat_request（公益开放；读操作不占用 DAG 写限流额度）
     """
     _dag_enabled_or_404()
     if request is not None:
@@ -204,7 +238,7 @@ async def dag_list(limit: int = 20, status: str | None = None, request: Request 
 async def dag_get(run_id: str, request: Request):
     """查询 DAG run 状态（含每节点状态）。"""
     _dag_enabled_or_404()
-    auth.guard_chat_request(request)
+    auth.guard_chat_request(request)  # 读操作不占用 DAG 写限流额度
 
     run = await _await_maybe(_STORE.get(run_id))
     if run is None:
@@ -220,7 +254,7 @@ async def dag_plan(payload: DagPlanRequest, request: Request):
     """自然语言 → DAG 节点列表（LLM 规划器，Mock 优先）。"""
     _dag_enabled_or_404()
     _planner_enabled_or_404()
-    auth.guard_chat_request(request)
+    auth.guard_chat_request(request)  # 规划是只读推导，不占用 DAG 写限流额度
 
     from ..agent.planner import plan_task
 
