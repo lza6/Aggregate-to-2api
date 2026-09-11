@@ -60,6 +60,8 @@ def main() -> int:
             "IF_MCP_ENABLED": "1",  # E2E 显式开启 MCP（默认关）
             "IF_AGENT_DAG_ENABLED": "1",
             "IF_AGENT_SKILLS_ENABLED": "1",
+            "IF_HUMAN_INPUT_ENABLED": "1",  # v12.0.1 T3：E2E 开启审批真通道
+            "IF_HUMAN_INPUT_TIMEOUT": "8",  # 审批等待 8s（E2E 快速轮转）
             "IF_REQUESTS_PER_MINUTE": "0",  # E2E 关闭 per-IP 限流
             "IF_DAG_REQUESTS_PER_MINUTE": "0",
             "IF_DB_FILE": os.path.join(ROOT, "data", "e2e_v12.db"),
@@ -92,7 +94,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==12.0.0", ver == "12.0.0", f"got {ver}")
+        check("2 openapi version==12.1.0", ver == "12.1.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -108,7 +110,7 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "12.0.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "12.1.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
@@ -180,6 +182,46 @@ def main() -> int:
         )
         ok11 = r.status_code == 200 and "image-mock" in r.json()["result"]["content"][0]["text"]
         check("11 mcp generate_image mock 占位", ok11)
+
+        # 12. v12.0.1 T3：human_input 审批真通道（run 挂起 → inbox approve → run succeeded）
+        r = client.post(
+            "/v1/agent/dag/run",
+            json={
+                "name": "e2e-v121-human",
+                "fail_fast": False,
+                "nodes": [
+                    {"id": "h1", "kind": "human_input", "depends_on": [], "prompt": "确认发布这张主图？"},
+                    {"id": "f1", "kind": "llm", "depends_on": ["h1"], "prompt": "发布后收尾"},
+                ],
+            },
+        )
+        human_run_id = r.json().get("run_id", "")
+        approved = False
+        for _ in range(24):
+            time.sleep(0.5)
+            inbox = client.get("/v1/agent/human-inbox", params={"run_id": human_run_id}).json()
+            pending = [x for x in inbox.get("items", []) if x["status"] == "pending"]
+            if pending:
+                d = client.post(
+                    f"/v1/agent/human-inbox/{pending[0]['req_id']}/decision",
+                    json={"decision": "approve", "note": "e2e-批准"},
+                )
+                approved = d.status_code == 200 and d.json()["status"] == "approved"
+                break
+        check("12a human_input 审批端点决策", approved)
+        human_final = None
+        for _ in range(30):
+            time.sleep(0.5)
+            g = client.get(f"/v1/agent/dag/{human_run_id}").json()
+            if g.get("status") in ("succeeded", "failed", "partial"):
+                human_final = g
+                break
+        h_node = next((n for n in (human_final or {}).get("nodes", []) if n["id"] == "h1"), {})
+        check(
+            "12b human_input 真通道审批后 run succeeded",
+            (human_final or {}).get("status") == "succeeded" and "已批准" in str(h_node.get("result", "")),
+            f"status={getattr(human_final, 'status', None)} h1={h_node.get('result', '')[:80]}",
+        )
 
         client.close()
     finally:

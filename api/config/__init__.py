@@ -267,6 +267,14 @@ class Settings(BaseSettings):
     if_budget_guard_mode: str = Field("off", validation_alias="IF_BUDGET_GUARD_MODE")
     # v12.0.0 P1-M10 Fence 清洗层（LLM 读不可信文本前剥离注入载荷；默认关闭零行为变化）
     if_fencing_enabled: bool = Field(False, validation_alias="IF_FENCING_ENABLED")
+    # v12.0.1 T1 自反思 critic：fail 后按 issues 单轮修正重生成（critic fail 路径增强）
+    if_critic_reflection_enabled: bool = Field(True, validation_alias="IF_CRITIC_REFLECTION_ENABLED")
+    # v12.0.1 T2 LLM 工具调用循环：响应含 [tool:名字] 自动执行回填再调；0=关闭循环
+    if_llm_tool_iterations: int = Field(2, validation_alias="IF_LLM_TOOL_ITERATIONS")
+    # v12.0.1 T3 human_input 真通道：1=inbox 审批等待；0=占位串（零行为变化）
+    if_human_input_enabled: bool = Field(False, validation_alias="IF_HUMAN_INPUT_ENABLED")
+    # v12.0.1 T3 审批等待超时（秒），超时节点降级返回 timeout 结果
+    if_human_input_timeout: float = Field(60.0, validation_alias="IF_HUMAN_INPUT_TIMEOUT")
 
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")

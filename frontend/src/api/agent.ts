@@ -10,6 +10,7 @@ export interface DagNodePublic {
   depends_on: string[];
   prompt: string | null;
   model: string | null;
+  condition: string | null;
   result: string | null;
   error: string | null;
   attempt: number;

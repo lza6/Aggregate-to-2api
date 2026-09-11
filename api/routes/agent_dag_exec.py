@@ -38,14 +38,25 @@ async def execute_node(node_id: str, state: dict[str, Any]) -> str:
     kind = kind or "llm"
     prompt = node_state.get("prompt") or "" if isinstance(node_state, dict) else ""
 
+    # v12.0.1 T3：human_input 真通道开启时节点超时须覆盖审批等待（默认 30s 会被掐）
+    timeout = NODE_EXEC_TIMEOUT_SECONDS
     try:
-        return await asyncio.wait_for(_dispatch(kind, prompt), timeout=NODE_EXEC_TIMEOUT_SECONDS)
+        if kind == "human_input" and get_settings().if_human_input_enabled:
+            timeout = max(timeout, float(get_settings().if_human_input_timeout) + 5.0)
+    except Exception:  # noqa: BLE001 — 超时计算失败回退默认
+        pass
+
+    try:
+        return await asyncio.wait_for(
+            _dispatch(kind, prompt, node_id, str(state.get("run_id") or "") if isinstance(state, dict) else ""),
+            timeout=timeout,
+        )
     except TimeoutError:  # asyncio.wait_for 超时（Python 3.11+ 与内置 TimeoutError 同一对象）
-        log.warning("DAG 节点 %s（kind=%s）执行超时（>%ss），降级返回", node_id, kind, NODE_EXEC_TIMEOUT_SECONDS)
-        return f"[{kind}-timeout] 节点执行超过 {NODE_EXEC_TIMEOUT_SECONDS}s，已降级返回（防拖死整个 run）"
+        log.warning("DAG 节点 %s（kind=%s）执行超时（>%ss），降级返回", node_id, kind, timeout)
+        return f"[{kind}-timeout] 节点执行超过 {timeout}s，已降级返回（防拖死整个 run）"
 
 
-async def _dispatch(kind: str, prompt: str) -> str:
+async def _dispatch(kind: str, prompt: str, node_id: str = "", run_id: str = "") -> str:
     if kind == "scene":
         return await _exec_scene(prompt)
     if kind == "llm":
@@ -67,8 +78,8 @@ async def _dispatch(kind: str, prompt: str) -> str:
         # v11.0.0 多模态节点：Mock 优先（IF_MOCK_UPSTREAM=1 返回占位 URL），真实路径仅 tryingopen
         return await _exec_image(prompt)
     if kind == "human_input":
-        # v11.0.0 人机协作节点：默认返回「等待人工确认」（真实 WS 待第二期）
-        return await _exec_human_input(prompt)
+        # v12.0.1 T3 人机协作节点：真通道（inbox 审批）或占位（开关关）
+        return await _exec_human_input(prompt, _human_node_id=node_id, _human_run_id=run_id)
     log.warning("DAG 节点未知 kind %s，返回空串", kind)
     return ""
 
@@ -106,8 +117,13 @@ async def _exec_scene(prompt: str) -> str:
     return "scene=unknown"
 
 
-async def _exec_llm(prompt: str) -> str:
-    """调 tryingopen 免费上游 LLM（IF_MOCK_UPSTREAM=1 → Mock 占位）。"""
+async def _exec_llm(prompt: str, *, _depth: int = 0) -> str:
+    """调 tryingopen 免费上游 LLM（IF_MOCK_UPSTREAM=1 → Mock 占位）。
+
+    v12.0.1 T2 工具调用循环：响应含 ``[tool:名字]`` 时自动执行本地工具并把结果
+    回填进下一轮 prompt（上限 if_llm_tool_iterations，0=关闭循环）。复用
+    _extract_tool_candidate 同源的 skills 索引，零真实付费（tryingopen 免费 metered）。
+    """
     from ..config import get_settings
 
     if get_settings().if_mock_upstream or not prompt:
@@ -130,7 +146,18 @@ async def _exec_llm(prompt: str) -> str:
                 {"role": "user", "content": prompt},
             ],
         )
-        return str(result.get("text", ""))[:1000]
+        text = str(result.get("text", ""))[:1000]
+        # v12.0.1 T2：工具调用循环（上限迭代，防死循环）
+        import re as _re
+
+        m = _re.search(r"\[tool:([^\]]{1,64})\]", text)
+        max_iter = int(get_settings().if_llm_tool_iterations or 0)
+        if m and _depth < max_iter:
+            tool_name = m.group(1).strip()
+            log.info("llm 工具循环 depth=%d 触发工具=%s", _depth, tool_name)
+            tool_result = await _exec_tool(f"调用 {tool_name}")
+            return await _exec_llm(f"{prompt}\n\n[工具 {tool_name} 结果]: {tool_result}", _depth=_depth + 1)
+        return text
     except Exception as exc:
         log.warning("DAG llm 节点执行失败，降级占位: %s", exc)
         return f"[llm-mock] 执行异常降级：{exc}"
@@ -145,12 +172,26 @@ async def _exec_llm_stable(prompt: str) -> str:
     return f"[llm-mock] 已稳定模拟处理：{prompt[:200]}（结果成功）"
 
 
-async def _exec_critic(prompt: str) -> str:
-    """终检：critic.review_generation（Mock 规则评分优先）。"""
+async def _exec_critic(prompt: str, *, _reflected: bool = False) -> str:
+    """终检：critic.review_generation（Mock 规则评分优先）。
+
+    v12.0.1 T1 自反思闭环：pass_check=False 时按 issues 单轮修正重生成
+    （IF_CRITIC_REFLECTION_ENABLED，仅一轮防震荡）。Mock 模式下重生成走
+    _exec_llm_stable（确定性，付费红线零真实调用）。
+    """
     from ..agent.critic import review_generation
+    from ..config import get_settings
 
     result = await review_generation(prompt or "（无提示词）", scene="image")
-    return f"critic=pass:{result.pass_check} score:{result.score} issues:{','.join(result.issues)}"
+    if result.pass_check:
+        return f"critic=pass:{result.pass_check} score:{result.score} issues:{','.join(result.issues)}"
+    # fail → 自反思：单轮按 issues 修正重生成
+    if not get_settings().if_critic_reflection_enabled or _reflected:
+        return f"critic=pass:{result.pass_check} score:{result.score} issues:{','.join(result.issues)}"
+    log.info("critic 反思触发（score=%.2f issues=%s），单轮重生成", result.score, result.issues)
+    issues_text = ",".join(result.issues) or "质量未达标"
+    regen = await _exec_llm(f"修正以下产物的质量问题（{issues_text}）：{prompt}")
+    return f"critic=reflection score:{result.score} issues:{issues_text} regen:{regen[:300]}"
 
 
 async def _exec_memory(prompt: str) -> str:
@@ -246,12 +287,30 @@ async def _exec_image(prompt: str) -> str:
         return f"[image-mock] 图像节点异常降级：{exc}"
 
 
-async def _exec_human_input(prompt: str) -> str:
-    """人机协作节点（v11.0.0，P3 第二期占位）。
+async def _exec_human_input(prompt: str, *, _human_node_id: str = "", _human_run_id: str = "") -> str:
+    """人机协作节点（v12.0.1 T3 真通道）。
 
-    默认返回「等待人工确认」提示；真实 WS 双向通道留待第二期（见《下一步改进指南》§6.2-f）。
+    IF_HUMAN_INPUT_ENABLED=0（默认）→ 占位串（v11 零行为变化）；
+    =1 → 创建审批请求进 HumanInbox 并等待决策（approve/reject/timeout 三态，
+    超时 if_human_input_timeout 秒降级）。审批经 POST /v1/agent/human-inbox/{req_id}/decision。
     """
-    return f"[human] 等待人工确认：{prompt[:200] or '（无提示词）'}"
+    from ..config import get_settings
+
+    if not get_settings().if_human_input_enabled:
+        return f"[human] 等待人工确认：{prompt[:200] or '（无提示词）'}"
+    try:
+        from ..agent.human_inbox import human_inbox
+
+        req = human_inbox.create(run_id=_human_run_id, node_id=_human_node_id or "human", prompt=prompt)
+        final = await human_inbox.wait(req.req_id, timeout=float(get_settings().if_human_input_timeout))
+        if final.status == "approved":
+            return f"[human] 已批准（note:{final.note or '无'}）：{prompt[:200]}"
+        if final.status == "rejected":
+            return f"[human] 已拒绝（note:{final.note or '无'}）：{prompt[:200]}"
+        return f"[human] 审批超时（{get_settings().if_human_input_timeout}s），降级继续：{prompt[:200]}"
+    except Exception as exc:  # noqa: BLE001 — 审批通道异常降级占位，不崩 DAG
+        log.warning("human_input 真通道异常降级: %s", exc)
+        return f"[human] 等待人工确认（通道降级：{exc}）：{prompt[:200]}"
 
 
 def _extract_tool_candidate(prompt: str) -> str:

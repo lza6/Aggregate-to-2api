@@ -429,7 +429,9 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
                 async with semaphore:
                     # state 含当前节点自身 public_state（键 "node"）+ 依赖节点快照（键 "deps"），
                     # 执行器无需再查 run 容器即可取到 kind/prompt/model。
+                    # v12.0.1：注入 run_id（human_input 审批请求需关联 run，纯增量键不破坏旧执行器）。
                     state = {
+                        "run_id": run.run_id,
                         "node": node.public_state(),
                         "deps": {d: run.nodes[d].public_state() for d in node.depends_on if d in run.nodes},
                     }

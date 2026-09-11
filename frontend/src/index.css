@@ -773,4 +773,36 @@ textarea:focus-visible,
 .dag-node-meta { color: var(--text-dim, #7c8798); font-size: 12px; }
 .dag-node-error { color: #ef4444; font-size: 12px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dag-node-result { color: #2563eb; font-size: 12px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* v12.0.1 DAG SVG 分层图 + 推理轨迹（black-box）面板 */
+.dag-graph-canvas { overflow-x: auto; border: 1px solid var(--border-default, #e2e8f0); border-radius: 12px; background: var(--bg-subtle, #f1f5f9); padding: 4px; }
+.dag-svg { display: block; }
+.dag-svg-node { cursor: pointer; }
+.dag-svg-node:focus { outline: none; }
+.dag-svg-node:focus-visible .dag-svg-node-box { stroke-width: 2.5; }
+.dag-svg-node-box { fill: var(--bg-card, #fff); stroke-width: 1.5; transition: filter var(--dur-fast, 150ms) ease; }
+.dag-svg-node:hover .dag-svg-node-box { filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.18)); }
+.dag-svg-node.selected .dag-svg-node-box { stroke-width: 2.5; filter: drop-shadow(0 0 6px var(--primary-glow, rgba(99, 102, 241, 0.25))); }
+.dag-svg-kind { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; fill: var(--text-muted, #64748b); }
+.dag-svg-id { font-size: 12px; font-weight: 600; fill: var(--text-primary, #0f172a); }
+.dag-svg-edge { fill: none; stroke-width: 1.5; opacity: 0.55; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dag-node-running .dag-svg-node-box { animation: dag-breath 1.6s ease-in-out infinite; }
+  .dag-node-running .dag-svg-status-dot { animation: dag-breath 1.6s ease-in-out infinite; }
+}
+@keyframes dag-breath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.dag-trace { margin-top: 10px; border: 1px solid var(--border-default, #e2e8f0); border-radius: 12px; background: var(--bg-card, #fff); padding: 12px 14px; }
+.dag-trace-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dag-trace-id { font-weight: 700; font-family: var(--mono-deep, monospace); font-size: 13px; }
+.dag-trace-meta { display: flex; gap: 14px; flex-wrap: wrap; color: var(--text-muted, #64748b); font-size: 12px; margin-top: 6px; }
+.dag-trace-label { font-size: 11px; font-weight: 700; color: var(--text-muted, #64748b); letter-spacing: 0.05em; margin: 10px 0 4px; text-transform: uppercase; }
+.dag-trace-block { font-family: var(--mono-deep, 'JetBrains Mono', Consolas, monospace); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; background: var(--bg-subtle, #f1f5f9); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow-y: auto; color: var(--text-primary, #0f172a); margin: 0; }
+.dag-trace-block.is-error { background: var(--danger-bg, #fef2f2); color: var(--danger-text, #b91c1c); }
+.dag-trace-empty { color: var(--text-muted, #64748b); font-size: 13px; padding: 10px 2px; }
+.dag-trace-empty-inline { color: var(--text-muted, #64748b); font-size: 12px; margin-top: 8px; }
 .dag-polling-hint { font-size: 12px; color: var(--text-dim, #7c8798); font-weight: 400; }

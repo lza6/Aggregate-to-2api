@@ -251,7 +251,7 @@ def build_sec_ch_ua_headers(user_agent: str) -> dict[str, str]:
     sec_ch_ua = ", ".join(f'"{b}";v="{v}"' for b, v, _ in ordered)
     if "Windows" in user_agent:
         platform = "Windows"
-        platform_version = "12.0.0"
+        platform_version = "12.1.0"
     elif "Mac OS X" in user_agent or "Macintosh" in user_agent:
         platform = "macOS"
         platform_version = "10.15.7"

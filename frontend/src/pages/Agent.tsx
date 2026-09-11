@@ -1,8 +1,7 @@
-// v10.0.0：智能体 DAG 编排页（/agent）。
-// 产品闭环：自然语言 → 规划（planDag）→ 提交（runDag）→ 轮询（getDagRun）→
-// 节点状态着色 + 失败/超时提示 + 历史 run 列表（listDagRuns，刷新不丢）。
+// v12.0.1：节点展示升级为 SVG 分层 DAG 图 + 推理轨迹面板（components/DagGraph.tsx）。
 // 复用现有轮子：useApi（轮询/竞态/防抖）+ EmptyState/ErrorRetry/Skeleton + Toast。
 import { useState } from 'react';
+import { DagGraph, statusColor, statusLabel } from '../components/DagGraph';
 import { EmptyState } from '../components/EmptyState';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
@@ -12,54 +11,13 @@ import {
   listDagRuns,
   planDag,
   runDag,
-  type DagNodePublic,
   type DagPlanResult,
   type DagRunPublic,
 } from '../api/agent';
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  pending: { label: '排队中', color: '#94a3b8' },
-  running: { label: '执行中', color: '#3b82f6' },
-  succeeded: { label: '成功', color: '#10b981' },
-  failed: { label: '失败', color: '#ef4444' },
-  skipped: { label: '已跳过', color: '#64748b' },
-};
-
-function statusLabel(status: string): string {
-  return STATUS_META[status]?.label ?? status;
-}
-
-function statusColor(status: string): string {
-  return STATUS_META[status]?.color ?? '#94a3b8';
-}
-
 function fmtTime(ts: number | null): string {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleString();
-}
-
-function fmtMs(v: number): string {
-  if (!Number.isFinite(v) || v <= 0) return '—';
-  if (v >= 1000) return `${(v / 1000).toFixed(2)}s`;
-  return `${Math.round(v)}ms`;
-}
-
-/** 节点级联展示（依赖链 → 状态/耗时/结果/错误）。 */
-function NodeRow({ node, depth }: { node: DagNodePublic; depth: number }) {
-  return (
-    <div className="dag-node-row" style={{ marginLeft: depth * 16 }}>
-      <span className="dag-node-kind">{node.kind}</span>
-      <span className="dag-node-id">{node.id}</span>
-      <span className="dag-node-status" style={{ color: statusColor(node.status) }}>
-        ● {statusLabel(node.status)}
-      </span>
-      <span className="dag-node-meta">
-        #{node.attempt} · {fmtMs(node.duration_ms)}
-      </span>
-      {node.error && <span className="dag-node-error">{node.error.slice(0, 120)}</span>}
-      {node.result && <span className="dag-node-result">{node.result.slice(0, 120)}</span>}
-    </div>
-  );
 }
 
 function RunCard({ run }: { run: DagRunPublic }) {
@@ -82,7 +40,7 @@ function RunCard({ run }: { run: DagRunPublic }) {
       {expanded && (
         <div className="dag-run-detail">
           {run.error_summary && <div className="dag-run-error">run 异常：{run.error_summary.slice(0, 300)}</div>}
-          {run.nodes.map(n => <NodeRow key={n.id} node={n} depth={0} />)}
+          <DagGraph nodes={run.nodes} />
         </div>
       )}
     </div>
@@ -180,7 +138,7 @@ export function AgentPage() {
           <div className="dag-section-title">
             计划预览（{plan.nodes.length} 节点，{plan.meta.valid ? '✓ 合法' : '✗ 需检查'}，{plan.meta.mock ? '规则规划' : `LLM 规划(${plan.meta.model})`}）
           </div>
-          {plan.nodes.map(n => <NodeRow key={n.id} node={{ ...n, status: 'pending' }} depth={0} />)}
+          <DagGraph nodes={plan.nodes.map(n => ({ ...n, status: 'pending' }))} />
         </div>
       )}
 
@@ -196,7 +154,7 @@ export function AgentPage() {
           {currentRun && (
             <div className="dag-run-detail">
               {currentRun.error_summary && <div className="dag-run-error">{currentRun.error_summary.slice(0, 300)}</div>}
-              {currentRun.nodes.map(n => <NodeRow key={n.id} node={n} depth={0} />)}
+              <DagGraph nodes={currentRun.nodes} />
             </div>
           )}
         </div>

@@ -10,6 +10,7 @@ from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/m
 from . import (
     admin,
     agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+    agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
     chat,
     ecosystem,
     gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
@@ -35,6 +36,8 @@ api_router.include_router(agent_routes.router)
 api_router.include_router(agent_dag.router)
 # v12.0.0 P1-M1：MCP 协议化（POST /v1/mcp JSON-RPC 2.0），IF_MCP_ENABLED=0（默认）时 404
 api_router.include_router(mcp_server.router)
+# v12.0.1 T3：human_input 审批通道（/v1/agent/human-inbox*），节点侧由 IF_HUMAN_INPUT_ENABLED 控制
+api_router.include_router(agent_human.router)
 # v8.3 P3-D1：画廊相似图检索（/v1/gallery/similar*），依赖 IF_VECTOR_SEARCH_ENABLED=1
 api_router.include_router(gallery.router)
 
