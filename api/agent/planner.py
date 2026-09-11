@@ -52,6 +52,7 @@ def _resolve_planner_model() -> str:
     except Exception:
         return PLANNER_LLM_MODEL
 
+
 # 场景 → 规划节点串（scene 根节点固定 + 场景相关处理节点 + 可选终检）
 # 依赖链：根 scene → 场景处理节点 →（可选）critic 终检
 PLAN_SCENE_ORDER: list[str] = [
@@ -136,7 +137,10 @@ def _normalize_scene(scene: str | None) -> str:
 
 
 def _build_mock_plan(prompt: str, scene: str) -> dict[str, Any]:
-    """构造 Mock 节点串：scene 根节点 + 场景处理节点 + （可选）critic 终检。"""
+    """构造 Mock 节点串：scene 根节点 + 场景处理节点 + （可选）critic 终检。
+
+    P0-2 收敛：开关与模型走 config 工厂（`get_settings()`）而非模块级 os.getenv。
+    """
     scene = _normalize_scene(scene)
     nodes: list[dict[str, Any]] = [
         {
@@ -185,7 +189,9 @@ async def plan_with_llm(prompt: str, scene: str | None = None) -> dict[str, Any]
     付费红线：本函数只调 tryingopen（metered 非付费）+ IF_MOCK_UPSTREAM=0 时启用；
     任何异常/无模型/无 provider/解析失败 → 回退 Mock，不崩主链路。
     """
-    mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+    from ..config import get_settings
+
+    mock = get_settings().if_mock_upstream
     if mock:
         return await plan_with_mock(prompt, scene)
 
@@ -271,7 +277,9 @@ async def plan_with_llm(prompt: str, scene: str | None = None) -> dict[str, Any]
 
 async def plan_task(prompt: str, scene: str | None = None) -> dict[str, Any]:
     """规划主入口：Mock 优先，IF_MOCK_UPSTREAM=0 时才走真实 LLM。"""
-    mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+    from ..config import get_settings
+
+    mock = get_settings().if_mock_upstream
     if mock:
         return await plan_with_mock(prompt, scene)
     return await plan_with_llm(prompt, scene)

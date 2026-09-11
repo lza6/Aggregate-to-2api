@@ -49,9 +49,11 @@ class TestPlanWithLLM:
     async def test_llm_fallback_when_no_chat_model(self, monkeypatch):
         """LLM 路径但无 chat model → 回退 Mock（不崩）。"""
         import api.agent.planner as planner_mod
+        from api.config import reset_settings
 
         monkeypatch.setattr(planner_mod, "PLANNER_LLM_MODEL", "tryingopen/t1")
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")  # 走真实 LLM 函数路径
+        reset_settings()  # P0-2：Settings 工厂缓存重建，使 monkeypatch env 生效
 
         # 用 importlib 拿**模块本身**（providers/__init__ 的包属性 registry 被实例覆盖）
         import importlib
@@ -69,8 +71,10 @@ class TestPlanWithLLM:
     async def test_llm_fallback_on_malformed_json(self, monkeypatch):
         """LLM 返回非 JSON → 回退 Mock。"""
         import api.agent.planner as planner_mod
+        from api.config import reset_settings
 
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        reset_settings()  # P0-2：Settings 工厂缓存重建
         monkeypatch.setattr(planner_mod, "PLANNER_LLM_MODEL", "tryingopen/t1")
 
         import importlib
@@ -96,8 +100,10 @@ class TestPlanWithLLM:
         import json
 
         import api.agent.planner as planner_mod
+        from api.config import reset_settings
 
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        reset_settings()  # P0-2：Settings 工厂缓存重建
         monkeypatch.setattr(planner_mod, "PLANNER_LLM_MODEL", "tryingopen/t1")
 
         import importlib

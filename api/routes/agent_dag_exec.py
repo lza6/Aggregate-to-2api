@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import Any
+
+from ..config import get_settings
 
 log = logging.getLogger("routes.agent_dag_exec")
 
@@ -49,8 +50,8 @@ async def _dispatch(kind: str, prompt: str) -> str:
         return await _exec_scene(prompt)
     if kind == "llm":
         # v11.0.0：IF_MOCK_UPSTREAM=1 时走稳定 Mock（确定性输出，条件分支可验证）
-        mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
-        if mock:
+        # P0-2 收敛：mock 开关读 config 工厂 get_settings()（不再裸 os.getenv）
+        if get_settings().if_mock_upstream:
             return await _exec_llm_stable(prompt)
         return await _exec_llm(prompt)
     if kind == "critic":
@@ -107,8 +108,9 @@ async def _exec_scene(prompt: str) -> str:
 
 async def _exec_llm(prompt: str) -> str:
     """调 tryingopen 免费上游 LLM（IF_MOCK_UPSTREAM=1 → Mock 占位）。"""
-    mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
-    if mock or not prompt:
+    from ..config import get_settings
+
+    if get_settings().if_mock_upstream or not prompt:
         return f"[llm-mock] 已模拟处理：{prompt[:200]}"
     try:
         from ..providers.registry import bootstrap, registry
@@ -211,11 +213,13 @@ async def _exec_image(prompt: str) -> str:
     真实路径走 registry 图片 provider（需 provider.generate，Mock 场景不触发）。
     异常降级占位，不崩 DAG。
     """
-    mock = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
-    if mock or not prompt:
+    from ..config import get_settings
+
+    if get_settings().if_mock_upstream or not prompt:
         _digest = __import__("hashlib").sha1(prompt.encode("utf-8")).hexdigest()[:12]
         return f"[image-mock] 已生成图像占位：https://tingfeng.ai/v1/img/{_digest}.png"
     try:
+        from ..agent.budget_guard import assert_can_spend
         from ..providers.registry import bootstrap, registry
 
         bootstrap()
@@ -224,6 +228,8 @@ async def _exec_image(prompt: str) -> str:
         if not image_models:
             return "[image-mock] 无可用图像 model（降级占位）"
         spec = image_models[0]
+        # v12.0.0 P1-M11：真实付费上游 dispatch 前硬预算门禁（off/observe 模式零行为变化）
+        await assert_can_spend(getattr(spec, "provider", "unknown"))
         provider = registry.providers.get(spec.provider)
         if provider is None:
             return "[image-mock] 无对应图像 provider（降级占位）"

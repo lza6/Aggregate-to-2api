@@ -88,7 +88,9 @@ async def _llm_classify(prompt: str) -> IntentResult:
     不发起真实付费调用。用户批准后才可切真实 LLM。
     """
     # 默认 Mock：返回 unknown + 低 confidence（不崩主链路）
-    mock_upstream = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+    from ..config import get_settings
+
+    mock_upstream = get_settings().if_mock_upstream
     if mock_upstream:
         return IntentResult(
             scene="unknown",

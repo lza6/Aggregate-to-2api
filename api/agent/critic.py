@@ -63,7 +63,9 @@ async def review_generation(
     if not CRITIC_AGENT_ENABLED:
         return CriticResult(pass_check=True, score=1.0, recommendation="accept", reasoning="critic disabled")
 
-    mock_upstream = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+    from ..config import get_settings
+
+    mock_upstream = get_settings().if_mock_upstream
     if mock_upstream:
         return _mock_review(prompt, scene, provider, duration_ms, retry_count)
 

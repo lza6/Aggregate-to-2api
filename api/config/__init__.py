@@ -255,11 +255,18 @@ class Settings(BaseSettings):
     # v9.0.0-A 智能体 DAG 编排（/v1/agent/dag/*，缺省开启；0 关闭时路由 404）
     if_agent_dag_enabled: bool = Field(True, validation_alias="IF_AGENT_DAG_ENABLED")
     # v9.0.0-A DAG LLM 规划器（IF_MOCK_UPSTREAM=1 时纯 Mock；0 时可走 tryingopen 免费上游）
+    if_mock_upstream: bool = Field(False, validation_alias="IF_MOCK_UPSTREAM")
     if_agent_planner_enabled: bool = Field(True, validation_alias="IF_AGENT_PLANNER_ENABLED")
     # v9.0.0-A planner 真实 LLM 的默认模型（约定 tryingopen/default，registry 无此 id 时回退首个 chat model）
     if_agent_planner_model: str = Field("tryingopen/default", validation_alias="IF_PLANNER_LLM_MODEL")
     # v11.0.0 RAG 增强：1=chat 在 system 前注入向量检索上下文（默认关闭，零行为变化）
     if_rag_enabled: bool = Field(False, validation_alias="IF_RAG_ENABLED")
+    # v12.0.0 P1-M1 MCP 协议化（/v1/mcp JSON-RPC 2.0；默认关闭，符合"新功能缺省关"约定）
+    if_mcp_enabled: bool = Field(False, validation_alias="IF_MCP_ENABLED")
+    # v12.0.0 P1-M11 dispatch 前硬预算门禁（付费上游估算超预算 402；observe 只记录不拦截）
+    if_budget_guard_mode: str = Field("off", validation_alias="IF_BUDGET_GUARD_MODE")
+    # v12.0.0 P1-M10 Fence 清洗层（LLM 读不可信文本前剥离注入载荷；默认关闭零行为变化）
+    if_fencing_enabled: bool = Field(False, validation_alias="IF_FENCING_ENABLED")
 
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")
@@ -653,8 +660,14 @@ IF_ALERT_WEBHOOK_URL = settings.if_alert_webhook_url
 IF_LOG_DIR = settings.if_log_dir
 IF_LOG_RETENTION_DAYS = settings.if_log_retention_days
 
-# ── mock 上游开关（E2E/CI；生产留空）──────────────
-MOCK_UPSTREAM = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+# 函数式读取（走 get_settings() 工厂，P0-2 收敛后统一调用方）：
+def mock_upstream() -> bool:
+    """IF_MOCK_UPSTREAM 是否开启（E2E/CI 用稳定 Mock，避免真实付费上游）。"""
+    return get_settings().if_mock_upstream
+
+
+MOCK_UPSTREAM = mock_upstream()
 
 # ── OpenTelemetry（IF_OTEL_*）───────────────────
 OTEL_ENABLED = os.getenv("IF_OTEL_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}

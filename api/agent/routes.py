@@ -41,9 +41,24 @@ class ObserveRequest(BaseModel):
     importance: float = Field(0.5, ge=0.0, le=1.0)
 
 
+def _skills_enabled() -> bool:
+    """IF_AGENT_SKILLS_ENABLED 是否开启（v12.0.0 补齐：config 工厂，缺省 True）。"""
+    try:
+        from ..config import get_settings
+
+        return bool(get_settings().if_agent_skills_enabled)
+    except Exception:
+        return True
+
+
 @router.get("/v1/agent/skills")
 async def list_skills(request: Request):
-    """列出可用 skills（按 scene 分组）。"""
+    """列出可用 skills（按 scene 分组）。
+
+    v12.0.0 补齐开关：IF_AGENT_SKILLS_ENABLED=0 → 404（此前 docstring 声明开关但未实现）。
+    """
+    if not _skills_enabled():
+        raise AppError(ErrorCodes.NOT_FOUND, "Agent 技能已关闭（IF_AGENT_SKILLS_ENABLED=0）", 404)
     auth.guard_chat_request(request)
     from ..skills import skill_index
 
@@ -58,6 +73,26 @@ async def list_skills(request: Request):
             }
         )
     return {"items": by_scene, "count": len(records)}
+
+
+@router.get("/v1/agent/skills/{name}")
+async def get_skill(name: str, request: Request):
+    """单个技能详情（v12.0.0 P1-M5 新增：body 预览，供前端技能工作台/工具节点加载）。"""
+    if not _skills_enabled():
+        raise AppError(ErrorCodes.NOT_FOUND, "Agent 技能已关闭（IF_AGENT_SKILLS_ENABLED=0）", 404)
+    auth.guard_chat_request(request)
+    from ..skills.loader import load_skill
+
+    rec = load_skill(name)
+    if rec is None:
+        raise AppError(ErrorCodes.NOT_FOUND, f"技能不存在：{name}", 404)
+    return {
+        "name": rec.name,
+        "description": rec.description,
+        "scene": rec.scene,
+        "body": rec.body[:2000],  # body 预览（超长截断；完整正文按 path 读取）
+        "path": rec.path,
+    }
 
 
 @router.post("/v1/agent/intent")

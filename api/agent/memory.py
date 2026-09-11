@@ -201,7 +201,9 @@ class MemoryStore:
             return {"L0_to_L1": 0, "pruned": 0}
 
         # Mock 路径：简单按 content 去重 + importance 阈值筛选（不调 LLM）
-        mock_upstream = os.getenv("IF_MOCK_UPSTREAM", "0").strip().lower() in {"1", "true", "yes", "on"}
+        from ..config import get_settings
+
+        mock_upstream = get_settings().if_mock_upstream
         if mock_upstream:
             return await self._consolidate_mock()
         # 真实 LLM 路径：调 tryingopen 上游压缩（用户批准后启用）

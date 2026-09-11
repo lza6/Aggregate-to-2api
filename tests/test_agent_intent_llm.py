@@ -36,14 +36,22 @@ def _isolate_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """每用例独立设置 IF_MOCK_UPSTREAM=0 + IF_AGENT_INTENT_CLASSIFIER=1，
     结束自动还原（防 env 污染 test_agent_intent.py 的 IF_MOCK_UPSTREAM=1 假设）。
 
-    关键坑：模块级 os.environ.setdefault 会在本文件被 import 时把 IF_MOCK_UPSTREAM
-    永久设为 0，后续 test_agent_intent.py 的 setdefault("IF_MOCK_UPSTREAM", "1") 变 no-op，
-    导致 test_fuzzy_intent_uses_llm_mock 走真实 LLM 路径调 tryingopen 上游
+    关键坑（P0-2 收敛后补充）：模块级 os.environ.setdefault 会在本文件被 import 时
+    把 IF_MOCK_UPSTREAM 永久设为 0，后续 test_agent_intent.py 的 setdefault("IF_MOCK_UPSTREAM", "1")
+    变 no-op，导致 test_fuzzy_intent_uses_llm_mock 走真实 LLM 路径调 tryingopen 上游
     （违反付费 API 红线：tryingopen 免费也不在测试里真实调）。
     用 monkeypatch.setenv 替代 setdefault，确保每用例结束后 env 自动还原。
+
+    P0-2 配置工厂缓存：IF_MOCK_UPSTREAM 现在走 get_settings() 单例（lru 缓存）。
+    setenv 后必须 reset_settings() 重建单例，否则 mock 开关恒为上次缓存的旧值
+    （组合跑时 test_agent_memory.py 模块级 setdefault("IF_MOCK_UPSTREAM","1")
+    会把缓存固化为 1 → 本文件 10 个 LLM 用例全走 mock 路径 → 全失败）。
     """
     monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
     monkeypatch.setenv("IF_AGENT_INTENT_CLASSIFIER", "1")
+    from api.config import reset_settings
+
+    reset_settings()
 
 
 def _patch_registry(
