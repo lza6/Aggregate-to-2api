@@ -67,3 +67,36 @@ spec 006（spec.md）
 1. 文档同步（下一步改进指南.md §6.1/§32 回写 + README 补 DAG 端点）
 2. `git add` 本轮变更 → commit（约定式 `feat(v9.0.0): smart agent DAG orchestration`）→ tag `v9.0.0` → push origin main
 3. Release 待 PAT（用户操作）
+---
+
+# v12.0.0 台账（2026-09-12 追加）
+
+## 验收标准表
+
+| ID | 验收标准 | 状态 | 证据 |
+|---|---|---|---|
+| V12-1 | 版本号全链 12.0.0（12 处 + desktop package 补字段 + 2 dist 重建） | ✅ done | `grep -c "12.0.0"` 12 文件全对齐；openapi 契约测试 20 passed；E2E #2 version==12.0.0 |
+| V12-2 | config 收敛（IF_MOCK_UPSTREAM 进 Settings 工厂；agent 五文件统一 get_settings()） | ✅ done | `os.getenv` 运行时读取 0 处残留（模块级兼容常量保留）；agent 域 171 用例绿 |
+| V12-3 | MCP 协议化（JSON-RPC 2.0 + 5 工具白名单 + 错误码契约 + 缺省关） | ✅ done | `api/mcp/` 新包 13 单测 + E2E #5-7/#10-11 真实 HTTP 通过 |
+| V12-4 | 硬预算门禁（三态 + enforce 402 + 接线真实付费路径） | ✅ done | `api/agent/budget_guard.py` 9 单测；F821 门禁位置 bug 已修（spec 定义后调用） |
+| V12-5 | Fence 清洗层（四类威胁不动点 + 递归 + 开关） | ✅ done | `api/utils/fencing.py` 24 单测（含不动点收敛/URL 不误伤） |
+| V12-6 | 技能可发现性（详情端点 + 开关补齐 + 电商/PPT 场景技能） | ✅ done | `agent/routes.py` 补 `IF_AGENT_SKILLS_ENABLED` 拦截 + `{name}` 端点；E2E #3-4 |
+| V12-7 | 全量单测无回归 | ✅ done | junitxml 实测 **2004 tests / 0 failed / 0 error / 1 skip**，exit=0 |
+| V12-8 | ruff 0 error | ✅ done | `ruff check api/ tests/ scripts/` All checks passed |
+| V12-9 | 真实 E2E（mock solver + uvicorn 真实 HTTP） | ✅ done | `scripts/e2e_v12.py` **12/12 PASS**（全程 IF_MOCK_UPSTREAM=1 零付费） |
+| V12-10 | 提交推送 + tag + Release | ✅/⚠️ | commit `cf471a0`+`6bcf60d` 已推 origin main；tag `v11.0.0`→b46c5f5、`v12.0.0`→cf471a0 已推远程；**Release 页面需 gh CLI/token（阻塞）**，notes 已存 `docs/releases/release_notes_12.0.0.md` |
+
+## 本轮踩坑（复用 Cerebrum 教训）
+
+1. **Settings 工厂缓存语义**：`IF_MOCK_UPSTREAM` 收敛到 `get_settings()` 后，测试 `monkeypatch.setenv` 后**必须 `reset_settings()`**——组合跑时模块级 `setdefault` 固化缓存导致 intent_llm 10 用例假失败（单跑绿/组合红的顺序依赖）。
+2. **路由遮蔽**：`/v1/agent/skills` 已被 agent_routes 占用（按 scene 分组契约），新建重复路由会被遮蔽——先 `rg` 端点存在性再动手。
+3. **门禁插入位置**：`assert_can_spend` 引用的 `spec` 必须在其定义之后（F821 在 mock 分支掩盖了真实分支 NameError）。
+4. **输出吞噬**：pytest traceback 在本机 Git Bash 管道被吞——用 `--junitxml` 落盘解析是唯一可靠定位手段。
+
+## 遗留（v12.0.1 待办）
+
+- 自反思 critic 循环深化（critic 节点已在 DAG/规划器，反思-重生成闭环待做）
+- 流式工具调用循环（复用 `_extract_tool_candidate`）
+- human_input WS 真通道（`ws_events.py` 底座已备）
+- 前端 reactflow 节点图 + black-box 推理轨迹面板
+- GitHub Release 页面创建（需 PAT）
