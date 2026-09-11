@@ -100,3 +100,16 @@ spec 006（spec.md）
 - human_input WS 真通道（`ws_events.py` 底座已备）
 - 前端 reactflow 节点图 + black-box 推理轨迹面板
 - GitHub Release 页面创建（需 PAT）
+
+# v12.1.0 台账（2026-09-12 追加）
+
+| ID | 验收标准 | 状态 | 证据 |
+|---|---|---|---|
+| T1 | 自反思 critic 闭环（fail→单轮 reflection 修正，开关/防递归） | ✅ | test_agent_v121 5 用例（注入 fail/disabled/不递归/pass 不变） |
+| T2 | LLM 工具循环（[tool:x] 回填，上限/关闭） | ✅ | 3 用例（二轮回填断言 provider.calls==2、上限==3） |
+| T3 | human_input 审批真通道（approve/reject/timeout/幂等/404/422） | ✅ | 9 用例 + E2E 12a/12b 真实 HTTP 审批后 run succeeded |
+| T4 | 前端 SVG 节点图 + 黑匣子轨迹面板 | ✅ | 子代理交付：DagGraph.tsx 285 行 + 6 vitest，build 0 error，239 全绿 |
+| R1 | 全量回归 | ✅ | 2021 tests / 0 failed / 0 error / 1 skip（两次），ruff 0 error |
+| R2 | 发布 | ✅/⚠️ | commit `f05954b` + tag `v12.1.0` 已推远程；Release 页面待 PAT |
+
+踩坑追加：human_input 审批 run_id 关联（E2E 12a 暴露）→ DAG state 注入 run_id；dist 历来不入库（gitignore 正确，CI 内构建）。
