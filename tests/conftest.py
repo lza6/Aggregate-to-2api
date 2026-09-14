@@ -32,6 +32,11 @@ os.environ["IF_REQUESTS_PER_MINUTE"] = "0"
 # 与 request_guard/chat 桶同策略——每个用例从干净 store 开始）。SQLite 持久化专测
 # test_dag_run_persistence.py 显式设 IF_DAG_STORE_BACKEND=sqlite + 独立临时 db 覆盖。
 os.environ["IF_DAG_STORE_BACKEND"] = "memory"
+# v13 P0-3：ACCOUNT_AUTO 是 import 期固化常量（config.ACCOUNT_AUTO = settings.account_auto，
+# 见 api/config/__init__.py:728）。必须在本模块级（早于任何 api.* import）设 0，否则
+# collection 提前 import api 时固化 True → 全量下 nanobanana 等 needs_account 提供商
+# 误可见（集成 test_full_flow::test_models_endpoint 断言隐藏失败，v7.7 已知预存）。
+os.environ.setdefault("IF_ACCOUNT_AUTO", "0")
 
 # v10.0.0 flaky 根修：IF_DB_FILE 必须在任何 api.* import 之前、模块级就指向临时库。
 # 此前只在 _app_instance（运行时）才设 IF_DB_FILE，而 api/agent/memory.py、api/db/
@@ -222,7 +227,10 @@ async def _app_instance(mock_cfsolver):
     # v13 P0-3：测试环境关闭记忆巩固后台 worker 常驻（300s 循环 consolidate 会
     # 与 ip_blocklist 等共享库跨用例写锁竞争 → database is locked flaky）。
     # consolidation 单测（test_agent_memory.py）自设 =1 并手动调用验证。
-    os.environ.setdefault("IF_MEMORY_CONSOLIDATION_ENABLED", "0")
+    # 注意：IF_MEMORY_CONSOLIDATION_ENABLED=0 会让 /v1/agent/memory/observe 抛
+    # 403「记忆子系统未启用」（集成 test_agent_e2e 依赖记忆端点真通道）——故本处
+    # 只关常驻循环（setdefault 后由各用例/集成按需覆盖 =1），observe 端点仍可用。
+    os.environ.setdefault("IF_MEMORY_CONSOLIDATION_ENABLED", "1")
 
     # 临时 DB 文件（会话级，共享 DB 实例）
     _db_path = tempfile.mktemp(suffix=".db")
@@ -246,11 +254,20 @@ async def _app_instance(mock_cfsolver):
         _cfg.IF_PERSISTENT_QUEUE_ENABLED = False
         _cfg.IF_SOLVE_CIRCUIT_PROBE_SECONDS = 1
         _cfg.IF_SOLVE_CIRCUIT_THRESHOLD = 3
-        # v13 P0-3：api 模块已 import 时同步 memory 巩固开关（关闭后台常驻循环，
-        # 防与 ip_blocklist 等共享库跨用例写锁竞争 database is locked）。
+        # v13 P0-3：api 模块已 import 时同步 memory 巩固开关——但仅关闭【常驻循环】
+        # 会同时让 observe 端点 403（记忆子系统未启用，集成 test_agent_e2e 依赖真通道）。
+        # 权衡：保留 MEMORY_CONSOLIDATION_ENABLED=True（observe/query 可用），
+        # 用把「后台循环间隔」置极大值（inf）等效关闭常驻 consolidate，杜绝写锁竞争。
         import api.agent.memory as _mem  # noqa: PLC0415
 
-        _mem.MEMORY_CONSOLIDATION_ENABLED = False
+        _mem.CONSOLIDATION_INTERVAL_SECONDS = float("inf")
+        # v13 P0-3：api 已 import 时同步 ACCOUNT_AUTO 模块快照（collection 提前 import
+        # 时 import 期已固化 True → 集成 test_models_endpoint 断言 nanobanana 隐藏失败）
+        import api.account_pool as _ap  # noqa: PLC0415
+
+        _cfg.ACCOUNT_AUTO = False
+        if hasattr(_ap, "AUTO_ENABLED"):
+            _ap.AUTO_ENABLED = False
         # P0-4 追加：api 模块已在本会话被 collection 提前 import 时，
         # 把 IF_MOCK_UPSTREAM 同步进模块级快照，避免上游 mock 开关失效
         # 导致集成测试对真实 imagefree.net 发 429（详见《下一步改进指南》P0-4 证据）。

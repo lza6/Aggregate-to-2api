@@ -1,6 +1,6 @@
 // v10.0.0：agent api 域封装测试（纯函数级：URL/方法/body 契约 + 错误透传）。
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { runDag, planDag, listDagRuns, getDagRun } from '../api/agent';
+import { runDag, planDag, listDagRuns, getDagRun, resumeDag } from '../api/agent';
 
 const base = globalThis as unknown as { fetchMock?: ReturnType<typeof vi.fn> };
 
@@ -49,5 +49,14 @@ describe('agent api 封装', () => {
   it('HTTP 错误抛 ApiError（message 含中文 detail）', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(err(422, '节点数超过上限 50'));
     await expect(planDag('x')).rejects.toThrow(/节点数超过上限|DAG/);
+  });
+
+  it('resumeDag POST 到 /v1/agent/dag/{run_id}/resume，encode run_id', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({ run_id: 'r/1', status: 'running', resumed: true }));
+    const res = await resumeDag('r/1');
+    expect(res.resumed).toBe(true);
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/v1/agent/dag/r%2F1/resume');
+    expect(init.method).toBe('POST');
   });
 });

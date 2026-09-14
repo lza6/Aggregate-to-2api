@@ -55,8 +55,7 @@ class _FakeChatProvider:
 
     prefix = "tryingopen"
 
-    def __init__(self, response: dict[str, Any] | None = None,
-                 exc: Exception | None = None) -> None:
+    def __init__(self, response: dict[str, Any] | None = None, exc: Exception | None = None) -> None:
         self.response = response or {}
         self.exc = exc
         self.calls: list[dict[str, Any]] = []
@@ -102,15 +101,23 @@ class TestAgentE2E:
         """POST /v1/agent/intent 返回 scene/confidence/llm_used 结构。
 
         用 Mock LLM 客户端（registry 被 patch），不真实调 tryingopen 上游。
+        v13 P0-6：prompt 改为规则未命中的模糊短语（"帮我处理下这个"），确保走 LLM 路
+        （"画一只猫" 已被 v13 规则增强命中 image conf=0.9，不再触发 LLM）。
         """
         fake_provider = _FakeChatProvider(
-            response={"text": '{"scene":"image","provider_hint":"imagefree","skill_hint":"image-quality-check","confidence":0.85}'}
+            response={
+                "text": '{"scene":"image","provider_hint":"imagefree","skill_hint":"image-quality-check","confidence":0.85}'
+            }
         )
         _patch_registry(monkeypatch, [_fake_spec()], {"tryingopen": fake_provider})
         # 集成 fixture 默认 IF_MOCK_UPSTREAM=1；这里临时切 0 走真实 LLM 路径（registry 被 Mock）
+        # v13 修复：monkeypatch.setenv 后必须 reset_settings()（Settings 工厂缓存固化 mock=1）
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        from api.config import reset_settings
 
-        r = await app_with_mocks.post("/v1/agent/intent", json={"prompt": "画一只猫"})
+        reset_settings()
+
+        r = await app_with_mocks.post("/v1/agent/intent", json={"prompt": "帮我处理下这个"})
         assert r.status_code == 200, f"intent 端点应 200: {r.status_code} {r.text[:200]}"
         body = r.json()
         assert body["scene"] == "image"
@@ -126,7 +133,7 @@ class TestAgentE2E:
         assert len(call["messages"]) == 2
         assert call["messages"][0]["role"] == "system"
         assert call["messages"][1]["role"] == "user"
-        assert call["messages"][1]["content"] == "画一只猫"
+        assert call["messages"][1]["content"] == "帮我处理下这个"
 
     async def test_observe_then_query_l0_round_trip(self, app_with_mocks):
         """POST /v1/agent/memory/observe → GET /v1/agent/memory 落库往返。
@@ -150,9 +157,7 @@ class TestAgentE2E:
         assert body["id"] > 0
 
         # 再查询 L0
-        r2 = await app_with_mocks.get(
-            "/v1/agent/memory?scene=image&layer=L0&limit=10&user_key=e2e-user"
-        )
+        r2 = await app_with_mocks.get("/v1/agent/memory?scene=image&layer=L0&limit=10&user_key=e2e-user")
         assert r2.status_code == 200
         body2 = r2.json()
         assert body2["enabled"] is True
@@ -177,11 +182,14 @@ class TestAgentE2E:
         await store.observe("u1", "image", "事实B", 0.8)
 
         # Mock LLM 返回压缩行格式（importance|content）
-        fake_provider = _FakeChatProvider(
-            response={"text": "0.8|压缩原子事实A\n0.6|压缩原子事实B\n0.2|低重要性忽略"}
-        )
+        fake_provider = _FakeChatProvider(response={"text": "0.8|压缩原子事实A\n0.6|压缩原子事实B\n0.2|低重要性忽略"})
         _patch_registry(monkeypatch, [_fake_spec()], {"tryingopen": fake_provider})
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        # v13 修复：monkeypatch.setenv 只改 env，Settings 工厂缓存已固化 mock=1——
+        # 必须 reset_settings() 让 consolidate 走 LLM 路径（memory 踩坑#1 同源）
+        from api.config import reset_settings
+
+        reset_settings()
 
         result = await store.consolidate()
         assert result["L0_to_L1"] == 2  # importance>=0.5 的两条
@@ -205,24 +213,22 @@ class TestAgentE2E:
 
         collector = REGISTRY._names_to_collectors.get("agent_memory_consolidations_total")
         assert collector is not None, "agent_memory_consolidations_total 必须已注册"
-        v_before = REGISTRY.get_sample_value(
-            "agent_memory_consolidations_total", {"result": "success"}
-        ) or 0.0
+        v_before = REGISTRY.get_sample_value("agent_memory_consolidations_total", {"result": "success"}) or 0.0
 
         store = MemoryStore(str(tmp_path / "e2e_metric.db"))
         await store.observe("u1", "image", "事实A", 0.9)
 
-        fake_provider = _FakeChatProvider(
-            response={"text": "0.8|压缩原子事实A"}
-        )
+        fake_provider = _FakeChatProvider(response={"text": "0.8|压缩原子事实A"})
         _patch_registry(monkeypatch, [_fake_spec()], {"tryingopen": fake_provider})
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        # v13 修复：同上——必须 reset_settings() 让 mock=0 生效（Settings 工厂缓存）
+        from api.config import reset_settings
+
+        reset_settings()
 
         await store.consolidate()
 
-        v_after = REGISTRY.get_sample_value(
-            "agent_memory_consolidations_total", {"result": "success"}
-        ) or 0.0
+        v_after = REGISTRY.get_sample_value("agent_memory_consolidations_total", {"result": "success"}) or 0.0
         assert v_after == v_before + 1, f"success 计数应 +1（before={v_before}, after={v_after}）"
 
     async def test_metrics_endpoint_exposes_agent_counters(self, app_with_mocks, monkeypatch):
@@ -235,6 +241,10 @@ class TestAgentE2E:
         )
         _patch_registry(monkeypatch, [_fake_spec()], {"tryingopen": fake_provider})
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
+        # v13 修复：同上——reset_settings() 让 mock=0 生效（Settings 工厂缓存）
+        from api.config import reset_settings
+
+        reset_settings()
 
         # 触发一次 intent 分类（让 counter 有样本）
         r = await app_with_mocks.post("/v1/agent/intent", json={"prompt": "随便聊聊"})

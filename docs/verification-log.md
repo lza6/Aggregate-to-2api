@@ -17,6 +17,10 @@
 | 2026-09-15 | P0-6 intent embedding 双路（`intent.py` 规则→embedding→LLM；`IF_INTENT_EMBED_THRESHOLD`；`tests/test_agent_intent_embed.py` 10 用例） | 全绿 | ruff 0 error |
 | 2026-09-15 | P1-13 前端统一 Button 反馈态（`frontend/src/components/ui/Button.tsx` + Generate/Agent/ChatPlayground 接入 + Button.test.tsx 9 用例） | vitest 248 全绿 + build 0 error + tsc 0 | 子代理独立交付 |
 | 2026-09-15 | 全量单测 3 连（版本 13.0.0 后） | 2043 tests / 0 failures / 0 errors / 1 skipped | flaky 已根治；2 连后台先绿（2033）后 FULL3 绿（2043 含新用例） |
+| 2026-09-15 | P2-17 DAG 失败可重试 + P2-16 成本视角切换/导出 CSV + P2-15 a11y 断言 + P1-14 Playwright 视觉探针（装成 @playwright/test 1.63，chromium launch 成功，明暗截图 frontend/artifacts/，gitignore） | vitest 255 绿（+7 新用例）+ build/tsc 0 | 子代理独立交付；vitest exclude e2e/**（Playwright 不允许被 vitest import） |
+| 2026-09-15 | P0-5/P1-10 补测试：`test_dag_memory_chain.py` 7 用例（memory read/write/config 子键/异常注入）+ `test_lifespan_consolidation.py` 4 用例（consolidation loop start/stop/cancel 不泄漏） | 50 用例全绿（含相邻 DAG/记忆文件） | 子代理独立交付 |
+| 2026-09-15 | 集成测试 8 失败根治（跨文件顺序污染）：① conftest `IF_MEMORY_CONSOLIDATION_ENABLED` 0→1（observe 端点 403「记忆子系统未启用」）+ 常驻循环改 `CONSOLIDATION_INTERVAL_SECONDS=inf` 等效关闭；② agent_e2e 4 用例 `setenv` 后补 `reset_settings()`（Settings 工厂缓存固化 mock=1）；③ intent 规则 '画一只' 增强后 ecommerce 主图 prompt 被 image 吃掉 → 收窄为 `画.*(猫|狗|人|风景)` + '画一个电商主图' 归 ecommerce 规则；④ conftest 模块级（api import 前）`setdefault IF_ACCOUNT_AUTO=0` + api 已 import 时同步 `_cfg.ACCOUNT_AUTO=False`（import 期固化 True → nanobanana 误可见） | **integration 49/0 + chaos 5/0 + unit 2070/0 三独立轮全绿**；E2E 14/14 | 组合跑（-m "not slow"）跨轮 IP 桶封禁+admin 开放模式冲突属 CI 分轮设计应对范围（ci.yml unit/integration/chaos 分 fresh 进程），非回归 |
+| 2026-09-15 | test_autoregister_loop_fills_to_target 时序 flaky（2 次单跑全绿，全量偶发 0>=2） | 预存 | cerebrum 已知：代理池每日限额时序，poll-until-stable 已在用例 |
 
 ## 记录表
 

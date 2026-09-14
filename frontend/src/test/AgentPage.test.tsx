@@ -65,4 +65,60 @@ describe('AgentPage 用户路径', () => {
     render(<AgentPage />);
     await waitFor(() => expect(screen.getByText('还没有 DAG 运行记录')).toBeTruthy());
   });
+
+  // P2-17/P2-15: run 终态 failed → 显示「重试」按钮；resume 404 降级重新 runDag；按钮为 button 语义
+  it('run 失败显示重试按钮，点击降级重新提交 runDag（resume 404 兜底）', async () => {
+    const failedRun = {
+      ...runBody,
+      status: 'failed',
+      error_summary: '节点 n1 执行超时',
+      nodes: planBody.nodes.map(n => ({ ...n, status: 'failed', error: 'boom' })),
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/plan')) return new Response(JSON.stringify(planBody), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/resume')) return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'DAG 续跑未启用（IF_DAG_RESUME_ENABLED=0）' } }), { status: 404, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/run')) return new Response(JSON.stringify({ ...runBody, run_id: 'r-2' }), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag/r-2')) return new Response(JSON.stringify(failedRun), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag/r-1')) return new Response(JSON.stringify(failedRun), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag?')) return new Response(JSON.stringify(emptyList), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag')) return new Response(JSON.stringify(oneList), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('{}', { status: 404 });
+    });
+    render(<AgentPage />);
+    fireEvent.change(screen.getByLabelText('任务描述'), { target: { value: '画一只猫并终检' } });
+    fireEvent.click(screen.getByText('生成计划'));
+    await waitFor(() => expect(screen.getByText(/计划预览/)).toBeTruthy());
+    fireEvent.click(screen.getByText('提交执行'));
+    // 失败终态 → 重试按钮（原生 button 语义）出现
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument());
+    const retryBtn = screen.getByRole('button', { name: '重试' });
+    expect(retryBtn.tagName).toBe('BUTTON');
+    expect(screen.getByText(/run 异常|节点 n1 执行超时/)).toBeTruthy();
+    // 点击重试：resume 404 → 降级重新 runDag（r-2）
+    fireEvent.click(retryBtn);
+    await waitFor(() => expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('已重新提交 DAG（r-2）'), 'success'));
+  });
+
+  // P2-17/P2-15: resume 开启成功时走续跑路径（不降级）
+  it('run 失败且后端 resume 开启 → 点击重试走续跑（复用 run_id）', async () => {
+    const failedRun = { ...runBody, status: 'failed', error_summary: 'boom' };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/plan')) return new Response(JSON.stringify(planBody), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/resume')) return new Response(JSON.stringify({ run_id: 'r-1', status: 'running', resumed: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/run')) return new Response(JSON.stringify(runBody), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag?')) return new Response(JSON.stringify(emptyList), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag')) return new Response(JSON.stringify(failedRun), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('{}', { status: 404 });
+    });
+    render(<AgentPage />);
+    fireEvent.change(screen.getByLabelText('任务描述'), { target: { value: '画一只猫并终检' } });
+    fireEvent.click(screen.getByText('生成计划'));
+    await waitFor(() => expect(screen.getByText(/计划预览/)).toBeTruthy());
+    fireEvent.click(screen.getByText('提交执行'));
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('已续跑 DAG（r-1）'), 'success'));
+  });
 });

@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { fetchCost, fetchCostForecast } from '../api';
 import { StatCard } from '../components/StatCard';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
@@ -14,8 +14,41 @@ function formatUsd(n: number | undefined | null): string {
   return `$${Number(n).toFixed(2)}`;
 }
 
+/** CSV 转义（RFC 4180：含逗号/引号/换行时包裹引号并翻倍内部引号）。 */
+function csvEscape(v: unknown): string {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * P2-16：纯前端导出 CSV —— Blob 下载（UTF-8 BOM，Excel 中文不乱码）。
+ * 行以 [provider/model 维度, 调用数, 成本, tokens] 为序，按成本降序。
+ */
+function exportCostCsv(cost: CostOverview): void {
+  const header = ['维度', '调用数', '成本 (USD)', 'Tokens'];
+  const rows: (string | number)[][] = [
+    ...(cost.by_provider ?? []).map(r => [r.provider, r.calls, r.cost_usd, r.tokens ?? '']),
+    ...(cost.by_model ?? []).map(r => [`${r.provider}/${r.model}`, r.calls, r.cost_usd, '']),
+  ];
+  const sorted = [...rows].sort((a, b) => Number(b[2]) - Number(a[2]));
+  const csv = [header, ...sorted].map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cost-overview-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+type CostView = 'provider' | 'model';
+
 export function CostsPage() {
   const { data: cost, loading, error, reload } = useApi<CostOverview>(() => fetchCost(), { intervalMs: 15000 });
+  // P2-16: 按 provider / 按 model 视角切换（本地 state 过滤，无新依赖）
+  const [view, setView] = useState<CostView>('provider');
   // P3-D3: 预算燃烧预测（管理 Key 鉴权；预算=0 时后端返回 disabled=true，前端降级）
   const { data: forecast } = useApi<CostForecast>(() => fetchCostForecast(), { intervalMs: 60000 });
 
@@ -72,9 +105,36 @@ export function CostsPage() {
           </h1>
           <p className="page-desc">token 成本（chat_usage）与图片成本（号池积分折算）月度口径一览</p>
         </div>
-        <button onClick={reload} className="tf-btn tf-btn-secondary">
-          <span>🔄</span> 刷新
-        </button>
+        <div className="cost-toolbar">
+          <div className="cost-view-switch" role="group" aria-label="成本维度">
+            <button
+              type="button"
+              className={`cost-view-btn ${view === 'provider' ? 'active' : ''}`}
+              aria-pressed={view === 'provider'}
+              onClick={() => setView('provider')}
+            >
+              按提供商
+            </button>
+            <button
+              type="button"
+              className={`cost-view-btn ${view === 'model' ? 'active' : ''}`}
+              aria-pressed={view === 'model'}
+              onClick={() => setView('model')}
+            >
+              按模型
+            </button>
+          </div>
+          <button onClick={reload} className="tf-btn tf-btn-secondary">
+            <span>🔄</span> 刷新
+          </button>
+          <button
+            onClick={() => cost && exportCostCsv(cost)}
+            disabled={!cost || !(cost.by_provider?.length || cost.by_model?.length)}
+            className="tf-btn tf-btn-secondary"
+          >
+            <span>📄</span> 导出 CSV
+          </button>
+        </div>
       </div>
 
       {/* P3-2: 全屏预算预警横幅（over_budget / burn_rate_warning） */}
@@ -303,12 +363,14 @@ export function CostsPage() {
         )}
       </div>
 
-      {/* by_provider 表格 */}
+      {/* P2-16: 按 provider / 按 model 视角切换（本地 state 过滤，无新依赖） */}
       <div className="section-block">
         <div className="section-header">
           <div>
-            <h2 className="section-title">按提供商成本</h2>
-            <span className="section-sub">provider / 调用数 / cost_usd / tokens</span>
+            <h2 className="section-title">{view === 'provider' ? '按提供商成本' : '按模型成本'}</h2>
+            <span className="section-sub">
+              {view === 'provider' ? 'provider / 调用数 / cost_usd / tokens' : 'provider / model / 调用数 / cost_usd'}
+            </span>
           </div>
         </div>
         <div className="tf-table-container">
@@ -316,29 +378,49 @@ export function CostsPage() {
             <table className="tf-table">
               <thead>
                 <tr>
-                  <th>提供商</th>
-                  <th>调用数</th>
-                  <th>成本 (USD)</th>
-                  <th>Tokens</th>
-                  <th>消耗积分</th>
-                  <th>出图数</th>
+                  {view === 'provider' ? (
+                    <>
+                      <th>提供商</th>
+                      <th>调用数</th>
+                      <th>成本 (USD)</th>
+                      <th>Tokens</th>
+                      <th>消耗积分</th>
+                      <th>出图数</th>
+                    </>
+                  ) : (
+                    <>
+                      <th>提供商</th>
+                      <th>模型</th>
+                      <th>调用数</th>
+                      <th>成本 (USD)</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {(cost?.by_provider ?? []).map(row => (
-                  <tr key={row.provider}>
-                    <td style={{ fontWeight: 600 }}>{row.provider}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.calls ?? 0}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)' }}>{formatUsd(row.cost_usd)}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{(row.tokens ?? 0).toLocaleString()}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{row.credits_used ?? '-'}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{row.images ?? '-'}</td>
-                  </tr>
-                ))}
-                {!cost?.by_provider?.length && (
+                {view === 'provider'
+                  ? (cost?.by_provider ?? []).map(row => (
+                      <tr key={row.provider}>
+                        <td style={{ fontWeight: 600 }}>{row.provider}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.calls ?? 0}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)' }}>{formatUsd(row.cost_usd)}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{(row.tokens ?? 0).toLocaleString()}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{row.credits_used ?? '-'}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{row.images ?? '-'}</td>
+                      </tr>
+                    ))
+                  : (cost?.by_model ?? []).map(row => (
+                      <tr key={`${row.provider}/${row.model}`}>
+                        <td style={{ fontWeight: 600 }}>{row.provider}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.model}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>{row.calls ?? 0}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--primary-600)' }}>{formatUsd(row.cost_usd)}</td>
+                      </tr>
+                    ))}
+                {((view === 'provider' ? cost?.by_provider?.length : cost?.by_model?.length) ?? 0) === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
-                      📭 暂无按提供商成本数据
+                    <td colSpan={view === 'provider' ? 6 : 4} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--text-muted)' }}>
+                      📭 暂无{view === 'provider' ? '按提供商' : '按模型'}成本数据
                     </td>
                   </tr>
                 )}
@@ -364,6 +446,11 @@ export function CostsPage() {
         .section-title { font-size: 17px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
         .section-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; display: block; }
         .chart-fallback { padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 12.5px; }
+        .cost-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .cost-view-switch { display: inline-flex; gap: 2px; background: var(--bg-subtle); border-radius: var(--radius-full); padding: 3px; }
+        .cost-view-btn { border: none; background: transparent; color: var(--text-muted); padding: 5px 14px; border-radius: var(--radius-full); font-size: 12.5px; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+        .cost-view-btn:hover { color: var(--text-primary); }
+        .cost-view-btn.active { background: var(--bg-card); color: var(--primary-600); box-shadow: var(--shadow-xs); font-weight: 600; }
         .cost-note { padding: 10px 16px; font-size: 12.5px; color: var(--warning-text); background: var(--warning-bg); border-color: var(--warning-border); display: flex; align-items: center; gap: 8px; }
         .cost-budget-alert { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-lg); color: var(--danger-text); }
         .cba-icon { font-size: 22px; flex-shrink: 0; }

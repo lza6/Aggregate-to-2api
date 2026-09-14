@@ -12,6 +12,7 @@ import {
   listDagRuns,
   planDag,
   runDag,
+  resumeDag,
   type DagPlanResult,
   type DagRunPublic,
 } from '../api/agent';
@@ -65,6 +66,9 @@ export function AgentPage() {
 
   const currentRun = run.data;
   const isTerminal = currentRun ? ['succeeded', 'failed'].includes(currentRun.status) : true;
+  // P2-17：failed 终态可重试（错误摘要已由黑匣子面板展示；按钮只触发重跑）
+  const isRetriable = !!currentRun && currentRun.status === 'failed';
+  const [retrying, setRetrying] = useState(false);
 
   async function handlePlan() {
     if (!prompt.trim()) {
@@ -103,8 +107,48 @@ export function AgentPage() {
     }
   }
 
+  async function handleRetry() {
+    if (!currentRun || retrying) return;
+    setRetrying(true);
+    try {
+      // 优先 resume（后端开关 IF_DAG_RESUME_ENABLED=0 → 404 → 降级重新 runDag）
+      try {
+        const res = await resumeDag(currentRun.run_id);
+        setActiveRunId(res.run_id);
+        notify(res.resumed ? `已续跑 DAG（${res.run_id}），幂等跳过已完成节点` : `DAG 无需续跑（${res.run_id}）`, 'success');
+      } catch (e) {
+        if (e instanceof Error && /404|未启用|续跑/.test(e.message)) {
+          const res = await runDag({
+            name: currentRun.name.slice(0, 64) || 'DAG 任务',
+            nodes: currentRun.nodes.map(n => ({
+              id: n.id,
+              kind: n.kind,
+              depends_on: n.depends_on,
+              prompt: n.prompt,
+              model: n.model,
+            })),
+          });
+          setActiveRunId(res.run_id);
+          notify(`已重新提交 DAG（${res.run_id}）`, 'success');
+        } else {
+          throw e;
+        }
+      }
+      setPlan(null);
+      run.reload();
+      history.reload();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : '重试失败', 'error');
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   return (
     <div className="agent-container">
+      <style>{`
+        .dag-run-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+      `}</style>
       <div className="page-header">
         <div>
           <h1 className="page-title">智能体 DAG 编排</h1>
@@ -165,6 +209,13 @@ export function AgentPage() {
           {currentRun && (
             <div className="dag-run-detail">
               {currentRun.error_summary && <div className="dag-run-error">{currentRun.error_summary.slice(0, 300)}</div>}
+              {isRetriable && (
+                <div className="dag-run-actions">
+                  <Button variant="danger" size="sm" loading={retrying} onClick={() => void handleRetry()}>
+                    {retrying ? '重试中…' : '重试'}
+                  </Button>
+                </div>
+              )}
               <DagGraph nodes={currentRun.nodes} />
             </div>
           )}

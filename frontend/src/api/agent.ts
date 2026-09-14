@@ -83,6 +83,16 @@ export async function getDagRun(runId: string): Promise<DagRunPublic> {
   });
 }
 
+/** v13 P0-7：续跑非终态/failed/skipped 节点（幂等；开关 IF_DAG_RESUME_ENABLED=0 时后端 404） */
+export async function resumeDag(
+  runId: string,
+): Promise<{ run_id: string; status: string; resumed: boolean }> {
+  return apiFetch<{ run_id: string; status: string; resumed: boolean }>(
+    `/v1/agent/dag/${encodeURIComponent(runId)}/resume`,
+    { method: 'POST', caller: 'DAG 续跑触发失败' },
+  );
+}
+
 /** 历史 run 列表（最近在前；可 status 过滤） */
 export async function listDagRuns(params?: { limit?: number; status?: string }): Promise<DagRunListResponse> {
   const q = new URLSearchParams();

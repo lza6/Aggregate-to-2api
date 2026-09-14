@@ -38,6 +38,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // P1-14：Playwright e2e/ 目录归 @playwright/test 跑（npm run test:e2e），
+    // vitest 不得误收（Playwright Test 不允许被 vitest import）
+    exclude: ['**/node_modules/**', 'e2e/**'],
     // api.ts / useApi.ts / Feedback.tsx 等被测试模块依赖 CSS 或 window 全局，
     // 仅跑纯逻辑与 hook 测试；CSS 模块由 jsdom 忽略。
     css: false,

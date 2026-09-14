@@ -44,7 +44,13 @@ _INTENT_RULES: list[tuple[str, str, list[str], float]] = [
     # (scene, provider_hint, [正则模式], skill_hint, 默认 confidence)
     # image_edit 优先匹配（含"改/编辑/修改 + 图"的语义，避免被 image 的"画图"先吃掉）
     ("image_edit", "imagefree", [r"改图|图生图|img2img|编辑.*图|修改.*图|把.*图.*改"], "image-quality-check", 0.85),
-    ("image", "imagefree", [r"画一张|生成图|画图|文生图|txt2img|生成.*图"], "image-quality-check", 0.9),
+    (
+        "image",
+        "imagefree",
+        [r"画一张|画一只|画图|文生图|txt2img|生成.*图|画.*(猫|狗|人|风景)"],
+        "image-quality-check",
+        0.9,
+    ),
     ("video", "falai", [r"生成视频|文生视频|txt2vid|视频|video"], "critic-review", 0.85),
     ("chat", "tryingopen", [r"聊天|对话|问答|chat|问.*答"], "prompt-refine", 0.8),
     ("ecommerce", "imagefree", [r"电商|主图|详情页|商品图|店铺"], "image-quality-check", 0.85),
