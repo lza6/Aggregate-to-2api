@@ -1,12 +1,14 @@
 """DAG 编排路由（v9.0.0-A）：/v1/agent/dag/* 端点。
 
 新增端点（向后兼容，不破坏现有 /v1/agent/*）：
-- POST /v1/agent/dag/run      提交 DAG run（节点/依赖/fail_fast/max_parallel/retry）
-- GET  /v1/agent/dag/{run_id} 查询 run 状态（含每节点状态）
-- POST /v1/agent/dag/plan     自然语言 → DAG（LLM 规划器，Mock 优先）
+- POST /v1/agent/dag/run           提交 DAG run（节点/依赖/fail_fast/max_parallel/retry）
+- GET  /v1/agent/dag/{run_id}      查询 run 状态（含每节点状态 + 节点级执行轨迹）
+- POST /v1/agent/dag/plan          自然语言 → DAG（LLM 规划器，Mock 优先）
+- POST /v1/agent/dag/{run_id}/resume  续跑非终态/failed/skipped 节点（幂等；开关缺省关）
 
 鉴权：复用 auth.guard_dag_request（v11.0.0：chat 频控 + DAG 独立限流 S-1；公益开放同生图）。
-开关：IF_AGENT_DAG_ENABLED=0 → 404；IF_AGENT_PLANNER_ENABLED=0 → plan 404。
+开关：IF_AGENT_DAG_ENABLED=0 → 404；IF_AGENT_PLANNER_ENABLED=0 → plan 404；
+      IF_DAG_RESUME_ENABLED=0（缺省）→ resume 404。
 三铁律：不重构现有 agent 模块；只追加；Mock 优先零真实付费。
 """
 
@@ -44,6 +46,7 @@ _STORE = _build_store()
 router = APIRouter()
 log = logging.getLogger("routes.agent_dag")
 
+
 # DAG 开关（读自 config 工厂；缺省开启，向后兼容现有 agent 子系统）。
 # 保持模块级 DAG_ENABLED/PLANNER_ENABLED 兼容旧测试 monkeypatch，但首值取自 get_settings()
 def _switches() -> tuple[bool, bool]:
@@ -59,6 +62,20 @@ def _switches() -> tuple[bool, bool]:
 _DAG_ENABLED, _PLANNER_ENABLED = _switches()
 DAG_ENABLED = _DAG_ENABLED
 PLANNER_ENABLED = _PLANNER_ENABLED
+RESUME_ENABLED = True  # v13 P0-7 初始 True，端点内用 get_settings().if_dag_resume_enabled 实时判定
+
+
+def _resume_enabled() -> bool:
+    """v13 P0-7：resume 开关读 config 工厂（IF_DAG_RESUME_ENABLED，缺省关）。
+
+    monkeypatch.setenv + reset_settings() 后生效；DAG_ENABLED 走模块级快照兼容旧测试。
+    """
+    try:
+        from ..config import get_settings
+
+        return bool(get_settings().if_dag_resume_enabled)
+    except Exception:
+        return False
 
 
 # ── 请求模型 ────────────────────────────────────────────────
@@ -155,7 +172,8 @@ async def dag_run(payload: DagRunRequest, request: Request):
     # v11.0.0 跨 run 记忆：run 结束把结果摘要沉淀 L0（复用 memory.memory_store.observe）
     async def _background() -> None:
         try:
-            await _execute_run_safe(run)
+            # v13 P0-7：挂节点终态轨迹回调（G 节点终态即持久化，运行中 GET 亦可渐进看到）
+            await _execute_run_safe(run, on_trace=_store_trace_callback)
         finally:
             await _persist_run_memory(run)
             await _await_maybe(_STORE.upsert(run))
@@ -167,12 +185,17 @@ async def dag_run(payload: DagRunRequest, request: Request):
     return {"run_id": run.run_id, "status": run.status}
 
 
-async def _execute_run_safe(run) -> None:
-    """执行 DAG run（内部异常记入 run，不崩 worker）。"""
+async def _execute_run_safe(run, *, on_trace=None, resume: bool = False) -> None:
+    """执行 DAG run（内部异常记入 run，不崩 worker）。
+
+    v13 P0-7 纯增量参数：
+    - on_trace：节点终态轨迹回调（持久化 node_traces）
+    - resume：续跑模式（非 succeeded 节点重置 pending 重跑，幂等）
+    """
     from ..agent.dag import execute_run
 
     try:
-        await execute_run(run, _execute_node)
+        await execute_run(run, _execute_node, on_trace=on_trace, resume=resume)
     except Exception as exc:  # noqa: BLE001 — 后台执行兜底，不崩 worker
         run.status = "failed"
         run.error_summary = str(exc)[:500]
@@ -194,9 +217,7 @@ async def _persist_run_memory(run) -> None:
         from ..agent.memory import memory_store
 
         status = run.status
-        summary = f"dag run {run.status}: nodes ops " + ",".join(
-            f"{n.status}" for n in run.nodes.values()
-        )
+        summary = f"dag run {run.status}: nodes ops " + ",".join(f"{n.status}" for n in run.nodes.values())
         await memory_store.observe(
             "dag",
             "dag",
@@ -213,6 +234,16 @@ async def _await_maybe(value: Any) -> Any:
     if hasattr(value, "__await__"):
         return await value
     return value
+
+
+async def _store_trace_callback(trace: dict[str, Any]) -> None:
+    """v13 P0-7：节点终态轨迹回调 → 写入 store（sqlite 落 node_traces，内存静默跳过）。
+
+    挂到 execute_run 的 on_trace；回调异常由 _STORE.append_trace 内部捕获降级。
+    """
+    append = getattr(_STORE, "append_trace", None)
+    if append is not None:
+        await _await_maybe(append(trace))
 
 
 @router.get("/v1/agent/dag")
@@ -247,6 +278,51 @@ async def dag_get(run_id: str, request: Request):
     if isinstance(run, dict):
         return run
     return run.public_state()
+
+
+@router.post("/v1/agent/dag/{run_id}/resume")
+async def dag_resume(run_id: str, request: Request):
+    """续跑一个非终态 / failed / skipped 的 DAG run（v13 P0-7）。
+
+    幂等语义：已 succeeded 节点不重跑（attempt 保留原值，计数器可验证）；其余节点
+    （pending/running/failed/skipped）重置为 pending 后整图重跑。复用 run_id，
+    前台 GET 同一 run_id 即可看到续跑后的节点轨迹追加（node_traces append-only）。
+    开关 IF_DAG_RESUME_ENABLED=0（缺省 0）→ 404。
+    """
+    _dag_enabled_or_404()
+    if not _resume_enabled():
+        raise HTTPException(status_code=404, detail="DAG 续跑未启用（IF_DAG_RESUME_ENABLED=0）")
+    auth.guard_chat_request(request)  # 频控走 chat 基线（公益开放）
+    from ..auth import check_dag_rate_limit
+
+    check_dag_rate_limit(request)  # v11.0.0 S-1 独立 DAG 限流
+
+    run = await _await_maybe(_STORE.get(run_id))
+    if run is None:
+        raise AppError(ErrorCodes.NOT_FOUND, "DAG run 不存在", 404)
+
+    # 内存 store 返回 DagRun 对象（可续跑）；sqlite store 返回 dict 快照（无
+    # execute_run 可操作的内存节点状态机）。dict → 400 语义清晰，不伪装不可执行路径。
+    if not hasattr(run, "nodes"):
+        raise AppError(ErrorCodes.BAD_REQUEST, "当前 DAG store 后端不支持续跑（仅内存后端可续跑）", 400)
+
+    # 全部节点已 succeeded → 无续跑必要（幂等边界：避免无谓重跑）
+    if all(n.status == "succeeded" for n in run.nodes.values()):
+        await _await_maybe(_STORE.upsert(run))
+        return {"run_id": run.run_id, "status": run.status, "resumed": False}
+
+    # 终态 run（已 succeeded/failed）中仍有非 succeeded 节点 → 续跑必要
+    async def _background() -> None:
+        try:
+            await _execute_run_safe(run, on_trace=_store_trace_callback, resume=True)
+        finally:
+            await _persist_run_memory(run)
+            await _await_maybe(_STORE.upsert(run))
+
+    from ..background import spawn
+
+    spawn(_background(), name=f"dag-resume-{run.run_id}")
+    return {"run_id": run.run_id, "status": "running", "resumed": True}
 
 
 @router.post("/v1/agent/dag/plan")

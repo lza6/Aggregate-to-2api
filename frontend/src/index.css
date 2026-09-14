@@ -360,6 +360,32 @@ code, kbd, samp, pre {
   border-radius: var(--radius-sm);
 }
 
+.tf-btn-lg {
+  padding: 10px 22px;
+  font-size: 14.5px;
+  border-radius: var(--radius-lg);
+}
+
+/* tf-btn-loading：UI 通用 Button 组件的提交中态 —— 保留原生 button 语义，
+   仅追加视觉指示。跟随全局 prefers-reduced-motion 降级（功能性指示加速完成）。 */
+.tf-btn-loading {
+  cursor: progress;
+}
+
+.tf-btn-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: tf-btn-spin 0.8s linear infinite;
+}
+
+@keyframes tf-btn-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 输入框与选择器通用类 */
 .tf-input, .tf-select {
   padding: 7px 12px;

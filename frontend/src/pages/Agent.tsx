@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { DagGraph, statusColor, statusLabel } from '../components/DagGraph';
 import { EmptyState } from '../components/EmptyState';
+import { Button } from '../components/ui/Button';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 import { notify } from '../api/core';
@@ -124,12 +125,22 @@ export function AgentPage() {
           aria-label="任务描述"
         />
         <div className="dag-composer-actions">
-          <button type="button" className="tf-btn tf-btn-primary" onClick={handlePlan} disabled={planning || submitting}>
+          <Button
+            className="tf-btn-primary"
+            onClick={() => void handlePlan()}
+            loading={planning}
+            disabled={submitting}
+          >
             {planning ? '规划中…' : '生成计划'}
-          </button>
-          <button type="button" className="tf-btn tf-btn-secondary" onClick={handleSubmit} disabled={!plan || submitting}>
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void handleSubmit()}
+            loading={submitting}
+            disabled={!plan}
+          >
             {submitting ? '提交中…' : '提交执行'}
-          </button>
+          </Button>
         </div>
       </div>
 

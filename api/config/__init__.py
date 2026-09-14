@@ -165,6 +165,10 @@ class Settings(BaseSettings):
     if_dag_store_backend: str = Field("sqlite", validation_alias="IF_DAG_STORE_BACKEND")
     if_dag_store_db: str = Field("data/dag_runs.db", validation_alias="IF_DAG_STORE_DB")
     if_dag_retention_days: int = Field(7, validation_alias="IF_DAG_RETENTION_DAYS")
+    # v13 P0-7: DAG 续跑端点（POST /v1/agent/dag/{run_id}/resume）开关，缺省关（0）。
+    # 幂等续跑（已 succeeded 节点不重跑，仅重跑 failed/skipped/pending/running）；
+    # 开启后可用同一 run_id 续跑，前台 GET 可见追加的节点执行轨迹（node_traces）。
+    if_dag_resume_enabled: bool = Field(False, validation_alias="IF_DAG_RESUME_ENABLED")
 
     # ── Token 池 ──
     token_pool_size: int = Field(6, validation_alias="IF_TOKEN_POOL_SIZE")
@@ -244,6 +248,8 @@ class Settings(BaseSettings):
     if_agent_skills_enabled: bool = Field(True, validation_alias="IF_AGENT_SKILLS_ENABLED")
     # P1-A2 意图分类→Provider/Skill 路由层（规则正则兜底 + LLM 仅处理模糊意图）
     if_agent_intent_classifier: bool = Field(True, validation_alias="IF_AGENT_INTENT_CLASSIFIER")
+    # P0-6 Embedding 双路命中阈值（规则未命中时与意图原型相似度低于此值降级 LLM）
+    if_intent_embed_threshold: float = Field(0.55, validation_alias="IF_INTENT_EMBED_THRESHOLD")
     # P1-A3 L0-L3 记忆分层 + 异步巩固管道（复用 imagefree.db 加 mem_* 表）
     if_memory_consolidation_enabled: bool = Field(True, validation_alias="IF_MEMORY_CONSOLIDATION_ENABLED")
     # 记忆巩固后台 worker 周期（秒，默认 300s）
@@ -275,6 +281,8 @@ class Settings(BaseSettings):
     if_human_input_enabled: bool = Field(False, validation_alias="IF_HUMAN_INPUT_ENABLED")
     # v12.0.1 T3 审批等待超时（秒），超时节点降级返回 timeout 结果
     if_human_input_timeout: float = Field(60.0, validation_alias="IF_HUMAN_INPUT_TIMEOUT")
+    # v13 P0-1 审批收件箱 SQLite 持久化库路径（空=默认 data/human_inbox.db）
+    if_human_inbox_db: str = Field("data/human_inbox.db", validation_alias="IF_HUMAN_INBOX_DB")
 
     # ── DB ──
     stats_file: str = Field("data/stats.json", validation_alias="IF_STATS_FILE")

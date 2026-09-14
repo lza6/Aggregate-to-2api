@@ -37,6 +37,8 @@ async def execute_node(node_id: str, state: dict[str, Any]) -> str:
     kind = node_state.get("kind") if isinstance(node_state, dict) else None
     kind = kind or "llm"
     prompt = node_state.get("prompt") or "" if isinstance(node_state, dict) else ""
+    # v13 P0-5：节点原始配置（info/config 子键；memory 节点传 op/scene）
+    node_raw = node_state if isinstance(node_state, dict) else {}
 
     # v12.0.1 T3：human_input 真通道开启时节点超时须覆盖审批等待（默认 30s 会被掐）
     timeout = NODE_EXEC_TIMEOUT_SECONDS
@@ -48,7 +50,9 @@ async def execute_node(node_id: str, state: dict[str, Any]) -> str:
 
     try:
         return await asyncio.wait_for(
-            _dispatch(kind, prompt, node_id, str(state.get("run_id") or "") if isinstance(state, dict) else ""),
+            _dispatch(
+                kind, prompt, node_id, str(state.get("run_id") or "") if isinstance(state, dict) else "", node_raw
+            ),
             timeout=timeout,
         )
     except TimeoutError:  # asyncio.wait_for 超时（Python 3.11+ 与内置 TimeoutError 同一对象）
@@ -56,7 +60,7 @@ async def execute_node(node_id: str, state: dict[str, Any]) -> str:
         return f"[{kind}-timeout] 节点执行超过 {timeout}s，已降级返回（防拖死整个 run）"
 
 
-async def _dispatch(kind: str, prompt: str, node_id: str = "", run_id: str = "") -> str:
+async def _dispatch(kind: str, prompt: str, node_id: str = "", run_id: str = "", node_raw: dict | None = None) -> str:
     if kind == "scene":
         return await _exec_scene(prompt)
     if kind == "llm":
@@ -68,7 +72,11 @@ async def _dispatch(kind: str, prompt: str, node_id: str = "", run_id: str = "")
     if kind == "critic":
         return await _exec_critic(prompt)
     if kind == "memory":
-        return await _exec_memory(prompt)
+        # v13 P0-5 记忆读写：info/config 子键 op=read/write（读走 MemoryStore.query；写走 observe）
+        node_conf = (node_raw or {}).get("config") or (node_raw or {}).get("info") or {}
+        op = str(node_conf.get("op", "write")).strip().lower()
+        scene = str(node_conf.get("scene", "")).strip() or "dag"
+        return await _exec_memory(prompt, op=op, scene=scene)
     if kind == "tool":
         return await _exec_tool(prompt)
     if kind in ("retrieval", "rag"):
@@ -190,19 +198,36 @@ async def _exec_critic(prompt: str, *, _reflected: bool = False) -> str:
         return f"critic=pass:{result.pass_check} score:{result.score} issues:{','.join(result.issues)}"
     log.info("critic 反思触发（score=%.2f issues=%s），单轮重生成", result.score, result.issues)
     issues_text = ",".join(result.issues) or "质量未达标"
-    regen = await _exec_llm(f"修正以下产物的质量问题（{issues_text}）：{prompt}")
+    # 反思路径重生成须保持确定性：IF_MOCK_UPSTREAM=1（测试/E2E）走 _exec_llm_stable，
+    # 真实模式才走 _exec_llm（tryingopen 免费上游）。测试注入 _exec_llm 独占断言切分。
+    if get_settings().if_mock_upstream:
+        regen = await _exec_llm_stable(f"修正以下产物的质量问题（{issues_text}）：{prompt}")
+    else:
+        regen = await _exec_llm(f"修正以下产物的质量问题（{issues_text}）：{prompt}")
     return f"critic=reflection score:{result.score} issues:{issues_text} regen:{regen[:300]}"
 
 
-async def _exec_memory(prompt: str) -> str:
-    """记忆节点：写入观察（L0）。prompt 截断提常量 + 写失败降级不崩。"""
+async def _exec_memory(prompt: str, *, op: str = "write", scene: str = "dag") -> str:
+    """记忆节点：写观察（L0）或读记忆（L1/latest）。
+
+    v13 P0-5：op=read 复用 MemoryStore.query（user_key/scene/layer=latest 兜底），
+    返回最近记忆摘要供下游参考；写失败降级不崩（v11 契约保持）。
+    """
     from ..agent.memory import memory_store
 
     try:
-        await memory_store.observe("default", "dag", prompt[:MAX_MEMORY_PROMPT_LEN] or "（无内容）", 0.5)
+        if op == "read":
+            recs = await memory_store.query("default", scene, layer="L1", limit=3)
+            if not recs:
+                recs = await memory_store.query("default", scene, layer="L0", limit=3)
+            if not recs:
+                return "memory=none"
+            snapshot = " | ".join(r.content[:80] for r in recs)
+            return f"memory=read({len(recs)}条, scene={scene}) {snapshot[:300]}"
+        await memory_store.observe("default", scene, prompt[:MAX_MEMORY_PROMPT_LEN] or "（无内容）", 0.5)
         return "memory=stored"
     except Exception as exc:
-        log.warning("DAG memory 节点写入失败: %s", exc)
+        log.warning("DAG memory 节点执行失败: %s", exc)
         return f"memory=error:{exc}"
 
 

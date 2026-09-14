@@ -5,6 +5,19 @@
 > - 改动了某模块 → 在本表追加一行（改动日期+范围），旧记录视为失效
 > - 本表由 AI 会话优先读取（配合 memory/），避免盲目重跑同样的测验
 
+## v13.0.0 记录（2026-09-15）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-15 | P0-1 审批收件箱 SQLite 持久化（`api/agent/human_inbox.py` 重建：同步 sqlite3+WAL+isolation_level=None+内存热缓存+工厂 get/reset_human_inbox；`IF_HUMAN_INBOX_DB`；`tests/test_human_inbox_persist.py` 14 用例含重启/并发/路由鉴权） | 全绿 | 3 连全量 2033→2043 0 failures |
+| 2026-09-15 | P0-2 审批决策端点挂管理 Key（`agent_human.py` inbox_decide→`check_admin_key`；GET 列表公益） | 全绿 | 开放模式 IF_ADMIN_KEY_OPEN=1 测试放行；E2E 审批带 Key 待真机 |
+| 2026-09-15 | P0-3 ip_blocklist `database is locked` flaky 根治（memory/human_inbox `_conn` 改 WAL+isolation_level=None+busy_timeout；conftest 关 consolidation 常驻循环；3 连全量 0 failures） | 根治 | 根因：memory/human_inbox 同步连接缺省 fallback journal + consolidation 常驻循环与共享库写锁竞争 |
+| 2026-09-15 | P0-4 版本号全链 bump 12.1.0→13.0.0（后端 6 文件+前端/桌面/landing/README/E2E 断言）+ frontend/landing dist 重建 | 契约绿 | `test_openapi_contract.py` 全过 |
+| 2026-09-15 | P0-5 DAG memory 节点读写（`_exec_memory` op=read/write + `node_raw` 传 config/info 子键） | 全绿 | DAG 全族回归 90 用例 0 失败 |
+| 2026-09-15 | P0-6 intent embedding 双路（`intent.py` 规则→embedding→LLM；`IF_INTENT_EMBED_THRESHOLD`；`tests/test_agent_intent_embed.py` 10 用例） | 全绿 | ruff 0 error |
+| 2026-09-15 | P1-13 前端统一 Button 反馈态（`frontend/src/components/ui/Button.tsx` + Generate/Agent/ChatPlayground 接入 + Button.test.tsx 9 用例） | vitest 248 全绿 + build 0 error + tsc 0 | 子代理独立交付 |
+| 2026-09-15 | 全量单测 3 连（版本 13.0.0 后） | 2043 tests / 0 failures / 0 errors / 1 skipped | flaky 已根治；2 连后台先绿（2033）后 FULL3 绿（2043 含新用例） |
+
 ## 记录表
 
 | 日期 | 版本/范围 | 验证内容 | 结果 | 失效条件 |

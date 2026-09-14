@@ -18,10 +18,17 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(autouse=True)
 def _cfg_reset(monkeypatch):
-    """每用例重置 Settings + inbox（进程内状态隔离）。"""
+    """每用例重置 Settings + inbox（进程内状态隔离）。
+
+    v13 P0-2：审批端点已挂 check_admin_key，测试环境由 conftest 统一
+    IF_ADMIN_KEY_OPEN=1 开放模式放行；此处显式 setenv 防 .env 残留覆盖。
+    critic 自反思测试需要 contr________ 确定性（IF_MOCK_UPSTREAM=1）。
+    """
     from api.agent.human_inbox import human_inbox
     from api.config import reset_settings
 
+    monkeypatch.setenv("IF_ADMIN_KEY_OPEN", "1")
+    monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
     reset_settings()
     human_inbox.reset()
     yield

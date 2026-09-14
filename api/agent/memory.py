@@ -72,8 +72,16 @@ class MemoryStore:
         self._init_schema()
 
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        """同步连接：isolation_level=None + WAL + busy_timeout（对齐主流程 Do-Not-Repeat#1）。
+
+        默认 fallback journal + 隐式事务会让本 store 与 ip_blocklist 等共享库
+        跨写锁窗口拉长（全量并发偶发 database is locked）；isolation_level=None
+        + WAL 与 api/db/core.py/ip_blocklist_store.py 一致。
+        """
+        conn = sqlite3.connect(self.db_path, timeout=30.0, isolation_level=None)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA journal_mode=WAL").fetchone()  # 消费结果防 "statements in progress"
         return conn
 
     def _init_schema(self) -> None:
@@ -136,6 +144,7 @@ class MemoryStore:
         """L0 写入：记录一次观察（chat/生成请求的事实片段）。"""
         now = time.time()
         async with self._lock:
+
             def _insert() -> int:
                 with self._conn() as conn:
                     cur = conn.execute(
@@ -216,6 +225,7 @@ class MemoryStore:
     async def _consolidate_mock(self) -> dict[str, int]:
         """Mock 巩固：去重 + importance>=0.6 筛选（不调 LLM）。"""
         async with self._lock:
+
             def _run() -> dict[str, int]:
                 now = time.time()
                 with self._conn() as conn:
@@ -236,7 +246,15 @@ class MemoryStore:
                             conn.execute(
                                 "INSERT INTO mem_atoms(user_key, scene, content, importance, created_at, last_accessed_at, source_ids) "
                                 "VALUES(?,?,?,?,?,?,?)",
-                                (item["user_key"], item["scene"], item["content"], item["importance"], now, now, str(item["id"])),
+                                (
+                                    item["user_key"],
+                                    item["scene"],
+                                    item["content"],
+                                    item["importance"],
+                                    now,
+                                    now,
+                                    str(item["id"]),
+                                ),
                             )
                             promoted += 1
                     # 清空已巩固的 L0（避免重复巩固）
@@ -254,11 +272,15 @@ class MemoryStore:
 
         # 取 L0 待巩固记录
         async with self._lock:
+
             def _fetch() -> list:
                 with self._conn() as conn:
-                    return [dict(r) for r in conn.execute(
-                        "SELECT id, user_key, scene, content, importance FROM mem_observations"
-                    ).fetchall()]
+                    return [
+                        dict(r)
+                        for r in conn.execute(
+                            "SELECT id, user_key, scene, content, importance FROM mem_observations"
+                        ).fetchall()
+                    ]
 
             rows = await asyncio.to_thread(_fetch)
         if not rows:
@@ -312,13 +334,21 @@ class MemoryStore:
                         imp = 0.5
                     if imp >= 0.5 and content.strip():
                         async with self._lock:
+
                             def _insert(content=content, scene=scene, imp=imp, items=items) -> None:
                                 with self._conn() as conn:
                                     conn.execute(
                                         "INSERT INTO mem_atoms(user_key, scene, content, importance, created_at, last_accessed_at, source_ids) "
                                         "VALUES(?,?,?,?,?,?,?)",
-                                        (items[0]["user_key"], scene, content.strip(), imp, now, now,
-                                         ",".join(str(i["id"]) for i in items)),
+                                        (
+                                            items[0]["user_key"],
+                                            scene,
+                                            content.strip(),
+                                            imp,
+                                            now,
+                                            now,
+                                            ",".join(str(i["id"]) for i in items),
+                                        ),
                                     )
                                     conn.commit()
 
@@ -327,6 +357,7 @@ class MemoryStore:
             # 清空已巩固的 L0（P0-11 修复：原 lambda 创建两个独立 _conn() 连接，
             # execute 与 commit 落在不同连接上导致 DELETE 未生效。改为单连接 with 上下文）
             async with self._lock:
+
                 def _clear_l0() -> None:
                     with self._conn() as conn:
                         conn.execute("DELETE FROM mem_observations")

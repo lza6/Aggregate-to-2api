@@ -82,9 +82,30 @@ async def _spent_today_usd() -> float:
         return 0.0
 
 
+# MCP 工具单次估算（USD/次；P1-9 工具维度近似常量表，与 provider 估算表独立）
+_TOOL_ESTIMATE_USD: dict[str, float] = {
+    "generate_image": 0.04,  # 真实生图付费量级（IF_MOCK_UPSTREAM=0 按张计费）
+    "dag_plan": 0.0,  # Mock 优先零付费；真实走 tryingopen 免费上游
+    "dag_status": 0.0,  # 本地 store 查询零网络
+    "skills_list": 0.0,  # 本地索引读取
+    "skills_get": 0.0,  # 本地 SKILL.md 读取
+    "unknown": 0.01,  # 保守默认（未知工具按低价估）
+}
+
+
 def estimate_cost(provider: str) -> float:
     """单次调用成本估算（USD）。未知 provider 保守按 unknown 档。"""
     return _PROVIDER_ESTIMATE_USD.get(str(provider or "unknown").strip().lower(), _PROVIDER_ESTIMATE_USD["unknown"])
+
+
+def estimate_tool_cost(tool_name: str, model: str = "") -> float:
+    """MCP 工具单次调用成本估算（USD）。
+
+    按工具维度给近似常量表；model 参数预留模型维度细分（当前未细分，命中工具档即可）。
+    找不到工具名按 unknown 保守默认。
+    """
+    key = str(tool_name or "unknown").strip().lower()
+    return _TOOL_ESTIMATE_USD.get(key, _TOOL_ESTIMATE_USD["unknown"])
 
 
 async def check_can_spend(provider: str) -> BudgetDecision:
@@ -112,10 +133,20 @@ async def check_can_spend(provider: str) -> BudgetDecision:
     over = (spent + estimated) > budget + 1e-9
     if over:
         if mode == "enforce":
-            return BudgetDecision(False, mode, estimated, budget, spent, f"spent ${spent:.4f} + est ${estimated:.4f} > budget ${budget:.4f}")
+            return BudgetDecision(
+                False,
+                mode,
+                estimated,
+                budget,
+                spent,
+                f"spent ${spent:.4f} + est ${estimated:.4f} > budget ${budget:.4f}",
+            )
         log.warning(
             "budget_guard[observe]: 估算超限 provider=%s spent=%.4f est=%.4f budget=%.4f（不拦截）",
-            provider, spent, estimated, budget,
+            provider,
+            spent,
+            estimated,
+            budget,
         )
         return BudgetDecision(True, mode, estimated, budget, spent, "observe: over budget (not blocked)")
     return BudgetDecision(True, mode, estimated, budget, spent, "within budget")
@@ -144,4 +175,5 @@ __all__ = [
     "assert_can_spend",
     "check_can_spend",
     "estimate_cost",
+    "estimate_tool_cost",
 ]

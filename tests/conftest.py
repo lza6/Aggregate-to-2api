@@ -214,6 +214,16 @@ async def _app_instance(mock_cfsolver):
     os.environ.pop("IF_AUTO_BLOCK_PERMANENT", None)
     os.environ["IF_ADMIN_KEY_OPEN"] = "1"
 
+    # v13 P0-2：human-inbox 决策端点已挂 check_admin_key（写操作管理 Key）。
+    # 测试环境统一开放模式（IF_ADMIN_KEY_OPEN=1，见上）即可无 Key 放行；
+    # 单测文件（test_human_inbox_persist）内按需覆盖为 401/403 路径。
+    # v12.0.1 T3：human_input 节点默认关闭（占位串），需真通道的用例自设。
+    os.environ.setdefault("IF_HUMAN_INPUT_ENABLED", "0")
+    # v13 P0-3：测试环境关闭记忆巩固后台 worker 常驻（300s 循环 consolidate 会
+    # 与 ip_blocklist 等共享库跨用例写锁竞争 → database is locked flaky）。
+    # consolidation 单测（test_agent_memory.py）自设 =1 并手动调用验证。
+    os.environ.setdefault("IF_MEMORY_CONSOLIDATION_ENABLED", "0")
+
     # 临时 DB 文件（会话级，共享 DB 实例）
     _db_path = tempfile.mktemp(suffix=".db")
     os.environ["IF_DB_FILE"] = _db_path
@@ -236,6 +246,11 @@ async def _app_instance(mock_cfsolver):
         _cfg.IF_PERSISTENT_QUEUE_ENABLED = False
         _cfg.IF_SOLVE_CIRCUIT_PROBE_SECONDS = 1
         _cfg.IF_SOLVE_CIRCUIT_THRESHOLD = 3
+        # v13 P0-3：api 模块已 import 时同步 memory 巩固开关（关闭后台常驻循环，
+        # 防与 ip_blocklist 等共享库跨用例写锁竞争 database is locked）。
+        import api.agent.memory as _mem  # noqa: PLC0415
+
+        _mem.MEMORY_CONSOLIDATION_ENABLED = False
         # P0-4 追加：api 模块已在本会话被 collection 提前 import 时，
         # 把 IF_MOCK_UPSTREAM 同步进模块级快照，避免上游 mock 开关失效
         # 导致集成测试对真实 imagefree.net 发 429（详见《下一步改进指南》P0-4 证据）。
@@ -305,7 +320,7 @@ def pytest_sessionfinish(session, exitstatus):
     # 测试结果已全部写入后，teardown 永不返回时兜底退出（CI 不触发，仅 Windows 本地）。
     # 必须传真实 exitstatus：否则 os._exit(0) 会把失败的测试强改为成功（掩盖回归）。
     # P3-(v7.3): 用 PYTEST_NO_FORCE_EXIT=1 禁用（定位 flaky 需看完整 traceback 时）。
-    if os.environ.get('PYTEST_NO_FORCE_EXIT') != '1':
+    if os.environ.get("PYTEST_NO_FORCE_EXIT") != "1":
         os._exit(exitstatus)
 
 

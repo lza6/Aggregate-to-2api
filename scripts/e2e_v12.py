@@ -62,6 +62,8 @@ def main() -> int:
             "IF_AGENT_SKILLS_ENABLED": "1",
             "IF_HUMAN_INPUT_ENABLED": "1",  # v12.0.1 T3：E2E 开启审批真通道
             "IF_HUMAN_INPUT_TIMEOUT": "8",  # 审批等待 8s（E2E 快速轮转）
+            # v13 P0-2：决策端点管理 Key——E2E 用开放模式放行（无 IF_ADMIN_KEYS + OPEN=1）
+            "IF_ADMIN_KEY_OPEN": "1",
             "IF_REQUESTS_PER_MINUTE": "0",  # E2E 关闭 per-IP 限流
             "IF_DAG_REQUESTS_PER_MINUTE": "0",
             "IF_DB_FILE": os.path.join(ROOT, "data", "e2e_v12.db"),
@@ -94,7 +96,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==12.1.0", ver == "12.1.0", f"got {ver}")
+        check("2 openapi version==13.0.0", ver == "13.0.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -110,7 +112,7 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "12.1.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "13.0.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
@@ -202,9 +204,11 @@ def main() -> int:
             inbox = client.get("/v1/agent/human-inbox", params={"run_id": human_run_id}).json()
             pending = [x for x in inbox.get("items", []) if x["status"] == "pending"]
             if pending:
+                # v13 P0-2：决策端点已挂管理 Key；E2E 环境开放模式 IF_ADMIN_KEY_OPEN=1 放行
                 d = client.post(
                     f"/v1/agent/human-inbox/{pending[0]['req_id']}/decision",
                     json={"decision": "approve", "note": "e2e-批准"},
+                    headers={"X-API-Key": "e2e-admin-key"},
                 )
                 approved = d.status_code == 200 and d.json()["status"] == "approved"
                 break

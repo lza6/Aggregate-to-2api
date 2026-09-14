@@ -59,7 +59,14 @@ def _reset_guard_state():
 
 @pytest_asyncio.fixture
 async def blocklist_store(tmp_path):
-    """把单例 store 指向独立临时 DB，保证每用例真正隔离。"""
+    """把单例 store 指向独立临时 DB，保证每用例真正隔离。
+
+    v13 P0-3：teardown 强制换回原路径并置未初始化，同时尝试等待在途
+    _auto_block_ip 后台任务（异步 spawn 的封禁写与用例边界重叠时，会
+    与新用例的 add_or_update 在同一 store 锁排队，但若换路径时仍有
+    上一用例的 aiosqlite 连接未释放，会残留写锁竞争 database is locked）。
+    显式 close 的时机由 store 方法自管；此处仅重置共享单例状态。
+    """
     old_path = store._path
     store._path = str(tmp_path / "ip_blocklist.db")
     store._initialized = False

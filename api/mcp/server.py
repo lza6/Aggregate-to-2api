@@ -9,6 +9,7 @@ POST /v1/mcp：
 - 未知方法             → -32601 method not found
 - 参数错误/工具异常    → -32602 invalid params（工具 ValueError 归入此码）
 - 解析失败             → -32700 parse error
+- 预算超限（P1-9）     → -32000 Budget exceeded（enforce 模式 tools/call 拦截，不抛 500）
 
 鉴权：只读工具走 auth.guard_chat_request（per-IP 限流，公益开放）。
 开关：IF_MCP_ENABLED=0（默认）→ 404（config 工厂，setenv+reset_settings 后生效）。
@@ -30,7 +31,7 @@ router = APIRouter()
 log = logging.getLogger("mcp.server")
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "12.1.0"}
+SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "13.0.0"}
 
 
 def mcp_enabled() -> bool:
@@ -56,6 +57,8 @@ _PARSE_ERROR = -32700
 _INVALID_REQUEST = -32600
 _METHOD_NOT_FOUND = -32601
 _INVALID_PARAMS = -32602
+# P1-9 预算超限业务码（enforce 模式；约定 -32000 区间为 server 业务错误）
+_BUDGET_EXCEEDED = -32000
 
 
 async def _handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
@@ -68,9 +71,14 @@ async def _handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
     if tool is None:
         raise KeyError(name)
     try:
-        result = await tool.handler(arguments)
+        from ..agent.budget_guard import BudgetExceededError
+        from .tools import guard_and_run
+
+        result = await guard_and_run(tool, arguments)
         text = str(result)
         return {"content": [{"type": "text", "text": text}], "isError": False}
+    except BudgetExceededError as exc:
+        raise exc
     except ValueError as exc:
         return {"content": [{"type": "text", "text": f"参数错误：{exc}"}], "isError": True}
 
@@ -90,7 +98,9 @@ async def mcp_endpoint(request: Request):
 
     if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
         return JSONResponse(
-            _jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, _INVALID_REQUEST, "Invalid Request"),
+            _jsonrpc_error(
+                payload.get("id") if isinstance(payload, dict) else None, _INVALID_REQUEST, "Invalid Request"
+            ),
             status_code=200,
         )
 
@@ -143,7 +153,16 @@ async def mcp_endpoint(request: Request):
 
     if method == "tools/call":
         try:
+            from ..agent.budget_guard import BudgetExceededError
+
             result = await _handle_tools_call(params)
+        except BudgetExceededError as exc:
+            # P1-9：enforce 超预算 → MCP JSON-RPC 错误（-32000 业务码 + 402 语义；不抛 500）
+            log.warning("MCP tools/call %s 预算拦截（402）: %s", params.get("name"), exc.message)
+            return JSONResponse(
+                _jsonrpc_error(req_id, _BUDGET_EXCEEDED, f"Budget exceeded: {exc.message}"),
+                status_code=200,
+            )
         except KeyError:
             return JSONResponse(
                 _jsonrpc_error(req_id, _INVALID_PARAMS, f"Unknown tool: {params.get('name', '')}"),

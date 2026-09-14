@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatCompletions, fetchChatModels, fetchChatRemaining, fetchChatUsage, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
 import type { ChatModelInfo, ChatRemaining, ChatUsageStats } from '../api';
 import { useApi } from '../hooks/useApi';
+import { Button } from '../components/ui/Button';
 import { classifyError, type ProviderOption } from '../components/Feedback';
 import {
   ChatRequestError, appendAssistantMessage, getErrorPayload, readResponseJson,
@@ -348,9 +349,9 @@ curl -X POST ${window.location.origin}/v1/messages \\
             aria-label="聊天消息"
           />
           {sending ? (
-            <button className="tf-btn tf-btn-danger chat-send-button" onClick={stopGenerating}>停止</button>
+            <Button variant="danger" className="chat-send-button" onClick={stopGenerating}>停止</Button>
           ) : (
-            <button className="tf-btn tf-btn-primary chat-send-button" onClick={() => void sendMessage()} disabled={!input.trim() || !model}>发送</button>
+            <Button className="chat-send-button" onClick={() => void sendMessage()} disabled={!input.trim() || !model}>发送</Button>
           )}
         </div>
       </section>

@@ -6,6 +6,10 @@ handler 只复用现有模块能力（三铁律：不重复造轮子）：
 - dag_plan → api.agent.planner.plan_task（Mock 优先零付费）
 - dag_status → api.routes.agent_dag_store（内存/SQLite store）
 - generate_image → api.routes.agent_dag_exec._exec_image（Mock 优先，付费红线）
+
+P1-9 预算门禁：tools/call 分发前统一过 assert_can_spend(provider_map[tool])，
+enforce 超预算抛 BudgetExceededError（上游转 MCP JSON-RPC 错误 402 语义）；
+observe 模式仅记录不拦截。
 """
 
 from __future__ import annotations
@@ -17,6 +21,18 @@ from typing import Any
 log = logging.getLogger("mcp.tools")
 
 Handler = Callable[[dict[str, Any]], Awaitable[Any]]
+
+# P1-9：MCP 工具 → 计费 provider 映射（代码内常量；generate_image 走 registry 图 provider，
+# dag_plan 真实路径走 tryingopen 免费上游，其余本地只读零网络计费）。
+# 注意：generate_image 在 IF_MOCK_UPSTREAM=1 下无成本，门禁仍按真实档估算——工具费用是
+# 真实路径的成本承诺（Mock 只是调试捷径），enforce 预算紧张时宁可拦截也不放行真实付费。
+TOOL_PROVIDER_MAP: dict[str, str] = {
+    "skills_list": "local",
+    "skills_get": "local",
+    "dag_plan": "tryingopen",
+    "dag_status": "local",
+    "generate_image": "imagefree",
+}
 
 
 class McpTool:
@@ -150,10 +166,7 @@ def build_tools() -> list[McpTool]:
         ),
         McpTool(
             name="generate_image",
-            description=(
-                "受控生图（IF_MOCK_UPSTREAM=1 时返回占位 URL 零真实付费；"
-                "真实路径走 registry 图像 provider）"
-            ),
+            description=("受控生图（IF_MOCK_UPSTREAM=1 时返回占位 URL 零真实付费；真实路径走 registry 图像 provider）"),
             input_schema={
                 "type": "object",
                 "properties": {"prompt": {"type": "string", "description": "生图提示词（≤2000 字）"}},
@@ -167,3 +180,26 @@ def build_tools() -> list[McpTool]:
 
 def find_tool(tools: list[McpTool], name: str) -> McpTool | None:
     return next((t for t in tools if t.name == name), None)
+
+
+# ── P1-9 预算门禁（tools/call 分发前统一闸口）─────────────
+
+
+async def guard_and_run(tool: McpTool, arguments: dict[str, Any]) -> Any:
+    """单工具闸口：预算门禁（enforce 超限抛 BudgetExceededError）+ 审计 + handler 执行。
+
+    - off 模式：零行为变化直通
+    - observe 模式：估算+审计记录（超限仅 warning，不拦截）
+    - enforce 模式：估算超限 → 抛 BudgetExceededError（server 层转 MCP JSON-RPC 错误）
+    """
+    from ..agent import budget_guard
+    from ..audit import audit_log
+
+    decision = await budget_guard.assert_can_spend(TOOL_PROVIDER_MAP.get(tool.name, "unknown"))
+    audit_log.record(
+        "mcp.tool.call",
+        "mcp",
+        tool.name,
+        f"est=${decision.estimated_usd:.4f} decision={decision.allowed} mode={decision.mode}",
+    )
+    return await tool.handler(arguments)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchImageModels, generateImage, editImage, fetchTask, fetchEditTask, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
 import { ErrorRetry, type ProviderOption } from '../components/Feedback';
+import { Button } from '../components/ui/Button';
 import { useApi } from '../hooks/useApi';
 import type { ImageModelInfo, Task } from '../api';
 
@@ -414,9 +415,13 @@ export function GeneratePage() {
 
         {/* 操作 */}
         <div className="gen-actions">
-          <button className="tf-btn tf-btn-primary" onClick={() => void handleGenerate()} disabled={genState.status === 'running'}>
-            {genState.status === 'running' ? '⏳ 生成中…' : mode === 'txt' ? '🚀 生成图片' : '🎨 生成变体'}
-          </button>
+          <Button
+            className="tf-btn-primary"
+            onClick={() => void handleGenerate()}
+            loading={genState.status === 'running'}
+          >
+            {genState.status === 'running' ? '提交中…' : mode === 'txt' ? '🚀 生成图片' : '🎨 生成变体'}
+          </Button>
           <button className="tf-btn tf-btn-secondary" onClick={handleReset}>重置</button>
         </div>
 

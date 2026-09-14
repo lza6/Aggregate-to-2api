@@ -3,8 +3,10 @@
 - GET  /v1/agent/human-inbox                      审批请求列表（run_id/status 过滤）
 - POST /v1/agent/human-inbox/{req_id}/decision    审批决策（approve/reject + note）
 
-鉴权：复用 auth.guard_chat_request（公益开放 + per-IP 限流；生产建议改管理 Key，
-与 admin 面板同保护级别——审批是写操作）。
+鉴权（v12.x P0-2）：
+- 列表 GET：auth.guard_chat_request（公益开放 + per-IP 限流，只读）
+- 决策 POST：auth.check_admin_key（写操作；IF_ADMIN_KEYS 管理 Key，未配置默认 403；
+  本地运维开放模式 IF_ADMIN_KEY_OPEN=1 可放行，与 admin 面板同保护级别）
 开关：human_input 节点侧由 IF_HUMAN_INPUT_ENABLED 控制；本端点始终可用
 （便于审批方先行集成），未知 req_id → 404。
 """
@@ -40,8 +42,12 @@ async def inbox_list(request: Request, run_id: str = "", status: str = ""):
 
 @router.post("/v1/agent/human-inbox/{req_id}/decision")
 async def inbox_decide(req_id: str, payload: DecisionRequest, request: Request):
-    """审批决策（幂等：仅 pending 可决策，重复决策返回现状）。"""
-    auth.guard_chat_request(request)
+    """审批决策（幂等：仅 pending 可决策，重复决策返回现状）。
+
+    v12.x P0-2：写操作挂管理 Key 校验（IF_ADMIN_KEYS）；未配置默认 403，
+    本地运维可用 IF_ADMIN_KEY_OPEN=1 开放。
+    """
+    auth.check_admin_key(request, scope="admin-human-inbox")
     from ..agent.human_inbox import human_inbox
 
     req = human_inbox.decide(req_id, payload.decision, payload.note)

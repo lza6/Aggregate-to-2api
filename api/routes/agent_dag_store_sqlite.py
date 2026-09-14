@@ -8,6 +8,11 @@
 表结构：
   dag_runs(run_id TEXT PK, name TEXT, status TEXT, nodes_json TEXT,
            error_summary TEXT, created_at REAL, finished_at REAL)
+  node_traces(id INTEGER PK AUTOINCREMENT, run_id TEXT, node_id TEXT,
+              status TEXT, result TEXT, error TEXT, attempt INTEGER,
+              duration_ms REAL, condition TEXT, finished_at REAL)
+    - v13 P0-7 节点级执行轨迹：每节点终态一条快照，GET run 时回填 nodes 轨迹
+      （重启后重建完整轨迹；保留 run_id+node_id 索引供按 run 查询）
 """
 
 from __future__ import annotations
@@ -56,6 +61,24 @@ class DagRunSqliteStore:
         )
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_dag_runs_status ON dag_runs(status)")
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_dag_runs_created ON dag_runs(created_at)")
+        # v13 P0-7 节点轨迹表（每节点终态一条快照；append-only，按 run 查询重建轨迹）
+        await self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS node_traces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                result TEXT,
+                error TEXT,
+                attempt INTEGER NOT NULL,
+                duration_ms REAL NOT NULL,
+                condition TEXT,
+                finished_at REAL
+            )
+            """
+        )
+        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_node_traces_run ON node_traces(run_id)")
         await self._db.commit()
         return self._db
 
@@ -104,14 +127,42 @@ class DagRunSqliteStore:
 
     async def get(self, run_id: str) -> dict[str, Any] | None:
         try:
-            rows = await self._query(
-                "SELECT * FROM dag_runs WHERE run_id = ?", (run_id,)
-            )
+            rows = await self._query("SELECT * FROM dag_runs WHERE run_id = ?", (run_id,))
             if rows:
-                return self._deserialize(rows[0])
+                return await self._decorate_with_traces(self._deserialize(rows[0]))
         except Exception as exc:
             log.warning("dag_runs 查询降级内存: %s", exc)
         return self._memory.get(run_id)
+
+    async def _traces_for(self, run_id: str) -> list[dict[str, Any]]:
+        """读取 run 的节点轨迹（按节点/时间序；v13 P0-7）。"""
+        try:
+            rows = await self._query(
+                "SELECT node_id, status, result, error, attempt, duration_ms, condition, finished_at "
+                "FROM node_traces WHERE run_id = ? ORDER BY id",
+                (run_id,),
+            )
+            return rows
+        except Exception as exc:
+            log.warning("node_traces 查询降级: %s", exc)
+            return []
+
+    async def _decorate_with_traces(self, run: dict[str, Any]) -> dict[str, Any]:
+        """把 node_traces 快照回填到 run.nodes 的 trace 字段（重启后重建完整轨迹）。"""
+        traces = await self._traces_for(run["run_id"])
+        if not traces:
+            return run
+        by_node: dict[str, list[dict[str, Any]]] = {}
+        for t in traces:
+            by_node.setdefault(t["node_id"], []).append(t)
+        nodes = []
+        for n in run.get("nodes", []):
+            n = dict(n)
+            n["traces"] = by_node.get(n.get("id"), [])
+            nodes.append(n)
+        run = dict(run)
+        run["nodes"] = nodes
+        return run
 
     async def list(self, limit: int = 20, status: str | None = None) -> list[dict[str, Any]]:
         """按创建时间倒序（最近在前）；可选 status 过滤。"""
@@ -127,7 +178,9 @@ class DagRunSqliteStore:
             return [self._deserialize(r) for r in rows]
         except Exception as exc:
             log.warning("dag_runs 列表降级内存: %s", exc)
-            runs = [self._memory[k] for k in sorted(self._memory, key=lambda k: self._memory[k]["created_at"], reverse=True)]
+            runs = [
+                self._memory[k] for k in sorted(self._memory, key=lambda k: self._memory[k]["created_at"], reverse=True)
+            ]
             if status:
                 runs = [r for r in runs if r.get("status") == status]
             return runs[:limit]
@@ -141,6 +194,9 @@ class DagRunSqliteStore:
             ids = [r["run_id"] for r in rows]
             if ids:
                 await self._execute("DELETE FROM dag_runs WHERE created_at < ?", (cutoff,))
+                # v13 P0-7：级联清理节点轨迹（避免孤儿轨迹长期累积）
+                for run_id in ids:
+                    await self._execute("DELETE FROM node_traces WHERE run_id = ?", (run_id,))
             return len(ids)
         except Exception as exc:
             log.warning("dag_runs 清理降级: %s", exc)
@@ -148,6 +204,30 @@ class DagRunSqliteStore:
             for k in expired:
                 self._memory.pop(k, None)
             return len(expired)
+
+    async def append_trace(self, trace: dict[str, Any]) -> None:
+        """追加一条节点轨迹快照（v13 P0-7；DB 异常降级静默，不破坏执行）。"""
+        try:
+            await self._execute(
+                """
+                INSERT INTO node_traces
+                    (run_id, node_id, status, result, error, attempt, duration_ms, condition, finished_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trace.get("run_id"),
+                    trace.get("node_id"),
+                    trace.get("status"),
+                    trace.get("result"),
+                    trace.get("error"),
+                    trace.get("attempt", 0),
+                    trace.get("duration_ms", 0.0),
+                    trace.get("condition"),
+                    trace.get("finished_at"),
+                ),
+            )
+        except Exception as exc:
+            log.warning("node_traces 写入降级: %s", exc)
 
     async def close(self) -> None:
         if self._db is not None:

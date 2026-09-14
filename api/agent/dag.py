@@ -161,9 +161,7 @@ class DagRun:
         # v11.0.0 条件分支：skipped 视为合法终态（条件不成立/依赖链跳过），
         # 仅当存在真实 failed 节点时 run 才判 failed（fail_fast 语义保持：失败链仍 failed）。
         self.status = (
-            "succeeded"
-            if all(n.status in ("succeeded", "skipped") for n in self.nodes.values())
-            else "failed"
+            "succeeded" if all(n.status in ("succeeded", "skipped") for n in self.nodes.values()) else "failed"
         )
         self.finished_at = time.time()
 
@@ -269,7 +267,9 @@ def _validate_condition(expr: str, node_id: str) -> None:
             if left.strip() and right.strip():
                 return
             break
-    raise DagError(f"节点 {node_id} 的 condition 非法：{expr}（仅支持 '<节点id> contains <文本>' 或 '<节点id> equals <文本>'）")
+    raise DagError(
+        f"节点 {node_id} 的 condition 非法：{expr}（仅支持 '<节点id> contains <文本>' 或 '<节点id> equals <文本>'）"
+    )
 
 
 def eval_condition(expr: str | None, node_states: dict[str, Any]) -> bool:
@@ -367,7 +367,13 @@ def topological_sort(nodes: list[DagNode]) -> list[str]:
 NodeExecutor = Callable[[str, dict[str, Any]], Awaitable[str]]
 
 
-async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
+async def execute_run(
+    run: DagRun,
+    executor: NodeExecutor,
+    *,
+    on_trace: Callable[[dict[str, Any]], Awaitable[Any]] | None = None,
+    resume: bool = False,
+) -> DagRun:
     """执行 DAG run。
 
     流程：
@@ -379,12 +385,53 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
     5. 结束时按全节点状态收束 run.status
 
     executor 签名：async def exec(node_id: str, state: dict) -> str（state 为节点上下文快照）。
+
+    纯增量参数（不破坏既有调用契约）：
+    - on_trace：可选异步回调，每节点进入终态（succeeded/failed/skipped）时收到轨迹快照
+      dict（node_id/status/result/error/attempt/duration_ms/condition/run_id），供路由层
+      持久化节点级执行轨迹（v13 P0-7）。回调异常只记 warning，不破坏节点执行。
+    - resume：True 时重置非 succeeded 节点为 pending 重跑（幂等：已 succeeded 节点跳过
+      不重跑，attempt 保留原值），供 POST /v1/agent/dag/{run_id}/resume 续跑。
     """
     order = topological_sort(list(run.nodes.values()))
     run.mark_running()
 
+    # v13 P0-7 resume：幂等续跑——已 succeeded 节点保留原状态不重跑，
+    # 其余（pending/running/failed/skipped）重置为 pending 重新执行。
+    if resume:
+        for node in run.nodes.values():
+            if node.status == "succeeded":
+                continue
+            node.status = "pending"
+            node.result = None
+            node.error = None
+            node.attempt = 0
+            node.started_at = None
+            node.finished_at = None
+            node.duration_ms = 0.0
+
     semaphore = asyncio.Semaphore(max(1, run.max_parallel))
     _TERMINAL = {"succeeded", "failed", "skipped"}
+
+    async def _emit_trace(node: DagNode) -> None:
+        """节点终态轨迹快照回调（v13 P0-7；回调异常不破坏执行）。"""
+        if on_trace is None:
+            return
+        trace = {
+            "run_id": run.run_id,
+            "node_id": node.id,
+            "status": node.status,
+            "result": node.result,
+            "error": node.error,
+            "attempt": node.attempt,
+            "duration_ms": node.duration_ms,
+            "condition": node.condition,
+            "finished_at": node.finished_at,
+        }
+        try:
+            await on_trace(trace)
+        except Exception:  # noqa: BLE001 — 轨迹回调是增强能力，失败不崩节点执行
+            log.warning("DAG 轨迹回调失败（run=%s node=%s）", run.run_id, node.id)
 
     async def _wait_deps_terminal(node: DagNode, timeout: float = 120.0) -> bool:
         """等待所有直接依赖到达终态（v11.0.0 条件分支/fail_fast 确定性基础）。
@@ -401,6 +448,10 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
             await asyncio.sleep(0.05)
 
     async def _run_node(node: DagNode) -> None:
+        # v13 P0-7 resume 幂等：已 succeeded 节点不重跑（正常 run 节点必为 pending，本守卫恒不触发）
+        if node.status == "succeeded":
+            return
+
         # v11.0.0：等待依赖终态后再做 skip/条件判定（消除并行扇出竞态）
         await _wait_deps_terminal(node)
 
@@ -410,6 +461,7 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
             d in run.nodes and run.nodes[d].status in ("failed", "skipped") for d in node.depends_on
         ):
             node.mark_skipped()
+            await _emit_trace(node)
             return
 
         # v11.0.0 条件分支：依赖全部终态后求值，条件不成立 → skipped
@@ -418,6 +470,7 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
             deps_snapshot = {d: run.nodes[d] for d in node.depends_on if d in run.nodes}
             if not node.condition_holds(deps_snapshot):
                 node.mark_skipped()
+                await _emit_trace(node)
                 return
 
         node.mark_running()
@@ -437,15 +490,24 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
                     }
                     result = await executor(node.id, state)
                 node.mark_succeeded(result)
+                await _emit_trace(node)
                 return
             except Exception as exc:  # noqa: BLE001 — 节点失败是业务路径，需完整捕获
                 last_error = str(exc) or exc.__class__.__name__
                 if attempt > node.retry:
                     node.mark_failed(last_error)
+                    await _emit_trace(node)
                     return
                 delay = min(node.retry_base_seconds * (2 ** (attempt - 1)), node.retry_max_seconds)
                 jitter = random.uniform(0, delay * 0.2)
-                log.info("DAG 节点 %s/%s 第 %s 次失败（%s），%.2fs 后重试", run.run_id, node.id, attempt, last_error, delay + jitter)
+                log.info(
+                    "DAG 节点 %s/%s 第 %s 次失败（%s），%.2fs 后重试",
+                    run.run_id,
+                    node.id,
+                    attempt,
+                    last_error,
+                    delay + jitter,
+                )
                 await asyncio.sleep(delay + jitter)
 
     # 启动全部非 skipped 节点（一轮 create_task → 并行扇出真并发）。
@@ -458,6 +520,9 @@ async def execute_run(run: DagRun, executor: NodeExecutor) -> DagRun:
     # 阶段三：等齐全部任务（gather 在 await 侧限流 + 收拢异常，run 不半途悬挂）
     if run._active_tasks:
         await asyncio.gather(*run._active_tasks)
+        # v13 P0-7：清空活动任务集（resume 复用同一 DagRun 会二次执行；不清理则
+        # 旧 loop 的已完成任务与新任务混合 gather → "future belongs to a different loop"）
+        run._active_tasks.clear()
 
     run.mark_finished()
     return run

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
 from api.agent.budget_guard import (
     BudgetExceededError,
@@ -126,3 +127,110 @@ class TestSpentIntegration:
         reset_settings()
         with pytest.raises(BudgetExceededError):
             await assert_can_spend("falai")
+
+
+class TestToolEstimate:
+    """P1-9：MCP 工具单次估算（工具/模型维度近似常量表）。"""
+
+    def test_tool_estimate_known(self):
+        from api.agent.budget_guard import estimate_tool_cost
+
+        assert estimate_tool_cost("generate_image") == 0.04
+        assert estimate_tool_cost("dag_plan") == 0.0
+        assert estimate_tool_cost("dag_status") == 0.0
+        assert estimate_tool_cost("skills_list") == 0.0
+
+    def test_tool_estimate_unknown_conservative(self):
+        from api.agent.budget_guard import estimate_tool_cost
+
+        assert estimate_tool_cost("no-such-tool") == 0.01
+        assert estimate_tool_cost("") == 0.01
+
+    def test_tool_estimate_accepts_model_dim(self):
+        """model 维度参数预留：当前未细分维度，命中工具档即可。"""
+        from api.agent.budget_guard import estimate_tool_cost
+
+        assert estimate_tool_cost("generate_image", model="sdxl") == 0.04
+
+
+class TestMcpBudgetGuard:
+    """P1-9：MCP tools/call 分发前预算门禁（HTTP 真路径，Mock 上游零付费）。
+
+    覆盖：
+    - observe：超预算只记录不拦截（返回正常结果）
+    - enforce：超预算 tools/call 返回 MCP JSON-RPC 错误 -32000（不抛 500）
+    - enforce：预算内正常调用通过
+    """
+
+    @staticmethod
+    def _enable_mcp(monkeypatch, mode: str, budget: str, spent: float = 0.0):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 + 预算三态；mock 当日花费隔离 DB。"""
+        import api.agent.budget_guard as bg
+        from api.config import reset_settings
+
+        async def _spent() -> float:
+            return spent
+
+        monkeypatch.setattr(bg, "_spent_today_usd", _spent)
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        monkeypatch.setenv("IF_BUDGET_GUARD_MODE", mode)
+        monkeypatch.setenv("IF_COST_BUDGET_USD", budget)
+        reset_settings()
+
+    @staticmethod
+    def _rpc(method: str, params: dict | None = None, req_id: int = 1) -> dict:
+        body = {"jsonrpc": "2.0", "id": req_id, "method": method}
+        if params is not None:
+            body["params"] = params
+        return body
+
+    def test_observe_over_budget_records_not_blocks(self, monkeypatch):
+        """observe：当日花费已超预算（spent 0.02 > budget 0.01）→ 不拦截（isError=False），审计已记录。"""
+        from api.audit import audit_log
+        from api.main import app
+
+        calls: list[tuple[str, str, str]] = []
+        monkeypatch.setattr(
+            audit_log, "record", lambda action, actor, target, *a, **k: calls.append((action, actor, target))
+        )
+        self._enable_mcp(monkeypatch, mode="observe", budget="0.01", spent=0.02)
+        with TestClient(app) as c:
+            resp = c.post(
+                "/v1/mcp", json=self._rpc("tools/call", {"name": "generate_image", "arguments": {"prompt": "cat"}})
+            )
+        assert resp.status_code == 200
+        result = resp.json()["result"]
+        assert result["isError"] is False
+        assert "[image-mock]" in result["content"][0]["text"]
+        # 审计记录：工具名 + 估算 + decision
+        assert any(action == "mcp.tool.call" and target == "generate_image" for action, _actor, target in calls)
+
+    def test_enforce_over_budget_returns_mcp_error_not_500(self, monkeypatch):
+        """enforce：当日花费已超预算（spent 0.02 > budget 0.01）→ JSON-RPC 错误 -32000（HTTP 200，不抛 500）。"""
+        from api.main import app
+
+        self._enable_mcp(monkeypatch, mode="enforce", budget="0.01", spent=0.02)
+        with TestClient(app) as c:
+            resp = c.post(
+                "/v1/mcp", json=self._rpc("tools/call", {"name": "generate_image", "arguments": {"prompt": "cat"}})
+            )
+        assert resp.status_code == 200  # JSON-RPC 错误仍走 200 信封，不 500
+        body = resp.json()
+        assert "error" in body and "result" not in body
+        assert body["error"]["code"] == -32000
+        assert "Budget exceeded" in body["error"]["message"]
+
+    def test_enforce_within_budget_passes(self, monkeypatch):
+        """enforce：预算充足 → dag_plan 正常返回 Mock 规划结果。"""
+        from api.main import app
+
+        self._enable_mcp(monkeypatch, mode="enforce", budget="10.0")
+        with TestClient(app) as c:
+            resp = c.post(
+                "/v1/mcp", json=self._rpc("tools/call", {"name": "dag_plan", "arguments": {"prompt": "画一只猫"}})
+            )
+        assert resp.status_code == 200
+        result = resp.json()["result"]
+        assert result["isError"] is False
+        assert '"mock"' in result["content"][0]["text"] or "nodes" in result["content"][0]["text"]
