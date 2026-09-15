@@ -1,7 +1,7 @@
 {
   "name": "imagefree-frontend",
   "private": true,
-  "version": "15.1.0",
+  "version": "15.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,8 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tauri-apps/plugin-notification": "^2.4.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

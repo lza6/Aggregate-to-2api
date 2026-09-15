@@ -5,6 +5,13 @@
 > - 改动了某模块 → 在本表追加一行（改动日期+范围），旧记录视为失效
 > - 本表由 AI 会话优先读取（配合 memory/），避免盲目重跑同样的测验
 
+## v15.1.1 记录（2026-09-15）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-15 | P1-11 自升级端到端闭环：① 端点协议修正——Tauri 2 updater 要求端点返回 JSON 更新清单（非 exe 直下），tauri.conf.json 端点由 `{{target}}-{{arch}}-{{version}}.{{ext}}` 改为 `releases/latest/download/latest.json`；② 生成 `latest.json` 清单（version/notes/pub_date/platforms.windows-x86_64.signature+url，签名取自 .sig 文件），上传 Release；③ 前端 `src/lib/desktopUpdater.ts` + main.tsx 启动即 check→downloadAndInstall→relaunch（Tauri 环境动态 import，浏览器静默零副作用），`@tauri-apps/plugin-updater`+`plugin-process` 入 frontend devDeps；④ 端到端验证：端点 GET 200 返回完整清单，exe 直链 200（87.6MB） | 全绿 | vitest 257/0 + tsc 0 + build 0 + `tests/test_desktopUpdater` 浏览器降级用例；desktopUpdater.test.ts 1 用例 |
+| 2026-09-15 | 版本全链 15.1.0→15.1.1 + 双 dist 重建 + 桌面安装包重建（含新端点+前端自升级） | 契约绿 | `test_openapi_contract.py` 全过；桌面 15.1.1 NSIS 包 + .sig 重建 |
+
 ## v15.1.0 记录（2026-09-15）
 
 | 日期 | 范围 | 结果 | 备注 |

@@ -4259,7 +4259,7 @@ dependencies = [
 
 [[package]]
 name = "tingfeng-desktop"
-version = "15.1.0"
+version = "15.1.1"
 dependencies = [
  "serde",
  "serde_json",
