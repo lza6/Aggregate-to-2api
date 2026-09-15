@@ -33,6 +33,12 @@
 - **桌面版用户**：新包需签名密钥 `TAURI_SIGNING_PRIVATE_KEY` 才可构建带自升级能力的产物；托盘/通知开箱即用；`IF_DESKTOP_CLOSE_TO_TRAY=1` 可选启用关窗进托盘。
 - **后端**：P1-8 前置 `IF_BUDGET_GUARD_MODE` 缺省 off（零行为变化）；生产环境建议先 `observe` 观察再 `enforce`。
 
+### 安装包（已发布到 GitHub Release assets）
+
+- **Windows 安装包**：`tingfeng-desktop-15.1.0-x64-setup.exe`（87.6 MB，NSIS）→ https://github.com/lza6/Aggregate-to-2api/releases/download/v15.1.0/tingfeng-desktop-15.1.0-x64-setup.exe
+- **自升级签名**：`tingfeng-desktop-15.1.0-x64-setup.exe.sig` → https://github.com/lza6/Aggregate-to-2api/releases/download/v15.1.0/tingfeng-desktop-15.1.0-x64-setup.exe.sig
+- 签名私钥 `~/.tauri/tingfeng.key`（仓库外，构建注入 `TAURI_SIGNING_PRIVATE_KEY`）
+
 ### 遗留（下轮候选）
 
 - `autoregister_loop 时序 flaky`：cerebrum 已知预存（代理池每日限额时序），本轮未触碰 account_pool/proxy_pool
