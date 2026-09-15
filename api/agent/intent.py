@@ -2,7 +2,9 @@
 
 设计：
 - 规则正则兜底：常见意图（画图/改图/聊天/视频脚本）用正则匹配，零成本零延迟
-- embedding 双路：规则未命中时用向量相似度匹配 5 类意图原型（image/video/chat/ecommerce/ppt）
+- embedding 双路：规则未命中时用向量相似度匹配 6 类意图原型
+  （image/video/chat/ecommerce/ppt/image_edit；单原型 _EMBED_PROTO_B64
+  + 关键词扩展原型 _EMBED_PROTO_EXTRAS 运行时合并，命中关键词子串加权）
 - LLM 兜底：规则 + embedding 均未命中时用 tryingopen 上游 LLM 分类
 - 双路 classifier：embedding + LLM（参考 mcp-agent 双路）
 
@@ -82,12 +84,50 @@ _EMBED_PROTO_META: dict[str, tuple[str, str]] = {
     "chat": ("tryingopen", "prompt-refine"),
     "ecommerce": ("imagefree", "image-quality-check"),
     "ppt": ("tryingopen", "prompt-refine"),
+    "image_edit": ("imagefree", "image-quality-check"),
 }
+
+# v15-A 语义增强：每 scene 关键词/短语扩展原型（运行时用 compute_embedding(短语)
+# 逐个算原型向量，与 _EMBED_PROTO_B64 单原型合并取最高 cosine）。
+# image_edit 无单原型（保持 _EMBED_PROTO_B64 5 键不变，兼容既有常量契约），
+# 仅靠扩展原型即可命中；关键词同时用于「子串命中加权」（见 _EMBED_KEYWORD_BONUS）。
+_EMBED_PROTO_EXTRAS: dict[str, list[str]] = {
+    "image": ["图片", "插画", "绘画", "壁纸"],
+    "video": ["视频", "短片", "动画"],
+    "chat": ["聊天", "回复", "写"],
+    "ecommerce": ["主图", "商品", "购物", "详情页"],
+    "ppt": ["PPT", "幻灯片", "演示"],
+    "image_edit": ["图生图", "编辑图片", "修改图片", "修图"],
+}
+
+# 关键词命中加权：prompt 直接子串命中某 scene 关键词时该 scene 相似度 += 0.15。
+# 避免通用词误判（如 chat 的"写/回复"不会无命中就加分）；未命中时阈值不变。
+_EMBED_KEYWORD_BONUS = 0.15
+
+# 短语原型向量缓存（键=短语，模块级 dict 避免每次重复 compute_embedding）
+_EMBED_PHRASE_CACHE: dict[str, bytes] = {}
+
+
+def _embed_phrase_vec(phrase: str) -> bytes | None:
+    """计算短语原型向量（带模块级缓存；异常返回 None 降级跳过）。"""
+    cached = _EMBED_PHRASE_CACHE.get(phrase)
+    if cached is not None:
+        return cached
+    try:
+        vec = compute_embedding(phrase)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("短语原型向量计算失败(%s)，降级跳过: %s", phrase, exc)
+        return None
+    _EMBED_PHRASE_CACHE[phrase] = vec
+    return vec
 
 
 def _embed_classify(prompt: str) -> IntentResult | None:
-    """Embedding 双路分类：与 5 类意图原型做 cosine 相似度。
+    """Embedding 双路分类：与 6 类意图原型（单原型 + 关键词扩展原型）做 cosine。
 
+    每个 scene 取「_EMBED_PROTO_B64 单原型 + _EMBED_PROTO_EXTRAS 短语扩展原型」
+    的最高相似度；prompt 直接子串命中该 scene 关键词时相似度 +=
+    _EMBED_KEYWORD_BONUS（0.15），置信度封顶 1.0。
     最高分 ≥ IF_INTENT_EMBED_THRESHOLD（默认 0.55）时返回对应 IntentResult
     （confidence=相似度，matched_rule="embed:<scene>"），否则返回 None（降级 LLM）。
 
@@ -100,11 +140,29 @@ def _embed_classify(prompt: str) -> IntentResult | None:
 
         threshold = get_settings().if_intent_embed_threshold
         query_vec = compute_embedding(prompt.strip())
+        text = prompt.strip().lower()
         best_scene: str | None = None
         best_sim = 0.0
-        for scene, b64 in _EMBED_PROTO_B64.items():
-            proto_vec = base64.b64decode(b64)
-            sim = cosine_similarity(query_vec, proto_vec)
+        # 场景迭代：单原型场景（image/video/chat/ecommerce/ppt）+ 仅扩展原型场景（image_edit）
+        scenes = [
+            *_EMBED_PROTO_B64,
+            *[s for s in _EMBED_PROTO_EXTRAS if s not in _EMBED_PROTO_B64],
+        ]
+        for scene in scenes:
+            sim = 0.0
+            b64 = _EMBED_PROTO_B64.get(scene)
+            if b64:
+                proto_vec = base64.b64decode(b64)
+                sim = max(sim, cosine_similarity(query_vec, proto_vec))
+            # 关键词扩展原型：运行时 compute_embedding(短语)，模块级缓存免重复计算
+            for phrase in _EMBED_PROTO_EXTRAS.get(scene, ()):
+                extra_vec = _embed_phrase_vec(phrase)
+                if extra_vec is not None:
+                    sim = max(sim, cosine_similarity(query_vec, extra_vec))
+            # 关键词子串命中加权（仅直接子串命中时加分，未命中阈值不变）
+            if any(kw.lower() in text for kw in _EMBED_PROTO_EXTRAS.get(scene, ())):
+                sim += _EMBED_KEYWORD_BONUS
+            sim = min(sim, 1.0)
             if sim > best_sim:
                 best_sim = sim
                 best_scene = scene

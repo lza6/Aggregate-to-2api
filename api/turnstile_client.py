@@ -17,6 +17,7 @@ import time
 import httpx
 
 from . import config
+from .captcha.protocol import CaptchaResult, from_turnstile
 from .solver_guard import solver_guard
 from .telemetry import get_tracer
 
@@ -76,6 +77,23 @@ async def close_client() -> None:
         _client = None
 
 
+async def solve_turnstile_result(
+    cf_solver_url: str | None = None,
+    url: str = "",
+    sitekey: str = "",
+    timeout: float = 90.0,
+    proxy: str | None = None,
+) -> CaptchaResult:
+    """同 solve_turnstile，但返回统一 CaptchaResult（elapsed_ms 毫秒，solver="turnstile"）。
+
+    失败路径与 solve_turnstile 完全一致（抛 TurnstileError/TimeoutError）；
+    调用方可用 result.ok 快速判断是否拿到有效 token。
+    """
+    token, elapsed = await _solve_turnstile_impl(cf_solver_url, url, sitekey, timeout, proxy)
+    # solve_turnstile 原生返回秒数，统一协议口径为毫秒
+    return from_turnstile(token, elapsed * 1000.0)
+
+
 async def solve_turnstile(
     cf_solver_url: str | None = None,
     url: str = "",
@@ -85,10 +103,28 @@ async def solve_turnstile(
 ) -> tuple[str, float]:
     """求解并返回 (token, 求解耗时秒数)；失败抛 TurnstileError/TimeoutError。
 
+    向后兼容入口：行为与历史版本一致（秒数口径），内部经 solve_turnstile_result 取 token。
+    新代码建议直接用 solve_turnstile_result 拿统一 CaptchaResult。
+
     支持分布式节点池调度与故障自动转移 (failover)：
     - 若传入 cf_solver_url，以此为主；
     - 若 cf_solver_url 为空，由 solver_guard 自动选举最优负载节点；
     - 当遇到 429 限流或网络 transport 错误时，对当前节点熔断并自动尝试下一个备选节点。
+    """
+    result = await solve_turnstile_result(cf_solver_url, url, sitekey, timeout, proxy)
+    return result.token, result.elapsed_ms / 1000.0
+
+
+async def _solve_turnstile_impl(
+    cf_solver_url: str | None,
+    url: str,
+    sitekey: str,
+    timeout: float,
+    proxy: str | None,
+) -> tuple[str, float]:
+    """共享求解内核：(token, 求解耗时秒数)；失败抛 TurnstileError/TimeoutError。
+
+    对外不直接暴露，由 solve_turnstile / solve_turnstile_result 共用。
     """
     tracer = get_tracer()
     t0 = time.monotonic()

@@ -33,7 +33,17 @@
 | 2026-09-15 | 版本全链 13.0.0→14.0.0 + dist 重建 | 契约绿 | openapi/landing dist 14.0.0 |
 | 2026-09-15 | 集成+混沌 + E2E 复跑 | 54/0 + 14/14 | mock cf_solver 全程 |
 
+## v15.0.0 记录（2026-09-15）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-15 | v15-A intent embedding 多原型（_EMBED_PROTO_EXTRAS 6 场景关键词 + _EMBED_KEYWORD_BONUS=0.15 加权 + 短语缓存；image_edit 补 meta） | 全绿 | test_agent_intent_embed_v15.py 10 用例；58 联动绿 |
+| 2026-09-15 | v15-B captcha 统一协议（api/captcha/protocol.py CaptchaResult frozen dataclass + from_turnstile/from_cf_clearance 工厂 + solve_turnstile_result/solve_result 包装，原返回向后兼容） | 全绿 | test_captcha_protocol.py 12 用例；53 联动绿 |
+| 2026-09-15 | 全量 unit 2127 / int+chaos 54 / E2E 14 / vitest 255 / ruff 0 / 契约 20 | 全绿 | autoregister flaky 预存（单跑绿，未触碰 account_pool） |
+| 2026-09-15 | 版本全链 14.0.0→15.0.0 + dist 重建 | 契约绿 | openapi/landing dist 15.0.0 |
+
 ## 记录表
+
 
 
 | 日期 | 版本/范围 | 验证内容 | 结果 | 失效条件 |

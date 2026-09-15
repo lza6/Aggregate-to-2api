@@ -16,6 +16,7 @@
 安全：cf_clearance 绑定 IP+JA3+UA，回放须用同 IP+同 UA+匹配 TLS 栈。
 仅用于非敏感的 CF 5s 盾穿越，不用于 Turnstile widget（那是 cf_solver 浏览器求解）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,19 +27,76 @@ from typing import Any
 import httpx
 
 from . import config
+from .captcha.protocol import CaptchaResult, from_cf_clearance
 
 log = logging.getLogger("cf_clearance")
 
 # ── DEFLATE 固定 Huffman 码表（与 CF JS 函数 F 字节对齐）──────────
-_LENGTH_BASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35,
-                43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]
-_LENGTH_EXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
-                 4, 4, 4, 4, 5, 5, 5, 5, 0]
-_DIST_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257,
-              385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289,
-              16385, 24577]
-_DIST_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9,
-               9, 10, 10, 11, 11, 12, 12, 13, 13]
+_LENGTH_BASE = [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    13,
+    15,
+    17,
+    19,
+    23,
+    27,
+    31,
+    35,
+    43,
+    51,
+    59,
+    67,
+    83,
+    99,
+    115,
+    131,
+    163,
+    195,
+    227,
+    258,
+]
+_LENGTH_EXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0]
+_DIST_BASE = [
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    9,
+    13,
+    17,
+    25,
+    33,
+    49,
+    65,
+    97,
+    129,
+    193,
+    257,
+    385,
+    513,
+    769,
+    1025,
+    1537,
+    2049,
+    3073,
+    4097,
+    6145,
+    8193,
+    12289,
+    16385,
+    24577,
+]
+_DIST_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
 
 _DEFAULT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
@@ -251,7 +309,7 @@ def build_sec_ch_ua_headers(user_agent: str) -> dict[str, str]:
     sec_ch_ua = ", ".join(f'"{b}";v="{v}"' for b, v, _ in ordered)
     if "Windows" in user_agent:
         platform = "Windows"
-        platform_version = "14.0.0"
+        platform_version = "15.0.0"
     elif "Mac OS X" in user_agent or "Macintosh" in user_agent:
         platform = "macOS"
         platform_version = "10.15.7"
@@ -280,12 +338,24 @@ def _build_payload_dict(domain: str, user_agent: str) -> dict[str, Any]:
         "api": False,
         "c": False,
         "payload": {
-            "0": ["length", "innerWidth", "innerHeight", "scrollX", "pageXOffset",
-                  "scrollY", "pageYOffset", "screenX", "screenY", "outerWidth",
-                  "outerHeight", "screenLeft", "screenTop", "TEMPORARY",
-                  "n.maxTouchPoints"],
-            "1": ["PERSISTENT", "d.childElementCount", "d.ELEMENT_NODE",
-                  "d.DOCUMENT_POSITION_DISCONNECTED"],
+            "0": [
+                "length",
+                "innerWidth",
+                "innerHeight",
+                "scrollX",
+                "pageXOffset",
+                "scrollY",
+                "pageYOffset",
+                "screenX",
+                "screenY",
+                "outerWidth",
+                "outerHeight",
+                "screenLeft",
+                "screenTop",
+                "TEMPORARY",
+                "n.maxTouchPoints",
+            ],
+            "1": ["PERSISTENT", "d.childElementCount", "d.ELEMENT_NODE", "d.DOCUMENT_POSITION_DISCONNECTED"],
             "2": ["d.ATTRIBUTE_NODE", "d.DOCUMENT_POSITION_PRECEDING"],
             "3": ["d.TEXT_NODE"],
             "4": ["d.CDATA_SECTION_NODE", "d.DOCUMENT_POSITION_FOLLOWING"],
@@ -299,11 +369,18 @@ def _build_payload_dict(domain: str, user_agent: str) -> dict[str, Any]:
             "12": ["d.NOTATION_NODE"],
             "16": ["d.DOCUMENT_POSITION_CONTAINED_BY"],
             "24": ["n.hardwareConcurrency"],
-            "32": ["n.deviceMemory",
-                   "d.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC"],
-            "F": ["closed", "crossOriginIsolated", "credentialless",
-                  "n.webdriver", "d.xmlStandalone", "d.wasDiscarded",
-                  "d.prerendering", "d.fullscreen", "d.webkitIsFullScreen"],
+            "32": ["n.deviceMemory", "d.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC"],
+            "F": [
+                "closed",
+                "crossOriginIsolated",
+                "credentialless",
+                "n.webdriver",
+                "d.xmlStandalone",
+                "d.wasDiscarded",
+                "d.prerendering",
+                "d.fullscreen",
+                "d.webkitIsFullScreen",
+            ],
             "Google Inc.": ["n.vendor"],
             "Mozilla": ["n.appCodeName"],
             "Netscape": ["n.appName"],
@@ -334,9 +411,7 @@ class CfClearanceSolver:
 
     _JSD_MAIN = "/cdn-cgi/challenge-platform/scripts/jsd/main.js"
     _RE_ALPHABET = re.compile(r"\b[A-Za-z0-9\-$+]{64,65}\b")
-    _RE_JSD_PATH = re.compile(
-        r"\b[a-f0-9]{8,}/[0-9.]+:[0-9]{10}:[A-Za-z0-9_-]+\b"
-    )
+    _RE_JSD_PATH = re.compile(r"\b[a-f0-9]{8,}/[0-9.]+:[0-9]{10}:[A-Za-z0-9_-]+\b")
     _RE_RAY = re.compile(r'"ray":"([a-f0-9]+)"')
     _RE_RAY_ATTR = re.compile(r'data-ray="([a-f0-9]+)"')
 
@@ -372,6 +447,7 @@ class CfClearanceSolver:
         """
         ua = user_agent or config.USER_AGENT
         from urllib.parse import urlsplit
+
         parts = urlsplit(url)
         domain = parts.hostname or ""
         if not domain:
@@ -406,9 +482,7 @@ class CfClearanceSolver:
                 }
 
             # 2) GET main.js 提取码表 + jsd_url_path
-            r_jsd = await client.get(
-                f"https://{domain}{self._JSD_MAIN}", headers=base_headers
-            )
+            r_jsd = await client.get(f"https://{domain}{self._JSD_MAIN}", headers=base_headers)
             if r_jsd.status_code != 200:
                 log.warning("cf_clearance: main.js HTTP %s", r_jsd.status_code)
                 return None
@@ -427,16 +501,12 @@ class CfClearanceSolver:
             # 3) 构造指纹 payload + soco4 加密
             payload_dict = _build_payload_dict(domain, ua)
             import json
-            payload_json = json.dumps(
-                payload_dict, separators=(",", ":"), ensure_ascii=False
-            )
+
+            payload_json = json.dumps(payload_dict, separators=(",", ":"), ensure_ascii=False)
             encrypted = soco4(alphabet, payload_json)
 
             # 4) POST jsd oneshot → Set-Cookie cf_clearance
-            oneshot_url = (
-                f"https://{domain}/cdn-cgi/challenge-platform/h/b/jsd/"
-                f"oneshot/{jsd_path}/{ray}"
-            )
+            oneshot_url = f"https://{domain}/cdn-cgi/challenge-platform/h/b/jsd/oneshot/{jsd_path}/{ray}"
             post_headers = {
                 **base_headers,
                 "content-type": "text/plain;charset=UTF-8",
@@ -446,19 +516,15 @@ class CfClearanceSolver:
                 "sec-fetch-dest": "empty",
                 "priority": "u=1, i",
             }
-            r_post = await client.post(
-                oneshot_url, content=encrypted, headers=post_headers
-            )
+            r_post = await client.post(oneshot_url, content=encrypted, headers=post_headers)
             cf_clearance = r_post.cookies.get("cf_clearance", "")
-            all_cookies = [
-                {"name": k, "value": v}
-                for k, v in r_post.cookies.items()
-            ]
+            all_cookies = [{"name": k, "value": v} for k, v in r_post.cookies.items()]
             elapsed = round((time.monotonic() - t0) * 1000, 1)
             if cf_clearance:
                 log.info(
                     "cf_clearance 纯协议求解成功 (%.1fms) domain=%s",
-                    elapsed, domain,
+                    elapsed,
+                    domain,
                 )
                 return {
                     "cf_clearance": cf_clearance,
@@ -466,9 +532,7 @@ class CfClearanceSolver:
                     "user_agent": ua,
                     "elapsed_ms": elapsed,
                     "method": "protocol",
-                    "warning": (
-                        "cf_clearance 绑定 IP+JA3+UA，回放须用同 IP+同 UA+匹配 TLS 栈"
-                    ),
+                    "warning": ("cf_clearance 绑定 IP+JA3+UA，回放须用同 IP+同 UA+匹配 TLS 栈"),
                 }
             log.warning(
                 "cf_clearance: oneshot POST HTTP %s 但无 cf_clearance cookie",
@@ -481,6 +545,20 @@ class CfClearanceSolver:
         except Exception as e:
             log.warning("cf_clearance 纯协议异常 domain=%s: %s", domain, e)
             return None
+
+    async def solve_result(
+        self,
+        url: str,
+        user_agent: str | None = None,
+        proxy: str | None = None,
+    ) -> CaptchaResult:
+        """同 solve()，但返回统一 CaptchaResult（solver="cf_clearance"）。
+
+        失败 / 无挑战 / 降级（solve 返回 None）时返回 ok=False 的空 CaptchaResult，
+        不抛异常；调用方可用 result.ok 判断是否拿到 cf_clearance cookie。
+        """
+        d = await self.solve(url, user_agent=user_agent, proxy=proxy)
+        return from_cf_clearance(d)
 
     def _extract_ray(self, response: httpx.Response) -> str | None:
         """从首访响应提取 ray id（data-ray 属性 或 __cf_chl_rt JSON 或 CF-RAY 头）。"""
