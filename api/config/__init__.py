@@ -254,6 +254,8 @@ class Settings(BaseSettings):
     if_memory_consolidation_enabled: bool = Field(True, validation_alias="IF_MEMORY_CONSOLIDATION_ENABLED")
     # 记忆巩固后台 worker 周期（秒，默认 300s）
     if_memory_consolidation_interval: float = Field(300.0, validation_alias="IF_MEMORY_CONSOLIDATION_INTERVAL")
+    # v14 P3 三档衰减（hot 提分/cold 淘汰）挂载开关（默认关 0，零行为变化；1=consolidate 尾部调 apply_decay）
+    if_memory_apply_decay: bool = Field(False, validation_alias="IF_MEMORY_APPLY_DECAY")
     # P1-A4 provider 风险档案 Tier + PreToolUse 硬门禁（paid Tier 默认拦截真实付费）
     if_provider_risk_tier: bool = Field(True, validation_alias="IF_PROVIDER_RISK_TIER")
     # P1-A7 独立终检 Agent（交付前 LLM 审查，用 tryingopen 免费上游）
@@ -427,6 +429,7 @@ class Settings(BaseSettings):
         "if_csp_enabled",
         "if_docs_enabled",
         "if_tryingopen_enabled",
+        "if_memory_apply_decay",
         mode="before",
     )
     @classmethod

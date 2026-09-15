@@ -4,6 +4,7 @@ DAG human_input 节点的审批收件箱（替代占位串，v12.x P0-1 起 SQLi
 - create()：节点执行时创建审批请求（req_id/run_id/node_id/prompt），状态 pending
 - decide()：审批端点写入 approve/reject（幂等：仅 pending 可决策）
 - wait()：节点执行侧轮询等待决策或超时（interval 0.5s）
+- export()：导出全部历史审批（csv：RFC 4180 + UTF-8 BOM；json：list[dict]，时间 ISO 化）
 
 持久化设计（v12.x P0-1，仿 api/agent/memory.py MemoryStore 模式）：
 - 同步 sqlite3 + threading.Lock，db_path 可注入（默认 data/human_inbox.db）
@@ -20,15 +21,20 @@ DAG human_input 节点的审批收件箱（替代占位串，v12.x P0-1 起 SQLi
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
+import json
 import sqlite3
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 _DEFAULT_DB = "data/human_inbox.db"
 _TERMINAL = {"approved", "rejected"}
+_EXPORT_FORMATS = ("csv", "json")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS inbox_requests (
@@ -188,6 +194,48 @@ class HumanInbox:
         except sqlite3.Error:
             pass
 
+    def export(self, format: str = "csv") -> str:
+        """导出全部历史审批（最近在前，与 list() 排序一致）。
+
+        - csv：表头 req_id,run_id,node_id,prompt,status,note,created_at,decided_at；
+          RFC 4180 转义（引号/逗号/换行），UTF-8 BOM（Excel 直开不乱码）；
+          时间 ISO 8601 UTC（None → 空串）
+        - json：list[dict]（ISO 8601 UTC 字符串，None → None）
+        非法 format → ValueError。
+        """
+        if format not in _EXPORT_FORMATS:
+            raise ValueError(f"非法导出格式：{format}（仅 csv/json）")
+        rows = [self.public_state(r) for r in self.list()]
+
+        def _iso(v: float | None) -> str | None:
+            if v is None:
+                return None
+            return datetime.fromtimestamp(v, tz=UTC).isoformat()
+
+        if format == "json":
+            for row in rows:
+                row["created_at"] = _iso(row["created_at"])
+                row["decided_at"] = _iso(row["decided_at"])
+            return json.dumps(rows, ensure_ascii=False, indent=2)
+
+        buf = io.StringIO()
+        writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")  # RFC 4180：CRLF + 最小引号
+        writer.writerow(["req_id", "run_id", "node_id", "prompt", "status", "note", "created_at", "decided_at"])
+        for row in rows:
+            writer.writerow(
+                [
+                    row["req_id"],
+                    row["run_id"],
+                    row["node_id"],
+                    row["prompt"],
+                    row["status"],
+                    row["note"],
+                    _iso(row["created_at"]) or "",
+                    _iso(row["decided_at"]) or "",
+                ]
+            )
+        return "﻿" + buf.getvalue()  # UTF-8 BOM（U+FEFF）：Excel 识别 UTF-8
+
     def public_state(self, req: InboxRequest) -> dict[str, Any]:
         return {
             "req_id": req.req_id,
@@ -224,9 +272,15 @@ def get_human_inbox(db_path: str | None = None) -> HumanInbox:
 
 
 def reset_human_inbox(db_path: str | None = None) -> HumanInbox:
-    """重置全局 HumanInbox（测试钩子）：丢弃旧实例并重建。"""
-    global _human_inbox
+    """重置全局 HumanInbox（测试钩子）：丢弃旧实例并重建。
+
+    v14 修复：重建 _human_inbox 后必须同步模块级 human_inbox 变量——否则
+    端点/exec 用 `from ..agent.human_inbox import human_inbox`（值拷贝到
+    import 期旧实例），reset 后仍读旧库（跨用例残留；memory 踩坑#1 同源）。
+    """
+    global _human_inbox, human_inbox
     _human_inbox = HumanInbox(db_path or _resolve_db_path())
+    human_inbox = _human_inbox
     return _human_inbox
 
 

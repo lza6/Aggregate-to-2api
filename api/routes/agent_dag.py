@@ -302,9 +302,17 @@ async def dag_resume(run_id: str, request: Request):
         raise AppError(ErrorCodes.NOT_FOUND, "DAG run 不存在", 404)
 
     # 内存 store 返回 DagRun 对象（可续跑）；sqlite store 返回 dict 快照（无
-    # execute_run 可操作的内存节点状态机）。dict → 400 语义清晰，不伪装不可执行路径。
+    # execute_run 可操作的内存节点状态机）。v14 P2：sqlite 后端先 restore_run
+    # 反序列化为 DagRun 对象（节状态+依赖索引完整还原），走同一续跑路径；
+    # restore_run 失败/快照缺失 → 404（不伪装不可执行路径）。
     if not hasattr(run, "nodes"):
-        raise AppError(ErrorCodes.BAD_REQUEST, "当前 DAG store 后端不支持续跑（仅内存后端可续跑）", 400)
+        restore = getattr(_STORE, "restore_run", None)
+        if restore is None:
+            raise AppError(ErrorCodes.BAD_REQUEST, "当前 DAG store 后端不支持续跑（仅内存/持久化后端可续跑）", 400)
+        dagrun = await _await_maybe(restore(run_id))
+        if dagrun is None:
+            raise AppError(ErrorCodes.NOT_FOUND, "DAG run 不存在", 404)
+        run = dagrun
 
     # 全部节点已 succeeded → 无续跑必要（幂等边界：避免无谓重跑）
     if all(n.status == "succeeded" for n in run.nodes.values()):

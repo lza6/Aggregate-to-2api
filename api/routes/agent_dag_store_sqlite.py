@@ -4,6 +4,7 @@
 - 缺省仍走内存（agent_dag_store.py），IF_DAG_STORE_BACKEND=sqlite 时切换到此实现
 - 数据落独立 DB 文件（默认 data/dag_runs.db，避免与主任务库争锁，见 Red Team R-C）
 - DB 异常一律降级内存（log.warning 不崩 worker，保活语义同 queue_store）
+- v14 P2：restore_run 从 dict 快照反序列化 DagRun 对象（重启后续跑 /v1/agent/dag/{id}/resume）
 
 表结构：
   dag_runs(run_id TEXT PK, name TEXT, status TEXT, nodes_json TEXT,
@@ -22,9 +23,12 @@ import json
 import logging
 import os
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiosqlite
+
+if TYPE_CHECKING:
+    from ..agent.dag import DagRun
 
 log = logging.getLogger("routes.agent_dag_store_sqlite")
 
@@ -133,6 +137,20 @@ class DagRunSqliteStore:
         except Exception as exc:
             log.warning("dag_runs 查询降级内存: %s", exc)
         return self._memory.get(run_id)
+
+    async def restore_run(self, run_id: str) -> DagRun | None:
+        """v14 P2：把持久化 dict 快照反序列化为 DagRun 对象（重启后续跑入口）。
+
+        nodes 由 public_state 快照重建 DagNode（配置+执行状态全量还原：status/result/
+        error/attempt/started_at/finished_at/duration_ms/condition/depends_on），
+        依赖索引（dependencies/upstreams）与 run 级状态（fail_fast/max_parallel/
+        status/error_summary/created_at/finished_at）一并还原。缺失快照 → None。
+        DB 异常降级内存快照读取（保活语义同 get）。
+        """
+        snapshot = await self.get(run_id)
+        if snapshot is None:
+            return None
+        return self._snapshot_to_run(snapshot)
 
     async def _traces_for(self, run_id: str) -> list[dict[str, Any]]:
         """读取 run 的节点轨迹（按节点/时间序；v13 P0-7）。"""
@@ -260,6 +278,52 @@ class DagRunSqliteStore:
             "created_at": row["created_at"],
             "finished_at": row["finished_at"],
         }
+
+    @staticmethod
+    def _snapshot_to_run(snapshot: dict[str, Any]) -> DagRun:
+        """把 get() 的 dict 快照重建为 DagRun 对象（v14 P2；幂等不可变还原）。
+
+        快照缺 fail_fast/max_parallel（v10/v13 早期落库数据）时用引擎默认值兜底，
+        不抛异常（历史数据兼容）；nodes 为空列表同样可还原为空 run。
+        """
+        from ..agent.dag import DagNode, DagRun
+
+        nodes: dict[str, DagNode] = {}
+        for item in snapshot.get("nodes") or []:
+            node = DagNode(
+                id=item["id"],
+                kind=item.get("kind", "llm"),
+                depends_on=list(item.get("depends_on") or []),
+                prompt=item.get("prompt"),
+                model=item.get("model"),
+                retry=int(item.get("retry") or 0),
+                condition=item.get("condition"),
+            )
+            node.status = item.get("status", "pending")
+            node.result = item.get("result")
+            node.error = item.get("error")
+            node.attempt = int(item.get("attempt") or 0)
+            node.started_at = item.get("started_at")
+            node.finished_at = item.get("finished_at")
+            node.duration_ms = float(item.get("duration_ms") or 0.0)
+            nodes[node.id] = node
+
+        run = DagRun(
+            run_id=snapshot.get("run_id", ""),
+            name=snapshot.get("name", ""),
+            nodes=nodes,
+            status=snapshot.get("status", "pending"),
+            created_at=float(snapshot.get("created_at") or time.time()),
+            finished_at=snapshot.get("finished_at"),
+            fail_fast=bool(snapshot.get("fail_fast", True)),
+            max_parallel=int(snapshot.get("max_parallel") or 4),
+        )
+        run.error_summary = snapshot.get("error_summary")
+        for node_id, node in nodes.items():
+            run.dependencies[node_id] = list(node.depends_on)
+            for dep in node.depends_on:
+                run.upstreams.setdefault(dep, []).append(node_id)
+        return run
 
 
 __all__ = ["DagRunSqliteStore"]

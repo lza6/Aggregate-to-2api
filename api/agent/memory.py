@@ -12,7 +12,12 @@
 - L2 提炼到 L3（用户长期偏好）
 - hot/warm/cold 衰减淘汰（超期未访问的记忆降级/删除）
 
+supersede 语义（v14 P3，参考 agentmemory 巩固蓝本 isLatest + supersedes）：
+- 同 (user_key, scene, content) 再次巩固出 L1 原子事实时，旧 L1 记录标记 superseded_by=新记录 id
+- query() 默认过滤 superseded_by IS NULL（不返回被取代记录；旧数据列缺失时降级不过滤不崩）
+
 开关：IF_MEMORY_CONSOLIDATION_ENABLED=0 关闭，回退无记忆（零回归）。
+三档衰减开关：IF_MEMORY_APPLY_DECAY（缺省关 0）→ consolidate 尾部可选挂载 apply_decay()。
 LLM 调用：巩固压缩用 tryingopen 上游 LLM（付费 API 红线：Mock 或用户批准预算）。
 
 数据层：复用现有 SQLite（imagefree.db），加 4 张表（不改 requests/chat_usage schema）。
@@ -43,6 +48,13 @@ CONSOLIDATION_INTERVAL_SECONDS = float(os.getenv("IF_MEMORY_CONSOLIDATION_INTERV
 # 记忆衰减阈值（秒）：L0 超 7 天未访问淘汰，L1 超 30 天，L2 超 90 天，L3 永久
 _DECAY_THRESHOLDS = {"L0": 7 * 86400, "L1": 30 * 86400, "L2": 90 * 86400, "L3": float("inf")}
 
+# hot/warm/cold 三档衰减（v14 P3，参考 agentmemory applyDecay）：
+# hot：距上次访问 < 1d → importance 提分（+0.05，钳 1.0）；warm：1d ~ 各层阈值之间 → 不动；
+# cold：超 _DECAY_THRESHOLDS → 淘汰（复用 _prune_stale）
+_HOT_RECENT_SECONDS = 1 * 86400
+_HOT_BOOST = 0.05
+_HOT_TABLES = ("mem_observations", "mem_atoms", "mem_scenarios", "mem_persona")
+
 # 默认 DB 路径（复用 imagefree.db，加 mem_ 前缀表）
 _DEFAULT_DB = os.getenv("IF_DB_FILE", "data/imagefree.db")
 
@@ -60,6 +72,7 @@ class MemoryRecord:
     created_at: float
     last_accessed_at: float
     source_ids: str  # 来源记录 id 列表（L1 来自哪些 L0）
+    superseded_by: int | None = None  # v14 P3：被同 (user_key, scene, content) 的新 L1 取代时指向新记录 id
 
 
 class MemoryStore:
@@ -138,6 +151,13 @@ class MemoryStore:
                 CREATE INDEX IF NOT EXISTS idx_mem_per_user ON mem_persona(user_key, scene);
                 """
             )
+            # v14 P3 幂等迁移：旧库无 superseded_by 列 → ADD COLUMN（duplicate column 报错吞掉）。
+            # 仅 mem_atoms 需要 supersede 语义（L1 原子事实被同 content 新原子取代）；其余层不动。
+            try:
+                conn.execute("ALTER TABLE mem_atoms ADD COLUMN superseded_by INTEGER")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
             conn.commit()
 
     async def observe(self, user_key: str, scene: str, content: str, importance: float = 0.5) -> int:
@@ -157,16 +177,32 @@ class MemoryStore:
 
             return await asyncio.to_thread(_insert)
 
+    def _has_column(self, table: str, column: str) -> bool:
+        """检查表是否有某列（PRAGMA table_info；供 query 降级判断）。"""
+        with self._conn() as conn:
+            cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        return column in cols
+
     async def query(self, user_key: str, scene: str, layer: str = "L1", limit: int = 10) -> list[MemoryRecord]:
-        """查询某层记忆（供 chat 端点注入上下文）。"""
+        """查询某层记忆（供 chat 端点注入上下文）。
+
+        v14 P3 supersede：mem_atoms 查询默认过滤 superseded_by IS NULL（被取代的旧 L1
+        不返回）。保底：旧库列缺失时降级不过滤（不崩，向后兼容）。
+        """
         table = {"L0": "mem_observations", "L1": "mem_atoms", "L2": "mem_scenarios", "L3": "mem_persona"}.get(layer)
         if not table:
             return []
 
+        # supersede 过滤：仅 L1（mem_atoms）且列存在；列缺失降级不过滤
+        supersede_filter = ""
+        if table == "mem_atoms" and self._has_column(table, "superseded_by"):
+            supersede_filter = " AND superseded_by IS NULL"
+
         def _query() -> list[MemoryRecord]:
             with self._conn() as conn:
                 rows = conn.execute(
-                    f"SELECT * FROM {table} WHERE user_key=? AND scene=? ORDER BY importance DESC, last_accessed_at DESC LIMIT ?",
+                    f"SELECT * FROM {table} WHERE user_key=? AND scene=?{supersede_filter} "
+                    "ORDER BY importance DESC, last_accessed_at DESC LIMIT ?",
                     (user_key, scene, limit),
                 ).fetchall()
                 return [
@@ -180,6 +216,8 @@ class MemoryStore:
                         created_at=r["created_at"],
                         last_accessed_at=r["last_accessed_at"],
                         source_ids=r["source_ids"],
+                        # sqlite3.Row 的 `in` 只匹配值不匹配键；必须用 r.keys() 判定列存在
+                        superseded_by=r["superseded_by"] if "superseded_by" in r.keys() else None,  # noqa: SIM118 - sqlite3.Row 的 in 判值非键
                     )
                     for r in rows
                 ]
@@ -214,16 +252,25 @@ class MemoryStore:
 
         mock_upstream = get_settings().if_mock_upstream
         if mock_upstream:
-            return await self._consolidate_mock()
-        # 真实 LLM 路径：调 tryingopen 上游压缩（用户批准后启用）
-        try:
-            return await self._consolidate_with_llm()
-        except Exception as exc:
-            log.warning("LLM 记忆巩固失败，回退 Mock: %s", exc)
-            return await self._consolidate_mock()
+            result = await self._consolidate_mock()
+        else:
+            # 真实 LLM 路径：调 tryingopen 上游压缩（用户批准后启用）
+            try:
+                result = await self._consolidate_with_llm()
+            except Exception as exc:
+                log.warning("LLM 记忆巩固失败，回退 Mock: %s", exc)
+                result = await self._consolidate_mock()
+        # v14 P3：可选三档衰减挂载（IF_MEMORY_APPLY_DECAY 缺省关，零行为变化）
+        if get_settings().if_memory_apply_decay:
+            result["decay"] = await self.apply_decay()
+        return result
 
     async def _consolidate_mock(self) -> dict[str, int]:
-        """Mock 巩固：去重 + importance>=0.6 筛选（不调 LLM）。"""
+        """Mock 巩固：去重 + importance>=0.6 筛选（不调 LLM）。
+
+        v14 P3 supersede：写入 L1 前先把同 (user_key, scene, content) 的旧 L1 记录
+        标记 superseded_by=新记录 id（先插新行拿 id，再回填旧行，保证链路可追溯）。
+        """
         async with self._lock:
 
             def _run() -> dict[str, int]:
@@ -239,11 +286,12 @@ class MemoryStore:
                         key = (r["user_key"], r["scene"], r["content"])
                         if key not in seen or r["importance"] > seen[key]["importance"]:
                             seen[key] = dict(r)
-                    # importance>=0.6 的写入 L1
+                    # importance>=0.6 的写入 L1；同 content 旧 L1 标记 superseded
                     promoted = 0
+                    superseded_total = 0
                     for item in seen.values():
                         if item["importance"] >= 0.6:
-                            conn.execute(
+                            cur = conn.execute(
                                 "INSERT INTO mem_atoms(user_key, scene, content, importance, created_at, last_accessed_at, source_ids) "
                                 "VALUES(?,?,?,?,?,?,?)",
                                 (
@@ -256,13 +304,20 @@ class MemoryStore:
                                     str(item["id"]),
                                 ),
                             )
+                            new_id = cur.lastrowid or 0
+                            mark = conn.execute(
+                                "UPDATE mem_atoms SET superseded_by=? WHERE superseded_by IS NULL "
+                                "AND id<>? AND user_key=? AND scene=? AND content=?",
+                                (new_id, new_id, item["user_key"], item["scene"], item["content"]),
+                            )
+                            superseded_total += mark.rowcount or 0
                             promoted += 1
                     # 清空已巩固的 L0（避免重复巩固）
                     conn.execute("DELETE FROM mem_observations")
                     # 衰减淘汰超期记忆
                     pruned = self._prune_stale(conn, now)
                     conn.commit()
-                    return {"L0_to_L1": promoted, "pruned": pruned}
+                    return {"L0_to_L1": promoted, "pruned": pruned, "superseded": superseded_total}
 
             return await asyncio.to_thread(_run)
 
@@ -335,9 +390,9 @@ class MemoryStore:
                     if imp >= 0.5 and content.strip():
                         async with self._lock:
 
-                            def _insert(content=content, scene=scene, imp=imp, items=items) -> None:
+                            def _insert(content=content, scene=scene, imp=imp, items=items) -> int:
                                 with self._conn() as conn:
-                                    conn.execute(
+                                    cur = conn.execute(
                                         "INSERT INTO mem_atoms(user_key, scene, content, importance, created_at, last_accessed_at, source_ids) "
                                         "VALUES(?,?,?,?,?,?,?)",
                                         (
@@ -350,7 +405,15 @@ class MemoryStore:
                                             ",".join(str(i["id"]) for i in items),
                                         ),
                                     )
+                                    # v14 P3 supersede：同 (user_key, scene, content) 旧 L1 标记被取代
+                                    new_id = cur.lastrowid or 0
+                                    conn.execute(
+                                        "UPDATE mem_atoms SET superseded_by=? WHERE superseded_by IS NULL "
+                                        "AND id<>? AND user_key=? AND scene=? AND content=?",
+                                        (new_id, new_id, items[0]["user_key"], scene, content.strip()),
+                                    )
                                     conn.commit()
+                                    return new_id
 
                             await asyncio.to_thread(_insert)
                         promoted += 1
@@ -386,6 +449,35 @@ class MemoryStore:
             )
             pruned += cur.rowcount or 0
         return pruned
+
+    async def apply_decay(self) -> dict[str, int]:
+        """v14 P3：hot/warm/cold 三档衰减（供 consolidation loop 调用，可选挂入 consolidate 尾部）。
+
+        - hot：距上次访问 < 1d → importance 提分（+_HOT_BOOST，钳 1.0；hot 记忆加权保活跃）
+        - warm：1d ~ 各层 _DECAY_THRESHOLDS 之间 → 不动（保持现状）
+        - cold：超 _DECAY_THRESHOLDS → 淘汰（复用 _prune_stale 删除）
+
+        返回各档处理条数（hot_boosted / cold_pruned）。
+        """
+        now = time.time()
+        async with self._lock:
+
+            def _run() -> dict[str, int]:
+                with self._conn() as conn:
+                    # hot 档：最近 1d 内访问过的记忆提分（全层；warm/cold 不动）
+                    boosted = 0
+                    for table in _HOT_TABLES:
+                        cur = conn.execute(
+                            f"UPDATE {table} SET importance = MIN(1.0, importance + ?) WHERE last_accessed_at >= ?",
+                            (_HOT_BOOST, now - _HOT_RECENT_SECONDS),
+                        )
+                        boosted += cur.rowcount or 0
+                    # cold 档：超期未访问淘汰（_prune_stale 按各层阈值删）
+                    pruned = self._prune_stale(conn, now)
+                    conn.commit()
+                    return {"hot_boosted": boosted, "cold_pruned": pruned}
+
+            return await asyncio.to_thread(_run)
 
     async def start_consolidation_loop(self) -> None:
         """启动后台巩固 worker（lifespan 调用）。"""

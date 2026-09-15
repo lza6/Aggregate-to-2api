@@ -22,7 +22,19 @@
 | 2026-09-15 | 集成测试 8 失败根治（跨文件顺序污染）：① conftest `IF_MEMORY_CONSOLIDATION_ENABLED` 0→1（observe 端点 403「记忆子系统未启用」）+ 常驻循环改 `CONSOLIDATION_INTERVAL_SECONDS=inf` 等效关闭；② agent_e2e 4 用例 `setenv` 后补 `reset_settings()`（Settings 工厂缓存固化 mock=1）；③ intent 规则 '画一只' 增强后 ecommerce 主图 prompt 被 image 吃掉 → 收窄为 `画.*(猫|狗|人|风景)` + '画一个电商主图' 归 ecommerce 规则；④ conftest 模块级（api import 前）`setdefault IF_ACCOUNT_AUTO=0` + api 已 import 时同步 `_cfg.ACCOUNT_AUTO=False`（import 期固化 True → nanobanana 误可见） | **integration 49/0 + chaos 5/0 + unit 2070/0 三独立轮全绿**；E2E 14/14 | 组合跑（-m "not slow"）跨轮 IP 桶封禁+admin 开放模式冲突属 CI 分轮设计应对范围（ci.yml unit/integration/chaos 分 fresh 进程），非回归 |
 | 2026-09-15 | test_autoregister_loop_fills_to_target 时序 flaky（2 次单跑全绿，全量偶发 0>=2） | 预存 | cerebrum 已知：代理池每日限额时序，poll-until-stable 已在用例 |
 
+## v14.0.0 记录（2026-09-15）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-15 | P1 审批导出/历史（HumanInbox.export csv/json + /export + /history 分页，管理 Key） | 全绿 | test_human_inbox_export.py 12 用例 |
+| 2026-09-15 | P2 DAG resume sqlite 化（restore_run 反序列化 + resume 端点 sqlite 后端可续跑） | 全绿 | test_dag_resume_sqlite.py 12 用例 |
+| 2026-09-15 | P3 memory supersede（superseded_by 列幂等迁移 + query 过滤 + apply_decay hot/warm/cold） | 全绿 | test_memory_supersede.py 10 用例；IF_MEMORY_APPLY_DECAY=0 |
+| 2026-09-15 | 组合回归根治：sqlite3.Row 无 .get（P3 破坏 6 既有用例）→ r[key] if key in r.keys()；reset_human_inbox 同步模块级单例（端点 from-import 值拷贝旧库残留 72 条）→ human_inbox=重建实例 | 全量 2104/0 | 34 新用例全绿 + ruff 0 |
+| 2026-09-15 | 版本全链 13.0.0→14.0.0 + dist 重建 | 契约绿 | openapi/landing dist 14.0.0 |
+| 2026-09-15 | 集成+混沌 + E2E 复跑 | 54/0 + 14/14 | mock cf_solver 全程 |
+
 ## 记录表
+
 
 | 日期 | 版本/范围 | 验证内容 | 结果 | 失效条件 |
 |------|----------|---------|------|---------|
