@@ -23,6 +23,8 @@
 - **🔍 深度可观测性** — Prometheus 指标 + 审计日志 + 内置告警引擎 + WebSocket 实时日志 + OTel 分布式追踪
 - **📡 SSE 每任务事件流** — `/v1/tasks/{id}/events` 实时推送 status/progress/result + Last-Event-ID 断线补偿
 - **💬 文本对话与智能体网关 (v4.4)** — 整合 TryingOpen 匿名多模型，提供标准 OpenAI `/v1/chat/completions` 与 Anthropic `/v1/messages` 兼容端点，支持思考链、工具调用（Function Calling）与多模态 Vision，自动代理轮换突破单 IP 频控。
+- **🤖 智能体 DAG 编排 (v13)** — `/v1/agent/dag/run` 多节点编排（scene/llm/critic/memory/tool/retrieval/human_input 八类节点），自反思 critic 闭环 + LLM 工具循环 + 人机审批真通道；断点续跑（`POST /v1/agent/dag/{run_id}/resume`）+ 节点轨迹持久化；intent 规则→embedding→LLM 三段式意图分类；MCP 协议端点（`POST /v1/mcp` JSON-RPC 2.0，五工具白名单 + 预算门禁）；审批收件箱 SQLite 持久化（重启可查）。
+- **🖥️ 桌面版 (v13)** — Tauri 2 sidecar 托管完整后端（PyInstaller uvicorn 内置），`desktop/start-desktop.bat` 无 Rust 环境一键启动（.venv 三级回退 + 前端 dist 自动构建 + healthz 探测）。
 
 > 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
 
