@@ -266,9 +266,15 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         // P1-11：系统通知插件（config/capability 已配，本处 Rust 注册后真正生效）
         .plugin(tauri_plugin_notification::init())
-        // P1-11：自升级插件（endpoints 指向 GitHub Release；签名公钥见 tauri.conf.json updater.pubkey）
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // P1-11：自升级插件（endpoints 指向 GitHub Release；签名公钥见 tauri.conf.json updater.pubkey）。
+            // IF_DESKTOP_UPDATER=0 可关闭（缺省开，可回滚——计划书 P1-11 §8 开关契约）。
+            let updater_disabled = std::env::var("IF_DESKTOP_UPDATER")
+                .map(|v| v.trim().eq_ignore_ascii_case("0"))
+                .unwrap_or(false);
+            if !updater_disabled {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             {
                 let mut st = state().lock().unwrap();
                 st.uvicorn_pid = spawn_uvicorn();

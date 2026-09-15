@@ -50,6 +50,7 @@ pyinstaller --onefile --name uvicorn --add-data "api;api" api/main.py
 | `IF_DESKTOP_MOCK_UPSTREAM` | 1 | 1=后端以 Mock 上游启动（零真实付费） |
 | `IF_DESKTOP_NO_SOLVER` | 0 | 1=不拉起 cf_solver（纯聊天/DAG Mock 场景） |
 | `IF_DESKTOP_CLOSE_TO_TRAY` | 0 | 1=关窗进托盘（应用驻留、后端存活；托盘「退出」才结束进程） |
+| `IF_DESKTOP_UPDATER` | 1 | 0=关闭自升级插件（可回滚；缺省开，端点/签名见 tauri.conf.json plugins.updater） |
 | `TAURI_SIGNING_PRIVATE_KEY` | — | 自升级签名私钥（Tauri updater 构建时注入，切勿入库） |
 
 ## `backend_status` 命令
