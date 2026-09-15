@@ -233,10 +233,41 @@ fn backend_status() -> BackendStatus {
     }
 }
 
+/// P1-11：托盘图标 + 菜单（显示主窗口 / 退出）。Tauri 2 核心能力（无需额外插件）。
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::TrayIconBuilder;
+    use tauri::Manager;
+
+    let show_i = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+    TrayIconBuilder::with_id("main-tray")
+        .tooltip("听风AI Desktop")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .build(app)?;
+    Ok(())
+}
+
 pub fn run() {
     use tauri::Manager;
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        // P1-11：系统通知插件（config/capability 已配，本处 Rust 注册后真正生效）
+        .plugin(tauri_plugin_notification::init())
+        // P1-11：自升级插件（endpoints 指向 GitHub Release；签名公钥见 tauri.conf.json updater.pubkey）
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             {
                 let mut st = state().lock().unwrap();
@@ -245,6 +276,9 @@ pub fn run() {
                     st.solver_pid = spawn_solver();
                 }
             }
+
+            // P1-11：托盘图标（显示/退出菜单）
+            build_tray(app)?;
 
             // 健康探测后台线程：就绪后显示主窗口（60s 超时兜底）
             // 注意：闭包内 move 捕获 handle，不能在外层再次 move 进嵌套闭包——
@@ -277,6 +311,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // P1-11：IF_DESKTOP_CLOSE_TO_TRAY=1 → 关窗进托盘（应用驻留，后端存活；托盘「退出」才结束）
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if env_yes("IF_DESKTOP_CLOSE_TO_TRAY") {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
+            }
             if let tauri::WindowEvent::Destroyed = event {
                 // 主窗口关闭 → 终止后端子进程（防孤儿）
                 let st = state().lock().unwrap();

@@ -126,8 +126,12 @@ desktop/node_modules/
 desktop/backend/uvicorn.exe
 
 freebuff
+.freebuff/
 backend/
 
 # P1-14 Playwright 视觉探针产物（不入库）
 frontend/artifacts/
 frontend/test-results/
+
+# 桌面已打包产物（用户机器构建，不入库）
+desktop/*.zip

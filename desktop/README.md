@@ -49,6 +49,8 @@ pyinstaller --onefile --name uvicorn --add-data "api;api" api/main.py
 | `IF_DESKTOP_USE_PYINSTALLER` | 0 | 1=用 sidecar exe；0=系统 python |
 | `IF_DESKTOP_MOCK_UPSTREAM` | 1 | 1=后端以 Mock 上游启动（零真实付费） |
 | `IF_DESKTOP_NO_SOLVER` | 0 | 1=不拉起 cf_solver（纯聊天/DAG Mock 场景） |
+| `IF_DESKTOP_CLOSE_TO_TRAY` | 0 | 1=关窗进托盘（应用驻留、后端存活；托盘「退出」才结束进程） |
+| `TAURI_SIGNING_PRIVATE_KEY` | — | 自升级签名私钥（Tauri updater 构建时注入，切勿入库） |
 
 ## `backend_status` 命令
 

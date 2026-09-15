@@ -92,8 +92,17 @@
 - `api/agent/planner.py` — LLM 规划器（Mock 优先 + tryingopen 真实路径降级；scene→节点串）
 - `api/routes/agent_dag.py` — `/v1/agent/dag/run` + `/v1/agent/dag/{run_id}` + `/v1/agent/dag/plan`（guard_chat_request 鉴权 + 开关 404 + 提交即拓扑校验）
 - `api/routes/agent_dag_store.py` — 进程内 run 存储（单例 `dag_run_store`，包级属性被遮蔽需用 `.dag_run_store` 实例）
-- `api/routes/agent_dag_exec.py` — 节点执行体（scene/llm/critic/memory/tool 分发，Mock 优先）
+- `api/routes/agent_dag_exec.py` — 节点执行体（scene/llm/critic/memory/tool 分发，Mock 优先）；v15.1.0 P1-8 工具安全护栏（`_exec_tool` 入口 + LLM 工具循环双闸口 `is_destructive_command` 硬门禁 + `_tool_budget_gate` 预算 402）
 - `tests/test_agent_dag*.py` — 56 用例（引擎/规划器/路由/执行体）
+- `tests/test_agent_tool_guard.py` — P1-8 工具护栏 14 用例（v15.1.0 新增）
+
+## v15.1.0 桌面三件套（2026-09-15）
+
+- `desktop/src-tauri/tauri.conf.json` — 增 updater 端点+签名公钥+createUpdaterArtifacts+trayIcon
+- `desktop/src-tauri/src/lib.rs` — P1-11 托盘菜单（显示/退出）+ notification/updater 插件注册 + `IF_DESKTOP_CLOSE_TO_TRAY=1` 关窗进托盘
+- `desktop/src-tauri/capabilities/default.json` — 补 `notification:default` + `updater:default`
+- `frontend/src/pages/Agent.tsx` — DAG 终态系统通知（动态 import `@tauri-apps/plugin-notification` 浏览器静默降级）
+- 签名私钥 `~/.tauri/tingfeng.key`（仓库外，构建注入 `TAURI_SIGNING_PRIVATE_KEY`）
 
 ---
 

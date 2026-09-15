@@ -31,7 +31,7 @@ router = APIRouter()
 log = logging.getLogger("mcp.server")
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "15.0.0"}
+SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "15.1.0"}
 
 
 def mcp_enabled() -> bool:

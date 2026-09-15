@@ -17,6 +17,7 @@ import asyncio
 import logging
 from typing import Any
 
+from ..agent.guard import is_destructive_command
 from ..config import get_settings
 
 log = logging.getLogger("routes.agent_dag_exec")
@@ -162,6 +163,9 @@ async def _exec_llm(prompt: str, *, _depth: int = 0) -> str:
         max_iter = int(get_settings().if_llm_tool_iterations or 0)
         if m and _depth < max_iter:
             tool_name = m.group(1).strip()
+            # P1-8：破坏性工具名快速拒绝（PreToolUse 硬门禁，不进 skills 索引执行路径）
+            if is_destructive_command(tool_name):
+                return f"[tool] 拒绝执行破坏性命令「{tool_name}」（PreToolUse 硬门禁拦截）"
             log.info("llm 工具循环 depth=%d 触发工具=%s", _depth, tool_name)
             tool_result = await _exec_tool(f"调用 {tool_name}")
             return await _exec_llm(f"{prompt}\n\n[工具 {tool_name} 结果]: {tool_result}", _depth=_depth + 1)
@@ -239,8 +243,12 @@ async def _exec_tool(prompt: str) -> str:
     - prompt 含工具名（如 "使用 playwright 工具" / "调用 imagefree"）→ 返回该 skill 描述；
     - prompt 为列举请求或未命中 → 返回可发现工具清单；
     - 未知工具 → 明确提示未找到（不静默，不崩）。
-    零 provider 付费（skill 索引是本地文件读取）。
+    P1-8：入口先过 PreToolUse 硬门禁——破坏性命令直接拒绝不执行；真实工具调用前过预算门禁
+    （enforce 超限 → BUDGET_EXCEEDED/402 拒绝文本）。零 provider 付费（skill 索引是本地文件读取）。
     """
+    # P1-8：破坏性命令硬门禁（PreToolUse 硬 block；rm -rf /、git reset --hard 等）
+    if is_destructive_command(prompt):
+        return "[tool] 拒绝执行破坏性命令（PreToolUse 硬门禁拦截，未执行）"
     try:
         from ..skills.loader import SkillIndex, load_skill
     except Exception as exc:  # skills 索引加载失败降级（不崩 DAG）
@@ -253,6 +261,9 @@ async def _exec_tool(prompt: str) -> str:
         known = idx.names()
         matched = next((n for n in known if n and n.lower() in prompt.lower()), None)
         if matched:
+            gate = await _tool_budget_gate(matched)
+            if gate:
+                return gate
             rec = load_skill(matched)
             desc = rec.description if rec and getattr(rec, "description", None) else ""
             return f"[tool] 已加载技能「{matched}」：{desc or '（无描述）'}"
@@ -263,6 +274,9 @@ async def _exec_tool(prompt: str) -> str:
         # 3) 试图用 prompt 里最可能的候选词
         cand = _extract_tool_candidate(prompt)
         if cand and any(cand.lower() in (n or "").lower() for n in known):
+            gate = await _tool_budget_gate(cand)
+            if gate:
+                return gate
             rec = load_skill(next(n for n in known if cand.lower() in (n or "").lower()))
             desc = rec.description if rec and getattr(rec, "description", None) else ""
             return f"[tool] 已加载技能「{cand}」：{desc or '（无描述）'}"
@@ -270,6 +284,27 @@ async def _exec_tool(prompt: str) -> str:
     except Exception as exc:  # noqa: BLE001 — 工具回路兜底不崩 DAG
         log.warning("DAG tool 节点执行失败（降级）: %s", exc)
         return f"[tool] 工具执行降级：{exc}"
+
+
+async def _tool_budget_gate(tool_name: str) -> str | None:
+    """P1-8 预算门禁：enforce 超限返回 402 拒绝文本，否则 None（放行）。
+
+    复用 budget_guard.check_can_spend（off/observe 零行为变化，不抛）；
+    enforce + 预算不足（含预算未配置=0 时工具估算>0 即拦截）→ 返回明确拒绝文本。
+    """
+    try:
+        from ..agent.budget_guard import check_can_spend
+
+        decision = await check_can_spend("tool")
+    except Exception as exc:  # noqa: BLE001 — 门禁自身异常不拦截（保 DAG 不崩）
+        log.warning("DAG tool 预算门禁异常（放行）: %s", exc)
+        return None
+    if not decision.allowed:
+        return (
+            f"[tool] 预算门禁拒绝执行「{tool_name}」（BUDGET_EXCEEDED/402，"
+            f"est=${decision.estimated_usd:.4f} mode={decision.mode}）"
+        )
+    return None
 
 
 async def _exec_image(prompt: str) -> str:

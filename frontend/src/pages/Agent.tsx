@@ -1,6 +1,6 @@
 // v12.0.1：节点展示升级为 SVG 分层 DAG 图 + 推理轨迹面板（components/DagGraph.tsx）。
 // 复用现有轮子：useApi（轮询/竞态/防抖）+ EmptyState/ErrorRetry/Skeleton + Toast。
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DagGraph, statusColor, statusLabel } from '../components/DagGraph';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/ui/Button';
@@ -69,6 +69,33 @@ export function AgentPage() {
   // P2-17：failed 终态可重试（错误摘要已由黑匣子面板展示；按钮只触发重跑）
   const isRetriable = !!currentRun && currentRun.status === 'failed';
   const [retrying, setRetrying] = useState(false);
+
+  // P1-11：DAG 终态系统通知（仅 Tauri 桌面环境生效——动态 import 浏览器环境零报错）
+  const prevStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentRun) return;
+    const status = currentRun.status;
+    if (prevStatusRef.current === null) {
+      prevStatusRef.current = status; // 初始快照不通知
+      return;
+    }
+    prevStatusRef.current = status;
+    if (!['succeeded', 'failed'].includes(status)) return;
+    void (async () => {
+      try {
+        const notif = await import('@tauri-apps/plugin-notification');
+        const granted = await notif.isPermissionGranted();
+        if (granted) {
+          await notif.sendNotification({
+            title: '听风AI · DAG 任务完成',
+            body: `「${currentRun.name ?? 'DAG 任务'}」${status === 'succeeded' ? '执行成功 ✅' : '执行失败 ❌'}`,
+          });
+        }
+      } catch {
+        // 浏览器环境（无 Tauri 插件）静默降级——桌面通知仅桌面可用
+      }
+    })();
+  }, [currentRun]);
 
   async function handlePlan() {
     if (!prompt.trim()) {

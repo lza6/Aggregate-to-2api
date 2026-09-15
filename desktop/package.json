@@ -1,13 +1,15 @@
 {
   "name": "tingfeng-desktop",
-  "version": "15.0.0",
+  "version": "15.1.0",
   "private": true,
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-notification": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.0.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

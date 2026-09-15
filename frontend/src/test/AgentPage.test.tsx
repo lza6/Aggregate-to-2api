@@ -121,4 +121,23 @@ describe('AgentPage 用户路径', () => {
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('已续跑 DAG（r-1）'), 'success'));
   });
+
+  // P1-11: DAG 终态触发的桌面系统通知在非 Tauri 环境（jsdom）必须静默降级，不抛错、不影响主流程
+  it('run 成功终态：桌面通知动态 import 在浏览器环境静默降级（无 unhandled rejection）', async () => {
+    const unhandled: unknown[] = [];
+    const onRej = (e: PromiseRejectionEvent) => unhandled.push(e.reason);
+    window.addEventListener('unhandledrejection', onRej);
+    mockFetch(['pending', 'done']);
+    render(<AgentPage />);
+    fireEvent.change(screen.getByLabelText('任务描述'), { target: { value: '画一只猫' } });
+    fireEvent.click(screen.getByText('生成计划'));
+    await waitFor(() => expect(screen.getByText(/计划预览/)).toBeTruthy());
+    fireEvent.click(screen.getByText('提交执行'));
+    // 轮询推进到 succeeded 终态
+    await waitFor(() => expect(screen.getByText(/r-1/)).toBeTruthy(), { timeout: 3000 });
+    // 终态渲染后给 effect 异步降级留时间（动态 import 失败已 try/catch 吞掉）
+    await new Promise(r => setTimeout(r, 300));
+    window.removeEventListener('unhandledrejection', onRej);
+    expect(unhandled.length).toBe(0);
+  });
 });

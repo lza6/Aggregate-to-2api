@@ -5,6 +5,17 @@
 > - 改动了某模块 → 在本表追加一行（改动日期+范围），旧记录视为失效
 > - 本表由 AI 会话优先读取（配合 memory/），避免盲目重跑同样的测验
 
+## v15.1.0 记录（2026-09-15）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-15 | P1-8 工具调用安全护栏（`api/routes/agent_dag_exec.py` `_exec_tool` 入口 + LLM 工具循环 `[tool:名]` 提取处双闸口：`is_destructive_command` PreToolUse 硬门禁拦截破坏性命令 + `budget_guard.check_can_spend("tool")` 预算门禁 enforce 超限 402 拒绝；`tests/test_agent_tool_guard.py` 14 用例含参数化破坏性样本/LLM 循环快速拒绝（不回调 provider）/enforce/observe/off 三态） | 全绿 | 30 关联用例全过；全量 2141/0F（+14 新用例） |
+| 2026-09-15 | P1-11 桌面版三件套（`tauri.conf.json` 增 updater 端点+签名公钥+createUpdaterArtifacts+trayIcon；Cargo.toml tauri `tray-icon` feature + `tauri-plugin-updater`+`tauri-plugin-notification`；lib.rs 托盘菜单（显示/退出）+ 通知/升级插件注册 + `IF_DESKTOP_CLOSE_TO_TRAY=1` 关窗进托盘；capability 补 updater:default；前端 Agent.tsx 终态系统通知（动态 import 浏览器静默降级）+ `@tauri-apps/plugin-notification`） | cargo check 编译通过（12.2s）+ tsc 0 + vitest 256/0 + build 0 | 签名私钥存用户主目录 `~/.tauri/tingfeng.key`（仓库外）；公开密钥入 tauri.conf.json |
+| 2026-09-15 | P3-18 性能水线（P1-8 未触碰 engine/DB/config 热路径） | DB+Config benchmark 绿；Engine benchmark 本机挂起（已知环境限制） | Engine 属 slow 标记默认排除；非本轮引入 |
+| 2026-09-15 | P1-14 Playwright 视觉探针真实浏览器复核（API 8100 在线） | Agent 页 DAG 渲染 + 明暗主题 1 passed（986ms）+ 截图 agent-light/dark.png | 前端 dist 重建后挂载 /admin 实测 |
+| 2026-09-15 | 集成 49 + 混沌 5 + E2E 14/14 复核 | 全绿 | mock cf_solver 全程；版本契约 15.0.0 通过 |
+| 2026-09-15 | 版本全链 15.0.0→15.1.0 + dist 重建 + landing lock 8.2.3→15.0.0 修复 | 契约绿 | `test_openapi_contract.py` 全过 |
+
 ## v13.0.0 记录（2026-09-15）
 
 | 日期 | 范围 | 结果 | 备注 |
