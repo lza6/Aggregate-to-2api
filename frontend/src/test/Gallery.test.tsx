@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { Gallery } from '../components/Gallery';
 import type { GalleryItem } from '../api';
-import { fetchGallery, signGallery } from '../api';
+import { fetchGalleryPage, signGallery } from '../api';
 
-// ── P2-1 画廊签名 URL 自动过期刷新 ──────────────────────────────────────
-// 后端 /v1/gallery 返回 image_url（当前不含 exp；待后端补）。
-// 前端做两层防护：
-//   1) 若 image_url 带 exp（单图直链签名）→ 到期前 5s 用 signGallery 重签并刷新列表；
-//   2) 无 exp 时由 <img onError> 防御路径兜底：加载失败重签一次 → 仍失败走 onGalleryFail。
+// ── P2-1 画廊签名 URL 自动过期刷新（v16 P0-3 组件迁移分页端点后适配）────────────
+// 组件已从 fetchGallery(limit) 迁移到 fetchGalleryPage({page,pageSize,search,password})，
+// 但 P2-1 两层防护语义不变：
+//   1) image_url 带 exp（单图直链签名）→ 到期前 5s 用 signGallery 重签并刷新列表；
+//   2) 无 exp 时由 <img onError> 防御路径兜底：静默重拉一次，不触发鉴权流程。
 //
 // 注意：useFakeTimers 与 @testing-library 的 waitFor/findBy* 冲突（后者内部 setTimeout 也被假化），
 // 因此在假定时器下统一用 `await act(async () => {})` 冲刷微任务队列，再手动推进定时器。
@@ -17,7 +17,7 @@ vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api')>();
   return {
     ...actual,
-    fetchGallery: vi.fn(),
+    fetchGalleryPage: vi.fn(),
     signGallery: vi.fn(),
     getStoredAdminKey: vi.fn(() => ''),
   };
@@ -29,6 +29,10 @@ function item(url: string, prompt = 'test prompt'): GalleryItem {
   return { image_url: url, image_mime: 'image/png', prompt, aspect_ratio: '1:1', duration_sec: 1.2 };
 }
 
+function page(items: GalleryItem[], total: number) {
+  return { items, total, page: 1, page_size: 24 };
+}
+
 /** 冲刷微任务队列（await act 空体）——配合假定时器推进 React 状态变更。 */
 async function flush() {
   await act(async () => {});
@@ -38,7 +42,7 @@ function renderGallery(overrides: { password?: string; onGalleryFail?: () => voi
   return render(<Gallery limit={20} password={overrides.password} onGalleryFail={overrides.onGalleryFail} />);
 }
 
-describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
+describe('Gallery P2-1 签名 URL 自动过期刷新（v16 分页迁移适配）', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -53,9 +57,9 @@ describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
     // exp 距今 12s：与 5s lead 配合 → 定时器 7s 后触发。remainSec <= 60 满足。
     const exp = nowSec() + 12;
     const expiringUrl = `https://img.example/x.png?exp=${exp}`;
-    (fetchGallery as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: [item(expiringUrl)], count: 1 })
-      .mockResolvedValueOnce({ items: [item('https://img.example/refreshed.png')], count: 1 });
+    (fetchGalleryPage as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(page([item(expiringUrl)], 1))
+      .mockResolvedValueOnce(page([item('https://img.example/refreshed.png')], 1));
     (signGallery as ReturnType<typeof vi.fn>).mockResolvedValue({ url: '/v1/gallery?limit=20&password=999999:abc', expires_in: 600 });
     const resignMock = signGallery as ReturnType<typeof vi.fn>;
 
@@ -68,7 +72,7 @@ describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(7000);
     });
-    // 冲刷 refreshSigned 异步（signGallery.resolve → fetchGallery.resolve → setItems）
+    // 冲刷 refreshSigned 异步（signGallery.resolve → fetchGalleryPage.resolve → setItems）
     await flush();
     expect(resignMock).toHaveBeenCalledTimes(1);
     // 新列表落地（仍渲染 test prompt 单图）
@@ -79,9 +83,9 @@ describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
     // 后端 /v1/gallery 返回的 image_url 是 R2 直链（无签名），单图 404/过期 ≠ 画廊 token 失效。
     // C2 修复：坏图 onError 只静默重拉一次列表，绝不走 signGallery → 清密码 → 弹密码框。
     const expiredUrl = `https://img.example/expired.png?exp=${nowSec() - 100}`;
-    (fetchGallery as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: [item(expiredUrl)], count: 1 })
-      .mockResolvedValueOnce({ items: [item('https://img.example/refreshed.png')], count: 1 });
+    (fetchGalleryPage as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(page([item(expiredUrl)], 1))
+      .mockResolvedValueOnce(page([item('https://img.example/refreshed.png')], 1));
     // signGallery 应完全不被调用（开放画廊无 admin key 必 403，但这里不应触发它）
     const resignMock = signGallery as ReturnType<typeof vi.fn>;
     const onGalleryFail = vi.fn();
@@ -101,7 +105,7 @@ describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
   });
 
   it('无 exp 的普通 image_url → 不挂长定时器，正常渲染', async () => {
-    (fetchGallery as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ items: [item('https://img.example/plain.png')], count: 1 });
+    (fetchGalleryPage as ReturnType<typeof vi.fn>).mockResolvedValueOnce(page([item('https://img.example/plain.png')], 1));
     const resignMock = signGallery as ReturnType<typeof vi.fn>;
 
     renderGallery();
@@ -116,9 +120,9 @@ describe('Gallery P2-1 签名 URL 自动过期刷新', () => {
 
   it('C2: 单图网络抖动（onError）→ 静默重拉列表，不触发 signGallery/密码重置', async () => {
     // 开放画廊（无 password、无 admin key）加载成功
-    (fetchGallery as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: [item('https://img.example/plain.png')], count: 1 })
-      .mockResolvedValueOnce({ items: [item('https://img.example/plain2.png')], count: 1 });
+    (fetchGalleryPage as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(page([item('https://img.example/plain.png')], 1))
+      .mockResolvedValueOnce(page([item('https://img.example/plain2.png')], 1));
     const resignMock = signGallery as ReturnType<typeof vi.fn>;
     const onGalleryFail = vi.fn();
 

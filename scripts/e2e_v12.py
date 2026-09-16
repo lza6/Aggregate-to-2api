@@ -24,6 +24,9 @@ import time
 import httpx
 
 ROOT = r"C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai"
+# v16 P0-3：画廊 seed 需 import api.base64_store（生产 file:// 存储），确保仓库根在 sys.path
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 API_PORT = 8103
 SOLVER_PORT = 8002
 BASE = f"http://127.0.0.1:{API_PORT}"
@@ -96,7 +99,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==15.1.1", ver == "15.1.1", f"got {ver}")
+        check("2 openapi version==16.0.0", ver == "16.0.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -112,13 +115,13 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "15.1.1"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "16.0.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
         check(
             "6 mcp tools/list 白名单",
-            tools == {"skills_list", "skills_get", "dag_plan", "dag_status", "generate_image"},
+            tools == {"skills_list", "skills_get", "dag_plan", "dag_status", "generate_image", "task_status"},
             f"got {tools}",
         )
         r = client.post(
@@ -182,8 +185,58 @@ def main() -> int:
                 "params": {"name": "generate_image", "arguments": {"prompt": "测试"}},
             },
         )
-        ok11 = r.status_code == 200 and "image-mock" in r.json()["result"]["content"][0]["text"]
-        check("11 mcp generate_image mock 占位", ok11)
+        text11 = r.json()["result"]["content"][0]["text"]
+        # v16 P0-1：异步任务契约 {task_id, status: queued}
+        ok11 = r.status_code == 200 and "task_id" in text11 and "queued" in text11
+        check("11 mcp generate_image 异步任务契约", ok11, f"got {text11[:120]}")
+        # 11b：task_status 轮询收敛（幂等）
+        import ast as _ast
+
+        task_id = _ast.literal_eval(text11)["task_id"]
+        poll_text = ""
+        for _ in range(3):
+            pr = client.post(
+                "/v1/mcp",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 11,
+                    "method": "tools/call",
+                    "params": {"name": "task_status", "arguments": {"task_id": task_id}},
+                },
+            )
+            poll_text = pr.json()["result"]["content"][0]["text"]
+            if "completed" in poll_text:
+                break
+        check("11b task_status 轮询收敛 completed", "completed" in poll_text, f"got {poll_text[:120]}")
+
+        # 11c：Streamable HTTP SSE 分帧（v16 P0-1）
+        sse = client.post(
+            "/v1/mcp",
+            json={"jsonrpc": "2.0", "id": 12, "method": "ping"},
+            headers={"Accept": "text/event-stream"},
+        )
+        check(
+            "11c mcp Streamable HTTP SSE 分帧",
+            sse.status_code == 200
+            and sse.headers.get("content-type", "").startswith("text/event-stream")
+            and sse.text.startswith("event: message\ndata: "),
+            f"ct={sse.headers.get('content-type')} body={sse.text[:60]}",
+        )
+
+        # 11d：resources/list + prompts/list 能力（v16 P0-1）
+        rr = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 13, "method": "resources/list"})
+        res_uris = {x["uri"] for x in rr.json()["result"]["resources"]}
+        pp = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 14, "method": "prompts/list"})
+        prompt_names = {x["name"] for x in pp.json()["result"]["prompts"]}
+        check(
+            "11d mcp resources/prompts 能力",
+            "skills://index" in res_uris and "image-from-prompt" in prompt_names,
+            f"uris={res_uris} prompts={prompt_names}",
+        )
+
+        # 11e：DELETE 谓词结束会话（v16 P0-1）
+        dr = client.request("DELETE", "/v1/mcp")
+        check("11e mcp DELETE 会话结束 200", dr.status_code == 200)
 
         # 12. v12.0.1 T3：human_input 审批真通道（run 挂起 → inbox approve → run succeeded）
         r = client.post(
@@ -225,6 +278,81 @@ def main() -> int:
             "12b human_input 真通道审批后 run succeeded",
             (human_final or {}).get("status") == "succeeded" and "已批准" in str(h_node.get("result", "")),
             f"status={getattr(human_final, 'status', None)} h1={h_node.get('result', '')[:80]}",
+        )
+
+        # 13. v16 P0-3：画廊管理端（列表/详情/打包/软删）
+        # 用确定性 DB fixture 造 3 张 completed 图（mock worker 完成态偶发被错误覆盖成 error，
+        # 画廊端点验证不依赖 worker 完成态；base64 走生产 file:// 存储，ZIP 需真实解码）
+        import base64 as _b64mod
+        import sqlite3 as _sqlite3
+        import uuid as _uuid
+
+        from api.base64_store import save_base64
+
+        _now = time.time()
+        _seed_conn = _sqlite3.connect(os.path.join(ROOT, "data", "e2e_v12.db"), timeout=10)
+        gallery_ids: list[str] = []
+        for _i, _pr in enumerate(["e2e画廊-橘猫", "e2e画廊-雪山", "e2e画廊-星海"]):
+            _gid = str(_uuid.uuid4())
+            gallery_ids.append(_gid)
+            _raw = b"\x89PNG\r\n\x1a\n" + b"e2e-gallery-" + _gid.encode()
+            _stored = save_base64(_gid, f"data:image/png;base64,{_b64mod.b64encode(_raw).decode()}", "image/png")
+            _seed_conn.execute(
+                "INSERT INTO requests (id, prompt, aspect_ratio, download, status, image_url, image_base64, image_mime, error, created_at, started_at, finished_at, duration_sec, type, model, client_ip, user_agent, trace_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (_gid, _pr, "1:1", 1, "completed", f"https://mock.example/{_gid}.png", _stored, "image/png", None,
+                 _now - _i, _now - 1, _now, 1.2, "image", "imagefree/default", "127.0.0.1", "e2e-gallery", ""),
+            )
+        _seed_conn.commit()
+        _seed_conn.close()
+        check("13a 画廊 fixture 落库 3 张 completed", len(gallery_ids) == 3, f"ids={gallery_ids}")
+        # 列表可见：search 过滤出这 3 张
+        r = client.get("/v1/gallery", params={"page": 1, "page_size": 10, "search": "e2e画廊"})
+        items13 = r.json().get("items", [])
+        ids_visible = {i["id"] for i in items13}
+        check(
+            "13b 画廊列表可见 3 张（search）",
+            r.status_code == 200 and all(x in ids_visible for x in gallery_ids),
+            f"visible={sorted(ids_visible)} want={sorted(gallery_ids)}",
+        )
+        # 详情
+        d = client.get(f"/v1/gallery/{gallery_ids[0]}")
+        dj = d.json()
+        check(
+            "13c 画廊详情 200+id",
+            d.status_code == 200 and dj.get("item", {}).get("id") == gallery_ids[0] and "similar" in dj,
+            f"resp={str(dj)[:120]}",
+        )
+        # 打包 ZIP：200 + zip magic + X-Total（data-URI 存储也应解出 PNG）
+        z = client.post("/v1/gallery/zip", json={"task_ids": gallery_ids})
+        _zip_ok = z.status_code == 200 and z.content[:2] == b"PK" and z.headers.get("X-Total") == "3"
+        _png_ok = False
+        if _zip_ok:
+            import io as _io
+            import zipfile as _zipfile
+
+            try:
+                with _zipfile.ZipFile(_io.BytesIO(z.content)) as _zf:
+                    _names = _zf.namelist()
+                    _png_ok = any(n.endswith(".png") for n in _names) and any(
+                        _zf.read(n).startswith(b"\x89PNG") for n in _names if n.endswith(".png")
+                    )
+            except Exception:
+                _png_ok = False
+        check(
+            "13d 画廊 zip 打包 200+PK+PNG 内容",
+            _zip_ok and _png_ok,
+            f"status={z.status_code} x-total={z.headers.get('X-Total')} png_ok={_png_ok}",
+        )
+        # 软删后列表不含
+        dd = client.request("DELETE", f"/v1/gallery/{gallery_ids[0]}")
+        check("13e 画廊软删 200+soft", dd.status_code == 200 and dd.json().get("soft") is True, f"resp={dd.text[:120]}")
+        r2 = client.get("/v1/gallery", params={"page": 1, "page_size": 10, "search": "e2e画廊"})
+        ids_after = {i["id"] for i in r2.json().get("items", [])}
+        check(
+            "13f 软删后列表不含该张",
+            gallery_ids[0] not in ids_after and all(x in ids_after for x in gallery_ids[1:]),
+            f"after={sorted(ids_after)}",
         )
 
         client.close()

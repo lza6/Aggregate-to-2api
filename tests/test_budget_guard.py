@@ -202,7 +202,8 @@ class TestMcpBudgetGuard:
         assert resp.status_code == 200
         result = resp.json()["result"]
         assert result["isError"] is False
-        assert "[image-mock]" in result["content"][0]["text"]
+        # v16 P0-1：generate_image 返回异步任务契约 {task_id, status: queued}（Mock 下同步产出）
+        assert "task_id" in result["content"][0]["text"] and "queued" in result["content"][0]["text"]
         # 审计记录：工具名 + 估算 + decision
         assert any(action == "mcp.tool.call" and target == "generate_image" for action, _actor, target in calls)
 

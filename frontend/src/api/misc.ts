@@ -42,17 +42,79 @@ export async function fetchStats(): Promise<Stats> {
 }
 
 export interface GalleryItem {
+  id?: string;
   image_url: string;
   image_mime: string | null;
   prompt: string;
   aspect_ratio: string;
   duration_sec: number | null;
+  model?: string;
+  status?: string;
+  created_at?: number;
 }
 
 export async function fetchGallery(limit = 20, password?: string): Promise<{ items: GalleryItem[]; count: number }> {
   const q = new URLSearchParams({ limit: String(limit) });
   if (password) q.set('password', password);
   return apiFetch<{ items: GalleryItem[]; count: number }>(`/v1/gallery?${q}`);
+}
+
+/** v16 P0-3：画廊分页列表（page/page_size/status/model/search）。 */
+export async function fetchGalleryPage(
+  opts: { page?: number; pageSize?: number; status?: string; model?: string; search?: string; password?: string } = {},
+): Promise<{ items: GalleryItem[]; total: number; page: number; page_size: number }> {
+  const q = new URLSearchParams();
+  if (opts.page != null) q.set('page', String(opts.page));
+  if (opts.pageSize != null) q.set('page_size', String(opts.pageSize));
+  if (opts.status) q.set('status', opts.status);
+  if (opts.model) q.set('model', opts.model);
+  if (opts.search) q.set('search', opts.search);
+  if (opts.password) q.set('password', opts.password);
+  return apiFetch<{ items: GalleryItem[]; total: number; page: number; page_size: number }>(`/v1/gallery?${q}`);
+}
+
+/** v16 P0-3：画廊单张详情（含相似推荐）。 */
+export async function fetchGalleryDetail(
+  taskId: string,
+  password?: string,
+  topK = 5,
+): Promise<{ item: GalleryItem; similar: GalleryItem[]; similar_count: number }> {
+  const q = new URLSearchParams({ top_k: String(topK) });
+  if (password) q.set('password', password);
+  return apiFetch<{ item: GalleryItem; similar: GalleryItem[]; similar_count: number }>(
+    `/v1/gallery/${encodeURIComponent(taskId)}?${q}`,
+  );
+}
+
+/** v16 P0-3：画廊批量打包 ZIP（原生 fetch 拿 Blob；apiFetch 只解 JSON 不适合二进制）。
+ *  返回 {blob, total, requested}——total 为服务端实际打入 ZIP 的张数（X-Total 头），
+ *  可据此修正 UI 提示（服务端按 IF_GALLERY_ZIP_BATCH=20 分批截断，requested > total 时提示分批）。 */
+export async function downloadGalleryZip(
+  taskIds: string[],
+  password?: string,
+): Promise<{ blob: Blob; total: number; requested: number }> {
+  const q = new URLSearchParams();
+  if (password) q.set('password', password);
+  const res = await fetch(`/v1/gallery/zip?${q}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_ids: taskIds }),
+  });
+  if (!res.ok) {
+    throw new Error(`打包失败 HTTP ${res.status}`);
+  }
+  const total = Number(res.headers.get('X-Total') ?? taskIds.length);
+  return { blob: await res.blob(), total: Number.isFinite(total) ? total : taskIds.length, requested: taskIds.length };
+}
+
+/** v16 P0-3：画廊软删（status → deleted，可回滚）。 */
+export async function softDeleteGalleryItem(taskId: string, password?: string): Promise<{ deleted: boolean; task_id: string; soft: boolean }> {
+  const q = new URLSearchParams();
+  if (password) q.set('password', password);
+  return apiFetch<{ deleted: boolean; task_id: string; soft: boolean }>(
+    `/v1/gallery/${encodeURIComponent(taskId)}?${q}`,
+    { method: 'DELETE' },
+  );
 }
 
 /** P1-1 画廊签名 URL：站长签发有限期访问链接（管理 Key 鉴权，后端返回带 exp+sig 的 URL）。 */

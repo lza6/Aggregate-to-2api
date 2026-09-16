@@ -48,20 +48,11 @@ async def warmup_cache(gallery_cache, db) -> dict[str, int]:
     for limit in (10, 20, 50):
         key = f"gallery:{limit}"
         try:
-            items = await db.recent_images(limit)
-            out = []
-            for t in items:
-                out.append(
-                    {
-                        "image_url": t["image_url"],
-                        "image_mime": t.get("image_mime"),
-                        "prompt": t["prompt"],
-                        "aspect_ratio": t["aspect_ratio"],
-                        "duration_sec": t["duration_sec"],
-                        "finished_at": t["finished_at"],
-                    }
-                )
-            await gallery_cache.set(key, {"items": out, "count": len(out)})
+            # M1 修复（审查）：与运行期 /v1/gallery 同构——用 db.gallery_list 取全字段
+            # （含 id/model/status，供前端多选/详情），total 为真实完成数（非 len 近似），
+            # 避免缓存命中时前端拿不到 id 导致多选勾选框缺失。
+            items, total = await db.gallery_list(page=1, page_size=limit)
+            await gallery_cache.set(key, {"items": items, "count": len(items), "total": total, "page": 1, "page_size": limit})
             result[key] = 1
         except Exception as e:
             log.warning("缓存预热 %s 失败: %s", key, e)

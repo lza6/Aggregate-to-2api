@@ -357,36 +357,51 @@ def _gallery_verify_sig(token: str, secret: str) -> bool:
 
 @router.get("/v1/gallery")
 async def gallery(
-    limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100), password: str | None = Query(None)
+    limit: int = Query(config.GALLERY_LIMIT, ge=1, le=100),
+    page: int = Query(1, ge=1, description="页码（1 起）"),
+    page_size: int | None = Query(None, ge=1, le=200, description="每页数量（缺省=limit，兼容旧 limit 语义）"),
+    status: str | None = Query(None, description="按状态过滤（completed/error/...）"),
+    model: str | None = Query(None, description="按模型过滤"),
+    search: str | None = Query(None, max_length=200, description="prompt 子串搜索（上限 200，防 LIKE 全表放大）"),
+    password: str | None = Query(None),
 ):
-    """最近完成的 N 条作品（画廊）。
+    """最近完成的作品（画廊）。
 
-    鉴权（P1-1 签名 URL 加固）：
-    - 优先校验签名 URL：exp + HMAC-SHA256(sig) token（'<exp>:<sig>' 作 password 传入）。
-    - 未配签名密钥时回退旧静态密码 IF_GALLERY_PASSWORD（向后兼容）。
-    - 两者皆空：画廊开放（向后兼容）。
+    鉴权（P1-1 签名 URL 加固）：签名 URL → 静态密码 → 皆空开放（向后兼容）。
+
+    v16 P0-3 管理端融合（/v1/gallery 列表端点权威实现，替代 api/routes/gallery.py 的重复列表路由）：
+    - 旧调用方（fetchGallery(limit, pwd)）：仅传 limit → 首屏兼容（page_size=limit）；
+    - 新调用方（fetchGalleryPage）：page/page_size/status/model/search 分页过滤；
+    - 响应 {items, total, page, page_size, count}：count 向后兼容旧消费者，total 供分页。
+    - 无过滤参数时命中 gallery:{limit} 缓存（cache_warmup 预热）；有过滤/翻页直查不缓存。
     """
     _gallery_auth(password)
-    cache_key = f"gallery:{limit}"
-    cached = await gallery_cache.get(cache_key)
-    if cached is not None:
-        return cached
-    items = await db.recent_images(limit)
-    out = []
-    for t in items:
-        out.append(
-            {
-                "image_url": t["image_url"],
-                "image_mime": t.get("image_mime"),
-                "prompt": t["prompt"],
-                "aspect_ratio": t["aspect_ratio"],
-                "duration_sec": t["duration_sec"],
-                "finished_at": t["finished_at"],
+    ps = page_size or max(1, min(limit, 200))
+    filtered = bool(status or model or search) or page != 1 or ps != min(limit, 200)
+    if not filtered:
+        key = f"gallery:{limit}"
+        cached = await gallery_cache.get(key)
+        if cached is not None:
+            items = cached.get("items", [])
+            return {
+                "items": items,
+                "total": cached.get("total", len(items)),
+                "page": 1,
+                "page_size": ps,
+                "count": cached.get("count", len(items)),
             }
-        )
-    result = {"items": out, "count": len(out)}
-    await gallery_cache.set(cache_key, result)
-    return result
+        items, total = await db.gallery_list(page=1, page_size=ps)
+        result = {"items": items, "total": total, "page": 1, "page_size": ps, "count": len(items)}
+        await gallery_cache.set(key, result)
+        return result
+    items, total = await db.gallery_list(page=page, page_size=ps, status=status, model=model, search=search)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": ps,
+        "count": len(items),
+    }
 
 
 @router.get("/v1/gallery/sign", include_in_schema=False)

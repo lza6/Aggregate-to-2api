@@ -8,6 +8,14 @@
 | 2026-09-15 | 计划书全任务最终验收矩阵（P0-1~P3-20 文件/开关/测试 30 项全在）+ 142 用例计划族 + 集成混沌 54/0 + E2E 14/14（15.1.1 版本断言）+ vitest 257/0 + 契约 20 | 全绿 | 逐项核对无 MISS |
 | 2026-09-15 | P1-11 §8 开关契约补全：updater 插件 setup 内条件注册 IF_DESKTOP_UPDATER=0 可关（缺省开）+ README 文档 | cargo check 编译过（5.28s） | commit e0bdace |
 
+## v16.0.0 记录（2026-09-16）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-16 | **P0-3 画廊管理端 + 前端相册化**：后端 `GET /v1/gallery` 分页（page/page_size/status/model/search，admin/query.py 权威实现，limit 兼容 + count/total 双字段 + gallery:{limit} 缓存）、`GET /v1/gallery/{task_id}` 详情（similar 推荐降级）、`GET /v1/gallery/search`、`POST /v1/gallery/zip`（临时文件流式 + `IF_GALLERY_ZIP_BATCH=20` 分批防 OOM + data-URI 解码修复 + 失败张跳过 X-Skipped）、`DELETE /v1/gallery/{task_id}` 软删可回滚；列表不投影 `image_base64`（防分页 OOM）；前端 Gallery.tsx 迁移分页端点 + 防抖搜索 + IntersectionObserver 无限滚动 + 多选操作条 + 删除确认 + 详情弹窗 + 相似推荐联动 + 空/错/骨架三态；`IF_GALLERY_PAGE_SIZE=50`/`IF_GALLERY_ZIP_BATCH=20` | 全绿 | `test_gallery_crud.py` 8 用例 + vitest GalleryAlbum 6 + Gallery(P2-1) 4 + E2E 画廊段 13a-13f 6 断言；全量单测 exit 0；vitest **263/0**（24 文件）；E2E **24/24**；tsc 0/build 0；ruff 待 CI | 修复：① mock worker 完成态被错误覆盖成 error（既往竞态，E2E 画廊 fixture 直接落库绕过，不依赖 worker 完成态）② 旧 `/v1/gallery` 路由（admin/query.py）遮蔽新列表端点 → 原位融合为权威实现并删重 ③ `image_base64` data-URI 前缀导致 zip 空包 → strip 前缀修复 |
+| 2026-09-16 | **P0-1 MCP Streamable HTTP**（`IF_MCP_STREAMABLE=1`：SSE 分帧 + capabilities resources/prompts + session 头 + DELETE 结束会话 + `task_status` 工具）与 **P0-2 聊天工具执行回路**（`IF_CHAT_TOOL_LOOP`：白名单工具网关侧执行 + role:tool 回填 + `IF_CHAT_TOOL_MAX_TURNS=2`）树内改动回归 | 全绿 | `test_mcp_server.py` + `test_chat_tool_loop.py` + E2E 11b-11e 通过 |
+| 2026-09-16 | 版本全链 15.1.1→16.0.0（14 文件：main.py/mcp/server.py/pyproject ×2/README/双 package.json+lock/docker-compose/desktop 三件套）+ 双 dist 重建 + README v16 特性小节 + E2E 版本断言更新 | 契约绿 | E2E `openapi version==16.0.0` + `mcp serverInfo 16.0.0` PASS；`frontend/dist` + `landing/dist` 重建；桌面 NSIS 真机自升级流待验证（无 Rust/真机环境） |
+
 ## v15.1.1 记录（2026-09-15）
 
 | 日期 | 范围 | 结果 | 备注 |

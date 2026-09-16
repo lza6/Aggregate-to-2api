@@ -27,10 +27,10 @@ async def test_warmup_all_success():
     db.stats_overview = AsyncMock(return_value={"total": 100})
     db.stats_daily = AsyncMock(return_value=[{"d": "1"}])
     db.stats_monthly = AsyncMock(return_value=[{"m": "1"}])
-    db.recent_images = AsyncMock(return_value=[
-        {"image_url": "u1", "image_mime": "png", "prompt": "p", "aspect_ratio": "1:1",
-         "duration_sec": 1.0, "finished_at": 1.0}
-    ])
+    db.gallery_list = AsyncMock(return_value=([
+        {"id": "g1", "status": "completed", "image_url": "u1", "image_mime": "png", "prompt": "p",
+         "aspect_ratio": "1:1", "duration_sec": 1.0, "finished_at": 1.0, "model": "m"}
+    ], 1))
     cache = MagicMock()
     cache.set = AsyncMock()
     result = await cw.warmup_cache(cache, db)
@@ -48,9 +48,9 @@ async def test_warmup_stats_failure_does_not_block_gallery():
     db.stats_overview = AsyncMock(side_effect=RuntimeError("db down"))
     db.stats_daily = AsyncMock(side_effect=RuntimeError("db down"))
     db.stats_monthly = AsyncMock(side_effect=RuntimeError("db down"))
-    db.recent_images = AsyncMock(return_value=[{"image_url": "u", "image_mime": "png",
-                                                "prompt": "p", "aspect_ratio": "1:1",
-                                                "duration_sec": 1.0, "finished_at": 1.0}])
+    db.gallery_list = AsyncMock(return_value=([{"id": "g1", "status": "completed", "image_url": "u", "image_mime": "png",
+                                                 "prompt": "p", "aspect_ratio": "1:1",
+                                                 "duration_sec": 1.0, "finished_at": 1.0, "model": "m"}], 1))
     cache = MagicMock()
     cache.set = AsyncMock()
     result = await cw.warmup_cache(cache, db)
@@ -66,18 +66,18 @@ async def test_warmup_gallery_partial_failure():
     db.stats_overview = AsyncMock(return_value={})
     db.stats_daily = AsyncMock(return_value=[])
     db.stats_monthly = AsyncMock(return_value=[])
-    # recent_images 对 gallery:20 抛错（模拟某次查询失败）
+    # gallery_list 对 gallery:20 抛错（模拟某次查询失败）
     call_count = 0
 
-    async def _recent(limit):
+    async def _gallery_list(page, page_size):
         nonlocal call_count
         call_count += 1
-        if limit == 20:
+        if page_size == 20:
             raise OSError("transient")
-        return [{"image_url": "u", "image_mime": "png", "prompt": "p",
-                 "aspect_ratio": "1:1", "duration_sec": 1.0, "finished_at": 1.0}]
+        return [{"id": "g1", "status": "completed", "image_url": "u", "image_mime": "png", "prompt": "p",
+                 "aspect_ratio": "1:1", "duration_sec": 1.0, "finished_at": 1.0, "model": "m"}], 1
 
-    db.recent_images = _recent
+    db.gallery_list = _gallery_list
     cache = MagicMock()
     cache.set = AsyncMock()
     result = await cw.warmup_cache(cache, db)
@@ -92,10 +92,10 @@ async def test_warmup_gallery_item_shape():
     db.stats_overview = AsyncMock(return_value={})
     db.stats_daily = AsyncMock(return_value=[])
     db.stats_monthly = AsyncMock(return_value=[])
-    db.recent_images = AsyncMock(return_value=[
-        {"image_url": "u1", "image_mime": "png", "prompt": "p", "aspect_ratio": "1:1",
-         "duration_sec": 2.5, "finished_at": 1700000000.0}
-    ])
+    db.gallery_list = AsyncMock(return_value=([
+        {"id": "g1", "status": "completed", "image_url": "u1", "image_mime": "png", "prompt": "p",
+         "aspect_ratio": "1:1", "duration_sec": 2.5, "finished_at": 1700000000.0, "model": "m"}
+    ], 1))
     cache = MagicMock()
     cache.set = AsyncMock()
     await cw.warmup_cache(cache, db)

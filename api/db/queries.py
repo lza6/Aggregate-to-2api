@@ -299,6 +299,75 @@ class DBQueriesMixin:
         rows = await cursor.fetchall()
         return [self._row_to_dict(r) for r in rows]
 
+    async def gallery_list(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        status: str | None = None,
+        model: str | None = None,
+        search: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """画廊分页列表（v16 P0-3）：已完成且有图的任务，支持过滤与 prompt 搜索。
+
+        默认排除软删（status='deleted' 不入画廊）。返回 (items, total)。
+        """
+        await self._ensure_flushed()
+        # H2 修复（审查）：total 与数据查询必须同口径——无图行（image_url IS NULL）两处都不计，
+        # 否则前端 hasMore = items.length < total 恒真，无限滚动永不终止。
+        where = ["status NOT IN ('deleted','pending')", "image_url IS NOT NULL"]
+        params: list[Any] = []
+        if status:
+            where.append("status=?")
+            params.append(status)
+        if model:
+            where.append("model=?")
+            params.append(model)
+        if search:
+            where.append("prompt LIKE ?")
+            params.append(f"%{search}%")
+        where_clause = " WHERE " + " AND ".join(where)
+        conn = await self._get_read_conn()
+        total_cursor = await conn.execute(
+            f"SELECT COUNT(*) FROM requests{where_clause}", params
+        )
+        total_row = await total_cursor.fetchone()
+        total = int(total_row[0]) if total_row is not None else 0
+        page = max(1, page)
+        page_size = min(max(1, page_size), 200)
+        cols = ", ".join(self._GALLERY_COLS)
+        data_cursor = await conn.execute(
+            f"SELECT {cols} FROM requests{where_clause}"
+            " ORDER BY finished_at DESC LIMIT ? OFFSET ?",
+            (*params, page_size, (page - 1) * page_size),
+        )
+        rows = await data_cursor.fetchall()
+        return [self._row_to_dict(r) for r in rows], total
+
+    async def gallery_get(self, task_id: str) -> dict[str, Any] | None:
+        """画廊单张详情（任务存在且未软删）。"""
+        await self._ensure_flushed()
+        cols = ", ".join(self._GALLERY_COLS)
+        conn = await self._get_read_conn()
+        cursor = await conn.execute(
+            f"SELECT {cols} FROM requests WHERE id=? AND status != 'deleted' LIMIT 1",
+            (task_id,),
+        )
+        row = await cursor.fetchone()
+        return self._row_to_dict(row) if row is not None else None
+
+    async def gallery_soft_delete(self, task_id: str) -> bool:
+        """画廊软删：status → 'deleted'（不物理删文件，可回滚）。返回是否生效。"""
+        await self._ensure_flushed()
+        # 先确认存在且未软删（读取路径；写走批量队列避免绕过 WAL 合并提交）
+        existing = await self.gallery_get(task_id)
+        if existing is None:
+            return False
+        await self._enqueue_write(
+            "UPDATE requests SET status='deleted', finished_at=COALESCE(finished_at, ?) WHERE id=? AND status != 'deleted'",
+            (time.time(), task_id),
+        )
+        return True
+
     async def recent_errors(self, limit: int = 20) -> list[dict[str, Any]]:
         """最近失败的请求（含错误原因/prompt），供在线排查。"""
         await self._ensure_flushed()
@@ -517,10 +586,21 @@ class DBQueriesMixin:
         return None
 
     async def read_base64(self, task_id: str) -> str | None:
-        """从文件读取 task_id 的 base64 字符串。"""
-        path = await self.get_base64_path(task_id)
-        if path is None:
+        """读取 task_id 的 base64 字符串（v16 P0-3 画廊 ZIP 用）。
+
+        M4 修复（审查）：file:// 路径读文件；内联 base64（save_base64 写文件失败时的降级存储）
+        直接返回值，避免 ZIP 静默跳过这类行。
+        """
+        await self._ensure_flushed()
+        conn = await self._get_read_conn()
+        cursor = await conn.execute("SELECT image_base64 FROM requests WHERE id=?", (task_id,))
+        row = await cursor.fetchone()
+        if not row or not row[0]:
             return None
+        val = str(row[0])
+        if not val.startswith("file://"):
+            return val  # 内联降级存储：直接返回原文
+        path = val[7:]
         try:
             with open(path, encoding="utf-8") as f:
                 data = f.read()

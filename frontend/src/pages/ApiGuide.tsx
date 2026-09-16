@@ -95,6 +95,38 @@ const res = await fetch(\`\${BASE}/v1/generate/async\`, {
 });
 const task = await res.json();
 console.log(task.id, task.status);`,
+    mcpClaude: `{
+  "mcpServers": {
+    "tingfeng-ai": {
+      "type": "http",
+      "url": "${baseUrl}/v1/mcp"
+    }
+  }
+}`,
+    mcpCursor: `// Cursor: Settings → MCP → Add new MCP server
+// Name: tingfeng-ai   Type: http   URL: ${baseUrl}/v1/mcp
+// 或编辑 ~/.cursor/mcp.json 使用与 Claude Desktop 相同的 JSON 结构`,
+    mcpCurl: `# 开启 MCP 端点（.env 设 IF_MCP_ENABLED=1 并重启）
+# 1) 握手：声明 capabilities（tools/resources/prompts）
+curl -X POST ${baseUrl}/v1/mcp \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+
+# 2) 列出工具（skills_list/skills_get/dag_plan/dag_status/generate_image/task_status）
+curl -X POST ${baseUrl}/v1/mcp \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+# 3) 调用受控生图（异步任务：返回 task_id，再用 task_status 轮询）
+curl -X POST ${baseUrl}/v1/mcp \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"generate_image","arguments":{"prompt":"a cute cat"}}}'
+
+# 4) Streamable HTTP：Accept: text/event-stream 时返回 SSE 分帧
+curl -N -X POST ${baseUrl}/v1/mcp \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":4,"method":"ping"}'`,
   }), [baseUrl]);
 
   return (
@@ -164,6 +196,23 @@ console.log(task.id, task.status);`,
       <div className="tf-card ag-card">
         <div className="ag-card-title">⚡ JavaScript 示例</div>
         <CodeBlock code={examples.jsFetch} title="fetch（异步生图）" />
+      </div>
+
+      {/* v16 P0-1：MCP 连接配置（外部 client 接入） */}
+      <div className="tf-card ag-card">
+        <div className="ag-card-title">🔌 MCP 接入（Claude Desktop / Cursor）</div>
+        <div className="ag-card-desc">
+          听风AI 提供 MCP 服务端（<code>POST /v1/mcp</code>，JSON-RPC 2.0 + Streamable HTTP），
+          任何支持 MCP 的客户端可直接接入，用自然语言驱动生图 / DAG 规划 / 技能查询。
+          需先在 <code>.env</code> 设 <code>IF_MCP_ENABLED=1</code> 并重启服务。
+        </div>
+        <CodeBlock code={examples.mcpClaude} title="① Claude Desktop（claude_desktop_config.json）" />
+        <CodeBlock code={examples.mcpCursor} title="② Cursor" />
+        <CodeBlock code={examples.mcpCurl} title="③ curl 手工验证（含 SSE 分帧）" />
+        <div className="ag-card-hint">
+          可用工具：skills_list / skills_get / dag_plan / dag_status / generate_image / task_status。
+          生图为异步任务（返回 task_id 后用 task_status 轮询）。能力声明含 tools / resources / prompts。
+        </div>
       </div>
 
       {/* 模型列表提示 */}

@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-15.1.1-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-16.0.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -25,6 +25,9 @@
 - **💬 文本对话与智能体网关 (v4.4)** — 整合 TryingOpen 匿名多模型，提供标准 OpenAI `/v1/chat/completions` 与 Anthropic `/v1/messages` 兼容端点，支持思考链、工具调用（Function Calling）与多模态 Vision，自动代理轮换突破单 IP 频控。
 - **🤖 智能体 DAG 编排 (v13)** — `/v1/agent/dag/run` 多节点编排（scene/llm/critic/memory/tool/retrieval/human_input 八类节点），自反思 critic 闭环 + LLM 工具循环 + 人机审批真通道；断点续跑（`POST /v1/agent/dag/{run_id}/resume`）+ 节点轨迹持久化；intent 规则→embedding→LLM 三段式意图分类；MCP 协议端点（`POST /v1/mcp` JSON-RPC 2.0，五工具白名单 + 预算门禁）；审批收件箱 SQLite 持久化（重启可查）。工具调用安全护栏：破坏性命令（`rm -rf /`、`git reset --hard`、`DELETE FROM accounts` 等）PreToolUse 硬门禁拦截 + 预算门禁（enforce 超限 402 拒绝），`IF_BUDGET_GUARD_MODE` 三态可回滚。
 - **🖥️ 桌面版 (v13)** — Tauri 2 sidecar 托管完整后端（PyInstaller uvicorn 内置），`desktop/start-desktop.bat` 无 Rust 环境一键启动（.venv 三级回退 + 前端 dist 自动构建 + healthz 探测）。任务完成系统通知（tauri-plugin-notification）+ 托盘图标（显示/退出，`IF_DESKTOP_CLOSE_TO_TRAY=1` 关窗进托盘）+ 应用自升级（tauri-plugin-updater，GitHub Release 静态 URL + 签名校验，私钥 `TAURI_SIGNING_PRIVATE_KEY` 环境变量注入）。
+- **🖼️ 画廊相册化 (v16)** — 完整画廊管理端：分页列表（page/搜索/状态/模型过滤，`IF_GALLERY_PAGE_SIZE` 分页大小）+ 前端瀑布流相册（防抖搜索 + IntersectionObserver 无限滚动 + 多选操作条 + 删除确认 + 详情弹窗 + 相似图推荐联动）+ 多选一键 ZIP 打包（临时文件流式下发，`IF_GALLERY_ZIP_BATCH=20` 防 512MB 容器 OOM，失败张跳过并回报）+ 软删可回滚（不物理删文件）。
+- **🔌 MCP Streamable HTTP (v16)** — `/v1/mcp` 升级官方 Streamable HTTP Transport（`Accept: text/event-stream` 时 SSE 分帧 + `resources/list`/`prompts/list` 能力声明 + `DELETE` 结束会话），Claude Desktop / Cursor 开箱即连；`generate_image` 异步任务契约（返回 `{task_id, status: queued}` + `task_status` 幂等轮询），`IF_MCP_STREAMABLE` 缺省开可回滚。
+- **🛠️ 聊天工具真实执行回路 (v16)** — 聊天 tools 网关侧安全执行白名单工具（skills_list/dag_plan/generate_image + memory_search 只读）并以 `role: tool` 回填续跑，复用 MCP 同一份 `guard_and_run` + 预算门禁（enforce 402）+ 破坏性命令黑名单，`IF_CHAT_TOOL_LOOP` 缺省关零行为变化。
 
 > 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
 

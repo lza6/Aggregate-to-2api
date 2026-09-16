@@ -63,6 +63,123 @@ async def _rag_prefix_if_enabled(query: str) -> str:
         log.warning("chat RAG 检索降级: %s", exc)
         return ""
 
+# ── v16 P0-2：聊天工具执行回路（网关侧安全执行白名单工具 + role:tool 回填）──────
+
+_FALLBACK_RETRY_ABLE = {"stop", "end_turn", ""}
+
+
+def _tool_loop_enabled() -> bool:
+    """IF_CHAT_TOOL_LOOP 是否开启（缺省 0 = 旧纯转发零行为变化）。"""
+    try:
+        from ..config import get_settings
+
+        return bool(getattr(get_settings(), "if_chat_tool_loop", False))
+    except Exception:
+        return False
+
+
+def _tool_loop_max_turns() -> int:
+    try:
+        from ..config import get_settings
+
+        return int(getattr(get_settings(), "if_chat_tool_max_turns", 2))
+    except Exception:
+        return 2
+
+
+async def _run_local_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """网关侧安全执行白名单工具（复用 MCP tools 同一份实现，不复制逻辑）。
+
+    - 复用 `api/mcp/tools.py` 的 find_tool + guard_and_run（预算门禁 enforce 402 语义）
+    - 复用 `api/agent/guard.py` 的 is_destructive_command 白名单先行拒绝（工具名命中即拒，
+      不给 handler 执行机会）
+    - 返回 {tool, ok, content, error} 统一信封（消费方勿抛上层，失败回填为文本）
+    """
+    from ..agent.guard import is_destructive_command
+    from ..mcp.tools import build_tools, find_tool, guard_and_run
+
+    if is_destructive_command(tool_name):
+        return {"tool": tool_name, "ok": False, "content": "", "error": f"工具「{tool_name}」属危险命令，已拒绝执行"}
+    tool = find_tool(build_tools(), tool_name)
+    if tool is None:
+        return {"tool": tool_name, "ok": False, "content": "", "error": f"未知工具：{tool_name}"}
+    try:
+        result = await guard_and_run(tool, arguments)
+        text = result if isinstance(result, str) else str(result)
+        return {"tool": tool_name, "ok": True, "content": text, "error": ""}
+    except Exception as exc:  # noqa: BLE001 — 工具异常回填为可读文本，不崩 chat
+        log.warning("chat 工具 %s 执行异常: %s", tool_name, exc)
+        return {"tool": tool_name, "ok": False, "content": "", "error": f"工具执行失败：{exc}"}
+
+
+def _tool_call_name(call: dict[str, Any]) -> str:
+    func = call.get("function") or {}
+    name = func.get("name") or ""
+    # Anthropic tool_use 形态：call 直接含 name
+    return name or str(call.get("name") or "")
+
+
+def _tool_call_args(call: dict[str, Any]) -> dict[str, Any]:
+    func = call.get("function") or {}
+    raw = func.get("arguments") or call.get("input") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            raw = {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _tool_call_id(call: dict[str, Any]) -> str:
+    return str(call.get("id") or call.get("tool_call_id") or f"call_{uuid.uuid4().hex[:12]}")
+
+
+async def _build_tool_messages(
+    messages: list[dict[str, Any]], tool_calls: list[dict[str, Any]], assistant_content: str | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """执行白名单工具并回填 role:tool 消息。
+
+    返回 (扩展后的 messages, 执行结果列表)。已执行的工具结果以 OpenAI tool 角色回填；
+    预算/拒绝的失败也回填为可读文本（不静默）。白名单 = MCP 五工具 + task_status。
+
+    H1 协议修复（审查）：OpenAI 要求 role:tool 消息必须前置对应的 assistant tool_calls 声明
+    ——本函数先把第一轮模型的工具声明（assistant 消息）插入，再追加各 tool 结果消息，
+    否则第 2 轮续跑上游会以「messages with role 'tool' must be a response to a preceding
+    message with 'tool_calls'」拒绝（或模型丢失"自己刚声明过工具调用"的上下文）。
+    """
+    from ..mcp.tools import TOOL_PROVIDER_MAP
+
+    extra: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
+    for call in tool_calls:
+        name = _tool_call_name(call)
+        if name not in TOOL_PROVIDER_MAP:
+            # 白名单外工具：不执行，仅以可读文本回填（保持对话连贯，不裸转发半截）
+            extra.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": _tool_call_id(call),
+                    "content": json.dumps(
+                        {"ok": False, "error": f"工具不在白名单：{name}（仅开放 {sorted(TOOL_PROVIDER_MAP)}）"},
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+            results.append({"tool": name, "ok": False, "content": "", "error": "not in whitelist"})
+            continue
+        out = await _run_local_tool(name, _tool_call_args(call))
+        results.append(out)
+        text = out["content"] if out["ok"] else (out["error"] or "执行失败")
+        extra.append({"role": "tool", "tool_call_id": _tool_call_id(call), "content": text})
+    # H1：先回填本轮 assistant 的工具声明消息（在全部 tool 结果之前）
+    assistant_msg: dict[str, Any] = {
+        "role": "assistant",
+        "content": assistant_content or None,
+        "tool_calls": tool_calls,
+    }
+    return messages + [assistant_msg] + extra, results
+
+
 _ROLE = Literal["user", "assistant", "system", "tool"]
 _REASONING_EFFORT = {
     "minimal": "quick",
@@ -418,6 +535,31 @@ async def _openai_stream(
         yield "data: [DONE]\n\n"
 
 
+async def _collect_with_tool_loop(
+    request: ChatCompletionsRequest | MessagesRequest,
+    messages: list[dict[str, Any]],
+) -> tuple[dict[str, Any], str, str, list[dict[str, Any]], str, dict[str, int]]:
+    """非流式聊天收集：IF_CHAT_TOOL_LOOP=1 时执行白名单工具并续跑一次汇总（最多 N 轮）。
+
+    返回最后一次 _chat_collect 的结果（终态为 stop/end_turn 或达轮次上限）。
+    未开启（缺省）→ 直接走原 _chat_collect 单轮，零行为变化。
+    """
+    if not _tool_loop_enabled():
+        return await _chat_collect(request, messages)
+
+    turn = 0
+    max_turns = max(1, _tool_loop_max_turns())
+    while turn < max_turns:
+        result, text, reasoning, tool_calls, finish_reason, usage = await _chat_collect(request, messages)
+        if not tool_calls or finish_reason in _FALLBACK_RETRY_ABLE:
+            return result, text, reasoning, tool_calls, finish_reason, usage
+        # 有工具声明 → 执行白名单工具 + 回填 role:tool 消息（H1：含前置 assistant tool_calls 声明）
+        messages, _results = await _build_tool_messages(messages, tool_calls, text)
+        turn += 1
+    # 达轮次上限：返回最后一次结果（含工具声明，客户端可自行决定）
+    return result, text, reasoning, tool_calls, finish_reason, usage
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionsRequest, raw_request: Request):
     auth.guard_chat_request(raw_request)
@@ -433,7 +575,7 @@ async def chat_completions(request: ChatCompletionsRequest, raw_request: Request
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-    _, text, reasoning, tool_calls, finish_reason, usage = await _chat_collect(request, messages)
+    _, text, reasoning, tool_calls, finish_reason, usage = await _collect_with_tool_loop(request, messages)
     return _openai_response(request.model, text, reasoning, tool_calls, finish_reason, usage)
 
 
@@ -477,7 +619,7 @@ async def messages(request: MessagesRequest, raw_request: Request):
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-    _, text, reasoning, tool_calls, finish_reason, usage = await _chat_collect(request, message_payload)
+    _, text, reasoning, tool_calls, finish_reason, usage = await _collect_with_tool_loop(request, message_payload)
     return {
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "message",

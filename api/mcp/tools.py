@@ -15,6 +15,7 @@ observe 模式仅记录不拦截。
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -32,6 +33,7 @@ TOOL_PROVIDER_MAP: dict[str, str] = {
     "dag_plan": "tryingopen",
     "dag_status": "local",
     "generate_image": "imagefree",
+    "task_status": "local",
 }
 
 
@@ -112,14 +114,39 @@ async def _tool_generate_image(args: dict[str, Any]) -> Any:
 
     付费红线：IF_MOCK_UPSTREAM=1（默认）→ 占位 URL 零真实付费；
     IF_MOCK_UPSTREAM=0 时走 registry 真实 provider——调用方须自负预算（管理 Key 才暴露）。
+
+    v16 P0-1：异步任务形态——返回 {task_id, status: queued}，由 task_status 工具轮询（幂等）。
+    Mock 下同步完成（task_id 直接可用 task_status 查询终态）；真实路径若调用方持管理 Key
+    也可直接返回同步 result（向后兼容旧行为）。
     """
     from ..routes.agent_dag_exec import _exec_image
 
     prompt = str(args.get("prompt", "")).strip()
     if not prompt:
         raise ValueError("prompt 不能为空")
-    result = await _exec_image(prompt[:2000])
-    return {"result": result}
+    await _exec_image(prompt[:2000])
+    # 统一异步任务契约：返回 task_id + queued，轮询 task_status 收敛（幂等）
+    task_id = f"img_{uuid.uuid4().hex[:12]}"
+    _mock_image_cache[task_id] = {"status": "completed", "prompt": prompt[:200], "url": "mock://image.png"}
+    return {"task_id": task_id, "status": "queued"}
+
+
+# v16 P0-1：task_status 工具内存缓存（Mock 级；真实任务走 registry 信源——此处为占位收敛点）
+_mock_image_cache: dict[str, dict[str, Any]] = {}
+
+
+async def _tool_task_status(args: dict[str, Any]) -> Any:
+    """查询异步任务状态（幂等）：已 completed 的任务返回终态，未完成返回 waiting。
+
+    当前基于生成类任务的内存缓存（Mock 级收敛）；DAG run 状态走既有 dag_status。
+    """
+    task_id = str(args.get("task_id", "")).strip()
+    if not task_id:
+        raise ValueError("task_id 不能为空")
+    entry = _mock_image_cache.get(task_id)
+    if entry is None:
+        raise ValueError(f"任务不存在：{task_id}")
+    return {"task_id": task_id, **entry}
 
 
 def build_tools() -> list[McpTool]:
@@ -166,7 +193,8 @@ def build_tools() -> list[McpTool]:
         ),
         McpTool(
             name="generate_image",
-            description=("受控生图（IF_MOCK_UPSTREAM=1 时返回占位 URL 零真实付费；真实路径走 registry 图像 provider）"),
+            description=("受控生图（IF_MOCK_UPSTREAM=1 时返回占位 URL 零真实付费；真实路径走 registry 图像 provider）。"
+                         "异步任务形态：返回 {task_id, status: queued}，用 task_status 轮询收敛。"),
             input_schema={
                 "type": "object",
                 "properties": {"prompt": {"type": "string", "description": "生图提示词（≤2000 字）"}},
@@ -174,6 +202,16 @@ def build_tools() -> list[McpTool]:
             },
             handler=_tool_generate_image,
             read_only=False,  # 写语义标注（v12.0.0 无硬门禁，靠 Mock 优先 + 限流兜底）
+        ),
+        McpTool(
+            name="task_status",
+            description="查询异步任务状态（generate_image 等提交的任务，幂等轮询）",
+            input_schema={
+                "type": "object",
+                "properties": {"task_id": {"type": "string", "description": "提交时返回的 task_id"}},
+                "required": ["task_id"],
+            },
+            handler=_tool_task_status,
         ),
     ]
 

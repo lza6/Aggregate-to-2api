@@ -269,8 +269,17 @@ class Settings(BaseSettings):
     if_agent_planner_model: str = Field("tryingopen/default", validation_alias="IF_PLANNER_LLM_MODEL")
     # v11.0.0 RAG 增强：1=chat 在 system 前注入向量检索上下文（默认关闭，零行为变化）
     if_rag_enabled: bool = Field(False, validation_alias="IF_RAG_ENABLED")
+    # v16 P0-2 聊天工具执行回路：1=网关侧安全执行白名单工具 + role:tool 回填续跑；0=旧纯转发零行为变化
+    if_chat_tool_loop: bool = Field(False, validation_alias="IF_CHAT_TOOL_LOOP")
+    # v16 P0-2 工具循环最大轮数（防死循环；达峰返回最后一次结果）
+    if_chat_tool_max_turns: int = Field(2, validation_alias="IF_CHAT_TOOL_MAX_TURNS")
     # v12.0.0 P1-M1 MCP 协议化（/v1/mcp JSON-RPC 2.0；默认关闭，符合"新功能缺省关"约定）
     if_mcp_enabled: bool = Field(False, validation_alias="IF_MCP_ENABLED")
+    # v16 P0-1 MCP Streamable HTTP（1=Accept text/event-stream 时响应走 SSE 分帧 + resources/prompts 能力；0=纯 JSON 单响应兼容旧客户端）
+    if_mcp_streamable: bool = Field(True, validation_alias="IF_MCP_STREAMABLE")
+    # v16 P0-3 画廊管理端：分页大小（1-200）与打包单批上限（防 512MB 容器全量内存打包 OOM）
+    if_gallery_page_size: int = Field(50, validation_alias="IF_GALLERY_PAGE_SIZE")
+    if_gallery_zip_batch: int = Field(20, validation_alias="IF_GALLERY_ZIP_BATCH")
     # v12.0.0 P1-M11 dispatch 前硬预算门禁（付费上游估算超预算 402；observe 只记录不拦截）
     if_budget_guard_mode: str = Field("off", validation_alias="IF_BUDGET_GUARD_MODE")
     # v12.0.0 P1-M10 Fence 清洗层（LLM 读不可信文本前剥离注入载荷；默认关闭零行为变化）
