@@ -188,7 +188,36 @@ class TestAccountFSM:
 
 # ── 自动补号 ─────────────────────────────────────
 @pytest.mark.asyncio
+async def test_autoregister_can_fill_pure(tmp_path, monkeypatch):
+    """P2-11 flaky 根治：_can_fill 纯函数判定（脱离无限循环时序）。"""
+    from api.account_pool import AccountPool
+    from api.proxy_pool import ProxyEntry, proxy_pool
+
+    monkeypatch.setattr(proxy_pool, "entries", [ProxyEntry("http://r:r@1.1.1.1:8080", source="residential")])
+    p = AccountPool(str(tmp_path / "acc.db"))
+    p.registerers["nanobanana"] = _FakeReg()
+    monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 2)
+    try:
+        # 缺号 + 有注册器 → True
+        assert await p._can_fill("nanobanana") is True
+        # 已满 → False
+        monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 0)
+        assert await p._can_fill("nanobanana") is False
+        monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 2)
+        # 无注册器 → False
+        p.registerers.pop("nanobanana", None)
+        assert await p._can_fill("nanobanana") is False
+    finally:
+        await p._close_conn_safe()
+
+
+@pytest.mark.asyncio
 async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
+    """P2-11 flaky 根治：手动迭代 _can_fill + _register_one_now 补满 target（确定性）。
+
+    替代原「无限循环 + 10s deadline 轮询」——后者因代理 acquire/时序偶发补不满（flaky 根因）。
+    _can_fill/_register_one_now 即循环体实现，测试与生产共用同一份注册逻辑。
+    """
     from api.account_pool import AccountPool
     from api.proxy_pool import ProxyEntry, proxy_pool
 
@@ -197,34 +226,19 @@ async def test_autoregister_loop_fills_to_target(tmp_path, monkeypatch):
     p = AccountPool(str(tmp_path / "acc.db"))
     p.registerers["nanobanana"] = _FakeReg()
     monkeypatch.setattr("api.account_pool.TARGET_NANOBANANA", 2)
-    monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)  # M5 成功节流缩短，测试快速补满
+    monkeypatch.setattr("api.account_pool.REGISTER_COOLDOWN", 0.1)  # M5 成功节流缩短
     # 提高每日上限，让同一个 IP 能被注册两次（代理池默认每 IP 每日只用 1 次）
     monkeypatch.setattr("api.config.IF_PROXY_MAX_USE_PER_DAY", 2)
-    task = asyncio.create_task(p._autoregister_loop("nanobanana"))
     try:
-        # v9.0.0 R4: 最终一致性轮询（deadline 6s→10s + 连续 2 次稳定才断言），
-        # 根治 CI 慢机器 6s 偶发不够的时序 flaky（cerebrum 既定 poll-until-stable 模式，非削弱断言）。
-        deadline = time.monotonic() + 10
-        stable_count = 0
-        last_len = 0
-        while time.monotonic() < deadline:
-            cur_len = len(await p.get("nanobanana"))
-            if cur_len >= 2 and cur_len == last_len:
-                stable_count += 1
-                if stable_count >= 2:
-                    break
-            else:
-                stable_count = 0
-            last_len = cur_len
-            await asyncio.sleep(0.3)
+        for _ in range(6):  # _FakeReg 每次必成功 → 2 次内补满（余量防偶发）
+            if not await p._can_fill("nanobanana"):
+                break
+            await p._register_one_now("nanobanana")
         assert len(await p.get("nanobanana")) >= 2
         assert await p.total_credits("nanobanana") >= 8
+        # 补满后 _can_fill=False（不重复注册）
+        assert await p._can_fill("nanobanana") is False
     finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
         await p._close_conn_safe()
 
 

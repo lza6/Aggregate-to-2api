@@ -49,6 +49,60 @@ async def get_task(task_id: str) -> TaskInfo:
     return TaskInfo(**task_to_public(task))
 
 
+@router.post("/v1/tasks/{task_id}/cancel", include_in_schema=True, summary="取消任务（幂等）")
+async def cancel_task(task_id: str) -> dict[str, Any]:
+    """取消任务（P0-4，幂等）。
+
+    - pending/processing → 终态 cancelled（取消后 worker 感知放弃，见 engine._process 检查点）；
+    - 已完成/失败/已取消 → 200 幂等返回当前状态，不报错、不产生状态不一致；
+    - 任务不存在 → 404；开关 IF_TASK_CANCEL_ENABLED=0 → 403 禁用。
+    """
+    from .. import config as _cfg
+    from ..meta import engine as _engine
+
+    if not _cfg.IF_TASK_CANCEL_ENABLED:
+        raise AppError(ErrorCodes.FORBIDDEN, "任务取消功能未启用（IF_TASK_CANCEL_ENABLED=0）", 403)
+    status, changed = await _engine.cancel_task(task_id)
+    if status == "not_found":
+        raise AppError(ErrorCodes.NOT_FOUND, "task 不存在", 404)
+    # changed=True 表示本次执行了取消；False 表示幂等命中（任务已是终态，未变更）
+    return {"task_id": task_id, "status": status, "cancelled": changed}
+
+
+@router.post("/v1/tasks/{task_id}/retry", include_in_schema=True, summary="按原任务参数重新投递")
+async def retry_task(request: Request, task_id: str) -> dict[str, Any]:
+    """一键重试（P0-4）：按原任务参数（prompt/aspect_ratio/download/model）重新投递为新任务。
+
+    - 返回新 task_id，原任务记录保持不变；新任务以 normal 优先级进入队列；
+    - 权限与主链路一致（guard + ratio/model 校验 + IP 回填，见 _prepare）；
+    - 任务不存在 → 404。注：原任务 DB 不存 priority/resolution，重试任务取默认。
+    """
+    row = await db.get(task_id)
+    if not row:
+        raise AppError(ErrorCodes.NOT_FOUND, "task 不存在", 404)
+    # L4 修复（审查）：仅允许失败/已取消终态重试——防复制运行中/已完成/已归档任务。
+    # 注：DB 不存 kind/duration/images（type 恒 'txt'），视频任务（txt2vid/img2vid）无法
+    # 完整重建：专用模型会在 _validate_model 422 明确报错，通用模型则降级 txt2img（已知限制，披露）。
+    if row.get("status") not in ("error", "failed", "cancelled"):
+        raise AppError(ErrorCodes.BAD_REQUEST, f"仅失败/已取消任务可重试（当前 {row.get('status')}）", 400)
+    from ..models import GenerateRequest
+    from .generate import _prepare, _submit
+
+    try:
+        req = GenerateRequest(
+            prompt=row.get("prompt") or "",
+            aspect_ratio=row.get("aspect_ratio") or "1:1",
+            download=bool(row.get("download")),
+            model=row.get("model") or "imagefree/default",
+        )
+    except Exception as exc:  # 原任务参数异常（如 DB 脏数据）→ 422，不静默
+        raise AppError(ErrorCodes.BAD_REQUEST, f"原任务参数无法重建请求: {exc}", 422)
+    # 与主链路 /v1/generate 完全一致：鉴权限流 → 比例/模型校验 → 调用方 IP 回填
+    _prepare(request, req)
+    new_task_id = await _submit(req)
+    return {"task_id": new_task_id, "source_task_id": task_id, "status": "queued"}
+
+
 @router.get("/v1/tasks/{task_id}/logs", include_in_schema=False)
 async def task_logs(task_id: str, lines: int = Query(200, ge=5, le=2000)) -> dict[str, Any]:
     """任务 ID → 全链路日志串联（Section 16 可观测性 / P3）。

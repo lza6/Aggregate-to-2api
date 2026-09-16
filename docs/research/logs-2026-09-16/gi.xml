@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="4.453" timestamp="2026-09-16T10:10:07.677983+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_mcp_server.TestStreamableHTTP" name="test_generate_image_async_then_task_status" time="3.863"><failure message="json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)">self = &lt;tests.test_mcp_server.TestStreamableHTTP object at 0x0000000006CAC640&gt;
+mcp_client = &lt;starlette.testclient.TestClient object at 0x00000000087E1940&gt;
+
+    def test_generate_image_async_then_task_status(self, mcp_client: TestClient):
+        """v16 P0-1：generate_image 异步任务形态 → task_status 轮询收敛（Mock 级幂等）。"""
+        # 提交生图（Mock）：返回 {task_id, status: queued}
+        submit = mcp_client.post(
+            "/v1/mcp",
+            json=_rpc("tools/call", {"name": "generate_image", "arguments": {"prompt": "一只猫"}}),
+        )
+        result = submit.json()["result"]
+        content = result["content"][0]["text"]
+        assert result["isError"] is False
+        assert "task_id" in content and "queued" in content
+        # 解析 task_id
+        import json as _json
+    
+&gt;       data = _json.loads(content)
+               ^^^^^^^^^^^^^^^^^^^^
+
+tests\test_mcp_server.py:221: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Python314\Lib\json\__init__.py:352: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\json\decoder.py:345: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;json.decoder.JSONDecoder object at 0x0000000001A8EF90&gt;
+s = "{'task_id': 'img_c584ed6fd37e', 'status': 'queued'}", idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+&gt;           obj, end = self.scan_once(s, idx)
+                       ^^^^^^^^^^^^^^^^^^^^^^
+E           json.decoder.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+
+C:\Python314\Lib\json\decoder.py:361: JSONDecodeError</failure></testcase></testsuite></testsuites>

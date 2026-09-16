@@ -153,11 +153,20 @@ async def broadcast_task_event(task_id: str, status: str, data: dict | None = No
             except Exception:
                 pass
     # v4.2: 同时发布到 per-task 事件流（仅发布一次，非双重）
+    # P0-4: cancelled 也是终态（用户主动取消，非错误）→ 映射为 result 事件（触发 SSE 断开）；
+    #       终态事件统一 append status_detail + progress（completed/cancelled=100）阶段徽章。
+    #       旧字段（task_id/status/...）全部保留，新字段 append-only 向后兼容。
     try:
+        _terminal_detail = {"cancelled": "cancelled", "completed": "completed"}.get(status, status)
+        _payload = {"task_id": task_id, "status": status, **(data or {})}
+        if not _payload.get("status_detail"):
+            _payload["status_detail"] = _terminal_detail
+        if status in ("completed", "cancelled"):
+            _payload["progress"] = 100
         publish_task_event(
             task_id,
-            "result" if status == "completed" else "error",
-            {"task_id": task_id, "status": status, **(data or {})},
+            "result" if status in ("completed", "cancelled") else "error",
+            _payload,
         )
     except Exception:
         pass

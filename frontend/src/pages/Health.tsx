@@ -4,6 +4,27 @@ import { StatCard } from '../components/StatCard';
 import { ProxyPoolGeo } from '../components/ProxyPoolGeo';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
+import { adminHeaders, notify } from '../api/core';
+
+/** P2-10：下载健康自诊断报告（管理 Key 鉴权端点 → Markdown 落盘）。 */
+async function exportHealthReport(): Promise<void> {
+  try {
+    const res = await fetch('/v1/admin/health-report?format=md', { headers: adminHeaders() });
+    if (!res.ok) throw new Error(`导出失败 HTTP ${res.status}`);
+    const text = await res.text();
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `health-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    notify('健康报告已导出', 'success');
+  } catch (e) {
+    notify(e instanceof Error ? e.message : '导出失败', 'error');
+  }
+}
 
 interface PoolScore {
   label: string;
@@ -121,9 +142,14 @@ export function HealthPage() {
           <h1 className="page-title">系统健康体检</h1>
           <p className="page-desc">聚合诊断与代理池状态，实时评估「可立即出图能力」</p>
         </div>
-        <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadProxy(); reloadProxyDetail(); }}>
-          <span>🔄</span> 重新体检
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tf-btn tf-btn-secondary" onClick={() => void exportHealthReport()}>
+            <span>📄</span> 导出报告
+          </button>
+          <button className="tf-btn tf-btn-secondary" onClick={() => { reloadDiag(); reloadProxy(); reloadProxyDetail(); }}>
+            <span>🔄</span> 重新体检
+          </button>
+        </div>
       </div>
 
       {errors.length > 0 && (

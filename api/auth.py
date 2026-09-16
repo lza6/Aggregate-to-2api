@@ -158,8 +158,28 @@ def check_admin_key(request: Request, *, scope: str = "admin-security") -> None:
         raise AppError(ErrorCodes.UNAUTHORIZED, "管理 Key 无效或已撤销", 401, details={"scope": scope})
 
 
+def _set_chat_rate_meta(request: Request, *, limit: int, remaining: int, reset: int) -> None:
+    """P1-5：把聊天限流桶状态挂到 request.state（供 RateLimitHeadersMiddleware 注入 X-RateLimit-*）。
+
+    与 request_guard._set_rate_meta 同键（state.rate_limit），填充分支静默跳过，不打断主链路。
+    """
+    try:
+        request.state.rate_limit = {
+            "limit": int(limit),
+            "remaining": int(max(0, remaining)),
+            "reset": int(reset),
+        }
+    except Exception:  # noqa: BLE001  展示数据，failure 不打断请求
+        pass
+
+
 def check_chat_rate_limit(request: Request) -> None:
-    """聊天端点每客户端限流（独立于生图 request_guard 的窗口）。"""
+    """聊天端点每客户端限流（独立于生图 request_guard 的窗口）。
+
+    P1-5：每路径把桶状态挂到 request.state.rate_limit；429 在 AppError.details 带
+    retry_after_seconds（handlers 据此补 human_hint 与 Retry-After 头）。桶时间基为
+    monotonic，Reset（秒级 epoch 时间戳）用「当前 epoch + 相对剩余秒数」近似推算。
+    """
     limit = int(getattr(config.settings, "if_chat_rate_limit", 60) or 60)
     if limit <= 0:
         return
@@ -171,12 +191,23 @@ def check_chat_rate_limit(request: Request) -> None:
         while bucket and now - bucket[0] >= _WINDOW_SECONDS:
             bucket.popleft()
         if len(bucket) >= limit:
-            raise AppError(ErrorCodes.RATE_LIMITED, "聊天请求过于频繁，请稍后重试", 429)
+            # 距最旧记录滑出窗口还剩的秒数 → 下一次放行点（monotonic 相对差值）
+            retry_after = max(1, int(_WINDOW_SECONDS - (now - bucket[0])) + 1) if bucket else int(_WINDOW_SECONDS)
+            _set_chat_rate_meta(request, limit=limit, remaining=0, reset=int(time.time()) + retry_after)
+            raise AppError(
+                ErrorCodes.RATE_LIMITED,
+                "聊天请求过于频繁，请稍后重试",
+                429,
+                details={"retry_after_seconds": retry_after},
+            )
         bucket.append(now)
         if len(_chat_buckets) > 10000:
             expired = [k for k, v in _chat_buckets.items() if not v or now - v[-1] >= _WINDOW_SECONDS]
             for k in expired:
                 _chat_buckets.pop(k, None)
+        _set_chat_rate_meta(
+            request, limit=limit, remaining=max(0, limit - len(bucket)), reset=int(time.time()) + int(_WINDOW_SECONDS)
+        )
 
 
 def check_dag_rate_limit(request: Request) -> None:

@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchImageModels, generateImage, editImage, fetchTask, fetchEditTask, fetchProviders, getStoredApiKey, setStoredApiKey, notify } from '../api';
 import { ErrorRetry, type ProviderOption } from '../components/Feedback';
 import { Button } from '../components/ui/Button';
+import { TaskProgress } from '../components/TaskProgress';
 import { useApi } from '../hooks/useApi';
+import { useTaskProgress } from '../hooks/useTaskProgress';
+import { useT } from '../i18n';
 import type { ImageModelInfo, Task } from '../api';
 
 type GenMode = 'txt' | 'img';
@@ -50,6 +53,8 @@ function fileToDataUri(file: File): Promise<string> {
 }
 
 export function GeneratePage() {
+  // P1-6 i18n：响应式 t()
+  const t = useT();
   const { data: modelsData, loading, error, reload } = useApi<{ items: Record<string, ImageModelInfo[]>; count: number }>(fetchImageModels);
   // D1: 拉取 providers 列表，429/502 错误时渲染「一键切备用 provider」行动。
   const { data: providersData } = useApi(() => fetchProviders());
@@ -263,17 +268,17 @@ export function GeneratePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">
-            在线生成
-            <span className="title-badge">文生图 · 图生图</span>
+            {t('gen.title')}
+            <span className="title-badge">{t('gen.badge')}</span>
           </h1>
-          <p className="page-desc">带 API Key 生成图像（写接口需 Key，未配置时后端返回 401）</p>
+          <p className="page-desc">{t('gen.desc')}</p>
         </div>
         <div className="gen-header-actions">
           <button
             className="tf-btn tf-btn-secondary"
             onClick={() => setShowKeyPanel(v => !v)}
           >
-            🔑 {apiKey ? '已配置 Key' : '配置 API Key'}
+            🔑 {apiKey ? t('gen.keyConfigured') : t('gen.keyConfigure')}
           </button>
           <button className="tf-btn tf-btn-secondary" onClick={reload}>
             <span>🔄</span> 刷新模型
@@ -327,10 +332,10 @@ export function GeneratePage() {
         {/* 模式切换 */}
         <div className="gen-tabs">
           <button className={`gen-tab ${mode === 'txt' ? 'on' : ''}`} onClick={() => { setMode('txt'); setGenState({ status: 'idle' }); }}>
-            🖼️ 文生图
+            🖼️ {t('gen.txtTab')}
           </button>
           <button className={`gen-tab ${mode === 'img' ? 'on' : ''}`} onClick={() => { setMode('img'); setGenState({ status: 'idle' }); }}>
-            🎨 图生图
+            🎨 {t('gen.imgTab')}
           </button>
         </div>
 
@@ -368,7 +373,7 @@ export function GeneratePage() {
 
         {/* 提示词 */}
         <label className="chat-control-field">
-          <span>{mode === 'txt' ? '提示词（Prompt）' : '编辑指令（Prompt）'}</span>
+          <span>{mode === 'txt' ? t('gen.promptLabelTxt') : t('gen.promptLabelImg')}</span>
           <textarea
             className="tf-input gen-prompt"
             rows={4}
@@ -387,7 +392,7 @@ export function GeneratePage() {
         {/* 模型 / 画幅 / 分辨率 */}
         <div className="gen-row">
           <label className="chat-control-field">
-            <span>模型</span>
+            <span>{t('gen.model')}</span>
             <select value={model} onChange={e => setModel(e.target.value)} disabled={loading || activeModels.length === 0}>
               {activeModels.length === 0 && <option value="">{loading ? '加载模型…' : '无可用模型'}</option>}
               {activeModels.map(m => (
@@ -397,7 +402,7 @@ export function GeneratePage() {
           </label>
           {mode === 'txt' && (
             <label className="chat-control-field">
-              <span>画幅</span>
+              <span>{t('gen.aspect')}</span>
               <select value={aspect} onChange={e => setAspect(e.target.value)}>
                 {ASPECT_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
@@ -405,7 +410,7 @@ export function GeneratePage() {
           )}
           {mode === 'txt' && (
             <label className="chat-control-field">
-              <span>分辨率</span>
+              <span>{t('gen.resolution')}</span>
               <select value={resolution} onChange={e => setResolution(e.target.value)}>
                 {RES_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -420,20 +425,24 @@ export function GeneratePage() {
             onClick={() => void handleGenerate()}
             loading={genState.status === 'running'}
           >
-            {genState.status === 'running' ? '提交中…' : mode === 'txt' ? '🚀 生成图片' : '🎨 生成变体'}
+            {genState.status === 'running' ? t('gen.submitting') : mode === 'txt' ? t('gen.submitTxt') : t('gen.submitImg')}
           </Button>
-          <button className="tf-btn tf-btn-secondary" onClick={handleReset}>重置</button>
+          <button className="tf-btn tf-btn-secondary" onClick={handleReset}>{t('gen.reset')}</button>
         </div>
 
         {/* 结果 */}
         {genState.status !== 'idle' && (
           <div className="gen-result">
             {genState.status === 'running' && (
-              <div className="gen-loading">
-                <span className="gen-spinner" />
-                任务处理中（任务 ID: {task?.id ? task.id.slice(0, 12) + '…' : '—'}）…
-              </div>
-            )}
+            task?.id
+              ? <RunningProgress taskId={task.id} />
+              : (
+                <div className="gen-loading" role="status" aria-live="polite">
+                  <span className="gen-spinner" aria-hidden="true" />
+                  任务提交中（等待分配任务 ID）…
+                </div>
+              )
+          )}
             {genState.status === 'error' && (
               <div className="gen-error">❌ {genState.error || '生成失败'}</div>
             )}
@@ -473,6 +482,8 @@ export function GeneratePage() {
         .gen-img-remove { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; border: none; cursor: pointer; font-size: 13px; line-height: 1; }
         .gen-result { padding-top: 8px; border-top: 1px solid var(--border-default); display: flex; flex-direction: column; gap: 12px; }
         .gen-loading { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 13.5px; }
+        .gen-loading-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+        .gen-loading-text { display: flex; align-items: center; gap: 10px; }
         .gen-spinner { width: 16px; height: 16px; border: 2px solid var(--border-default); border-top-color: var(--primary-500); border-radius: 50%; animation: gen-spin .8s linear infinite; }
         @keyframes gen-spin { to { transform: rotate(360deg); } }
         .gen-error { color: var(--danger); font-size: 13px; padding: 10px 12px; background: var(--danger-bg); border: 1px solid var(--danger-border); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 8px; }
@@ -489,4 +500,28 @@ export function GeneratePage() {
 function flatModels(groups: Record<string, ImageModelInfo[]> | undefined, cap: string): ImageModelInfo[] {
   if (!groups) return [];
   return Object.values(groups).flat().filter(m => Array.isArray(m.capabilities) && m.capabilities.includes(cap));
+}
+
+/**
+ * P0-4 提交后运行卡：独立度量子组件（每任务一个 useTaskProgress 实例）。
+ * 阶段徽章/进度条由 useTaskProgress 驱动（SSE 精确阶段 + 轮询兜底），终态收尾仍走
+ * GeneratePage 既有 startTxtSse/startPoll 状态机，本组件只管阶段流转展示。
+ */
+function RunningProgress({ taskId }: { taskId: string }) {
+  const progress = useTaskProgress(taskId);
+  return (
+    <div className="gen-loading" role="status" aria-live="polite">
+      <span className="gen-spinner" aria-hidden="true" />
+      <div className="gen-loading-body">
+        <div className="gen-loading-text">
+          任务处理中（任务 ID: {taskId.slice(0, 12)}…）
+        </div>
+        <TaskProgress
+          status={progress.status ?? 'processing'}
+          statusDetail={progress.statusDetail}
+          progress={progress.progress}
+        />
+      </div>
+    </div>
+  );
 }

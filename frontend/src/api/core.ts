@@ -61,8 +61,24 @@ const STATUS_TEXT: Record<number, string> = {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** 解析错误响应体 → { code, message }。code 优先取 body.code / body.error.code。 */
-async function readErrorBody(res: Response): Promise<{ code: string | null; message: string }> {
+/** 把未知值解析为「重试等待秒数」（合规数字才返回；非数字/负数 → null）。P1-5 */
+function toRetrySeconds(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+  if (typeof raw === 'string') {
+    const n = Number(raw.trim());
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return null;
+}
+
+/** 读 Retry-After 响应头（秒数）。P1-5 */
+function parseRetryAfter(headers: Headers): number | null {
+  const raw = headers.get('retry-after');
+  return toRetrySeconds(raw);
+}
+
+/** 解析错误响应体 → { code, message, retryAfterSeconds }。code 优先取 body.code / body.error.code。 */
+async function readErrorBody(res: Response): Promise<{ code: string | null; message: string; retryAfterSeconds: number | null }> {
   let text = '';
   try { text = await res.text(); } catch { text = ''; }
   let body: unknown = null;
@@ -79,9 +95,12 @@ async function readErrorBody(res: Response): Promise<{ code: string | null; mess
       : typeof detail === 'number' ? String(detail)
       : detail && typeof detail === 'object' ? JSON.stringify(detail).slice(0, 200)
       : text.slice(0, 200);
-    return { code, message };
+    // P1-5：429 等待秒数优先取 error 顶层（后端同时放 error/detils），再回退 error.details
+    const errDetails = errObj && typeof errObj.details === 'object' ? errObj.details as Record<string, unknown> : undefined;
+    const retryAfterSeconds = toRetrySeconds(errObj?.retry_after_seconds) ?? toRetrySeconds(obj.retry_after_seconds) ?? toRetrySeconds(errDetails?.retry_after_seconds);
+    return { code, message, retryAfterSeconds };
   }
-  return { code: null, message: text.slice(0, 200) };
+  return { code: null, message: text.slice(0, 200), retryAfterSeconds: null };
 }
 
 /**
@@ -130,12 +149,24 @@ export async function apiFetch<T>(path: string, opts: ApiFetchOptions = {}): Pro
   clearTimeout(timerId);
 
   if (!res.ok) {
-    const { code, message: detail } = await readErrorBody(res);
+    const { code, message: detail, retryAfterSeconds } = await readErrorBody(res);
     const statusText = STATUS_TEXT[res.status] ?? `HTTP ${res.status}`;
     // caller 给定时用「caller HTTP <status>: <detail>」；否则用状态中文文案（可带 detail）
     const message = caller
       ? (detail ? `${caller} HTTP ${res.status}: ${detail}` : `${caller} HTTP ${res.status}`)
       : `${statusText}${code ? `（${code}）` : ''}${detail ? `：${detail}` : ''}`;
+    // P1-5：429 统一拦截 → 右上角 Toast（用户友好，去技术化）。只在 429 触发，不改变其它错误路径。
+    // 秒数优先级：响应体 retry_after_seconds > Retry-After 头 > 60 秒兜底。
+    // L2 修复（审查）：仅真实限流（code=RATE.001 或带真实 retry_after_seconds）弹「太快啦」；
+    // QueueFull/上游限流等无秒数的 429 → 用后端语义化 detail 提示，不误报「请求太频繁」。
+    if (res.status === 429) {
+      const realRetry = retryAfterSeconds ?? parseRetryAfter(res.headers) ?? null;
+      if (realRetry != null || code === 'RATE.001') {
+        notify(`你太快啦，${realRetry ?? 60} 秒后再试`, 'error');
+      } else if (detail) {
+        notify(detail.slice(0, 80), 'error');
+      }
+    }
     throw new ApiError(res.status, message, code);
   }
   // 200 空 body（如某些 DELETE 返回 204/空串）→ 返回 null，而非抛裸 SyntaxError

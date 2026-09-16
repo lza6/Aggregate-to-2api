@@ -571,3 +571,187 @@ def test_p3_3_per_ip_lock_isolation_concurrent(monkeypatch):
     t1.join(timeout=3)
     t2.join(timeout=3)
     assert len(results) == 2, "两个不同 IP 的限速检查应并行完成（分片锁隔离）"
+
+
+# ── P1-5 公共用户友好配额响应（去技术化）────────────────────
+def test_p1_5_pass_injects_rate_meta(monkeypatch):
+    """放行请求：check_rate_limit 把桶状态挂到 request.state.rate_limit（3 头数据源）。"""
+    monkeypatch.setattr(config, "IF_IP_WHITELIST", "")
+    _set_cfg_attr(monkeypatch, config, "IF_RATE_TOKEN_CAPACITY", 0)
+    monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 5)
+    monkeypatch.setattr(config, "IF_AUTO_BLOCK_ENABLED", False)
+    request_guard.reset_runtime_state()
+    req = _mk_request(client_host="8.8.8.8")
+    request_guard.check_rate_limit(req)
+    meta = req.state.rate_limit
+    assert meta["limit"] == 5
+    assert meta["remaining"] == 4  # 5 - 本次已扣 1
+    assert isinstance(meta["reset"], int) and meta["reset"] > time.time()
+
+
+def test_p1_5_sliding_window_429_populates_meta_and_details(monkeypatch):
+    """滑窗 429：state.remaining=0，AppError.details 带 int retry_after_seconds。"""
+    monkeypatch.setattr(config, "IF_IP_WHITELIST", "")
+    _set_cfg_attr(monkeypatch, config, "IF_RATE_TOKEN_CAPACITY", 0)  # 关 L1 聚焦滑窗
+    monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 2)
+    monkeypatch.setattr(config, "IF_AUTO_BLOCK_ENABLED", False)
+    request_guard.reset_runtime_state()
+    req = _mk_request(client_host="8.8.8.8")
+    request_guard.check_rate_limit(req)
+    request_guard.check_rate_limit(req)
+    with pytest.raises(AppError) as exc:
+        request_guard.check_rate_limit(req)
+    assert exc.value.status_code == 429
+    retry = exc.value.details.get("retry_after_seconds")
+    assert isinstance(retry, int) and retry >= 1
+    meta = req.state.rate_limit
+    assert meta["limit"] == 2
+    assert meta["remaining"] == 0
+    assert isinstance(meta["reset"], int) and meta["reset"] > time.time()
+
+
+def test_p1_5_l1_token_bucket_429_populates_meta_and_details(monkeypatch):
+    """L1 令牌桶 429：默认 refill=0（纯突发桶）→ retry_after 按窗口兜底，仍 int。"""
+    monkeypatch.setattr(config, "IF_IP_WHITELIST", "")
+    _set_cfg_attr(monkeypatch, config, "IF_RATE_TOKEN_CAPACITY", 2)
+    _set_cfg_attr(monkeypatch, config, "IF_RATE_TOKEN_REFILL_PER_SEC", 0)
+    monkeypatch.setattr(config, "IF_REQUESTS_PER_MINUTE", 0)  # 关 L3 聚焦 L1
+    monkeypatch.setattr(config, "IF_AUTO_BLOCK_ENABLED", False)
+    request_guard.reset_runtime_state()
+    req = _mk_request(client_host="8.8.8.8")
+    request_guard.check_rate_limit(req)
+    request_guard.check_rate_limit(req)
+    with pytest.raises(AppError) as exc:
+        request_guard.check_rate_limit(req)
+    assert exc.value.status_code == 429
+    retry = exc.value.details.get("retry_after_seconds")
+    assert isinstance(retry, int) and retry >= 1
+    meta = req.state.rate_limit
+    assert meta["limit"] == 2
+    assert meta["remaining"] == 0
+
+
+def test_p1_5_chat_rate_limit_429_populates_meta_and_details(monkeypatch):
+    """聊天频控（auth.check_chat_rate_limit）429：同样带 state 元数据与 retry_after_seconds。"""
+    from api import auth as _auth
+
+    monkeypatch.setattr(config.settings, "if_chat_rate_limit", 1, raising=False)
+    _auth.reset_chat_rate_state()
+    req = _mk_request(client_host="8.8.8.8")
+    _auth.check_chat_rate_limit(req)  # 第 1 次放行
+    with pytest.raises(AppError) as exc:
+        _auth.check_chat_rate_limit(req)  # 第 2 次 429
+    assert exc.value.status_code == 429
+    retry = exc.value.details.get("retry_after_seconds")
+    assert isinstance(retry, int) and retry >= 1
+    meta = req.state.rate_limit
+    assert meta["limit"] == 1
+    assert meta["remaining"] == 0
+    assert meta["reset"] > time.time()
+
+
+# ── P1-5 响应头中间件 + 429 人话响应（微 FastAPI app，不碰引擎）────────
+def _make_rate_limit_app(*, with_state: bool, with_details: bool = True):
+    """构造带 RateLimitHeadersMiddleware + 全局异常处理器的微 app（纯响应侧验证）。"""
+    from fastapi import FastAPI
+
+    from api.errors import ErrorCodes
+    from api.handlers import register_exception_handlers
+    from api.request_guard import RateLimitHeadersMiddleware
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.add_middleware(RateLimitHeadersMiddleware)
+
+    @app.get("/v1/generate/ok")
+    async def ok(request: Request):
+        if with_state:
+            request.state.rate_limit = {"limit": 10, "remaining": 7, "reset": 1_700_000_000}
+        return {"ok": True}
+
+    @app.get("/v1/generate/boom")
+    async def boom(request: Request):
+        if with_state:
+            request.state.rate_limit = {"limit": 2, "remaining": 0, "reset": 1_700_000_000}
+        details = {"retry_after_seconds": 30} if with_details else None
+        raise AppError(ErrorCodes.RATE_LIMITED, "请求过于频繁（>2/分钟），请稍后重试", 429, details=details)
+
+    @app.get("/healthz")
+    async def healthz():
+        return {"ok": True}
+
+    return app
+
+
+def test_p1_5_middleware_default_headers_on_protected_no_state():
+    """P1-5 契约补强：限流保护端点（/v1/generate*）即使无桶数据（如 IF_REQUESTS_PER_MINUTE=0 限流关闭）
+    也注入默认三头（Limit/Remaining=0 表示无限流，Reset 存在）——保证响应恒携带配额头。"""
+    from fastapi.testclient import TestClient
+
+    app = _make_rate_limit_app(with_state=False)
+    client = TestClient(app)
+    r = client.get("/v1/generate/ok")
+    assert r.status_code == 200
+    assert r.headers["x-ratelimit-limit"] == "0"
+    assert r.headers["x-ratelimit-remaining"] == "0"
+    assert "x-ratelimit-reset" in r.headers
+
+
+def test_p1_5_middleware_skips_unprotected_endpoint():
+    """非限流保护端点（healthz 等）不注入任何 X-RateLimit-* 头。"""
+    from fastapi.testclient import TestClient
+
+    app = _make_rate_limit_app(with_state=False)
+    client = TestClient(app)
+    r = client.get("/healthz")
+    assert r.status_code == 200
+    assert "x-ratelimit-limit" not in r.headers
+    assert "x-ratelimit-remaining" not in r.headers
+    assert "x-ratelimit-reset" not in r.headers
+
+
+def test_p1_5_middleware_injects_headers_on_pass():
+    """放行响应：X-RateLimit-Limit/Remaining/Reset 三头存在且值正确。"""
+    from fastapi.testclient import TestClient
+
+    app = _make_rate_limit_app(with_state=True)
+    client = TestClient(app)
+    r = client.get("/v1/generate/ok")
+    assert r.status_code == 200
+    assert r.headers["x-ratelimit-limit"] == "10"
+    assert r.headers["x-ratelimit-remaining"] == "7"
+    assert r.headers["x-ratelimit-reset"] == "1700000000"
+
+
+def test_p1_5_429_response_human_hint_and_headers():
+    """429 人话响应：retry_after_seconds 为 int、human_hint 中文含重复秒数、Retry-After 头 + 3 头。"""
+    from fastapi.testclient import TestClient
+
+    app = _make_rate_limit_app(with_state=True)
+    client = TestClient(app)
+    r = client.get("/v1/generate/boom")
+    assert r.status_code == 429
+    body = r.json()["error"]
+    assert body["retry_after_seconds"] == 30
+    assert isinstance(body["retry_after_seconds"], int)
+    assert "请求太频繁啦" in body["human_hint"]
+    assert "30 秒后再试" in body["human_hint"]
+    assert r.headers["retry-after"] == "30"
+    assert r.headers["x-ratelimit-limit"] == "2"
+    assert r.headers["x-ratelimit-remaining"] == "0"
+    assert r.headers["x-ratelimit-reset"] == "1700000000"
+
+
+def test_p1_5_429_defaults_when_no_details():
+    """429 且 details 无 retry_after_seconds（如上游 ProviderRateLimited 升级）：默认 60 秒兜底。"""
+    from fastapi.testclient import TestClient
+
+    app = _make_rate_limit_app(with_state=False, with_details=False)
+    client = TestClient(app)
+    r = client.get("/v1/generate/boom")
+    assert r.status_code == 429
+    body = r.json()["error"]
+    assert body["retry_after_seconds"] == 60
+    assert isinstance(body["retry_after_seconds"], int)
+    assert "请求太频繁啦，60 秒后再试" in body["human_hint"]
+    assert r.headers["retry-after"] == "60"

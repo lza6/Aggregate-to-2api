@@ -185,6 +185,7 @@ class Engine:
             if self._persistent_queue and self._queue_db:
                 await self._queue_db.enqueue(task_id, priority, seq)
             # v4.2: SSE 事件 - 任务已入队（带精确队列位置和优先级）
+            # P0-4: 追加 status_detail/progress 阶段徽章（queued=5），前端可据此渲染进度条
             try:
                 pos = self.queue.qsize()
                 from ..sse_events import publish_task_event
@@ -195,6 +196,8 @@ class Engine:
                     {
                         "task_id": task_id,
                         "status": "pending",
+                        "status_detail": "queued",
+                        "progress": 5,
                         "queue_pos": pos,
                         "priority": priority,
                     },
@@ -507,6 +510,10 @@ class Engine:
         row = await self.db.get(task_id)
         if not row:
             return None
+        # P0-4: 取消检查①——任务已被取消（cancel 端点已落终态），worker 直接放弃认领，
+        # 不 mark_started、不进 token 获取，保证已取消任务不再占用 worker/求解槽位。
+        if row.get("status") == "cancelled":
+            return "cancelled"
         await self.db.mark_started(task_id)
         # B2: worker 后台协程脱离入口请求 contextvars——从 DB row 恢复 trace_id
         # 重建请求上下文并 set，使本任务全链路日志/审计/慢日志带同一 trace_id
@@ -521,10 +528,21 @@ class Engine:
         _ctx_token = request_context_var.set(_ctx)
         try:
             # v4.2: SSE 事件 - 任务进入处理阶段
+            # P0-4: 追加 status_detail/progress 阶段徽章（solving=30）
             try:
                 from ..sse_events import publish_task_event
 
-                publish_task_event(task_id, "status", {"task_id": task_id, "status": "processing", "phase": "solving"})
+                publish_task_event(
+                    task_id,
+                    "status",
+                    {
+                        "task_id": task_id,
+                        "status": "processing",
+                        "status_detail": "solving",
+                        "progress": 30,
+                        "phase": "solving",
+                    },
+                )
             except Exception:
                 pass
             # IMP-29: 持久化队列标记 processing
@@ -555,6 +573,10 @@ class Engine:
                 },
             ):
                 for attempt in range(1, config.IF_TXT_RETRY_MAX + 1):
+                    # P0-4: 取消检查②——acquire 前检查（含重试间隙），已取消任务尽早放弃
+                    # 而不消耗宝贵的 turnstile token（token 一次性，取走即失效）。
+                    if await self._is_cancelled(task_id):
+                        return "cancelled"
                     with tracer.start_as_current_span(
                         "worker.acquire_token",
                         attributes={"attempt": attempt},
@@ -571,10 +593,20 @@ class Engine:
                         )
                         break
                     # v4.2: SSE 事件 - token 已获取，进入生成阶段
+                    # P0-4: 追加 status_detail/progress 阶段徽章（generating=80；上游轮询中阶段）
                     try:
                         from ..sse_events import publish_task_event
 
-                        publish_task_event(task_id, "progress", {"task_id": task_id, "phase": "generating"})
+                        publish_task_event(
+                            task_id,
+                            "progress",
+                            {
+                                "task_id": task_id,
+                                "status_detail": "generating",
+                                "progress": 80,
+                                "phase": "generating",
+                            },
+                        )
                     except Exception:
                         pass
                     try:
@@ -683,6 +715,11 @@ class Engine:
     ) -> None:
         """终态落库（统一累计耗时）。"""
         await self.db.mark_finished(task_id, status, image_url, error, time.monotonic() - t0, image_base64, image_mime)
+        # H2 修复：任务已在生成完成前被取消（DB 已是 cancelled，mark_finished 护栏挡掉覆盖）→
+        # 跳过 completed/error 终态事件广播，避免 SSE 流收到与 DB 矛盾的终态（SSE last-wins 会误显示已取消任务的 completed）。
+        if await self._is_cancelled(task_id):
+            log.info("task %s 已取消，_finish(%s) 跳过终态事件广播（DB 保持 cancelled）", task_id, status)
+            return
         # 注：终态 SSE 事件由 broadcast_task_event 统一发布（含 per-task 流），
         # _finish 不再直接调用 publish_task_event，避免 worker.py:936 与 dispatch.py:140 双重发布。
         # IMP-29: 持久化队列标记终态
@@ -722,6 +759,54 @@ class Engine:
                     _record(ip, "task-failure-burst")
             except Exception as exc:
                 log.debug("反滥用违规记录失败（可忽略）: %s", exc)
+
+    # ── P0-4: 幂等取消 ────────────────────────────────
+    async def cancel_task(self, task_id: str) -> tuple[str, bool]:
+        """P0-4: 取消任务（幂等）。
+
+        语义：
+        - pending/processing → 落终态 cancelled（复用 db.mark_finished，走 _enqueue_write/flush，
+          不绕过 WAL 批量合并），并标记持久化队列终态 + 发布 cancelled 终态事件；
+        - 已完成/失败/已取消 → 原样返回当前终态字符串（幂等，状态机不产生不一致）；
+        - 任务不存在 → 返回 ("not_found", False)（由路由层映射 404）。
+
+        返回 (新状态, 本次是否执行了取消)：('not_found', False) /
+        ('cancelled', True)（本次执行了取消）/ (其他终态字符串, False)（幂等命中）。
+        """
+        row = await self.db.get(task_id)
+        if not row:
+            return "not_found", False
+        status = row["status"]
+        if status in ("pending", "processing"):
+            # H1 修复：反向护栏（db.cancel_task 仅 pending/processing → cancelled），
+            # 防「取消读取到 processing 时 worker 已完成」→ 写被护栏挡，不翻转 completed 也不清 image_url。
+            await self.db.cancel_task(task_id)
+            # 写后读确认（批量队列 flush 后立即生效）：若未成 cancelled 说明写被护栏挡（已完成/已取消）
+            row2 = await self.db.get(task_id)
+            if not (row2 and row2["status"] == "cancelled"):
+                final = row2["status"] if row2 else status
+                return final, False
+            # 持久化队列标记终态（与 _finish 一致）
+            if self._persistent_queue and self._queue_db:
+                await self._queue_db.mark_completed(task_id)
+            # 发布终态事件（broadcast + per-task 流；broadcast 对 cancelled 映射为 result 事件）
+            try:
+                from ..dispatch import broadcast_task_event
+
+                await broadcast_task_event(
+                    task_id,
+                    "cancelled",
+                    {"status_detail": "cancelled", "progress": 100},
+                )
+            except Exception:
+                pass
+            return "cancelled", True
+        return status, False
+
+    async def _is_cancelled(self, task_id: str) -> bool:
+        """P0-4: 查询任务是否已被取消（worker 检查点用，见 _process）。"""
+        row = await self.db.get(task_id)
+        return bool(row and row.get("status") == "cancelled")
 
     # ── 实时状态 ──────────────────────────────────
     def snapshot(self) -> dict[str, Any]:

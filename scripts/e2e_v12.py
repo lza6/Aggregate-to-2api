@@ -99,7 +99,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==16.0.0", ver == "16.0.0", f"got {ver}")
+        check("2 openapi version==16.1.0", ver == "16.1.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -115,7 +115,7 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "16.0.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "16.1.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
@@ -353,6 +353,74 @@ def main() -> int:
             "13f 软删后列表不含该张",
             gallery_ids[0] not in ids_after and all(x in ids_after for x in gallery_ids[1:]),
             f"after={sorted(ids_after)}",
+        )
+
+        # 14. v16.1 P0-4：任务幂等取消 + 一键重试（E2E 状态机一致性，精确终态由单测覆盖）
+        c = client.post("/v1/generate/async", json={"prompt": "e2e取消-即时提交"})
+        cid = c.json().get("id", "")
+        cc = client.post(f"/v1/tasks/{cid}/cancel")
+        check(
+            "14a 任务取消 200+cancelled 布尔",
+            cc.status_code == 200 and isinstance(cc.json().get("cancelled"), bool),
+            f"resp={cc.text[:120]}",
+        )
+        cc2 = client.post(f"/v1/tasks/{cid}/cancel")
+        check("14b 幂等二连 cancel 200 不报错", cc2.status_code == 200, f"resp={cc2.text[:120]}")
+        # 轮询终态：cancelled 或 completed 皆可（mock 秒级完成，取消窗口内可能已完成），
+        # 断言「不落不一致中间态」（error/processing 即为不一致）。
+        final_c = None
+        for _ in range(10):
+            t = client.get(f"/v1/tasks/{cid}").json()
+            if t.get("status") in ("cancelled", "completed"):
+                final_c = t.get("status")
+                break
+            time.sleep(0.5)
+        check("14c 取消后终态 cancelled/completed（状态机一致）", final_c in ("cancelled", "completed"), f"final={final_c}")
+        # retry：按原参数重投 → 新任务 queued
+        rr = client.post(f"/v1/tasks/{cid}/retry")
+        rj = rr.json() if rr.headers.get("content-type", "").startswith("application/json") else {}
+        check(
+            "14d retry 返回新任务 queued",
+            rr.status_code == 200 and bool(rj.get("task_id")) and rj.get("status") == "queued",
+            f"resp={rr.text[:120]}",
+        )
+
+        # 15. v16.1 P1-5：配额响应头（放行路径也带 X-RateLimit-* 三头）
+        h = client.post("/v1/generate/async", json={"prompt": "e2e配额头-测试"})
+        hd = h.headers
+        check(
+            "15a generate 响应带 X-RateLimit-* 三头",
+            all(k in hd for k in ("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset")),
+            f"headers={ {k: hd.get(k) for k in ('X-RateLimit-Limit','X-RateLimit-Remaining','X-RateLimit-Reset')} }",
+        )
+
+        # 16. v16.1 P1-8 + P2-10：管理导出 + 健康自诊断报告（E2E 开放模式放行）
+        ex = client.post("/v1/admin/export/tasks", params={"format": "csv"})
+        check(
+            "16a 任务导出 csv 200+BOM+中文表头",
+            ex.status_code == 200 and ex.content.startswith(b"\xef\xbb\xbf") and "提示词" in ex.text,
+            f"status={ex.status_code} head={ex.text[:40]!r}",
+        )
+        ej = client.post("/v1/admin/export/tasks", params={"format": "json"})
+        check(
+            "16b 任务导出 json 200+meta",
+            ej.status_code == 200 and "meta" in ej.json() and "rows" in ej.json(),
+            f"status={ej.status_code}",
+        )
+        hr = client.get("/v1/admin/health-report")
+        hrj = hr.json()
+        # health-report 返回顶层聚合键（providers/account_pool/email_pool/solver/queue/runtime/cost）
+        _HR_KEYS = {"providers", "account_pool", "email_pool", "solver", "queue", "runtime", "cost"}
+        check(
+            "16c 健康报告 200+七维",
+            hr.status_code == 200 and len(_HR_KEYS - set(hrj.keys())) == 0,
+            f"keys={sorted(hrj.keys())}",
+        )
+        hrm = client.get("/v1/admin/health-report", params={"format": "md"})
+        check(
+            "16d 健康报告 md 200+markdown",
+            hrm.status_code == 200 and hrm.headers.get("content-type", "").startswith("text/markdown"),
+            f"ct={hrm.headers.get('content-type')}",
         )
 
         client.close()

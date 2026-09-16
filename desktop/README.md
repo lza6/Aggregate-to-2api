@@ -51,6 +51,8 @@ pyinstaller --onefile --name uvicorn --add-data "api;api" api/main.py
 | `IF_DESKTOP_NO_SOLVER` | 0 | 1=不拉起 cf_solver（纯聊天/DAG Mock 场景） |
 | `IF_DESKTOP_CLOSE_TO_TRAY` | 0 | 1=关窗进托盘（应用驻留、后端存活；托盘「退出」才结束进程） |
 | `IF_DESKTOP_UPDATER` | 1 | 0=关闭自升级插件（可回滚；缺省开，端点/签名见 tauri.conf.json plugins.updater） |
+| `IF_DESKTOP_GLOBAL_SHORTCUT` | 1 | 0=关闭全局快捷键 Ctrl+Shift+T 唤起主窗（缺省开；条件注册同 updater 模式） |
+| `IF_DESKTOP_AUTOSTART` | 1 | 0=关闭开机自启插件与托盘「开机自启」toggle（缺省开） |
 | `TAURI_SIGNING_PRIVATE_KEY` | — | 自升级签名私钥（Tauri updater 构建时注入，切勿入库） |
 
 ## `backend_status` 命令

@@ -126,6 +126,10 @@ class TaskEventHub:
     def subscriber_count(self, task_id: str) -> int:
         return len(self._subscribers.get(task_id, []))
 
+    def active_subscription_count(self) -> int:
+        """全部任务的 SSE 活动订阅连接总数（健康自诊断 runtime 维度用）。"""
+        return sum(len(subs) for subs in self._subscribers.values())
+
     async def clear_task(self, task_id: str) -> None:
         """任务终态后清理缓冲（防止长跑服务内存膨胀）。"""
         async with self._lock:

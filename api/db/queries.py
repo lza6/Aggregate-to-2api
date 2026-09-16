@@ -141,9 +141,12 @@ class DBQueriesMixin:
         ):
             if image_base64 and image_mime:
                 image_base64 = base64_store.save_base64(task_id, image_base64, image_mime)
+            # P0-4: 防取消竞态覆盖——任务已被标记 cancelled 后，任何后续终态写入
+            # （worker 生成完成/异常兜底等）都不得把 cancelled 覆盖成 completed/error。
+            # cancel 端点本身写 cancelled 时状态仍为 pending/processing，条件满足正常写入。
             await self._enqueue_write(
                 "UPDATE requests SET status=?, image_url=?, image_base64=?, image_mime=?,"
-                " error=?, finished_at=?, duration_sec=? WHERE id=?",
+                " error=?, finished_at=?, duration_sec=? WHERE id=? AND status NOT IN ('cancelled')",
                 (status, image_url, image_base64, image_mime, error, time.time(), duration_sec, task_id),
             )
 
@@ -258,13 +261,19 @@ class DBQueriesMixin:
         model: str | None = None,
         sort: str = "created_at",
     ) -> tuple[list[dict[str, Any]], int]:
-        """任务列表查询（IMP-41）。"""
+        """任务列表查询（IMP-41）。
+
+        P1-8：默认排除冷归档（status='archived'）——热列表只展示活跃状态；
+        显式 `status='archived'` 可查冷历史（归档详情仍可取）。
+        """
         await self._ensure_flushed()
         where = []
         params: list[Any] = []
         if status:
             where.append("status=?")
             params.append(status)
+        else:
+            where.append("status != 'archived'")
         if model:
             where.append("model=?")
             params.append(model)
@@ -309,12 +318,14 @@ class DBQueriesMixin:
     ) -> tuple[list[dict[str, Any]], int]:
         """画廊分页列表（v16 P0-3）：已完成且有图的任务，支持过滤与 prompt 搜索。
 
-        默认排除软删（status='deleted' 不入画廊）。返回 (items, total)。
+        默认排除软删（status='deleted'）与冷归档（status='archived'）——冷数据退出画廊。
+        返回 (items, total)。
         """
         await self._ensure_flushed()
         # H2 修复（审查）：total 与数据查询必须同口径——无图行（image_url IS NULL）两处都不计，
         # 否则前端 hasMore = items.length < total 恒真，无限滚动永不终止。
-        where = ["status NOT IN ('deleted','pending')", "image_url IS NOT NULL"]
+        # P1-8：archived 冷归档任务不参与热画廊列表。
+        where = ["status NOT IN ('deleted','pending','archived')", "image_url IS NOT NULL"]
         params: list[Any] = []
         if status:
             where.append("status=?")
@@ -368,6 +379,20 @@ class DBQueriesMixin:
         )
         return True
 
+    async def cancel_task(self, task_id: str) -> None:
+        """幂等取消写（H1 修复）：**反向护栏**——仅 `status IN ('pending','processing')` 可置 cancelled。
+
+        不能用 mark_finished 的 `NOT IN ('cancelled')` 护栏（那只防"已取消被覆盖"，方向反了：
+        会允许已完成行被翻成 cancelled 并清掉 image_url）。批量队列拿不到 rowcount，
+        实际是否生效由调用方写后读确认。
+        """
+        await self._ensure_flushed()
+        await self._enqueue_write(
+            "UPDATE requests SET status='cancelled', error='cancelled', finished_at=COALESCE(finished_at, ?)"
+            " WHERE id=? AND status IN ('pending','processing')",
+            (time.time(), task_id),
+        )
+
     async def recent_errors(self, limit: int = 20) -> list[dict[str, Any]]:
         """最近失败的请求（含错误原因/prompt），供在线排查。"""
         await self._ensure_flushed()
@@ -382,7 +407,10 @@ class DBQueriesMixin:
 
     # ── 统计 ──────────────────────────────────────
     async def stats_overview(self) -> dict[str, Any]:
-        """总量 + 平均出图耗时。"""
+        """总量 + 平均出图耗时。
+
+        P1-8：冷归档（archived）任务不计入热统计（总量/出图/失败均为热口径）。
+        """
         await self._ensure_flushed()
         conn = await self._get_read_conn()
         cursor = await conn.execute(
@@ -391,7 +419,7 @@ class DBQueriesMixin:
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors, "
             " AVG(CASE WHEN status='completed' AND duration_sec IS NOT NULL"
             "         THEN duration_sec END) AS avg_duration"
-            " FROM requests"
+            " FROM requests WHERE status != 'archived'"
         )
         row = await cursor.fetchone()
         if row is None:
@@ -417,7 +445,7 @@ class DBQueriesMixin:
             "SELECT day, COUNT(*) AS total, "
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
-            " FROM requests WHERE day >= ?"
+            " FROM requests WHERE day >= ? AND status != 'archived'"
             " GROUP BY day ORDER BY day",
             (cutoff,),
         )
@@ -442,7 +470,7 @@ class DBQueriesMixin:
             "SELECT month, COUNT(*) AS total, "
             " SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS images, "
             " SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors"
-            " FROM requests WHERE month >= ?"
+            " FROM requests WHERE month >= ? AND status != 'archived'"
             " GROUP BY month ORDER BY month",
             (cutoff,),
         )
@@ -479,6 +507,32 @@ class DBQueriesMixin:
                 pass
         size_after = os.path.getsize(path) if os.path.exists(path) else 0
         return {"deleted": deleted, "size_before": size_before, "size_after": size_after}
+
+    async def archive_tasks(self, older_than_days: int) -> int:
+        """P1-8 冷热归档：终态任务软归档为 `status='archived'`（不物理删）。
+
+        判据：`finished_at` 距今超过 `older_than_days` 天，且处于终态
+        （completed / error / failed）。单条参数化 UPDATE 批量处理，返回受影响行数。
+
+        - 软归档保留历史数据（详情仍可查、批量导出仍可覆盖），仅退出热列表/热统计；
+        - 物理清理仍由 `cleanup_batched` 按 `IF_DB_RETENTION_DAYS` 管辖（两套并存，
+          归档不改变物理 DELETE 行为——超物理保留期的 archived 行照常被删回收空间）；
+        - 0 / 负值按「关闭归档」处理（调用方跳过即可，此处防御返回 0）。
+        """
+        if older_than_days <= 0:
+            return 0
+        await self._ensure_flushed()
+        cutoff = time.time() - older_than_days * 86400
+        _, conn, conn_lock = await self._get_write_conn()
+        async with conn_lock:
+            cur = await conn.execute(
+                "UPDATE requests SET status='archived'"
+                " WHERE status IN ('completed','error','failed')"
+                "   AND finished_at IS NOT NULL AND finished_at < ?",
+                (cutoff,),
+            )
+            await conn.commit()
+            return cur.rowcount
 
     async def cleanup_batched(self, retention_days: int, batch_size: int = 5000) -> dict[str, Any]:
         """TTL 回收（分批，避免单条长 DELETE 锁表/占用内存）：删除超期请求记录。

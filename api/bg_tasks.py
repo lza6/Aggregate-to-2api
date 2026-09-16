@@ -178,8 +178,10 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                 log.warning("worker 巡检循环异常: %s", e)
 
     async def _retention_loop() -> None:
-        """P3-2: 每日 04:00（本地时间）分批 DB 巡检（DELETE + VACUUM ANALYZE）。
+        """P3-2: 每日 04:00（本地时间）分批 DB 巡检（软归档 + DELETE + VACUUM ANALYZE）。
 
+        P1-8 冷热分离：先软归档（status='archived'，终态历史可见但不占热口径），
+        再物理清理超 `IF_DB_RETENTION_DAYS` 的记录回收空间——两套并存。
         用 asyncio.sleep 精确对齐到下一个 04:00 本地时间；每次清理完成后重新计算
         下一次 04:00。失败仅 warning，不影响 TaskGroup 其余任务（与 _cleanup_loop 一致）。
         """
@@ -187,12 +189,43 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
             try:
                 now = datetime.datetime.now().astimezone()
                 await asyncio.sleep(_seconds_until_next_0400(now))
+                # P1-8 冷热归档：软归档终态历史（不物理删，0/负值=关闭）
+                if config.IF_TASK_RETENTION_DAYS and config.IF_TASK_RETENTION_DAYS > 0:
+                    try:
+                        archived = await db.archive_tasks(config.IF_TASK_RETENTION_DAYS)
+                        if archived:
+                            log.info("历史归档: %d 个终态任务软归档为 archived", archived)
+                    except Exception as e:
+                        log.warning("历史归档失败（可忽略）: %s", e)
                 r = await db.cleanup_batched(config.DB_RETENTION_DAYS)
                 log.info("DB 每日04:00分批巡检: %s", r)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 log.warning("DB 每日04:00分批巡检失败: %s", e)
+
+    async def _cost_alert_loop(interval: float = 3600.0) -> None:
+        """P2-9: 成本预测预警推送（每小时一轮；IF_COST_ALERT_PCT=0 时评估直接返回）。
+
+        进程级幂等水位在 cost_alert 模块内维护（同水位不重复推，上升 >=5pp 再推）。
+        """
+        while True:
+            try:
+                await asyncio.sleep(interval)
+                from .cost_alert import run_cost_alert_once  # noqa: PLC0415
+
+                result = await run_cost_alert_once()
+                if result:
+                    log.warning(
+                        "成本预警推送触发: pct=%.1f%% / 预算=%.2f / 已耗=%.2f",
+                        result.get("burn_pct", 0.0),
+                        result.get("budget_usd", 0.0),
+                        result.get("spent_usd", 0.0),
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("成本预警评估失败（可忽略）: %s", e)
 
     async with asyncio.TaskGroup() as tg:
         tg.create_task(_cleanup_loop())
@@ -201,3 +234,4 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
         tg.create_task(_provider_recover_loop())
         tg.create_task(_worker_sweep_loop())
         tg.create_task(_retention_loop())
+        tg.create_task(_cost_alert_loop())

@@ -74,14 +74,24 @@ class TestExecNode:
 
         若测试环境恰好有真实 tryingopen 上游可用，会返回真实文本（不以 [llm-mock] 开头），
         此时同样可接受——本用例验证「不崩、不抛异常」，付费红线由代码审查保障。
+
+        P2-11 flaky 根治：setenv 后须 reset_settings() 让 execute_node 的 get_settings() 读新值
+        （否则 Settings 单例还是 conftest reset 时构建的 if_mock_upstream=True，走 mock 分支），
+        且 try/finally 恢复 env + 重置单例，防「组合串扰」污染后续用例。
         """
         monkeypatch.setenv("IF_MOCK_UPSTREAM", "0")
-        from api.routes.agent_dag_exec import execute_node
+        from api.config import reset_settings
 
-        result = await execute_node("n1", _state("llm", "真实路径"))
-        # 不崩即可；文本可能为占位或真实上游回复
-        assert isinstance(result, str) and result
-        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+        try:
+            from api.routes.agent_dag_exec import execute_node
+
+            result = await execute_node("n1", _state("llm", "真实路径"))
+            # 不崩即可；文本可能为占位或真实上游回复
+            assert isinstance(result, str) and result
+        finally:
+            monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+            reset_settings()
 
 
 class TestToolNodeRoundtrip:

@@ -213,15 +213,24 @@ def error_response(
     message: str,
     status_code: int = 400,
     details: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    error_extra: dict[str, Any] | None = None,
 ) -> JSONResponse:
-    """统一错误响应格式，自动映射旧版错误码。"""
+    """统一错误响应格式，自动映射旧版错误码。
+
+    headers（P1-5）：429 时由 handlers 传入 Retry-After 等响应头。
+    error_extra（P1-5）：合并进 error 对象顶层的额外字段（如 429 的
+    retry_after_seconds / human_hint），供客户端直接消费。
+    """
+    error_obj: dict[str, Any] = {
+        "code": _resolve_code(code),
+        "message": message,
+        "details": details or {},
+    }
+    if error_extra:
+        error_obj.update(error_extra)
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": {
-                "code": _resolve_code(code),
-                "message": message,
-                "details": details or {},
-            }
-        },
+        content={"error": error_obj},
+        headers=headers,
     )

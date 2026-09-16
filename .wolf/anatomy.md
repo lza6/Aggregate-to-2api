@@ -71,6 +71,8 @@
 - `audit.py` — 审计（trace_id 透传可 grep 串联）
 - `telemetry.py` — OTel tail 采样（错误 100%+正常 10%）
 - `alerting.py` — 内置告警引擎+冷却+webhook
+- `cost_alert.py` — P2-9 成本预警推送（IF_COST_ALERT_PCT 阈值 + 进程级水位幂等，webhook 走 alerting）+ `bg_tasks._cost_alert_loop` 每小时
+- `health_report.py` — P2-10 健康自诊断聚合（七维只读 + 单项降级 + format_health_report_md；端点 GET /v1/admin/health-report）
 - `slow_log.py` + `sse_stats.py` — 慢日志/SSE 指标
 - `log_buffer.py`/`log_ws.py`/`disk_logger.py` — 日志三件套（环形缓冲+WS 推送+14 天落盘）
 

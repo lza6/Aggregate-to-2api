@@ -1,0 +1,16 @@
+abundantbeing__hermes-browser-extension
+browser-harness-js
+browser-use
+browser-use__browser-use
+browsercode
+camofox-browser
+nanobrowser__nanobrowser
+Aether-desktop-orchestrator
+Hermes-CN-Desktop
+UI-TARS-desktop
+bytedance__UI-TARS-desktop
+deepseek-harness-desktop
+dsh-desktop
+vastsa__PI-Desktop
+subhacademic-cmd__prompt-craft-ecommerce-visuals
+ppt-master

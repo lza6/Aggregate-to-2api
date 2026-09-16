@@ -12,10 +12,39 @@ from .errors import STATUS_CODE_ERROR_MAP, AppError, ErrorCodes, error_response
 log = logging.getLogger("imagefree_api")
 
 
+def _retry_after_seconds(details: dict) -> int:
+    """从 AppError.details 取 retry_after_seconds；缺失/非法回退 60 秒（P1-5）。"""
+    raw = details.get("retry_after_seconds")
+    if raw is None:
+        return 60
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        return 60
+    return max(1, val)
+
+
 async def app_error_handler(request, exc: AppError):
-    """AppError → 统一错误响应格式。"""
+    """AppError → 统一错误响应格式。
+
+    P1-5：429 时补面向用户的字段——`retry_after_seconds`（int）与 `human_hint`
+    （中文，去技术化），并设置 Retry-After 响应头（优先 guard 算出的真实值，
+    缺失时按 60 秒兜底，如聊天上游 ProviderRateLimited 升级的 429）。
+    """
     error_tracker_record(exc.code)
-    return error_response(exc.code, exc.message, exc.status_code, exc.details)
+    headers: dict[str, str] | None = None
+    details = exc.details or {}
+    error_extra: dict | None = None
+    if exc.status_code == 429:
+        retry_after = _retry_after_seconds(details)
+        # 字段同时放在 error 顶层（便于客户端直接消费）与 details（保留扩展区）
+        error_extra = {
+            "retry_after_seconds": retry_after,
+            "human_hint": f"请求太频繁啦，{retry_after} 秒后再试",
+        }
+        details = {**details, **error_extra}
+        headers = {"Retry-After": str(retry_after)}
+    return error_response(exc.code, exc.message, exc.status_code, details, headers=headers, error_extra=error_extra)
 
 
 async def starlette_http_exception_handler(request, exc: StarletteHTTPException):

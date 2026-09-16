@@ -117,8 +117,11 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
+/* P1-7 主题优先级链：`@media (prefers-color-scheme: dark)` 仅作为「无 data-theme 属性」的
+   系统跟随兜底（内联脚本被 CSP 拦截 / 隐私模式等）；一旦 JS 设置 data-theme，手动覆盖优先。
+   手动深色由下方 `:root[data-theme='dark']` 独立生效（不受系统偏好影响）。 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg-canvas: #090d16;
     --bg-subtle: #0f172a;
     --bg-card: #111827;
@@ -183,32 +186,97 @@
   }
 }
 
-/* v10.0.0 桌面版 · 暗色专业工作台：DAG 节点卡玻璃拟态 + 状态点亮 + 细网格背景 */
-@media (prefers-color-scheme: dark) {
-  .agent-container {
-    background:
-      linear-gradient(rgba(0,0,0,0) 0%, rgba(15,20,32,0.6) 100%),
-      var(--bg-canvas-deep);
-    background-image:
-      linear-gradient(var(--grid-line-deep) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-line-deep) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-  .dag-node-row {
-    background: rgba(26, 34, 51, 0.72);
-    border: 1px solid var(--border-deep);
-    border-radius: 10px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    font-family: var(--mono-deep);
-  }
-  .dag-node-status { font-weight: 600; letter-spacing: 0.02em; }
-  .dag-run-card { border-left-width: 3px; }
-  .dag-run-card.succeeded { border-left-color: var(--accent-ok-deep); }
-  .dag-run-card.failed   { border-left-color: var(--accent-fail-deep); }
-  .dag-run-card.running  { border-left-color: var(--accent-run-deep); }
-  .dag-run-card.pending  { border-left-color: var(--accent-pending-deep); }
+/* —— P1-7 手动深色（localStorage tf-theme=dark）：独立于系统偏好，覆盖暗色 token —— */
+:root[data-theme='dark'] {
+  --bg-canvas: #090d16;
+  --bg-subtle: #0f172a;
+  --bg-card: #111827;
+  --bg-card-hover: #172033;
+  --bg-card-elevated: #1e293b;
+  --bg-glass: rgba(17, 24, 39, 0.85);
+
+  --border-subtle: #1e293b;
+  --border-default: #243047;
+  --border-strong: #334155;
+  --border-focus: #818cf8;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  --primary-50: rgba(99, 102, 241, 0.1);
+  --primary-100: rgba(99, 102, 241, 0.18);
+  --primary-200: #818cf8;
+  --primary-500: #6366f1;
+  --primary-600: #818cf8;
+  --primary-700: #a5b4fc;
+  --primary-glow: rgba(99, 102, 241, 0.35);
+
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.25);
+  --success-text: #34d399;
+
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.25);
+  --warning-text: #fbbf24;
+
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --danger-border: rgba(239, 68, 68, 0.25);
+  --danger-text: #f87171;
+
+  --info-bg: rgba(14, 165, 233, 0.12);
+  --info-border: rgba(14, 165, 233, 0.25);
+  --info-text: #38bdf8;
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+
+  --sidebar-bg: #05070d;
+  --sidebar-border: #151d2f;
+
+  /* v10.0.0 桌面版 · 暗色专业工作台 token（对齐选定 UI 方向） */
+  --bg-canvas-deep: #0f1420;
+  --bg-panel-deep: #1a2233;
+  --border-deep: #243047;
+  --text-strong-deep: #e2e8f0;
+  --mono-deep: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --accent-ok-deep: #10b981;
+  --accent-fail-deep: #ef4444;
+  --accent-run-deep: #3b82f6;
+  --accent-pending-deep: #94a3b8;
+  --grid-line-deep: rgba(96, 165, 250, 0.06);
 }
+
+/* v10.0.0 桌面版 · 暗色专业工作台：DAG 节点卡玻璃拟态 + 状态点亮 + 细网格背景。
+   P1-7：该页靠 JS 渲染（data-theme 必已设置），故直接以 `:where(:root[data-theme='dark'])`
+   为作用域，去掉 media 包裹（手动深色/系统深色统一走此规则；:where 不提升特异性）。 */
+:where(:root[data-theme='dark']) .agent-container {
+  background:
+    linear-gradient(rgba(0,0,0,0) 0%, rgba(15,20,32,0.6) 100%),
+    var(--bg-canvas-deep);
+  background-image:
+    linear-gradient(var(--grid-line-deep) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line-deep) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+:where(:root[data-theme='dark']) .dag-node-row {
+  background: rgba(26, 34, 51, 0.72);
+  border: 1px solid var(--border-deep);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--mono-deep);
+}
+:where(:root[data-theme='dark']) .dag-node-status { font-weight: 600; letter-spacing: 0.02em; }
+:where(:root[data-theme='dark']) .dag-run-card { border-left-width: 3px; }
+:where(:root[data-theme='dark']) .dag-run-card.succeeded { border-left-color: var(--accent-ok-deep); }
+:where(:root[data-theme='dark']) .dag-run-card.failed   { border-left-color: var(--accent-fail-deep); }
+:where(:root[data-theme='dark']) .dag-run-card.running  { border-left-color: var(--accent-run-deep); }
+:where(:root[data-theme='dark']) .dag-run-card.pending  { border-left-color: var(--accent-pending-deep); }
 
 /* ==========================================================================
    CSS Reset & Base Typography

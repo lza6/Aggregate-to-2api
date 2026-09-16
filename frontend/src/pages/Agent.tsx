@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 import { Skeleton, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 import { notify } from '../api/core';
+import { notifyTaskDone } from '../lib/desktopNotify';
 import {
   getDagRun,
   listDagRuns,
@@ -70,7 +71,8 @@ export function AgentPage() {
   const isRetriable = !!currentRun && currentRun.status === 'failed';
   const [retrying, setRetrying] = useState(false);
 
-  // P1-11：DAG 终态系统通知（仅 Tauri 桌面环境生效——动态 import 浏览器环境零报错）
+  // P1-11 + P1-7：DAG 终态系统通知（仅 Tauri 桌面环境生效——动态 import 浏览器零报错；
+  // P1-7 起走 1s 窗口聚合：批量任务同窗口完成合并为一条汇总，避免刷屏）
   const prevStatusRef = useRef<string | null>(null);
   useEffect(() => {
     if (!currentRun) return;
@@ -81,20 +83,7 @@ export function AgentPage() {
     }
     prevStatusRef.current = status;
     if (!['succeeded', 'failed'].includes(status)) return;
-    void (async () => {
-      try {
-        const notif = await import('@tauri-apps/plugin-notification');
-        const granted = await notif.isPermissionGranted();
-        if (granted) {
-          await notif.sendNotification({
-            title: '听风AI · DAG 任务完成',
-            body: `「${currentRun.name ?? 'DAG 任务'}」${status === 'succeeded' ? '执行成功 ✅' : '执行失败 ❌'}`,
-          });
-        }
-      } catch {
-        // 浏览器环境（无 Tauri 插件）静默降级——桌面通知仅桌面可用
-      }
-    })();
+    notifyTaskDone({ name: currentRun.name ?? 'DAG 任务', ok: status === 'succeeded' });
   }, [currentRun]);
 
   async function handlePlan() {

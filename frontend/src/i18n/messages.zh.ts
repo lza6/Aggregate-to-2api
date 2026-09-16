@@ -1,0 +1,114 @@
+// 简体中文文案字典（P1-6 i18n）。
+// key 集与 messages.en.ts 必须完全一致 —— 由 src/test/i18n.test.ts 强制断言。
+// 缺失 key 时 t() 回退 key 本身（不崩），未接入页面保持中文（渐进式）。
+
+export type Lang = 'zh' | 'en';
+
+export type MessageKey = keyof typeof messagesZh;
+
+export const messagesZh = {
+  // ── 导航 / 布局（Layout.tsx）────────────────────────────
+  'nav.core': '核心模块',
+  'nav.dashboard': '仪表盘',
+  'nav.providers': '提供商',
+  'nav.tasks': '任务管理',
+  'nav.accounts': '长效号池',
+  'nav.logs': '实时日志',
+  'nav.dlq': '死信队列',
+  'nav.slow': '慢请求画像',
+  'nav.chat': '在线聊天',
+  'nav.generate': '在线生成',
+  'nav.agent': '智能体编排',
+  'nav.guide': 'API 指南',
+  'nav.health': '健康体检',
+  'nav.ecosystem': 'AI 生态',
+  'nav.costs': '成本管理',
+  'nav.security': '安全风控',
+
+  'layout.brandSub': '高可用智能出图中心',
+  'layout.systemOk': '服务运行正常',
+  'layout.console': '控制台',
+  'layout.crumb': '听风智能图像生成架构',
+  'layout.boundary': '公开只读 · 写操作需管理 Key',
+  'layout.langSwitch': 'EN',
+
+  // ── Generate 主表单（Generate.tsx）─────────────────────
+  'gen.title': '在线生成',
+  'gen.badge': '文生图 · 图生图',
+  'gen.desc': '带 API Key 生成图像（写接口需 Key，未配置时后端返回 401）',
+  'gen.keyConfigured': '已配置 Key',
+  'gen.keyConfigure': '配置 API Key',
+  'gen.txtTab': '文生图',
+  'gen.imgTab': '图生图',
+  'gen.promptLabelTxt': '提示词（Prompt）',
+  'gen.promptLabelImg': '编辑指令（Prompt）',
+  'gen.model': '模型',
+  'gen.aspect': '画幅',
+  'gen.resolution': '分辨率',
+  'gen.submitTxt': '🚀 生成图片',
+  'gen.submitImg': '🎨 生成变体',
+  'gen.submitting': '提交中…',
+  'gen.reset': '重置',
+
+  // ── Tasks 列表（Tasks.tsx）─────────────────────────────
+  'tasks.title': '生成任务管理',
+  'tasks.total': '共 {n} 条记录',
+  'tasks.desc': '查询并监控所有已提交的图像生成请求、提示词、执行状态与耗时',
+  'tasks.colId': '任务 ID',
+  'tasks.colStatus': '运行状态',
+  'tasks.colProgress': '进度',
+  'tasks.colModel': '目标模型',
+  'tasks.colPrompt': '提示词 (Prompt)',
+  'tasks.colDuration': '执行耗时',
+  'tasks.colCreated': '创建时间',
+  'tasks.colActions': '操作',
+  'tasks.statusCompleted': '已完成',
+  'tasks.statusProcessing': '处理中',
+  'tasks.statusError': '失败',
+  'tasks.statusPending': '排队中',
+  'tasks.statusCancelled': '已取消',
+  'tasks.statusArchived': '已归档',
+  'tasks.cancel': '取消',
+  'tasks.retry': '重试',
+  'tasks.cancelOk': '任务 {id} 已取消',
+  'tasks.cancelFinal': '任务 {id} 已处于终态（{s}），无需取消',
+  'tasks.cancelFail': '取消失败',
+  'tasks.retryOk': '重试已提交，新任务 {id}…',
+  'tasks.retryFail': '重试失败',
+  'tasks.refresh': '刷新',
+  'tasks.filterAll': '全部状态 (All)',
+  'tasks.emptyText': '未找到相关任务',
+  'tasks.emptyHint': '提交生成请求后，任务状态将实时在此更新',
+  'tasks.emptyCta': '前往生成',
+
+  // ── Gallery 操作条（Gallery.tsx）────────────────────────
+  'gallery.searchPlaceholder': '搜索 prompt 关键词…',
+  'gallery.total': '{n} 张',
+  'gallery.selected': '已选 {n} 张',
+  'gallery.zip': '打包下载 ZIP',
+  'gallery.remove': '移除',
+  'gallery.clearSel': '取消选择',
+
+  // ── Dashboard 卡片标题（Dashboard.tsx）──────────────────
+  'dash.title': '系统总览仪表盘',
+  'dash.badge': '实时监控中',
+  'dash.desc': '全节点图像生成任务调度、集群负载与核心业务指标一览',
+  'dash.refresh': '刷新数据',
+  'dash.totalRequests': '总请求数',
+  'dash.successImages': '成功出图',
+  'dash.failedImages': '生成失败',
+  'dash.uptime': '系统运行时长',
+  'dash.processing': '当前处理中',
+  'dash.queued': '队列等待中',
+  'dash.workers': 'Worker 总数',
+  'dash.cfSolver': 'CF 求解器状态',
+  'dash.base64Cache': 'base64 缓存',
+  'dash.pendingCleanup': '待清理',
+  'dash.workerCluster': 'Worker 集群健康',
+  'dash.slowRequests': '慢请求(窗口内)',
+  'dash.costMetric': '出图成本口径',
+
+  // ── ApiGuide（ApiGuide.tsx）─────────────────────────────
+  'guide.title': 'API 调用指南',
+  'guide.desc': '如何用 curl / Python / JavaScript 调用听风AI 出图与聊天接口（OpenAI 风格 /v1/*）',
+} as const;

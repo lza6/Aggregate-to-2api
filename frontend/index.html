@@ -9,6 +9,22 @@
   <meta name="theme-color" content="#090d16" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
   <meta name="color-scheme" content="light dark" />
+  <!-- P1-7 主题预置（首帧前 → 防浅色闪烁）：localStorage['tf-theme'] 优先，未设置跟随系统。
+       尽力而为——Tauri 窗口 CSP 无 unsafe-inline 会拦截内联脚本，但主窗 visible:false 直到后端就绪，
+       且 main.tsx initTheme() 在 React 渲染前权威应用，无 FOUC（见 frontend/src/lib/theme.ts）。 -->
+  <script>
+    (function () {
+      try {
+        var stored = null;
+        try { stored = localStorage.getItem('tf-theme'); } catch (e) { /* 隐私模式降级为跟随系统 */ }
+        var darkQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        var theme = (stored === 'light' || stored === 'dark')
+          ? stored
+          : (darkQuery && darkQuery.matches ? 'dark' : 'light');
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) { /* 保持 CSS 默认（系统跟随） */ }
+    })();
+  </script>
   <meta name="description" content="听风AI 管理中心 — 多提供商 AI 图像/对话生成网关控制台" />
   <!-- 字体非阻塞加载：preconnect 握手 + preload 指示 + media=print→all 切换 + font-display:swap。
        不再阻塞首屏渲染；字体未就绪时降级系统字体，LCP 不受拖累。 -->

@@ -64,50 +64,62 @@ class EngineMixin:
 
     async def _autoregister_loop(self, provider: str) -> None:
         """提供商自动补号守护任务。"""
-        target = _pkg_attr("TARGET_NANOBANANA", TARGET_NANOBANANA)
         while True:
             try:
-                usable = len(await self.get(provider))
-                if usable >= target:
+                if not await self._can_fill(provider):
                     await asyncio.sleep(60)
                     continue
-                reg = self.registerers.get(provider)
-                if reg is None:
-                    await asyncio.sleep(30)
-                    continue
-
-                try:
-                    if not _pkg_attr("MOCK_REGISTER", MOCK_REGISTER):
-                        # 号池注册需轮换 IP：只要池里有任何代理就尝试 acquire（内部按冷却分配）。
-                        # 不能用 available()（受 IF_PROXY_MAX_USE_PER_DAY=1 每日限额约束）做前置判定，
-                        # 否则用一轮后全部 use_count=1 会被误判"无可用代理"而永久暂停。
-                        if not proxy_pool.entries:
-                            log.info("号池补号暂停 %s：代理池为空（抓取器尚未注入）", provider)
-                            await asyncio.sleep(_pkg_attr("REGISTER_COOLDOWN", REGISTER_COOLDOWN))
-                            continue
-                    reg.proxy = await proxy_pool.acquire()
-                    acc = await reg.register_one()
-                    if acc:
-                        await self.add(
-                            provider,
-                            acc["email"],
-                            acc["cookie"],
-                            acc.get("password"),
-                            credits=acc.get("credits", 0),
-                            register_ip=acc.get("register_ip", ""),
-                        )
-                        await self.mark(provider, acc["email"], "ok")
-                        log.info(
-                            "号池补号成功 %s: %s（现有 %d）", provider, acc["email"], len(await self.get(provider))
-                        )
-                        await asyncio.sleep(_pkg_attr("REGISTER_COOLDOWN", REGISTER_COOLDOWN))
-                    else:
-                        await asyncio.sleep(_pkg_attr("REGISTER_COOLDOWN", REGISTER_COOLDOWN))
-                except Exception as e:
-                    log.warning("号池补号失败 %s: %s", provider, e)
-                    await asyncio.sleep(_pkg_attr("REGISTER_COOLDOWN", REGISTER_COOLDOWN))
+                await self._register_one_now(provider)
+                await asyncio.sleep(_pkg_attr("REGISTER_COOLDOWN", REGISTER_COOLDOWN))
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 log.warning("号池补号循环异常 %s: %s", provider, e)
                 await asyncio.sleep(30)
+
+    async def _can_fill(self, provider: str) -> bool:
+        """补号判定纯函数（P2-11 flaky 根治）：当前可用号 < 目标 且 有注册器 且 可补。
+
+        从 _autoregister_loop 抽出，测试可脱离无限循环时序直接断言：
+        - 可用号 >= 目标 → False（已满）
+        - 无注册器 → False
+        - 非 mock 模式且代理池为空 → False（无代理守卫生效，避免误注册）
+        """
+        try:
+            usable = len(await self.get(provider))
+        except Exception:
+            return False
+        target = _pkg_attr("TARGET_NANOBANANA", TARGET_NANOBANANA)
+        if usable >= target or self.registerers.get(provider) is None:
+            return False
+        if not _pkg_attr("MOCK_REGISTER", MOCK_REGISTER) and not proxy_pool.entries:
+            return False
+        return True
+
+    async def _register_one_now(self, provider: str) -> bool:
+        """补号单步（P2-11 flaky 根治）：注册一个账号并入库，返回是否成功。
+
+        循环与测试共用同一实现（不复制注册逻辑）：acquire 代理 → register_one →
+        add + mark ok。异常吞掉返回 False（与旧循环 except 分支等价）。
+        """
+        reg = self.registerers.get(provider)
+        if reg is None:
+            return False
+        try:
+            reg.proxy = await proxy_pool.acquire()
+            acc = await reg.register_one()
+            if not acc:
+                return False
+            await self.add(
+                provider,
+                acc["email"],
+                acc["cookie"],
+                acc.get("password"),
+                credits=acc.get("credits", 0),
+                register_ip=acc.get("register_ip", ""),
+            )
+            await self.mark(provider, acc["email"], "ok")
+            return True
+        except Exception as e:
+            log.warning("号池补号失败 %s: %s", provider, e)
+            return False

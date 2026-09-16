@@ -233,25 +233,41 @@ fn backend_status() -> BackendStatus {
     }
 }
 
-/// P1-11：托盘图标 + 菜单（显示主窗口 / 退出）。Tauri 2 核心能力（无需额外插件）。
+/// P1-11：托盘图标 + 菜单（显示主窗口 / 开机自启 / 退出）。Tauri 2 核心能力（无需额外插件）。
+/// P1-7：菜单新增「开机自启」toggle（勾选态 = 已启用），点击走 autostart 插件 enable/disable。
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem};
+    use tauri::menu::{CheckMenuItem, Menu, MenuItem};
     use tauri::tray::TrayIconBuilder;
     use tauri::Manager;
+    use tauri_plugin_autostart::ManagerExt;
 
     let show_i = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+    // 勾选态取自 autostart 插件当前状态；插件未注册（IF_DESKTOP_AUTOSTART=0）时 is_enabled 报错 → 回退未勾选
+    let autostart_checked = app.autolaunch().is_enabled().unwrap_or(false);
+    let autostart_i = CheckMenuItem::with_id(app, "autostart", "开机自启", true, autostart_checked, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_i, &autostart_i, &quit_i])?;
     TrayIconBuilder::with_id("main-tray")
         .tooltip("听风AI Desktop")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| match event.id.as_ref() {
+        .on_menu_event(move |app, event| match event.id.as_ref() {
             "show" => {
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.show();
                     let _ = win.set_focus();
                 }
+            }
+            // P1-7：开机自启 toggle —— 读当前状态反相写入，并同步勾选态
+            "autostart" => {
+                let enabled = app.autolaunch().is_enabled().unwrap_or(false);
+                let new_state = !enabled;
+                let _ = if enabled {
+                    app.autolaunch().disable()
+                } else {
+                    app.autolaunch().enable()
+                };
+                let _ = autostart_i.set_checked(new_state);
             }
             "quit" => app.exit(0),
             _ => {}
@@ -274,6 +290,39 @@ pub fn run() {
                 .unwrap_or(false);
             if !updater_disabled {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+            // P1-7：全局快捷键插件 + 注册 Ctrl+Shift+T（按下 → 显示主窗口 + 置前 + 还原最小化）。
+            // 条件注册，IF_DESKTOP_GLOBAL_SHORTCUT=0 可关闭（缺省开，与 IF_DESKTOP_UPDATER 同一读取模式）。
+            let shortcut_disabled = std::env::var("IF_DESKTOP_GLOBAL_SHORTCUT")
+                .map(|v| v.trim().eq_ignore_ascii_case("0"))
+                .unwrap_or(false);
+            if !shortcut_disabled {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_handler(|app, _shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                if let Some(win) = app.get_webview_window("main") {
+                                    let _ = win.show();
+                                    let _ = win.unminimize();
+                                    let _ = win.set_focus();
+                                }
+                            }
+                        })
+                        .build(),
+                )?;
+                let _ = app.global_shortcut().register("Ctrl+Shift+T");
+            }
+            // P1-7：开机自启插件（Windows 忽略 MacosLauncher/args，仅 macOS 生效区分登录类型）。
+            // 条件注册，IF_DESKTOP_AUTOSTART=0 可关闭（缺省开）。
+            let autostart_disabled = std::env::var("IF_DESKTOP_AUTOSTART")
+                .map(|v| v.trim().eq_ignore_ascii_case("0"))
+                .unwrap_or(false);
+            if !autostart_disabled {
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                    Some(vec!["--autostart"]),
+                ))?;
             }
             {
                 let mut st = state().lock().unwrap();

@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ToastHost } from './ToastHost';
+import { useT, useLang } from '../i18n';
+import { useTheme } from '../hooks/useTheme';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  // P1-6 i18n：响应式 t() + 语言切换（zh/en，localStorage 持久化）
+  const t = useT();
+  const { lang, toggle } = useLang();
+  // P1-7: 主题控制（跟随系统 → 浅色 → 深色 三态循环，localStorage 覆盖系统）
+  const { preference, cycleTheme } = useTheme();
   // D3: 移动端侧栏抽屉开关；桌面端常驻，窄屏可折叠 + Esc/遮罩关闭 + 键盘可达
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Esc 关闭抽屉（键盘可达性 WCAG 2.1.1）：原 D3 注释承诺但未实现，补齐。
@@ -41,86 +48,86 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="brand-title">
               听风AI <span className="brand-tag">PRO</span>
             </div>
-            <span className="brand-sub">高可用智能出图中心</span>
+            <span className="brand-sub">{t('layout.brandSub')}</span>
           </div>
         </div>
 
         {/* Navigation */}
-        <div className="nav-section-title">核心模块</div>
+        <div className="nav-section-title">{t('nav.core')}</div>
         <nav className="sidebar-nav" aria-label="核心模块导航">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">📊</span>
-            <span className="nav-text">仪表盘</span>
+            <span className="nav-text">{t('nav.dashboard')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/providers" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🔌</span>
-            <span className="nav-text">提供商</span>
+            <span className="nav-text">{t('nav.providers')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/tasks" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">📋</span>
-            <span className="nav-text">任务管理</span>
+            <span className="nav-text">{t('nav.tasks')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/accounts" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">👤</span>
-            <span className="nav-text">长效号池</span>
+            <span className="nav-text">{t('nav.accounts')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/logs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">📝</span>
-            <span className="nav-text">实时日志</span>
+            <span className="nav-text">{t('nav.logs')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/dlq" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🗑️</span>
-            <span className="nav-text">死信队列</span>
+            <span className="nav-text">{t('nav.dlq')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/slow" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🐌</span>
-            <span className="nav-text">慢请求画像</span>
+            <span className="nav-text">{t('nav.slow')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">💬</span>
-            <span className="nav-text">在线聊天</span>
+            <span className="nav-text">{t('nav.chat')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/generate" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🖼️</span>
-            <span className="nav-text">在线生成</span>
+            <span className="nav-text">{t('nav.generate')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/agent" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🤖</span>
-            <span className="nav-text">智能体编排</span>
+            <span className="nav-text">{t('nav.agent')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/api-guide" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">📖</span>
-            <span className="nav-text">API 指南</span>
+            <span className="nav-text">{t('nav.guide')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/health" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🩺</span>
-            <span className="nav-text">健康体检</span>
+            <span className="nav-text">{t('nav.health')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/ecosystem" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🌐</span>
-            <span className="nav-text">AI 生态</span>
+            <span className="nav-text">{t('nav.ecosystem')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/costs" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">💰</span>
-            <span className="nav-text">成本管理</span>
+            <span className="nav-text">{t('nav.costs')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/security" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
             <span className="nav-icon" aria-hidden="true">🛡️</span>
-            <span className="nav-text">安全风控</span>
+            <span className="nav-text">{t('nav.security')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
         </nav>
@@ -129,7 +136,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="sidebar-footer">
           <div className="system-pill">
             <span className="system-dot" aria-hidden="true" />
-            <span className="system-status">服务运行正常</span>
+            <span className="system-status">{t('layout.systemOk')}</span>
           </div>
           <div className="system-version">v{__APP_VERSION__} SaaS Enterprise</div>
         </div>
@@ -139,15 +146,42 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="layout-body">
         <header className="layout-topbar">
           <div className="topbar-breadcrumb">
-            <span className="breadcrumb-root">控制台</span>
+            <span className="breadcrumb-root">{t('layout.console')}</span>
             <span className="breadcrumb-sep">/</span>
-            <span className="breadcrumb-current">听风智能图像生成架构</span>
+            <span className="breadcrumb-current">{t('layout.crumb')}</span>
           </div>
           <div className="topbar-actions">
+            {/* P1-7：主题切换按钮（跟随系统 → 浅色 → 深色 三态循环） */}
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={cycleTheme}
+              title={
+                preference === 'dark'
+                  ? '当前：深色（点击切到浅色）'
+                  : preference === 'light'
+                    ? '当前：浅色（点击切到跟随系统）'
+                    : '当前：跟随系统（点击切到浅色）'
+              }
+              aria-label={`切换主题，当前${preference === 'dark' ? '深色' : preference === 'light' ? '浅色' : '跟随系统'}`}
+            >
+              <span className="theme-toggle-icon" aria-hidden="true">
+                {preference === 'dark' ? '🌙' : preference === 'light' ? '☀️' : '🖥️'}
+              </span>
+            </button>
+            {/* P1-6 i18n：中英切换按钮（显示目标语言，localStorage 持久化 + <html lang> 同步） */}
+            <button
+              type="button"
+              className="tf-btn tf-btn-secondary tf-btn-sm"
+              onClick={toggle}
+              aria-label={lang === 'zh' ? 'Switch to English' : '切换到中文'}
+            >
+              {t('layout.langSwitch')}
+            </button>
             {/* P3-1: 公开/受保护边界说明（不引入登录体系，写操作需管理 Key） */}
             <span className="boundary-pill" title="本面板公开只读展示；写操作（封禁/解封、DLQ 重试/清空）需管理 Key（Authorization: Bearer 头，环境变量 IF_ADMIN_KEYS）">
               <span className="boundary-dot" aria-hidden="true" />
-              公开只读 · 写操作需管理 Key
+              {t('layout.boundary')}
             </span>
             <span className="topbar-badge">
               <span className="tf-dot tf-dot-pulse" aria-hidden="true" style={{ background: '#10b981' }} />
@@ -430,6 +464,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
           border: 1px solid var(--border-default);
           padding: 4px 10px;
           border-radius: var(--radius-full);
+        }
+
+        /* P1-7：顶栏主题切换按钮（跟随系统 → 浅色 → 深色） */
+        .theme-toggle {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 30px;
+          height: 30px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border-default);
+          background: var(--bg-subtle);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 14px;
+          transition: all var(--transition-fast, 0.15s ease);
+        }
+        .theme-toggle:hover {
+          border-color: var(--primary-500);
+          color: var(--text-primary);
+        }
+        .theme-toggle:focus-visible {
+          outline: 2px solid var(--primary-500);
+          outline-offset: 2px;
+        }
+        .theme-toggle-icon { line-height: 1; }
+
+        @media (max-width: 480px) {
+          .theme-toggle { width: 44px; height: 44px; }
         }
 
         .boundary-pill {

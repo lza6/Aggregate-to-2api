@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { notify } from '../api';
 import { copyToClipboard } from '../components/Feedback';
+import { useT } from '../i18n';
 
 function CopyButton({ text }: { text: string }) {
   const handle = async () => {
@@ -32,6 +33,8 @@ function CodeBlock({ code, title }: { code: string; title?: string }) {
 }
 
 export function ApiGuidePage() {
+  // P1-6 i18n：响应式 t()
+  const t = useT();
   // v7.7.11: 移除业务 Key 输入——生图/聊天公益开放不限 Key，示例不再填充业务 Key
   // （管理 Key 仅用于面板写操作，不在本页输入；用户自行去 Security 页存管理 Key）
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://imagefree.tingfengai.art';
@@ -133,8 +136,8 @@ curl -N -X POST ${baseUrl}/v1/mcp \\
     <div className="ag-container">
       <div className="page-header">
         <div>
-          <h1 className="page-title">📖 API 调用指南</h1>
-          <p className="page-desc">如何用 curl / Python / JavaScript 调用听风AI 出图与聊天接口（OpenAI 风格 /v1/*）</p>
+          <h1 className="page-title">📖 {t('guide.title')}</h1>
+          <p className="page-desc">{t('guide.desc')}</p>
         </div>
       </div>
 

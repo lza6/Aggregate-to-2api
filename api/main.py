@@ -19,6 +19,7 @@ from .context import RequestContextMiddleware
 from .handlers import register_exception_handlers
 from .lifespan import lifespan
 from .meta import db, engine, gallery_cache  # noqa: F401  (test conftest 依赖 api.main.engine)
+from .request_guard import RateLimitHeadersMiddleware
 from .routes import api_router
 
 log = logging.getLogger("imagefree_api")
@@ -114,7 +115,7 @@ else:
     _docs_url = _redoc_url = _openapi_url = None  # 全部禁用（404）
 app = FastAPI(
     title="imagefree API",
-    version="16.0.0",
+    version="16.1.0",
     description="AI 图像生成开放接口：自动完成 Cloudflare Turnstile 人机验证，无感调用。"
     "高并发异步队列，文档见管理台 /admin，Swagger 见 /docs。",
     lifespan=lifespan,
@@ -135,6 +136,9 @@ app.add_middleware(
 # JS 前端无破坏（X-Frame-Options:DENY 仅影响他页 iframe 嵌本服务，管理面板自身不受影响）。
 # CSP 默认关闭（config.IF_CSP_ENABLED），避免误杀面板 inline script / 画廊 CDN 图片。
 app.add_middleware(SecurityHeadersMiddleware)
+
+# ── P1-5: X-RateLimit-* 响应头注入（读 request.state.rate_limit，仅限流端点注入）──
+app.add_middleware(RateLimitHeadersMiddleware)
 
 # ── 全局异常处理器 ──
 register_exception_handlers(app)

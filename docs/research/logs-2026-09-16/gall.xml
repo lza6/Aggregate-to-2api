@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="8" time="1.408" timestamp="2026-09-16T10:42:23.069681+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_gallery_crud" name="test_gallery_list_pagination_and_filters" time="0.053" /><testcase classname="tests.test_gallery_crud" name="test_gallery_list_status_and_model_filter" time="0.038" /><testcase classname="tests.test_gallery_crud" name="test_gallery_list_search_prompt_substring" time="0.037" /><testcase classname="tests.test_gallery_crud" name="test_gallery_get_and_missing" time="0.038" /><testcase classname="tests.test_gallery_crud" name="test_gallery_soft_delete_removes_from_list" time="0.045" /><testcase classname="tests.test_gallery_crud" name="test_gallery_detail_endpoint_with_similar_degraded" time="0.040" /><testcase classname="tests.test_gallery_crud" name="test_gallery_zip_endpoint_streams" time="0.045"><failure message="AssertionError: assert ('t1.png' in [])">seeded_gdb = &lt;api.db.core.DB object at 0x000000000869BBD0&gt;
+
+    @pytest.mark.asyncio
+    async def test_gallery_zip_endpoint_streams(seeded_gdb):
+        """打包端点：流式 ZIP 200 + X-Skipped 头；含 deleted/缺失张跳过。"""
+        import json
+    
+        from api.routes.gallery import _ZipRequest
+    
+        payload = _ZipRequest(task_ids=["t1", "t2", "t4", "no_such"])
+        resp = await gallery_routes.gallery_zip(payload, password=None)
+        assert isinstance(resp, StreamingResponse)
+        assert resp.media_type == "application/zip"
+        # 收集流并断言可解压
+        chunks = b"".join([c async for c in resp.body_iterator])
+        assert chunks.startswith(b"PK")  # zip magic
+        skipped = resp.headers.get("X-Skipped", "")
+        assert "t4" in skipped  # deleted 张被跳过
+        assert "no_such" in skipped  # 缺失张被跳过
+        # 解压校验内容
+        import io
+        import zipfile
+    
+        zf = zipfile.ZipFile(io.BytesIO(chunks))
+        names = zf.namelist()
+&gt;       assert "t1.png" in names and "t2.png" in names
+E       AssertionError: assert ('t1.png' in [])
+
+tests\test_gallery_crud.py:172: AssertionError</failure></testcase><testcase classname="tests.test_gallery_crud" name="test_gallery_delete_endpoint" time="0.040" /></testsuite></testsuites>

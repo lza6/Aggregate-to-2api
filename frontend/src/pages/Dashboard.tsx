@@ -3,6 +3,7 @@ import { fetchStats, fetchDiagnostics, fetchRoutingRecords, fetchSystemSpec, fet
 import { StatCard } from '../components/StatCard';
 import { ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
+import { useT } from '../i18n';
 import type { Stats, Diagnostics, RoutingRecord, RoutingNode, SystemSpec, ChatUsageStats, ChatRemaining, ChatAuthStatus, AccountPoolResponse, SseStatsSnapshot } from '../api';
 
 const PWD_KEY = 'galleryPwd';
@@ -25,6 +26,8 @@ function formatTokens(n: number): string {
 }
 
 export function Dashboard() {
+  // P1-6 i18n：响应式 t()
+  const t = useT();
   const { data: stats, loading, error, reload } = useApi<Stats>(() => fetchStats(), { intervalMs: 5000 });
   const { data: diag, error: diagError } = useApi<Diagnostics>(() => fetchDiagnostics(), { intervalMs: 15000 });
   const { data: routingData } = useApi<{ records: RoutingRecord[]; nodes: Record<string, RoutingNode> }>(
@@ -75,10 +78,10 @@ export function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">
-            系统总览仪表盘
-            <span className="title-badge">实时监控中</span>
+            {t('dash.title')}
+            <span className="title-badge">{t('dash.badge')}</span>
           </h1>
-          <p className="page-desc">全节点图像生成任务调度、集群负载与核心业务指标一览</p>
+          <p className="page-desc">{t('dash.desc')}</p>
         </div>
         <div className="dashboard-header-actions">
           {/* v7.7.7: 生图/聊天公益开放不限业务 Key，此徽章仅对站长（已存管理 Key）展示管理 Key 脱敏，
@@ -106,7 +109,7 @@ export function Dashboard() {
             </span>
           )}
           <button onClick={reload} className="tf-btn tf-btn-secondary">
-            <span>🔄</span> 刷新数据
+            <span>🔄</span> {t('dash.refresh')}
           </button>
         </div>
       </div>
@@ -114,71 +117,71 @@ export function Dashboard() {
       {/* 核心指标卡片矩阵 */}
       <div className="stats-grid">
         <StatCard
-          label="总请求数"
+          label={t('dash.totalRequests')}
           value={loading && !stats ? '…' : stats?.total_requests ?? '-'}
           icon="📈"
         />
         <StatCard
-          label="成功出图"
+          label={t('dash.successImages')}
           value={stats?.total_images ?? '-'}
           color="var(--success)"
           icon="🎨"
         />
         <StatCard
-          label="生成失败"
+          label={t('dash.failedImages')}
           value={stats?.total_errors ?? '-'}
           color="var(--danger)"
           icon="⚠️"
         />
         <StatCard
-          label="系统运行时长"
+          label={t('dash.uptime')}
           value={stats?.uptime_human ?? '-'}
           icon="⏱️"
         />
         <StatCard
-          label="当前处理中"
+          label={t('dash.processing')}
           value={stats?.processing ?? '-'}
           icon="⚡"
         />
         <StatCard
-          label="队列等待中"
+          label={t('dash.queued')}
           value={stats?.queued ?? '-'}
           sub={`队列最大容量: ${stats?.queue_capacity ?? '-'}`}
           icon="⏳"
         />
         <StatCard
-          label="Worker 总数"
+          label={t('dash.workers')}
           value={diag?.workers?.total ?? stats?.workers ?? '-'}
           icon="🤖"
         />
         <StatCard
-          label="CF 求解器状态"
+          label={t('dash.cfSolver')}
           value={stats?.solver?.status ?? '-'}
           color={stats?.solver?.status === 'ok' ? 'var(--success)' : 'var(--danger)'}
           icon="🛡️"
         />
         <StatCard
-          label="base64 缓存"
+          label={t('dash.base64Cache')}
           value={stats?.base64_gc ? `${stats.base64_gc.total_files} 文件 / ${stats.base64_gc.total_gb.toFixed(2)} GB` : '-'}
           sub={stats?.base64_gc ? `热 ${stats.base64_gc.hot_files} · 冷 ${stats.base64_gc.cold_files} · 配额 ${stats.base64_gc.usage_pct}%` : undefined}
           icon="🧊"
         />
         <StatCard
-          label="待清理"
+          label={t('dash.pendingCleanup')}
           value={stats?.base64_gc ? `${stats.base64_gc.pending_cleanup_count} 个` : '-'}
           sub={stats?.base64_gc ? `预计释放 ${stats.base64_gc.pending_cleanup_gb.toFixed(2)} GB` : undefined}
           color={stats?.base64_gc && stats.base64_gc.pending_cleanup_count > 0 ? 'var(--warning, #e0a800)' : 'var(--success)'}
           icon="🗑️"
         />
         <StatCard
-          label="Worker 集群健康"
+          label={t('dash.workerCluster')}
           value={diag ? `${diag.workers.alive} / ${diag.workers.total}` : '…'}
           color={diag && diag.workers.stale_count > 0 ? 'var(--danger)' : 'var(--success)'}
           sub={diag && diag.workers.stale_count > 0 ? `⚠ ${diag.workers.stale_count} 个节点失联` : '所有 Worker 存活'}
           icon="🩺"
         />
         <StatCard
-          label="慢请求(窗口内)"
+          label={t('dash.slowRequests')}
           value={diag?.slow_log ? `${diag.slow_log.count} 个` : '-'}
           sub={diag?.slow_log?.count
             ? `平均 ${diag.slow_log.avg_total_ms}ms · 最慢 ${diag.slow_log.max_total_ms}ms · ${diag.slow_log.slowest_stage ?? '—'}`
@@ -187,7 +190,7 @@ export function Dashboard() {
           icon="🐌"
         />
         <StatCard
-          label="出图成本口径"
+          label={t('dash.costMetric')}
           value={accountPool?.cost_summary ? `${accountPool.cost_summary.total_credits_used} 分` : '-'}
           sub={accountPool?.cost_summary
             ? `累计 ${accountPool.cost_summary.total_images_used} 张 · 均 ${accountPool.cost_summary.avg_cost_per_image != null ? accountPool.cost_summary.avg_cost_per_image + ' 分/张' : '—'} · ${accountPool.cost_summary.accounts_with_usage}/${accountPool.cost_summary.total_accounts} 账号出图`

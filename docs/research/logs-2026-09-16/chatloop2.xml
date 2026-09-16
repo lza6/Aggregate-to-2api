@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="5" time="1.174" timestamp="2026-09-16T10:04:04.421062+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_chat_tool_loop" name="test_loop_enabled_executes_whitelist_tool_and_backfills" time="0.039" /><testcase classname="tests.test_chat_tool_loop" name="test_loop_disabled_keeps_old_passthrough" time="0.017" /><testcase classname="tests.test_chat_tool_loop" name="test_destructive_tool_rejected_not_executed" time="0.013"><failure message="assert ('危险' in '{&quot;ok&quot;: false, &quot;error&quot;: &quot;工具不在白名单：rm_rf（仅开放 [\'dag_plan\', \'dag_status\', \'generate_image\', \'skills_get\', \'skills_list\', \'task_status\']）&quot;}' or '拒绝' in '{&quot;ok&quot;: false, &quot;error&quot;: &quot;工具不在白名单：rm_rf（仅开放 [\'dag_plan\', \'dag_status\', \'generate_image\', \'skills_get\', \'skills_list\', \'task_status\']）&quot;}')">app = &lt;fastapi.applications.FastAPI object at 0x00000000087AD400&gt;
+fake_provider = &lt;tests.test_chat_tool_loop._FakeChatProvider object at 0x00000000087C65D0&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000000087A58C0&gt;
+
+    @pytest.mark.asyncio
+    async def test_destructive_tool_rejected_not_executed(app, fake_provider, monkeypatch):
+        """危险命令工具名 → is_destructive_command 硬门禁拒绝（不执行 handler，回填拒绝文本）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_CHAT_TOOL_LOOP", "1")
+        reset_settings()
+        fake_provider.events = _tool_call_events(name="rm_rf", arguments='{"path":"/"}')
+    
+        resp = await _request(app, {"model": MODEL, "messages": [{"role": "user", "content": "x"}]})
+        assert resp.status_code == 200
+        assert len(fake_provider.calls) &gt;= 2
+        second_messages = fake_provider.calls[1]["messages"]
+        role_tool = [m for m in second_messages if m.get("role") == "tool"]
+        assert role_tool
+&gt;       assert "危险" in role_tool[0]["content"] or "拒绝" in role_tool[0]["content"]
+E       assert ('危险' in '{"ok": false, "error": "工具不在白名单：rm_rf（仅开放 [\'dag_plan\', \'dag_status\', \'generate_image\', \'skills_get\', \'skills_list\', \'task_status\']）"}' or '拒绝' in '{"ok": false, "error": "工具不在白名单：rm_rf（仅开放 [\'dag_plan\', \'dag_status\', \'generate_image\', \'skills_get\', \'skills_list\', \'task_status\']）"}')
+
+tests\test_chat_tool_loop.py:176: AssertionError</failure></testcase><testcase classname="tests.test_chat_tool_loop" name="test_out_of_whitelist_tool_backfilled_text_not_executed" time="0.016" /><testcase classname="tests.test_chat_tool_loop" name="test_max_turns_capped" time="0.018" /></testsuite></testsuites>

@@ -11,6 +11,7 @@ import type { GalleryItem } from '../api';
 import { Skeleton, Empty } from './Feedback';
 import { Button } from './ui/Button';
 import { notify } from '../api/core';
+import { useT } from '../i18n';
 
 const PWD_KEY = 'galleryPwd';
 /** P2-1: 签名 URL 到期前提前重签的余量（秒）。 */
@@ -59,6 +60,8 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
   /** P2-1: 重签/刷新因鉴权失败时回调（走父级密码重试流）。 */
   onGalleryFail?: () => void;
 }) {
+  // P1-6 i18n：响应式 t()（仅操作条文案接入，图片/交互逻辑不变）
+  const t = useT();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -436,11 +439,11 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
           type="search"
           value={searchQ}
           onChange={e => setSearchQ(e.target.value)}
-          placeholder="搜索 prompt 关键词…"
+          placeholder={t('gallery.searchPlaceholder')}
           aria-label="搜索画廊作品"
           className="tf-input gallery-search-input"
         />
-        <span className="gallery-total">{total} 张</span>
+        <span className="gallery-total">{t('gallery.total', { n: total })}</span>
       </div>
 
       {!items.length && searchQ && (
@@ -450,11 +453,11 @@ export function Gallery({ limit = 20, password, onGalleryFail }: {
       {/* v16 P0-3：多选操作条（选中 > 0 时出现） */}
       {selected.size > 0 && (
         <div className="gallery-actionbar tf-card">
-          <span className="gallery-sel-count">已选 {selected.size} 张</span>
+          <span className="gallery-sel-count">{t('gallery.selected', { n: selected.size })}</span>
           <div className="gallery-sel-actions">
-            <Button loading={zipping} onClick={() => void handleZip()}>打包下载 ZIP</Button>
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>移除</Button>
-            <Button variant="ghost" onClick={() => setSelected(new Set())}>取消选择</Button>
+            <Button loading={zipping} onClick={() => void handleZip()}>{t('gallery.zip')}</Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('gallery.remove')}</Button>
+            <Button variant="ghost" onClick={() => setSelected(new Set())}>{t('gallery.clearSel')}</Button>
           </div>
         </div>
       )}

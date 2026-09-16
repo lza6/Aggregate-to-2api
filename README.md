@@ -6,7 +6,7 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-16.0.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-16.1.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
@@ -28,6 +28,9 @@
 - **🖼️ 画廊相册化 (v16)** — 完整画廊管理端：分页列表（page/搜索/状态/模型过滤，`IF_GALLERY_PAGE_SIZE` 分页大小）+ 前端瀑布流相册（防抖搜索 + IntersectionObserver 无限滚动 + 多选操作条 + 删除确认 + 详情弹窗 + 相似图推荐联动）+ 多选一键 ZIP 打包（临时文件流式下发，`IF_GALLERY_ZIP_BATCH=20` 防 512MB 容器 OOM，失败张跳过并回报）+ 软删可回滚（不物理删文件）。
 - **🔌 MCP Streamable HTTP (v16)** — `/v1/mcp` 升级官方 Streamable HTTP Transport（`Accept: text/event-stream` 时 SSE 分帧 + `resources/list`/`prompts/list` 能力声明 + `DELETE` 结束会话），Claude Desktop / Cursor 开箱即连；`generate_image` 异步任务契约（返回 `{task_id, status: queued}` + `task_status` 幂等轮询），`IF_MCP_STREAMABLE` 缺省开可回滚。
 - **🛠️ 聊天工具真实执行回路 (v16)** — 聊天 tools 网关侧安全执行白名单工具（skills_list/dag_plan/generate_image + memory_search 只读）并以 `role: tool` 回填续跑，复用 MCP 同一份 `guard_and_run` + 预算门禁（enforce 402）+ 破坏性命令黑名单，`IF_CHAT_TOOL_LOOP` 缺省关零行为变化。
+- **⏱️ 任务进度/取消/重试 (v16.1)** — SSE/轮询阶段徽章（queued→solving→generating→done + progress 5/30/80/100）+ `POST /v1/tasks/{id}/cancel` 幂等取消（`IF_TASK_CANCEL_ENABLED`，mark_finished 防覆盖护栏 + worker 双检查点）+ `POST /v1/tasks/{id}/retry` 一键重试；前端 Tasks/Generate 进度条 + 取消/重试按钮。
+- **🌐 i18n 双语 (v16.1)** — 零依赖轻量 i18n（`t()`/`useT()`，en/zh 91 key 一致性测试锁定）+ Layout/Generate/Tasks/Gallery/Dashboard/ApiGuide 主路径接线 + 顶栏语言切换；landing 复用既有 zh/en 平行字典。
+- **🗄️ 数据治理 (v16.1)** — 任务软归档（`IF_TASK_RETENTION_DAYS=90` 到期终态→archived，列表退冷/详情可查）+ `POST /v1/admin/export/tasks` 批量导出（CSV BOM 中文表头/json 完整字段/管理 Key/审计/10 万行截断）+ 成本预警（`IF_COST_ALERT_PCT=80` webhook 幂等）+ `GET /v1/admin/health-report` 七维健康自诊断（JSON/MD，前端导出）。
 
 > 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
 

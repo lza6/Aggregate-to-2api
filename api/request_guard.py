@@ -286,6 +286,62 @@ def _l1_check(key: str, now: float) -> bool:
         return True
 
 
+def _l1_bucket_status(key: str, now: float) -> tuple[float, float]:
+    """只读令牌桶快照（P1-5 展示用，不改桶、不参与限流决策）：返回 (当前 tokens, 容量)。
+
+    L1 判定 `_l1_check` 只返回 bool（保持签名不变，兼容 test_request_guard_redis_mode），
+    限流头需要 remaining/reset —— 此处用同一把 per-IP 分片锁只读 peek，避免为展示改动判定函数。
+    redis 模式下桶在适配器侧、内存桶缺失 → 返回 (0, 0)，由调用方按需近似。
+    """
+    capacity = _l1_capacity()
+    if capacity <= 0:
+        return 0.0, 0.0
+    refill = _l1_refill_per_sec()
+    with _ip_lock(key):
+        bucket = _l1_token_buckets.get(key)
+        if bucket is None:
+            return capacity, capacity
+        tokens, last = bucket[0], bucket[1]
+        if refill > 0 and tokens < capacity:
+            tokens = min(capacity, tokens + max(0.0, now - last) * refill)
+        return max(0.0, tokens), capacity
+
+
+def _l1_retry_after(remaining_tokens: float) -> int:
+    """L1 令牌桶 429 后到下一次放行的近似秒数（P1-5 展示用）。
+
+    refill>0：按剩余缺口除以回填速率。refill=0 的纯突发桶无精确恢复点（等 GC 重建桶），
+    取滑窗周期兜底——对客户端退避是足够安全的近似值。
+    """
+    refill = _l1_refill_per_sec()
+    if refill > 0 and remaining_tokens < 1.0:
+        return max(1, int((1.0 - remaining_tokens) / refill) + 1)
+    return int(_WINDOW_SECONDS)
+
+
+def _window_retry_after(bucket: list[float], now: float) -> int:
+    """滑动窗口 429 后距最旧记录滑出窗口的秒数（即下一次放行点，P1-5 展示用）。"""
+    if bucket:
+        return max(1, int(_WINDOW_SECONDS - (now - bucket[0])) + 1)
+    return int(_WINDOW_SECONDS)
+
+
+def _set_rate_meta(request: Request, *, limit: int, remaining: int, reset: float) -> None:
+    """P1-5：把本请求的配额桶状态挂到 request.state（供 RateLimitHeadersMiddleware 注入 X-RateLimit-*）。
+
+    starlette 1.6 中 request.state 底层即 scope["state"]，同请求全程共享。填充分支静默跳过，
+    不因展示数据失败破坏限流/放行主链路。
+    """
+    try:
+        request.state.rate_limit = {
+            "limit": int(limit),
+            "remaining": int(max(0, remaining)),
+            "reset": int(reset),
+        }
+    except Exception:  # noqa: BLE001  展示数据，failure 不打断请求
+        pass
+
+
 # ── 真实客户端 IP 判定（安全版）────────────────────────
 def get_client_ip(request: Request) -> str:
     """返回不可伪造的真实客户端 IP。
@@ -515,14 +571,28 @@ def check_rate_limit(request: Request) -> None:
                 records.append(now)
 
     # 2. L1 秒级令牌桶（突发限流；容量<=0 跳过，退化为仅滑窗）
-    if _l1_capacity() > 0 and not _l1_check(key, now):
-        _record_auto_block_violation(key, "rate-limit-exceeded")
-        from .error_tracker import record as _err_record
+    l1_capacity = _l1_capacity()
+    if l1_capacity > 0:
+        if not _l1_check(key, now):
+            _record_auto_block_violation(key, "rate-limit-exceeded")
+            from .error_tracker import record as _err_record
 
-        _err_record("RATE.001")
-        raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{_l1_capacity()} 突发令牌），请稍后重试", 429)
+            _err_record("RATE.001")
+            _tokens, _cap = _l1_bucket_status(key, now)
+            _retry_after = _l1_retry_after(_tokens)
+            _set_rate_meta(request, limit=int(l1_capacity), remaining=0, reset=now + _retry_after)
+            raise AppError(
+                ErrorCodes.RATE_LIMITED,
+                f"请求过于频繁（>{l1_capacity} 突发令牌），请稍后重试",
+                429,
+                details={"retry_after_seconds": _retry_after},
+            )
+        # L1 放行：先把 L1 桶状态落 meta；若下方 L3 滑窗开启，步骤 3 会用主窗口覆盖。
+        _tokens, _cap = _l1_bucket_status(key, now)
+        _l1_remaining = int(min(int(_cap), int(_tokens))) if _storage_adapter is None else max(0, int(l1_capacity) - 1)
+        _set_rate_meta(request, limit=int(l1_capacity), remaining=_l1_remaining, reset=now + _WINDOW_SECONDS)
 
-    # 3. 基础滑动窗口限流检查（0 = 关闭）
+    # 3. 基础滑动窗口限流检查（0 = 关闭；关闭时上面 L1 的 meta 保持生效）
     limit = _limit()
     if limit <= 0:
         return
@@ -535,7 +605,15 @@ def check_rate_limit(request: Request) -> None:
             allowed = _await_sync(rate_limiter.is_allowed(f"rate:{key}", limit=limit, window=_WINDOW_SECONDS))
             if not bool(allowed):
                 _record_auto_block_violation(key, "rate-limit-exceeded")
-                raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{limit}/分钟），请稍后重试", 429)
+                _set_rate_meta(request, limit=limit, remaining=0, reset=now + _WINDOW_SECONDS)
+                raise AppError(
+                    ErrorCodes.RATE_LIMITED,
+                    f"请求过于频繁（>{limit}/分钟），请稍后重试",
+                    429,
+                    details={"retry_after_seconds": int(_WINDOW_SECONDS)},
+                )
+            # redis 侧拿不到滑窗内精确剩余（is_allowed 只返回布尔），保守展示 limit-1
+            _set_rate_meta(request, limit=limit, remaining=max(0, limit - 1), reset=now + _WINDOW_SECONDS)
             return
         except AppError:
             raise  # 429 向上抛，不走降级
@@ -550,6 +628,7 @@ def check_rate_limit(request: Request) -> None:
             limited = True
         else:
             bucket.append(now)
+        remaining = max(0, limit - len(bucket))
     # P3-3: 全局过期键清理移出 per-IP 锁（避免每请求扫全表 + 持 per-IP 锁过久）。
     # 降频清理：仅当总记录数超过 10000 时扫一次全表清过期键，用 _cache_lock 保护跨 IP 操作。
     # P3-(v7.3): 一并清理 _ip_locks/_l1_token_buckets/_rate_violations（无界增长内存泄漏）。
@@ -558,7 +637,15 @@ def check_rate_limit(request: Request) -> None:
 
     if limited:
         _record_auto_block_violation(key, "rate-limit-exceeded")
-        raise AppError(ErrorCodes.RATE_LIMITED, f"请求过于频繁（>{limit}/分钟），请稍后重试", 429)
+        _retry_after = _window_retry_after(bucket, now)
+        _set_rate_meta(request, limit=limit, remaining=0, reset=now + _retry_after)
+        raise AppError(
+            ErrorCodes.RATE_LIMITED,
+            f"请求过于频繁（>{limit}/分钟），请稍后重试",
+            429,
+            details={"retry_after_seconds": _retry_after},
+        )
+    _set_rate_meta(request, limit=limit, remaining=remaining, reset=now + _WINDOW_SECONDS)
 
 
 def _gc_unbounded_ip_state() -> None:
@@ -596,3 +683,54 @@ def _gc_unbounded_ip_state() -> None:
 def check_generate_request(request: Request, prompt: str = "") -> None:
     del prompt
     check_rate_limit(request)
+
+
+# ── P1-5：X-RateLimit-* 响应头注入中间件 ─────────────────
+class RateLimitHeadersMiddleware:
+    """向已走过限流判定的响应注入 X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset。
+
+    request_guard.check_rate_limit 与 api.auth.check_chat_rate_limit 会把配额桶状态挂到
+    request.state.rate_limit（starlette 1.6 中底层即 scope["state"]）。本中间件仅在
+    state 存在该数据时注入 —— 即 /v1/generate*、/v1/edit、/v1/chat/completions、
+    /v1/messages 等被限流保护的端点，不污染未限流端点（healthz 等）。
+    Reset 为秒级 epoch 时间戳；放行/429 路径均由 guard 层填充，此处不重复计算。
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                meta = scope.get("state", {}).get("rate_limit")
+                # P1-5 契约补强：限流保护端点即使未挂桶数据（如 IF_REQUESTS_PER_MINUTE=0 关闭限流）
+                # 也注入三头（Limit/Remaining=0 表示无限流；Reset=now+60 合理兜底），
+                # 保证 /v1/generate*、/v1/edit、/v1/chat/* 响应恒携带配额头；healthz 等不受影响。
+                if not meta:
+                    path = scope.get("path", "")
+                    if (
+                        path.startswith("/v1/generate")
+                        or path.startswith("/v1/edit")
+                        or path.startswith("/v1/chat/")
+                        or path.startswith("/v1/messages")
+                    ):
+                        meta = {"limit": 0, "remaining": 0, "reset": int(time.time()) + 60}
+                if meta:
+                    headers = list(message.get("headers", []))
+                    existing = {k.lower() for k, _ in headers}
+                    for _name, _key in (
+                        (b"X-RateLimit-Limit", "limit"),
+                        (b"X-RateLimit-Remaining", "remaining"),
+                        (b"X-RateLimit-Reset", "reset"),
+                    ):
+                        _val = meta.get(_key)
+                        if _val is not None and _name.lower() not in existing:
+                            headers.append((_name, str(_val).encode("ascii")))
+                    message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)

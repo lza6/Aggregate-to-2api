@@ -21,6 +21,24 @@ export interface Task {
   user_agent?: string | null;
   /** 阶段耗时拆解（当前仅 total_sec，预留扩展） */
   timings?: Record<string, number>;
+  /** P0-4：阶段徽章 queued/solving/generating/completed/cancelled（仅任务 SSE 事件负载带；
+   *  GET 轮询 task_to_public 不含此字段，由 useTaskProgress 做状态映射兜底） */
+  status_detail?: string;
+  /** P0-4：阶段进度 5/30/80/100（同上，仅事件负载带；轮询路径为 null） */
+  progress?: number;
+}
+
+export interface CancelTaskResult {
+  task_id: string;
+  status: string;
+  /** true=本次执行了取消；false=幂等命中（任务已是终态，未变更） */
+  cancelled: boolean;
+}
+
+export interface RetryTaskResult {
+  task_id: string;
+  source_task_id: string;
+  status: string;
 }
 
 export interface DLQItem {
@@ -47,6 +65,24 @@ export async function fetchTask(id: string): Promise<Task> {
 
 export async function fetchEditTask(id: string): Promise<Task> {
   return apiFetch<Task>(`/v1/edit/tasks/${id}`, { caller: '图生图任务查询失败' });
+}
+
+/** P0-4：取消任务（幂等）。POST /v1/tasks/{id}/cancel → cancelled=true 本次取消；false 已终态。 */
+export async function cancelTask(taskId: string): Promise<CancelTaskResult> {
+  return apiFetch<CancelTaskResult>(`/v1/tasks/${taskId}/cancel`, {
+    method: 'POST',
+    headers: adminHeaders(),
+    caller: '取消任务失败',
+  });
+}
+
+/** P0-4：一键重试。POST /v1/tasks/{id}/retry → 新 task_id 入队，原任务记录不变。 */
+export async function retryTask(taskId: string): Promise<RetryTaskResult> {
+  return apiFetch<RetryTaskResult>(`/v1/tasks/${taskId}/retry`, {
+    method: 'POST',
+    headers: adminHeaders(),
+    caller: '重试任务失败',
+  });
 }
 
 export async function fetchDLQ(): Promise<{ items: DLQItem[]; count: number }> {

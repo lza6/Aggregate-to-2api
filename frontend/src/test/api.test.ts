@@ -125,6 +125,7 @@ import {
   apiFetch,
   ApiError,
 } from '../api';
+import { onToast } from '../api';
 
 function mockFetch(impl: typeof globalThis.fetch) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(impl);
@@ -623,6 +624,44 @@ describe('apiFetch 统一错误处理（P1-4）', () => {
     expect((err as ApiError).status).toBe(429);
     expect((err as ApiError).message).toMatch(/过于频繁/);
     spy.mockRestore();
+  });
+
+  it('P1-5 429 → 统一 notify「你太快啦，X 秒后再试」', async () => {
+    const received: unknown[] = [];
+    const unsub = onToast((t) => received.push(t));
+    try {
+      const spy = mockFetch(async () => jsonRes(
+        { error: { code: 'RATE.001', message: '限流', retry_after_seconds: 30 } },
+        { status: 429 },
+      ));
+      const err = await apiFetch('/v1/generate').catch((e: unknown) => e);
+      expect((err as ApiError).status).toBe(429);
+      expect(received).toHaveLength(1);
+      expect((received[0] as { message: string; type: string }).type).toBe('error');
+      expect((received[0] as { message: string }).message).toContain('太快啦');
+      expect((received[0] as { message: string }).message).toContain('30 秒');
+      spy.mockRestore();
+    } finally {
+      unsub();
+    }
+  });
+
+  it('P1-5 429 body 无秒数 → 回退 Retry-After 头', async () => {
+    const received: unknown[] = [];
+    const unsub = onToast((t) => received.push(t));
+    try {
+      const res = new Response(JSON.stringify({ error: { message: 'x' } }), {
+        status: 429,
+        headers: { 'Retry-After': '45' },
+      });
+      const spy = mockFetch(async () => res);
+      await apiFetch('/v1/generate').catch((e: unknown) => e);
+      expect(received).toHaveLength(1);
+      expect((received[0] as { message: string }).message).toBe('你太快啦，45 秒后再试');
+      spy.mockRestore();
+    } finally {
+      unsub();
+    }
   });
 
   it('500 → status=500、message 含「服务器内部错误」', async () => {

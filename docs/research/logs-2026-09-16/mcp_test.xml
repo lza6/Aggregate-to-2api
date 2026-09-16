@@ -1,0 +1,572 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="12" failures="1" skipped="0" tests="13" time="1.819" timestamp="2026-09-16T09:33:42.934647+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_mcp_server.TestSwitch" name="test_disabled_by_default_404" time="0.608"><failure message="  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function">self = &lt;tests.test_mcp_server.TestSwitch object at 0x0000000004E51090&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000007734C30&gt;
+
+    def test_disabled_by_default_404(self, monkeypatch):
+        """IF_MCP_ENABLED 缺省 False → 404（新功能缺省关）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "0")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:50: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</failure></testcase><testcase classname="tests.test_mcp_server.TestHandshake" name="test_initialize_returns_protocol_and_server_info" time="0.020"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000007734B00&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsList" name="test_tools_list_whitelist" time="0.018"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000000086B9130&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_list" time="0.022"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000007B92F10&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_get" time="0.022"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000007B93460&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_dag_plan_mock" time="0.021"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000008701150&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_unknown_tool_invalid_params" time="0.021"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000000000867AC50&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_missing_required_param_is_error_content" time="0.020"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000000086B2030&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_unknown_method_32601" time="0.015"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x00000000086B0D70&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_invalid_jsonrpc_32600" time="0.015"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000006CA0050&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_bad_json_32700" time="0.015"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000006CA2970&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_notification_202" time="0.019"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000008684870&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_ping" time="0.019"><error message="failed on setup with &quot;  File &quot;C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py&quot;, line 165&#10;    out = await _run_local_tool(name, _tool_call_args(call))&#10;          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^&#10;SyntaxError: 'await' outside async function&quot;">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x0000000008717050&gt;
+
+    @pytest.fixture()
+    def mcp_client(monkeypatch):
+        """IF_MCP_ENABLED=1 + IF_MOCK_UPSTREAM=1 的 TestClient（付费红线：全 Mock）。"""
+        from api.config import reset_settings
+    
+        monkeypatch.setenv("IF_MCP_ENABLED", "1")
+        monkeypatch.setenv("IF_MOCK_UPSTREAM", "1")
+        reset_settings()
+&gt;       from api.main import app
+
+tests\test_mcp_server.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+api\main.py:22: in &lt;module&gt;
+    from .routes import api_router
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """路由子包：main.py 拆分目标（v4.2）。
+    
+    main.py 收敛为 app 组装；本包按功能域挂载所有 /v1 端点。
+    """
+    
+    from fastapi import APIRouter
+    
+    from ..agent import routes as agent_routes
+    from ..mcp import server as mcp_server  # noqa: F401  (v12.0.0 P1-M1 MCP：/v1/mcp)
+&gt;   from . import (
+        admin,
+        agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
+        agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+        chat,
+        ecosystem,
+        gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
+        generate,
+        health,
+        security,
+        tasks,
+    )
+E     File "C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai\api\routes\chat.py", line 165
+E       out = await _run_local_tool(name, _tool_call_args(call))
+E             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   SyntaxError: 'await' outside async function
+
+api\routes\__init__.py:10: SyntaxError</error></testcase></testsuite></testsuites>

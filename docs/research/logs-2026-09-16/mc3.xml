@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="19" time="53.355" timestamp="2026-09-16T10:12:46.721932+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_mcp_server.TestSwitch" name="test_disabled_by_default_404" time="3.799" /><testcase classname="tests.test_mcp_server.TestHandshake" name="test_initialize_returns_protocol_and_server_info" time="2.568" /><testcase classname="tests.test_mcp_server.TestToolsList" name="test_tools_list_whitelist" time="2.697" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_list" time="2.701" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_get" time="2.827" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_dag_plan_mock" time="2.658" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_unknown_tool_invalid_params" time="2.806" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_missing_required_param_is_error_content" time="2.764" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_unknown_method_32601" time="2.579" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_resources_list" time="2.710" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_prompts_list" time="2.552" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_invalid_jsonrpc_32600" time="2.690" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_bad_json_32700" time="2.590" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_notification_202" time="2.623" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_ping" time="2.694" /><testcase classname="tests.test_mcp_server.TestStreamableHTTP" name="test_accept_sse_returns_event_stream" time="2.808" /><testcase classname="tests.test_mcp_server.TestStreamableHTTP" name="test_accept_json_keeps_single_response" time="2.763" /><testcase classname="tests.test_mcp_server.TestStreamableHTTP" name="test_delete_ends_session_200" time="2.967" /><testcase classname="tests.test_mcp_server.TestStreamableHTTP" name="test_generate_image_async_then_task_status" time="2.855"><failure message="AssertionError: task_status 3 轮未收敛到 completed">self = &lt;tests.test_mcp_server.TestStreamableHTTP object at 0x0000000006CACFC0&gt;
+mcp_client = &lt;starlette.testclient.TestClient object at 0x000000000AF4A470&gt;
+
+    def test_generate_image_async_then_task_status(self, mcp_client: TestClient):
+        """v16 P0-1：generate_image 异步任务形态 → task_status 轮询收敛（Mock 级幂等）。"""
+        # 提交生图（Mock）：返回 {task_id, status: queued}
+        submit = mcp_client.post(
+            "/v1/mcp",
+            json=_rpc("tools/call", {"name": "generate_image", "arguments": {"prompt": "一只猫"}}),
+        )
+        result = submit.json()["result"]
+        content = result["content"][0]["text"]
+        assert result["isError"] is False
+        assert "task_id" in content and "queued" in content
+        # 解析 task_id（MCP content 为 str(dict) 文本——与既有 dag_plan 同格式，用 literal_eval 安全解析）
+        import ast
+    
+        data = ast.literal_eval(content)
+        task_id = data["task_id"]
+        assert task_id
+        # 轮询 task_status（幂等 3 次收敛到 completed）
+        for _ in range(3):
+            poll = mcp_client.post(
+                "/v1/mcp",
+                json=_rpc("tools/call", {"name": "task_status", "arguments": {"task_id": task_id}}),
+            )
+            poll_result = poll.json()["result"]
+            assert poll_result["isError"] is False
+            text = poll_result["content"][0]["text"]
+            if '"completed"' in text:
+                break
+        else:
+&gt;           raise AssertionError("task_status 3 轮未收敛到 completed")
+E           AssertionError: task_status 3 轮未收敛到 completed
+
+tests\test_mcp_server.py:236: AssertionError</failure></testcase></testsuite></testsuites>

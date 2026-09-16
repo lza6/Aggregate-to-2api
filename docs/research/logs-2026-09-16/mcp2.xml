@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="13" time="46.454" timestamp="2026-09-16T09:41:24.840715+08:00" hostname="DESKTOP-EGNE9ND"><testcase classname="tests.test_mcp_server.TestSwitch" name="test_disabled_by_default_404" time="4.608" /><testcase classname="tests.test_mcp_server.TestHandshake" name="test_initialize_returns_protocol_and_server_info" time="3.425" /><testcase classname="tests.test_mcp_server.TestToolsList" name="test_tools_list_whitelist" time="3.406"><failure message="AssertionError: assert {'dag_plan', ...'task_status'} == {'dag_plan', ...'skills_list'}&#10;  &#10;  Extra items in the left set:&#10;  #x1B[0m#x1B[33m'#x1B[39;49;00m#x1B[33mtask_status#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  Use -v to get more diff">self = &lt;tests.test_mcp_server.TestToolsList object at 0x0000000006CA8CD0&gt;
+mcp_client = &lt;starlette.testclient.TestClient object at 0x00000000087E2850&gt;
+
+    def test_tools_list_whitelist(self, mcp_client: TestClient):
+        """v12.0.0 工具白名单：4 只读 + 1 受控生图，均带 inputSchema。"""
+        resp = mcp_client.post("/v1/mcp", json=_rpc("tools/list"))
+        tools = resp.json()["result"]["tools"]
+        names = {t["name"] for t in tools}
+&gt;       assert names == {"skills_list", "skills_get", "dag_plan", "dag_status", "generate_image"}
+E       AssertionError: assert {'dag_plan', ...'task_status'} == {'dag_plan', ...'skills_list'}
+E         
+E         Extra items in the left set:
+E         #x1B[0m#x1B[33m'#x1B[39;49;00m#x1B[33mtask_status#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+E         Use -v to get more diff
+
+tests\test_mcp_server.py:75: AssertionError</failure></testcase><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_list" time="3.134" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_skills_get" time="3.163" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_dag_plan_mock" time="3.497" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_unknown_tool_invalid_params" time="4.542" /><testcase classname="tests.test_mcp_server.TestToolsCall" name="test_call_missing_required_param_is_error_content" time="3.353" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_unknown_method_32601" time="3.344"><failure message="KeyError: 'error'">self = &lt;tests.test_mcp_server.TestProtocolErrors object at 0x0000000006CA9450&gt;
+mcp_client = &lt;starlette.testclient.TestClient object at 0x000000000AF25E10&gt;
+
+    def test_unknown_method_32601(self, mcp_client: TestClient):
+        resp = mcp_client.post("/v1/mcp", json=_rpc("resources/list"))
+&gt;       assert resp.json()["error"]["code"] == -32601
+               ^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'error'
+
+tests\test_mcp_server.py:126: KeyError</failure></testcase><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_invalid_jsonrpc_32600" time="3.319" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_bad_json_32700" time="3.405" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_notification_202" time="3.258" /><testcase classname="tests.test_mcp_server.TestProtocolErrors" name="test_ping" time="3.237" /></testsuite></testsuites>

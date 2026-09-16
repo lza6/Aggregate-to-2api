@@ -8,6 +8,19 @@
 | 2026-09-15 | 计划书全任务最终验收矩阵（P0-1~P3-20 文件/开关/测试 30 项全在）+ 142 用例计划族 + 集成混沌 54/0 + E2E 14/14（15.1.1 版本断言）+ vitest 257/0 + 契约 20 | 全绿 | 逐项核对无 MISS |
 | 2026-09-15 | P1-11 §8 开关契约补全：updater 插件 setup 内条件注册 IF_DESKTOP_UPDATER=0 可关（缺省开）+ README 文档 | cargo check 编译过（5.28s） | commit e0bdace |
 
+## v16.1.0 记录（2026-09-17）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-17 | **P0-4 任务进度/取消/重试**：engine queued→solving→generating→done pub status_detail+progress（5/30/80/100 append-only）；POST /v1/tasks/{id}/cancel 幂等（IF_TASK_CANCEL_ENABLED，mark_finished 防覆盖护栏 + worker 认领前/acquire token 前双检查点）；POST /v1/tasks/{id}/retry 同参重投新任务；前端 Tasks/Generate 阶段徽章+进度条+取消/重试按钮 | 全绿 | test_task_cancel 12 + vitest Tasks 4；E2E 14a-14d |
+| 2026-09-17 | **P1-5 配额响应头+429 人话**：RateLimitHeadersMiddleware 对限流保护端点恒注入 X-RateLimit-Limit/Remaining/Reset（限流关闭注入默认 0 头补强，healthz 不污染）；429 补 retry_after_seconds+human_hint+Retry-After；前端 useApi 429 Toast | 全绿 | test_request_guard_layers 扩展；E2E 15a |
+| 2026-09-17 | **P1-6 i18n 双语**：零依赖 i18n 模块（91 key zh/en 一致性测试锁定）+ Layout/Generate/Tasks/Gallery/Dashboard/ApiGuide 主路径接线 + 顶栏切换；landing 复用 P3-7 既有 i18n | 全绿 | i18n.test 8 + vitest 293/293 + tsc 0 |
+| 2026-09-17 | **P1-7 桌面深化**：Ctrl+Shift+T 全局快捷键（IF_DESKTOP_GLOBAL_SHORTCUT=1）+ 托盘开机自启 toggle（IF_DESKTOP_AUTOSTART=1）+ 通知聚合 1s 窗口 + 深色跟随系统（localStorage 手动优先 → matchMedia → CSS media 兜底）+ 三态主题按钮 | cargo check 0 error | 真机 NSIS/快捷键/自启注册**待验证**（无真机）；vitest 293 + tsc 0 |
+| 2026-09-17 | **P1-8 归档+导出**：IF_TASK_RETENTION_DAYS=90 软归档 archived（每日 04:00 retention 先软归档后物理清理；列表/统计退冷，详情可查）+ POST /v1/admin/export/tasks（CSV/json BOM 中文表头 管理 Key 审计 10 万截断 X-Truncated） | 全绿 | test_db_retention 扩展 + test_admin_export_tasks 5；E2E 16a-16b |
+| 2026-09-17 | **P2-9/P2-10 治理**：IF_COST_ALERT_PCT=80 每小时预算预警（webhook 幂等水位 +5pp）+ GET /v1/admin/health-report 七维聚合（JSON/MD 单项降级不 500）+ Health 页导出按钮 | 全绿 | test_cost_alert 9 + test_health_report 7 + 回归 137；E2E 16c-16d |
+| 2026-09-17 | **P2-11 双 flaky 根治 + P2-12 清理**：autoregister 抽 _can_fill/_register_one_now 纯函数（脱离循环时序）；llm_real_path_fallback try/finally+reset_settings（消 Settings 串扰）；历史日志删/产物归档 docs/research+archived | 全绿 | 全量 ×3 exit 0（连续 3 次 0 failures）；44 用例批 |
+| 2026-09-17 | 版本全链 16.0.0→16.1.0（14 文件）+ dist ×2 重建 + README v16.1 小节 + release notes 16.1.0 | 契约绿 | E2E openapi+serverInfo 16.1.0 |
+
 ## v16.0.0 记录（2026-09-16）
 
 | 日期 | 范围 | 结果 | 备注 |

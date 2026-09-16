@@ -169,6 +169,9 @@ class Settings(BaseSettings):
     # 幂等续跑（已 succeeded 节点不重跑，仅重跑 failed/skipped/pending/running）；
     # 开启后可用同一 run_id 续跑，前台 GET 可见追加的节点执行轨迹（node_traces）。
     if_dag_resume_enabled: bool = Field(False, validation_alias="IF_DAG_RESUME_ENABLED")
+    # P0-4: 任务取消端点开关（POST /v1/tasks/{id}/cancel，幂等）。缺省 1 开启；
+    # 置 0 时端点返回 403（功能禁用，零行为变化）。重试端点不受此开关控制。
+    if_task_cancel_enabled: bool = Field(True, validation_alias="IF_TASK_CANCEL_ENABLED")
 
     # ── Token 池 ──
     token_pool_size: int = Field(6, validation_alias="IF_TOKEN_POOL_SIZE")
@@ -196,6 +199,9 @@ class Settings(BaseSettings):
     if_usd_per_credit: float = Field(0.0, validation_alias="IF_USD_PER_CREDIT")
     # 月度预算（美元）；0 = 不启用成本告警（cost_over_budget / cost_burn_rate_warning）
     if_cost_budget_usd: float = Field(0.0, validation_alias="IF_COST_BUDGET_USD")
+    # P2-9 成本预测预警推送阈值（%）：后台每小时评估近 30 天累计消耗/预算，
+    # 消耗百分比 >= 此值时经 alerting webhook 推送预警（水位上升 >=5pp 才重复推）；0 = 关闭
+    if_cost_alert_pct: float = Field(80.0, validation_alias="IF_COST_ALERT_PCT")
     # v4.2.1: CORS 来源白名单（逗号分隔；默认 * 全放行向后兼容）
     if_cors_origins: str = Field("*", validation_alias="IF_CORS_ORIGINS")
     # P3-3: 生产安全响应头注入开关（默认开启；关闭=最小回滚，不注入任何安全头）。
@@ -306,6 +312,10 @@ class Settings(BaseSettings):
     if_img_max_gb: float = Field(5.0, validation_alias="IF_IMG_MAX_GB")
     db_retention_days: int = Field(365, validation_alias="IF_DB_RETENTION_DAYS")
     db_cleanup_interval: int = Field(21600, validation_alias="IF_DB_CLEANUP_INTERVAL")
+    # P1-8 冷热归档：终态（completed/error/failed）任务 finished_at 距今超过该天数 →
+    # 软归档 status='archived'（不物理删，历史仍可查/可导出，仅退出热列表与热统计）。
+    # 0 = 关闭软归档。物理清理继续由 IF_DB_RETENTION_DAYS 管辖（两套并存）。
+    if_task_retention_days: int = Field(90, validation_alias="IF_TASK_RETENTION_DAYS")
     if_db_batch_enabled: bool = Field(True, validation_alias="IF_DB_BATCH_ENABLED")
     if_db_batch_window: float = Field(0.5, validation_alias="IF_DB_BATCH_WINDOW")
     if_db_pool_size: int = Field(5, validation_alias="IF_DB_POOL_SIZE")
@@ -439,6 +449,7 @@ class Settings(BaseSettings):
         "if_docs_enabled",
         "if_tryingopen_enabled",
         "if_memory_apply_decay",
+        "if_task_cancel_enabled",
         mode="before",
     )
     @classmethod
@@ -652,6 +663,8 @@ IF_PERSISTENT_QUEUE_ENABLED = settings.if_persistent_queue_enabled
 IF_PERSISTENT_QUEUE_DB = settings.if_persistent_queue_db
 IF_WORKER_BATCH_ENABLED = settings.if_worker_batch_enabled
 IF_WORKER_BATCH_SIZE = settings.if_worker_batch_size
+# P0-4: 任务取消端点开关（POST /v1/tasks/{id}/cancel；缺省 1 开启）
+IF_TASK_CANCEL_ENABLED = settings.if_task_cancel_enabled
 
 # Token 池
 TOKEN_POOL_SIZE = settings.token_pool_size
@@ -670,6 +683,8 @@ IF_GALLERY_SIGNING_TTL = settings.if_gallery_signing_ttl
 # 成本 / 预算（M6-F3）
 IF_USD_PER_CREDIT = settings.if_usd_per_credit
 IF_COST_BUDGET_USD = settings.if_cost_budget_usd
+# P2-9 成本预测预警推送阈值（%，0=关闭）
+IF_COST_ALERT_PCT = settings.if_cost_alert_pct
 
 # 缓存
 IF_LRU_CACHE_SIZE = settings.if_lru_cache_size
@@ -716,6 +731,7 @@ IF_BASE64_FILE_TTL = settings.if_base64_file_ttl
 IF_IMG_MAX_GB = settings.if_img_max_gb
 DB_RETENTION_DAYS = settings.db_retention_days
 DB_CLEANUP_INTERVAL = settings.db_cleanup_interval
+IF_TASK_RETENTION_DAYS = settings.if_task_retention_days
 IF_DB_BATCH_ENABLED = settings.if_db_batch_enabled
 IF_DB_BATCH_WINDOW = settings.if_db_batch_window
 IF_DB_POOL_SIZE = settings.if_db_pool_size

@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
+import csv
+import datetime
 import hashlib
 import hmac
 import inspect
+import io
+import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import Query, Request, WebSocket
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -728,3 +733,156 @@ async def sse_stats(request: Request):
     from ...sse_stats import sse_stats as _sse_stats  # noqa: PLC0415
 
     return _sse_stats.snapshot()
+
+
+# ── P1-8 历史任务批量导出（csv/json）──────────────────────────────
+_EXPORT_MAX_ROWS = 100000
+_EXPORT_COLUMNS = (
+    "id, prompt, status, model, aspect_ratio, created_at, finished_at, duration_sec, error, client_ip"
+)
+
+# csv 中文表头（顺序与 _EXPORT_COLUMNS 一致）
+_EXPORT_CSV_HEADER = ["ID", "提示词", "状态", "模型", "提供商", "比例", "创建时间", "完成时间", "耗时秒", "错误", "IP"]
+
+
+def _fmt_ts(ts: Any) -> str:
+    """REAL 秒 → Excel 友好 'YYYY-MM-DD HH:MM:SS'；空/非法 → 空串。"""
+    if not ts:
+        return ""
+    try:
+        return datetime.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M:%S")
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
+def _export_provider_of(model: Any) -> str:
+    """由 model id 派生提供商（命名约定 <提供商前缀>/<上游真实模型名>）。"""
+    m = str(model or "")
+    return m.split("/", 1)[0] if "/" in m else ""
+
+
+def _csv_safe(value: Any) -> str:
+    """M1 修复（审查）：CSV 公式注入防御——外部可控字段以 `= + - @` 或制表/回车开头时
+    前缀 `'`（Excel 约定转义），防导出后用表格软件打开被解析为公式/DDE 执行。"""
+    s = str(value or "")
+    if s and s[0] in {"=", "+", "-", "@", "\t", "\r"}:
+        return "'" + s
+    return s
+
+
+def _export_row_to_csv(row: dict[str, Any]) -> list[str]:
+    """DB 行 → csv 行（按中文表头顺序；时间格式化；provider 由 model 前缀派生）。"""
+    return [
+        str(row.get("id") or ""),
+        _csv_safe(row.get("prompt")),
+        str(row.get("status") or ""),
+        str(row.get("model") or ""),
+        _export_provider_of(row.get("model")),
+        str(row.get("aspect_ratio") or ""),
+        _fmt_ts(row.get("created_at")),
+        _fmt_ts(row.get("finished_at")),
+        "" if row.get("duration_sec") is None else str(row.get("duration_sec")),
+        _csv_safe(row.get("error")),
+        _csv_safe(row.get("client_ip")),
+    ]
+
+
+@router.post("/v1/admin/export/tasks", include_in_schema=False)
+async def export_tasks(
+    request: Request,
+    format: str = Query("csv", pattern="^(csv|json)$", description="导出格式：csv（Excel 友好）或 json"),
+    start_ts: float | None = Query(None, description="起始时间（REAL 秒，含）；空=不限"),
+    end_ts: float | None = Query(None, description="结束时间（REAL 秒，含）；空=不限"),
+    provider: str | None = Query(None, description="按提供商过滤（model 前缀，如 imagefree）"),
+    model: str | None = Query(None, description="按模型 id 过滤"),
+    status: str | None = Query(None, description="按状态过滤（空=全部，含 archived 冷归档历史）"),
+):
+    """P1-8: 历史任务批量导出（管理 Key 鉴权，csv/json）。
+
+    - 默认覆盖全部状态（含 archived 冷归档——导出即冷历史出口）；
+    - 行数上限 100000，超限截断并带 `X-Truncated: true` 响应头；
+    - csv 带 UTF-8 BOM（\\ufeff）与中文表头，Excel 可直接识别打开；
+    - 时间段过滤按 `created_at`（REAL 秒，与 start_ts/end_ts 同单位）。
+    """
+    check_admin_key(request, scope="export-tasks")
+    where: list[str] = []
+    params: list[Any] = []
+    if start_ts is not None:
+        where.append("created_at >= ?")
+        params.append(start_ts)
+    if end_ts is not None:
+        where.append("created_at <= ?")
+        params.append(end_ts)
+    if provider:
+        where.append("model LIKE ?")
+        params.append(f"{provider}/%")
+    if model:
+        where.append("model = ?")
+        params.append(model)
+    if status:
+        where.append("status = ?")
+        params.append(status)
+    where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+    # M2 修复（审查）：读前 flush——批量写入队列（0.2s 窗口）未提交的任务也应可导出，
+    # 否则「刚完成即导出」漏最近任务，与 list_tasks/stats 等先 flush 的读路径口径不一致。
+    await db._ensure_flushed()
+    conn = await db._get_read_conn()
+    cur = await conn.execute(
+        f"SELECT {_EXPORT_COLUMNS} FROM requests{where_clause}"
+        " ORDER BY created_at DESC LIMIT ?",
+        (*params, _EXPORT_MAX_ROWS + 1),
+    )
+    fetched = await cur.fetchall()
+    rows = [dict(zip(r.keys(), r)) for r in fetched]
+    truncated = len(rows) > _EXPORT_MAX_ROWS
+    if truncated:
+        rows = rows[:_EXPORT_MAX_ROWS]
+    actor = request.client.host if request.client else "unknown"
+    audit_log.record(
+        "export.tasks",
+        actor,
+        f"format={format}",
+        (
+            f"rows={len(rows)} truncated={truncated}"
+            f" filters={json.dumps({'start_ts': start_ts, 'end_ts': end_ts, 'provider': provider, 'model': model, 'status': status}, ensure_ascii=False)}"
+        ),
+    )
+    headers = {"X-Truncated": "true"} if truncated else {}
+
+    if format == "json":
+        return Response(
+            content=json.dumps({"rows": rows, "meta": {"total": len(rows), "truncated": truncated}}, ensure_ascii=False),
+            media_type="application/json; charset=utf-8",
+            headers=headers,
+        )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_EXPORT_CSV_HEADER)
+    for row in rows:
+        writer.writerow(_export_row_to_csv(row))
+    body = "﻿" + buf.getvalue()  # UTF-8 BOM：Excel 正确识别中文
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get("/v1/admin/health-report", include_in_schema=False)
+async def admin_health_report(request: Request, fmt: str = Query("json", alias="format")) -> Response:
+    """P2-10: 健康自诊断报告（管理 Key 鉴权，`?format=md` 输出可读 Markdown）。
+
+    聚合 providers / account_pool / email_pool / solver / queue / runtime / cost
+    七个维度——全部只读既有 metrics/status 快照，不新增采集、不触发真实付费上游。
+    单项采集失败降级 `{"error": ...}`，不整端点 500。
+    """
+    check_admin_key(request, scope="health-report")
+    from ...health_report import build_health_report, format_health_report_md  # noqa: PLC0415
+
+    report = await build_health_report()
+    if fmt == "md":
+        return PlainTextResponse(
+            format_health_report_md(report), media_type="text/markdown"
+        )
+    return report
