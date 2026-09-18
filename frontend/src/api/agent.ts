@@ -110,3 +110,30 @@ export async function planDag(prompt: string, scene?: string): Promise<DagPlanRe
     caller: '生成 DAG 计划失败',
   });
 }
+
+// ── B2/P0-1 技能沉淀（/v1/agent/skills/save-from-run + /v1/agent/my-skills）──
+export interface SkillSaveRequest {
+  run_id?: string;
+  name: string;
+  description?: string;
+  prompt_template: string;
+  params?: Record<string, unknown>;
+  notes?: string;
+}
+
+export interface SkillPublic {
+  id: string;
+  name: string;
+  description: string;
+  status: 'draft' | 'approved' | 'rejected' | string;
+  risk_score: number;
+  created_at: number;
+}
+
+export async function saveSkillFromRun(payload: SkillSaveRequest): Promise<{ ok: boolean; skill: SkillPublic }> {
+  return apiFetch('/v1/agent/skills/save-from-run', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function mySkills(): Promise<{ ok: boolean; count: number; items: SkillPublic[] }> {
+  return apiFetch('/v1/agent/my-skills');
+}

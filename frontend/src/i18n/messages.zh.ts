@@ -111,4 +111,15 @@ export const messagesZh = {
   // ── ApiGuide（ApiGuide.tsx）─────────────────────────────
   'guide.title': 'API 调用指南',
   'guide.desc': '如何用 curl / Python / JavaScript 调用听风AI 出图与聊天接口（OpenAI 风格 /v1/*）',
+
+  // ── Agent 智能体页（Agent.tsx，B2/P0-1 技能沉淀 + B3/P0-3 教学化）──
+  'agent.saveSkill': '保存为技能',
+  'agent.skillName': '技能名称',
+  'agent.savedDraft': '已保存技能草稿，待审批',
+  'agent.mySkills': '我的技能',
+  'agent.noSkills': '暂无已批准技能（可在上方把成功运行保存为技能）',
+  'agent.sedimentDisabled': '技能沉淀未启用（IF_SKILL_SEDIMENT_ENABLED=1 开启）',
+  'agent.saveDisallowed': '仅成功完成的运行可保存为技能',
+  'agent.saving': '保存中…',
+  'agent.kindHint': '节点释义：hover 节点查看该步骤在做什么',
 } as const;

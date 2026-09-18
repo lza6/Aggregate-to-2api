@@ -1,6 +1,6 @@
 // v10.0.0：agent api 域封装测试（纯函数级：URL/方法/body 契约 + 错误透传）。
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { runDag, planDag, listDagRuns, getDagRun, resumeDag } from '../api/agent';
+import { runDag, planDag, listDagRuns, getDagRun, resumeDag, saveSkillFromRun, mySkills } from '../api/agent';
 
 const base = globalThis as unknown as { fetchMock?: ReturnType<typeof vi.fn> };
 
@@ -58,5 +58,26 @@ describe('agent api 封装', () => {
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/v1/agent/dag/r%2F1/resume');
     expect(init.method).toBe('POST');
+  });
+});
+
+describe('技能沉淀 API（B2/P0-1）', () => {
+  it('saveSkillFromRun POST 到 /v1/agent/skills/save-from-run，body 含 name/prompt_template', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({ ok: true, skill: { id: 's1', name: 'my-skill', status: 'draft' } }));
+    const res = await saveSkillFromRun({ run_id: 'r-9', name: 'my-skill', prompt_template: '画一张主图' });
+    expect(res.ok).toBe(true);
+    expect(res.skill.name).toBe('my-skill');
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/v1/agent/skills/save-from-run');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toMatchObject({ name: 'my-skill', run_id: 'r-9' });
+  });
+
+  it('mySkills GET 到 /v1/agent/my-skills', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({ ok: true, count: 1, items: [{ id: 's1', name: 'x', status: 'approved' }] }));
+    const res = await mySkills();
+    expect(res.count).toBe(1);
+    const [url] = vi.mocked(globalThis.fetch).mock.calls[0] as unknown as [string];
+    expect(url).toBe('/v1/agent/my-skills');
   });
 });

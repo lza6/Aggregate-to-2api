@@ -107,4 +107,15 @@ export const messagesEn = {
   // ── ApiGuide ───────────────────────────────────────────
   'guide.title': 'API Guide',
   'guide.desc': 'How to call Tingfeng AI image generation and chat APIs with curl / Python / JavaScript (OpenAI-style /v1/*)',
+
+  // ── Agent page (Agent.tsx, B2/P0-1 skill sediment + B3/P0-3 onboarding) ──
+  'agent.saveSkill': 'Save as skill',
+  'agent.skillName': 'Skill name',
+  'agent.savedDraft': 'Skill draft saved, pending approval',
+  'agent.mySkills': 'My skills',
+  'agent.noSkills': 'No approved skills yet (save a succeeded run above)',
+  'agent.sedimentDisabled': 'Skill sediment disabled (set IF_SKILL_SEDIMENT_ENABLED=1)',
+  'agent.saveDisallowed': 'Only succeeded runs can be saved',
+  'agent.saving': 'Saving…',
+  'agent.kindHint': 'Node hint: hover a node to see what this step does',
 } as const;

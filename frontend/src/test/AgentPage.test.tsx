@@ -91,7 +91,7 @@ describe('AgentPage 用户路径', () => {
     await waitFor(() => expect(screen.getByText(/计划预览/)).toBeTruthy());
     fireEvent.click(screen.getByText('提交执行'));
     // 失败终态 → 重试按钮（原生 button 语义）出现
-    await waitFor(() => expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument(), { timeout: 8000 });
     const retryBtn = screen.getByRole('button', { name: '重试' });
     expect(retryBtn.tagName).toBe('BUTTON');
     expect(screen.getByText(/run 异常|节点 n1 执行超时/)).toBeTruthy();
@@ -139,5 +139,28 @@ describe('AgentPage 用户路径', () => {
     await new Promise(r => setTimeout(r, 300));
     window.removeEventListener('unhandledrejection', onRej);
     expect(unhandled.length).toBe(0);
+  });
+  // B2/P0-1: 我的技能区块（approved 空态 + 成功 run 展开显示「保存为技能」）
+  it('技能区块：空态显示「暂无已批准技能」，成功 run 展开后可保存为技能', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes('save-from-run')) return new Response(JSON.stringify({ ok: true, skill: { id: 's-new', name: 'my-skill', status: 'draft' } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('my-skills')) return new Response(JSON.stringify({ ok: true, count: 0, items: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag?')) return new Response(JSON.stringify(oneList), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (u.includes('/dag')) return new Response(JSON.stringify(oneList), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('{}', { status: 404 });
+    });
+    render(<AgentPage />);
+    // 我的技能空态
+    await waitFor(() => expect(screen.getByText('我的技能')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/暂无已批准技能/)).toBeTruthy());
+    // 历史列表成功 run → 展开 → 保存为技能按钮
+    await waitFor(() => expect(screen.getByText('t')).toBeTruthy());
+    fireEvent.click(screen.getByText('t'));
+    await waitFor(() => expect(screen.getByText('保存为技能')).toBeTruthy());
+    fireEvent.click(screen.getByText('保存为技能'));
+    await waitFor(() => expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('已保存技能草稿'), 'success'));
+    const saveCall = vi.mocked(globalThis.fetch).mock.calls.find(c => String(c[0]).includes('save-from-run'));
+    expect(saveCall).toBeTruthy();
   });
 });

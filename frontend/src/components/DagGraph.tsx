@@ -5,6 +5,18 @@
 import { useMemo, useState } from 'react';
 import type { DagNodePublic } from '../api/agent';
 
+// B3/P0-3 教学化：节点类型大白话释义（tooltip 最小闭环，RT-2 先释义后教学层）
+const NODE_HINT: Record<string, string> = {
+  scene: '入口：判断用户想干什么（生图/对话/视频/电商/PPT）',
+  llm: '大模型加工：按提示词做一次思考/生成',
+  critic: '终检：交付前审查质量（内容/尺寸/水印/安全）',
+  tool: '工具调用：执行具体工具（受预算与安全门禁）',
+  memory: '记忆：读取/写入你的长期偏好',
+  retrieval: '检索：从知识库召回相关内容（RAG）',
+  image: '多模态图像：生成/编辑图片（Mock 优先）',
+  human_input: '人机审批：需要你确认后才继续',
+};
+
 export const STATUS_META: Record<string, { label: string; color: string }> = {
   pending: { label: '排队中', color: '#94a3b8' },
   running: { label: '执行中', color: '#3b82f6' },
@@ -240,6 +252,7 @@ export function DagGraph({ nodes, onSelect }: DagGraphProps) {
                 aria-pressed={isSelected}
                 aria-label={`节点 ${node.id}（${statusLabel(node.status)}）`}
               >
+                <title>{NODE_HINT[node.kind] ?? `节点 ${node.id}`}</title>
                 <rect
                   className="dag-svg-node-box"
                   width={NODE_W}

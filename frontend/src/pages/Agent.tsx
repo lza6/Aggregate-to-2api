@@ -11,12 +11,15 @@ import { notifyTaskDone } from '../lib/desktopNotify';
 import {
   getDagRun,
   listDagRuns,
+  mySkills,
   planDag,
   runDag,
   resumeDag,
+  saveSkillFromRun,
   type DagPlanResult,
   type DagRunPublic,
 } from '../api/agent';
+import { useT } from '../i18n';
 
 function fmtTime(ts: number | null): string {
   if (!ts) return '—';
@@ -25,6 +28,37 @@ function fmtTime(ts: number | null): string {
 
 function RunCard({ run }: { run: DagRunPublic }) {
   const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const t = useT();
+  const canSave = run.status === 'succeeded';
+
+  async function handleSaveSkill() {
+    if (!canSave) {
+      notify(t('agent.saveDisallowed'), 'error');
+      return;
+    }
+    const name = saveName.trim() || run.name || 'DAG 技能';
+    setSaving(true);
+    try {
+      await saveSkillFromRun({
+        run_id: run.run_id,
+        name,
+        description: `由 DAG run ${run.run_id} 沉淀`,
+        prompt_template: run.name || name,
+        notes: '手动收藏（MVP）',
+      });
+      notify(t('agent.savedDraft'), 'success');
+      setSaveName('');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (/未启用|404/.test(msg)) notify(t('agent.sedimentDisabled'), 'info');
+      else notify(msg || '保存失败', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className={`dag-run-card ${run.status}`}>
       <button
@@ -43,6 +77,19 @@ function RunCard({ run }: { run: DagRunPublic }) {
       {expanded && (
         <div className="dag-run-detail">
           {run.error_summary && <div className="dag-run-error">run 异常：{run.error_summary.slice(0, 300)}</div>}
+          {canSave && (
+            <div className="dag-save-skill">
+              <input
+                value={saveName}
+                onChange={e => setSaveName(e.target.value)}
+                placeholder={t('agent.skillName')}
+                aria-label={t('agent.skillName')}
+              />
+              <Button size="sm" onClick={() => void handleSaveSkill()} loading={saving}>
+                {saving ? t('agent.saving') : t('agent.saveSkill')}
+              </Button>
+            </div>
+          )}
           <DagGraph nodes={run.nodes} />
         </div>
       )}
@@ -51,6 +98,7 @@ function RunCard({ run }: { run: DagRunPublic }) {
 }
 
 export function AgentPage() {
+  const t = useT();
   const [prompt, setPrompt] = useState('');
   const [planning, setPlanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -64,6 +112,8 @@ export function AgentPage() {
   );
   // 历史列表（15s 轮询，刷新不丢）
   const history = useApi(() => listDagRuns({ limit: 10 }), { intervalMs: 15000 });
+  // B2/P0-1：我的已批准技能（只读，单次拉取）
+  const skills = useApi(() => mySkills(), { intervalMs: 0, immediate: true });
 
   const currentRun = run.data;
   const isTerminal = currentRun ? ['succeeded', 'failed'].includes(currentRun.status) : true;
@@ -246,6 +296,22 @@ export function AgentPage() {
           <EmptyState text="还没有 DAG 运行记录" hint="在上方输入任务并提交第一个编排" />
         )}
         {history.data?.items.map(run => <RunCard key={run.run_id} run={run} />)}
+      </div>
+
+      <div className="dag-my-skills">
+        <div className="dag-section-title">{t('agent.mySkills')}</div>
+        {skills.error && !skills.data && <p className="my-skill-hint">{t('agent.sedimentDisabled')}</p>}
+        {skills.data && skills.data.items.length === 0 && <EmptyState text={t('agent.noSkills')} />}
+        {skills.data && skills.data.items.length > 0 && (
+          <ul className="my-skill-list">
+            {skills.data.items.map(s => (
+              <li key={s.id} className="my-skill-item">
+                <span className="my-skill-name">{s.name}</span>
+                <span className="my-skill-desc">{s.description}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
