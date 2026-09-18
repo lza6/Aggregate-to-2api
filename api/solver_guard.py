@@ -523,3 +523,30 @@ solver_guard = SolverGuard(
     weights=getattr(config, "SOLVER_NODE_WEIGHTS", {}),
     rate_limit_cooldown=getattr(config, "SOLVER_RATE_LIMIT_COOLDOWN_SECONDS", 60.0),
 )
+
+
+# ── v18 P2-3 evaluate 参数化（captcha-solver 对标）：求解参数白名单校验 ──
+import re as _re
+
+# Turnstile sitekey 常见格式：0x + 40-64 hex（CF 站点）或 base64url 20-120 字符
+# CF Turnstile 真实 sitekey：0x + base64url 混合（含 -/_）；mock/测试可短些。注入字符（空格/引号/;
+# /换行）天然不在字符类内 → 拒绝。长度 8-120 兼容既有 mock sitekey。
+# 参数化安全：sitekey 仅允许安全字符类（字母/数字/-/_），长度 1-120（兼容 mock 短值）。
+# 注入字符（空格/引号/分号/换行等）天然不在字符类内 → 拒绝。
+_SITEKEY_RE = _re.compile(r"^[A-Za-z0-9_-]{1,120}$")
+
+
+def validate_solve_params(url: str, sitekey: str) -> list[str]:
+    """校验求解参数（防恶意 sitekey/URL 注入求解服务）。返回违规清单；空=通过。
+
+    - url：必须 http/https 且带 host（防 file://、自定义 scheme 探测）
+    - sitekey：必须匹配白名单格式（0x+hex 或 base64url 20-120 字符）
+    """
+    reasons: list[str] = []
+    if url:
+        u = urlparse(url)
+        if u.scheme not in ("http", "https") or not u.hostname:
+            reasons.append(f"url scheme/host 非法: {url[:60]}")
+    if sitekey and not _SITEKEY_RE.match(sitekey):
+        reasons.append("sitekey 格式非法（应 0x+hex 或 base64url 20-120 字符）")
+    return reasons

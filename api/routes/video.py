@@ -6,13 +6,16 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .. import auth
 from ..providers.video_provider import get_video_provider
+from ..sse_events import task_events_generator
 
 router = APIRouter()
 log = logging.getLogger("video")
@@ -45,6 +48,31 @@ async def submit_video(body: VideoRequest, request: Request):
         duration_seconds=body.duration_seconds,
         ratio=body.ratio,
     )
+
+    # v18 P2-1 视频 SSE 逐帧：后台轮询 provider 并发布 progress 帧到 TaskEventHub
+    from ..background import spawn
+
+    async def _publish_frames() -> None:
+        from ..sse_events import hub as _hub
+
+        last_pct = -1.0
+        try:
+            while True:
+                job = provider.poll(task_id)
+                if job is None:
+                    break
+                pct = float(job.get("progress") or 0)
+                if pct >= last_pct + 1 or job.get("status") == "completed":
+                    last_pct = pct
+                    await _hub.publish(task_id, "progress", {"task_id": task_id, "progress": pct, "status": job.get("status")})
+                if job.get("status") == "completed":
+                    await _hub.publish(task_id, "result", {"task_id": task_id, "url": job.get("url"), "progress": 100.0})
+                    break
+                await asyncio.sleep(0.5)
+        except Exception as exc:  # noqa: BLE001 - 帧发布失败静默（轮询端点仍可用）
+            log.warning("video SSE 帧发布异常 task=%s: %s", task_id, exc)
+
+    spawn(_publish_frames(), name=f"video-frames-{task_id}")
     return {"task_id": task_id, "status": "queued", "mode": body.mode}
 
 
@@ -64,3 +92,16 @@ async def video_status(task_id: str, request: Request):
     resp["ratio"] = job.get("ratio", "16:9")
     resp["mode"] = job.get("mode", "txt2vid")
     return resp
+
+
+@router.get("/v1/video/{task_id}/events", include_in_schema=False)
+async def video_events(task_id: str, request: Request) -> StreamingResponse:
+    """视频任务 SSE 逐帧事件流：progress 帧 + result 终态 + Last-Event-ID 补偿。"""
+    if not _enabled():
+        raise HTTPException(status_code=404, detail="视频生成未启用（IF_VIDEO_ENABLED=1 开启）")
+    auth.guard_chat_request(request)
+    return StreamingResponse(
+        task_events_generator(task_id, request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

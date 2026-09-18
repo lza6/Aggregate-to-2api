@@ -111,6 +111,14 @@ async def solve_turnstile(
     - 若 cf_solver_url 为空，由 solver_guard 自动选举最优负载节点；
     - 当遇到 429 限流或网络 transport 错误时，对当前节点熔断并自动尝试下一个备选节点。
     """
+    # v18 P2-3：evaluate 参数化（求解前白名单校验，防恶意 sitekey/url 注入求解服务）
+    from .solver_guard import validate_solve_params
+
+    _reasons = validate_solve_params(url, sitekey)
+    if _reasons:
+        from .errors import AppError, ErrorCodes
+
+        raise AppError(ErrorCodes.BAD_REQUEST, "求解参数非法: " + "; ".join(_reasons), 422)
     result = await solve_turnstile_result(cf_solver_url, url, sitekey, timeout, proxy)
     return result.token, result.elapsed_ms / 1000.0
 

@@ -53,3 +53,24 @@ def test_provider_importable_via_factory():
     p = get_video_provider()
     tid = p.submit(prompt="demo")
     assert tid
+
+def test_sse_progress_frame_publish_replay():
+    """视频 SSE 帧事件：TaskEventHub 发布 progress 帧后可按任务回放（Last-Event-ID 补偿语义）。"""
+    import asyncio
+
+    from api.sse_events import hub as _hub
+
+    async def _run():
+        tid = "vid-sse-test"
+        await _hub.publish(tid, "progress", {"task_id": tid, "progress": 42.0, "status": "rendering"})
+        await _hub.publish(tid, "result", {"task_id": tid, "url": "https://x.mp4", "progress": 100.0})
+        events = await _hub.replay_after(tid, None)
+        return events
+
+    events = asyncio.run(_run())
+    types = [e.event for e in events]
+    assert "progress" in types and "result" in types
+    data = next(e.data for e in events if e.event == "result")
+    assert data["progress"] == 100.0
+    # 清理
+    asyncio.run(_hub.clear_task("vid-sse-test"))
