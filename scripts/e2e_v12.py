@@ -29,6 +29,13 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 API_PORT = 8103
 SOLVER_PORT = 8002
+# v17：每次运行前清掉固定 E2E DB（跨运行残留会污染 generate/async 与任务状态机断言）
+_E2E_DB = os.path.join(ROOT, "data", "e2e_v12.db")
+try:
+    if os.path.exists(_E2E_DB):
+        os.remove(_E2E_DB)
+except OSError:
+    pass
 BASE = f"http://127.0.0.1:{API_PORT}"
 
 PASS: list[str] = []
@@ -87,8 +94,9 @@ def main() -> int:
         stderr=subprocess.DEVNULL,
     )
     try:
-        ok = wait_port(SOLVER_PORT) and wait_port(API_PORT)
-        print(f"[e2e-v12] solver:8002={wait_port(SOLVER_PORT)} api:8103={wait_port(API_PORT)}")
+        # v17: 受限网络下 lifespan startup（free proxy/provider 探测超时）可达 2 分钟，API wait 放宽到 150s
+        ok = wait_port(SOLVER_PORT) and wait_port(API_PORT, timeout=150)
+        print(f"[e2e-v12] solver:8002={ok and 'True'} api:8103={'True' if ok else wait_port(API_PORT, timeout=150)}")
         if not ok:
             print("[e2e-v12] 服务启动超时")
             return 1
@@ -99,7 +107,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==16.1.0", ver == "16.1.0", f"got {ver}")
+        check("2 openapi version==17.0.0", ver == "17.0.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -115,7 +123,7 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "16.1.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "17.0.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
@@ -369,7 +377,7 @@ def main() -> int:
         # 轮询终态：cancelled 或 completed 皆可（mock 秒级完成，取消窗口内可能已完成），
         # 断言「不落不一致中间态」（error/processing 即为不一致）。
         final_c = None
-        for _ in range(10):
+        for _ in range(20):  # v17: 受限网络/慢环境放宽轮询窗口（10s）
             t = client.get(f"/v1/tasks/{cid}").json()
             if t.get("status") in ("cancelled", "completed"):
                 final_c = t.get("status")

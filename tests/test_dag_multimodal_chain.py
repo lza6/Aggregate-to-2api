@@ -16,9 +16,19 @@ from api.routes.agent_dag_exec import _exec_human_input, _exec_image, execute_no
 
 class TestImageNode:
     async def test_image_mock_returns_placeholder(self):
-        """IF_MOCK_UPSTREAM=1（默认）→ 返回占位图 URL。"""
+        """IF_MOCK_UPSTREAM=1（默认）→ 返回占位图 URL。
+
+        注意：get_settings() 是缓存单例（根 .env 显式 IF_MOCK_UPSTREAM=0 时不会随
+        patch.dict 生效），patch 后必须 reset_settings() 重建缓存（项目惯例）。
+        """
+        from api.config import reset_settings
+
         with patch.dict("os.environ", {"IF_MOCK_UPSTREAM": "1"}):
-            out = await _exec_image("一只猫")
+            reset_settings()
+            try:
+                out = await _exec_image("一只猫")
+            finally:
+                reset_settings()
         assert out.startswith("[image-mock]")
         assert "http" in out
 
