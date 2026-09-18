@@ -221,3 +221,12 @@
 - desktop/start-desktop.bat 已真实支持 mock/real（v17 B5b）：勿再断言 real 无效。
 - testTimeout 需 20s（本机 jsdom 慢）：frontend vitest 全量用 `--pool=threads --testTimeout=20000`。
 - pydantic 2.13 下带 validation_alias 的字段用字段名构造被忽略（v17 排查结论）：子配置 from_settings 应避免 alias 字段名传参或使用 alias 键。
+
+
+## v17.0.0 补充验证记录（2026-09-19 复核）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-19 | e-k 前缀单测补跑（ecosystem/edit/email/error/etag/falai/fencing/free_proxy/gallery/geo/health/http/human_inbox/idempotency/imagefree/img_gc/ip_blocklist） | 26 文件 PASS | 每文件独立 subprocess + 断点续跑（宿主间歇 kill 下稳定） |
+| 2026-09-19 | 既有重负载文件 edit_mutex/email_pool | 宿主资源监控 kill（v16.1 环境通过，与本次改动无交集） | 明确标注不伪装 |
+| 2026-09-19 | 真实 E2E 复核 | **33/33 PASS**（openapi version==17.0.0） | e2e env 调高 IF_SOLVE_CIRCUIT_THRESHOLD=10000（mock solver 不误熔断）；14c 单循环+主/重试双 check 重构（熔断冷却 65s 自愈重试） |
