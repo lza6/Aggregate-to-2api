@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """MCP 渐进工具暴露测试（指南 P1-7，smart-mcp-proxy 对标）。
 
 覆盖：intent 元数据、annotations 完整映射、retrieve_tools 关键词过滤、
@@ -102,3 +101,54 @@ def test_tools_list_contract_annotations_compat():
     for t in tools:
         ann = tool_annotations(t)
         assert isinstance(ann["readOnlyHint"], bool)
+
+# ── v18 P1-3 渐进暴露（8 工具注册 + expose 过滤 + 审批流）──
+from api.mcp.tools import McpTool  # noqa: E402
+
+
+def test_build_tools_includes_progressive_tools():
+    tools = build_tools()
+    names = [t.name for t in tools]
+    assert "retrieve_tools" in names
+    assert "describe_tool" in names
+    assert len(tools) == 8
+
+
+def test_progressive_tools_are_read_intent():
+    tools = {t.name: t for t in build_tools()}
+    assert tools["retrieve_tools"].intent == "read"
+    assert tools["describe_tool"].intent == "read"
+    assert tools["retrieve_tools"].expose is True
+
+
+def test_visible_when_approval_off():
+    from api.mcp.server import _tool_visible
+
+    tools = build_tools()
+    hidden = McpTool(name="secret-tool", description="待审批", input_schema={}, handler=lambda a: None, expose=False)
+    assert _tool_visible(tools[0], approval_enabled=False) is True
+    assert _tool_visible(hidden, approval_enabled=False) is True  # 开关关=全可见零回归
+
+
+def test_visible_when_approval_on_hides_unapproved():
+    from api.mcp.server import _tool_visible
+
+    hidden = McpTool(name="secret-tool", description="待审批", input_schema={}, handler=lambda a: None, expose=False)
+    base = McpTool(name="skills_list", description="x", input_schema={}, handler=lambda a: None, expose=True)
+    assert _tool_visible(hidden, approval_enabled=True) is False
+    assert _tool_visible(base, approval_enabled=True) is True
+
+
+def test_approve_revoke_expose():
+    from api.mcp.server import _APPROVED_TOOLS, approve_tool_expose, revoke_tool_expose
+
+    _APPROVED_TOOLS.clear()
+    try:
+        assert approve_tool_expose("no-such-tool") is False
+        assert approve_tool_expose("skills_get") is True
+        assert "skills_get" in _APPROVED_TOOLS
+        assert approve_tool_expose("skills_get") is False  # 已存在（新增语义）
+        assert revoke_tool_expose("skills_get") is True
+        assert revoke_tool_expose("skills_get") is False
+    finally:
+        _APPROVED_TOOLS.clear()

@@ -36,11 +36,40 @@ from .. import auth
 from ..errors import AppError, ErrorCodes
 from .tools import build_tools, find_tool, tool_annotations
 
+# v18 P1-3：渐进暴露审批状态（内存集；重启后重置为注册表默认——审批流属运行期护栏，
+# 持久化可后置为 SQLite（如需跨重启保留）。基础工具 expose=True 恒可见，不受此集影响。
+_APPROVED_TOOLS: set[str] = set()
+
+
+def approve_tool_expose(name: str) -> bool:
+    """审批通过：允许该工具对 MCP 客户端可见。返回是否新增。"""
+    tool = find_tool(build_tools(), name)
+    if tool is None:
+        return False
+    was = name in _APPROVED_TOOLS
+    _APPROVED_TOOLS.add(name)
+    return not was
+
+
+def revoke_tool_expose(name: str) -> bool:
+    """回收暴露：隐藏该工具。返回是否命中。"""
+    if name not in _APPROVED_TOOLS:
+        return False
+    _APPROVED_TOOLS.discard(name)
+    return True
+
+
+def _tool_visible(tool, approval_enabled: bool) -> bool:
+    """开关关（缺省 0）= 全部工具可见（旧客户端零回归）；开=基础工具 + 已审批新工具。"""
+    if not approval_enabled:
+        return True
+    return bool(tool.expose) or tool.name in _APPROVED_TOOLS
+
 router = APIRouter()
 log = logging.getLogger("mcp.server")
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "17.0.0"}
+SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "18.0.0"}
 _MCP_SESSION_HEADER = "Mcp-Session-Id"
 
 
@@ -229,6 +258,13 @@ async def mcp_endpoint(request: Request):
         return _json_response(_jsonrpc_result(req_id, result), req_id, want_stream=want_stream)
 
     if method == "tools/list":
+        approval_enabled = False
+        try:
+            from ..config import get_settings
+
+            approval_enabled = bool(get_settings().if_mcp_tool_approval)
+        except Exception:  # noqa: BLE001
+            approval_enabled = False
         return _json_response(
             _jsonrpc_result(
                 req_id,
@@ -242,6 +278,7 @@ async def mcp_endpoint(request: Request):
                             "annotations": tool_annotations(t),
                         }
                         for t in tools_cache
+                        if _tool_visible(t, approval_enabled)
                     ]
                 },
             ),

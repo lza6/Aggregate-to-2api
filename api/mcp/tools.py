@@ -158,6 +158,24 @@ async def _tool_task_status(args: dict[str, Any]) -> Any:
     return {"task_id": task_id, **entry}
 
 
+async def _tool_retrieve_tools(args: dict[str, Any]) -> Any:
+    """P1-3：按关键词检索可见工具（渐进暴露）。"""
+    query = str(args.get("query", "") or "")
+    hits = retrieve_tools(build_tools(), query)
+    return {"count": len(hits), "tools": [{"name": t.name, "description": t.description} for t in hits]}
+
+
+async def _tool_describe_tool(args: dict[str, Any]) -> Any:
+    """P1-3：查看单工具详情（annotations/inputSchema/intent）。"""
+    name = str(args.get("name", "") or "")
+    detail = describe_tool(build_tools(), name)
+    if detail is None:
+        from ..errors import AppError, ErrorCodes
+
+        raise AppError(ErrorCodes.NOT_FOUND, f"未知工具: {name}", 404)
+    return detail
+
+
 def build_tools() -> list[McpTool]:
     """构造工具注册表（每次调用新建，测试隔离友好）。"""
     return [
@@ -228,6 +246,31 @@ def build_tools() -> list[McpTool]:
             },
             handler=_tool_task_status,
             intent="read",
+        ),
+        # v18 P1-3：渐进暴露基础工具（read，直接可见；新工具审批后 expose 才可见由 server 层过滤）
+        McpTool(
+            name="retrieve_tools",
+            description="按关键词检索 MCP 可用工具（渐进暴露，返回 name/description 列表）",
+            input_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "关键词，空=返回全部可见工具"}},
+                "required": [],
+            },
+            handler=_tool_retrieve_tools,
+            intent="read",
+            expose=True,
+        ),
+        McpTool(
+            name="describe_tool",
+            description="查看单工具详情（intent/annotations/inputSchema，供客户端决定调用）",
+            input_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "工具名，如 generate_image"}},
+                "required": ["name"],
+            },
+            handler=_tool_describe_tool,
+            intent="read",
+            expose=True,
         ),
     ]
 
