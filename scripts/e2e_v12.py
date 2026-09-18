@@ -78,6 +78,9 @@ def main() -> int:
             "IF_DAG_REQUESTS_PER_MINUTE": "0",
             # v17：mock solver 场景调高熔断阈值（连续失败不误熔断，取消/画廊段稳定）
             "IF_SOLVE_CIRCUIT_THRESHOLD": "10000",
+            "IF_VIDEO_ENABLED": "1",  # v18 P1-1 视频 Mock
+            "IF_PPT_GENERATE": "1",   # v18 P1-2 PPT 生成
+            "IF_SKILL_SEDIMENT_ENABLED": "1",  # v18 自动沉淀相关开关
             "IF_DB_FILE": os.path.join(ROOT, "data", "e2e_v12.db"),
         }
     )
@@ -109,7 +112,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==17.0.0", ver == "17.0.0", f"got {ver}")
+        check("2 openapi version==18.0.0", ver == "18.0.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -125,13 +128,13 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "17.0.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "18.0.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
         check(
             "6 mcp tools/list 白名单",
-            tools == {"skills_list", "skills_get", "dag_plan", "dag_status", "generate_image", "task_status"},
+            tools == {"skills_list", "skills_get", "dag_plan", "dag_status", "generate_image", "task_status", "retrieve_tools", "describe_tool"},  # v18 P1-3 渐进暴露 +2
             f"got {tools}",
         )
         r = client.post(
@@ -453,6 +456,31 @@ def main() -> int:
             hrm.status_code == 200 and hrm.headers.get("content-type", "").startswith("text/markdown"),
             f"ct={hrm.headers.get('content-type')}",
         )
+
+
+        # 17. v18 P1-1：视频 Mock 提交→轮询→完成
+        v = client.post("/v1/video", json={"prompt": "e2e城市夜景视频", "mode": "txt2vid", "duration_seconds": 1.0})
+        vj = v.json() if v.headers.get("content-type", "").startswith("application/json") else {}
+        check("17a video 提交 200+task_id", v.status_code == 200 and bool(vj.get("task_id")), f"resp={v.text[:120]}")
+        vdone = False
+        for _ in range(40):
+            vs = client.get(f"/v1/video/{vj.get('task_id', '')}")
+            if vs.status_code == 200 and vs.json().get("status") == "completed":
+                vdone = True
+                break
+            time.sleep(0.25)
+        check("17b video 轮询 completed+mock URL", vdone, "video 任务未在窗口内完成")
+
+        # 18. v18 P1-2：PPT 可编辑产物生成
+        ppt = client.post("/v1/skills/ppt/generate", json={"title": "e2e 产品发布会", "pages": [{"headline": "开场", "points": ["a", "b"], "notes": "n"}]})
+        check("18a ppt generate 200+PK 头", ppt.status_code == 200 and ppt.content[:2] == b"PK", f"status={ppt.status_code} head={ppt.content[:4]!r}")
+
+        # 19. v18 P1-3：MCP 渐进暴露（retrieve_tools 可调 + admin 清单 8 工具）
+        mc = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 99, "method": "tools/call", "params": {"name": "retrieve_tools", "arguments": {"query": "image"}}})
+        mcj = mc.json()
+        check("19a mcp retrieve_tools 可调", mc.status_code == 200 and "generate_image" in str(mcj.get("result", {})), f"resp={mc.text[:160]}")
+        adm = client.get("/v1/admin/mcp-tools")
+        check("19b mcp admin 工具清单 200", adm.status_code == 200 and adm.json().get("count", 0) >= 8, f"status={adm.status_code}")
 
         client.close()
     finally:

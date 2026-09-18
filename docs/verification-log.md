@@ -230,3 +230,27 @@
 | 2026-09-19 | e-k 前缀单测补跑（ecosystem/edit/email/error/etag/falai/fencing/free_proxy/gallery/geo/health/http/human_inbox/idempotency/imagefree/img_gc/ip_blocklist） | 26 文件 PASS | 每文件独立 subprocess + 断点续跑（宿主间歇 kill 下稳定） |
 | 2026-09-19 | 既有重负载文件 edit_mutex/email_pool | 宿主资源监控 kill（v16.1 环境通过，与本次改动无交集） | 明确标注不伪装 |
 | 2026-09-19 | 真实 E2E 复核 | **33/33 PASS**（openapi version==17.0.0） | e2e env 调高 IF_SOLVE_CIRCUIT_THRESHOLD=10000（mock solver 不误熔断）；14c 单循环+主/重试双 check 重构（熔断冷却 65s 自愈重试） |
+
+
+## v18.0.0 自动进化+多场景验证记录（2026-09-19）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-19 | P0-1 证伪实验 sediment_probe | 好 0.506 / 坏 0.2 / 区分度 0.306>0.15 → 自动沉淀可尝试（Mock 评估器） | RT-1 前置 |
+| 2026-09-19 | P0-1 自动沉淀 skill_sediment_auto | test_sediment_probe 6 + test_skill_sediment_auto 9 全绿（四重前置/扫描闸门/gate/幂等/上限） | IF_SKILL_SEDIMENT_AUTO=0 |
+| 2026-09-19 | P0-2 记忆 RRF（FTS5+RRF+双模式） | test_memory_rrf 8 全绿；压测 P95 plain=110.9/rrf=126.3ms 未达 50ms → 保持纯 SQL 缺省（RRF 留开关） | RT-4 决策 |
+| 2026-09-19 | P1-3 MCP 渐进暴露（8 工具+审批流） | test_mcp_tools_meta 14 全绿 | IF_MCP_TOOL_APPROVAL=0 |
+| 2026-09-19 | P1-2 PPT 产物（python-pptx） | test_skill_ppt 5 全绿（PK 头/slide/备注） | IF_PPT_GENERATE=0 |
+| 2026-09-19 | P1-1 视频 Mock 任务模型 | test_video_tasks 5 全绿（提交/轮询/完成） | IF_VIDEO_ENABLED=0 |
+| 2026-09-19 | 组合回归（本批 10 文件） | 114 用例全绿 | app import 修复（video 相对导入） |
+| 2026-09-19 | 前端 | vitest 295/296（CostsPage recharts 既有环境 flaky）；tsc/build 0 error；dist 重建 | 前端零改动 |
+| 2026-09-19 | 真实 E2E（扩至 38 段） | **38/38 PASS**（17 视频/18 PPT/19 MCP 渐进暴露新增） | — |
+| 2026-09-19 | 版本 bump 17.0.0→18.0.0（全链 14 处）+ dist 重建 | openapi/mcp serverInfo/e2e 契约 18.0.0 | — |
+
+## 新增「验证过勿重跑」结论（v18.0.0）
+
+- 自动沉淀证伪已通过（v18）：区分度 0.306，sediment_probe 是唯一权威评估器（Mock 确定性，勿改用付费 LLM 评估）。
+- 自动沉淀必须过 scan_skill 闸门（v17）且四重前置（开关/状态/幂等/上限）——勿在别处复制实现。
+- 记忆 RRF 压测未达 50ms 目标（v18）：保持纯 SQL 缺省，RRF 留 IF_MEMORY_RRF 开关；勿在未优化索引/触达基准前默认开启。
+- MCP tools/list 现 8 工具（v18）：旧客户端兼容（annotations readOnlyHint 不变）；审批开关缺省 0 全可见。
+- E2E 现 38 段（v18）：video/ppt 端点需 env 开关；tools/list 断言 8 工具。
