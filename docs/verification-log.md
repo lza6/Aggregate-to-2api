@@ -192,3 +192,32 @@
 
 - storage 热路径真接线（v8.3.0 P0-S1）：request_guard _l1_check:267/268 + 滑窗:535/536 调 adapter.rate_limiter.is_allowed，**勿再当半成品**——双实例集中式限流已就绪（真实 Redis 端到端待 L3 生产灰度验证）
 - agent intent/critic 已有真实 LLM 调用路径（intent.py:107-148/critic.py:107-138 provider.chat_collect 走 tryingopen），**勿再提 Mock 悬空**——待验证是 E2E 验收覆盖非是否真调
+
+
+## v17.0.0 自我进化+体验闭环验证记录（2026-09-18）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-18 | B1a 技能四件套（5 技能 schema/validate/expected_results + validate_skills.py 门禁） | test_skills_validate 14/14；validate_skills --strict 5/5 PASS | anthropics 规范 |
+| 2026-09-18 | B1b 技能扫描（skillspector.py 4 类静态 + baseline + scan_skill 封装） | test_skillspector 33/33；恶意样例拒绝 | SkillSpector 对标 |
+| 2026-09-18 | B2 技能沉淀（save/approve/reject/mine/删除 + 扫描前置） | test_skill_sediment 14/14（store+route）；安全扫描拦截 422 | 手动收藏 MVP |
+| 2026-09-18 | B4 记忆 explain（query 返回命中理由 + 路由透传） | test_memory_explain 7/7；supersede/agent_memory 26 回归 | mem0 explain |
+| 2026-09-18 | P1-7 MCP intent/annotations/retrieve/describe | test_mcp_tools_meta 9/9 | smart-mcp-proxy |
+| 2026-09-18 | P2-1 solver 回放元数据 + validate_replay（SSRF 锁定） | test_solver_hardening 12/12；captcha_protocol 回归 | captcha-solver |
+| 2026-09-18 | B5b 桌面启动脚本修复 | verify-start-modes 12/12 PASS（MODE 生效/轮询/健康诊断/清理） | — |
+| 2026-09-18 | B3 教学化 explain 模板（8 节点） | test_agent_explain 6/6 | learn-agent |
+| 2026-09-18 | P1-5 电商合规护栏 fence | test_skill_ecommerce 8/8 | commerce-agents |
+| 2026-09-18 | 前端（Agent 保存技能/我的技能/节点 tooltip + i18n key + API） | vitest 296/296（threads+testTimeout）；tsc/build 0 error；dist 重建 | 较 v16.1 增 3 |
+| 2026-09-18 | 后端全量单测（分批） | a-c/d/l-o/t-w/batch90 全绿；config/captcha/memory/mcp/skills/dag 专项全绿 | 1 项 provider_probe loop flaky（未触碰模块，单跑全绿） |
+| 2026-09-18 | 版本 bump 16.1.0→17.0.0（全链 15 处）+ dist 重建 + env.example 补齐 | 契约：openapi/mcp serverInfo/e2e 同步 17.0.0 | — |
+
+## 新增「验证过勿重跑」结论（v17.0.0）
+
+- 技能四件套门禁已落地（v17）：validate_skills.py --strict 是唯一权威门禁，勿再用散落检查替代。
+- 技能安全扫描已前置（v17 B1b）：任何技能上传/沉淀入口必须先过 scan_skill（IF_SKILL_SCAN_REJECT=60）。
+- skill_sediment store 必须运行时取模块属性（v17）：勿再从路由模块 `from ... import skill_sediment_store` 绑定单例（reset_store 会失效）。
+- 记忆 explain 已落地（v17 B4）：勿再提"query 无解释"；前端面板可消费 `explain` 字段。
+- MCP annotations 已四字段（v17）：旧客户端仅读 readOnlyHint，勿回退单字段。
+- desktop/start-desktop.bat 已真实支持 mock/real（v17 B5b）：勿再断言 real 无效。
+- testTimeout 需 20s（本机 jsdom 慢）：frontend vitest 全量用 `--pool=threads --testTimeout=20000`。
+- pydantic 2.13 下带 validation_alias 的字段用字段名构造被忽略（v17 排查结论）：子配置 from_settings 应避免 alias 字段名传参或使用 alias 键。
