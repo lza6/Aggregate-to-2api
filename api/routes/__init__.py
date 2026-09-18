@@ -17,8 +17,11 @@ from . import (
     gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
     generate,
     health,
+    mcp_admin,  # noqa: F401  (v18 P1-3 MCP 渐进暴露审批：/v1/admin/mcp-tools/*)
+    ppt,  # noqa: F401  (v18 P1-2 PPT 可编辑产物：/v1/skills/ppt/generate)
     security,
     tasks,
+    video,  # noqa: F401  (v18 P1-1 视频 Mock：/v1/video)
 )
 
 # ── 注册所有路由 ──
@@ -41,6 +44,12 @@ api_router.include_router(mcp_server.router)
 api_router.include_router(agent_human.router)
 # B2 / P0-1：技能沉淀管理（保存/审批/我的技能），IF_SKILL_SEDIMENT_ENABLED=0 时保存端点 404
 api_router.include_router(agent_skills_admin.router)
+# v18 P1-3：MCP 渐进暴露审批（/v1/admin/mcp-tools/*，admin key）
+api_router.include_router(mcp_admin.router)
+# v18 P1-2：PPT 可编辑产物生成（IF_PPT_GENERATE=0 时 404）
+api_router.include_router(ppt.router)
+# v18 P1-1：视频 Mock 任务（IF_VIDEO_ENABLED=0 时 404）
+api_router.include_router(video.router)
 # v8.3 P3-D1：画廊相似图检索（/v1/gallery/similar*），依赖 IF_VECTOR_SEARCH_ENABLED=1
 api_router.include_router(gallery.router)
 
