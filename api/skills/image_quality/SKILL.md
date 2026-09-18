@@ -1,6 +1,23 @@
 ---
 name: image-quality-check
 description: 图像生成交付前的质量自检——尺寸/比例/水印/重复图检测，供 critic 终检 Agent 调用
+version: 1.0.0
+security:
+  run: isolated
+  network: readonly-llm
+  approvals: none
+inputs:
+  asset_url: string 必填 待检图片地址
+  expected_aspect_ratio: string 必填 目标比例
+  width: integer 可选 实际宽
+  height: integer 可选 实际高
+  watermark_scan: boolean 可选 默认 true
+  vision_check: boolean 可选 默认 false
+  if_mock_upstream: boolean 可选 测试模式
+outputs:
+  pass: boolean 是否通过
+  issues: array 问题列表
+  severity: string none|warning|blocker
 ---
 
 ## 触发条件

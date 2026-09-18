@@ -1,6 +1,22 @@
 ---
 name: prompt-refine
 description: 用户意图模糊时用 tryingopen 上游 LLM 把裸 prompt 细化为 provider+style+size 结构化参数
+version: 1.0.0
+security:
+  run: isolated
+  network: readonly-llm
+  approvals: none
+inputs:
+  raw_prompt: string 必填 用户原始 prompt
+  history: array 可选 最近对话
+  desired_aspect_ratio: string 可选 预设比例
+  resolution: string 可选 1K|2K|4K
+outputs:
+  refined_prompt: string 细化后 prompt
+  style: string 风格
+  aspect_ratio: string 比例
+  resolution: string 分辨率
+  fallback: boolean 是否回退原始 prompt
 ---
 
 ## 触发条件

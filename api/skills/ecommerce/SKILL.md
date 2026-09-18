@@ -2,6 +2,24 @@
 name: ecommerce-visual-copywriting
 description: 电商主图/详情页视觉策划 SOP——先判断转化驱动力并锁定 Campaign Style Lock，再执行稿（画面/图内文案/生图 Prompt），五维独立自审后输出
 scene: ecommerce
+version: 1.0.0
+security:
+  run: isolated
+  network: none
+  approvals: none
+inputs:
+  scene: string 必填 main|detail|sku|storefront|campaign
+  platform: string 必填 天猫|拼多多|京东|抖音
+  product: object 必填 商品名/卖点/人群
+  selling_points: array 必填 商品核心卖点
+  target_audience: string 可选 目标人群
+  image_count: integer 可选 默认 5
+outputs:
+  driver: string 转化驱动力类型
+  campaign_style: object 风格锁
+  storyboard: array 分镜表
+  prompts: array 生图 Prompt 列表
+  self_review: object 五维自审得分
 ---
 
 ## 什么时候使用

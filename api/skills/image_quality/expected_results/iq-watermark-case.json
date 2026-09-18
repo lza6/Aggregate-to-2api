@@ -1,0 +1,17 @@
+{
+  "name": "iq-watermark-case",
+  "task": "水印命中应标记并建议重生成",
+  "input": {
+    "asset_url": "https://example.com/assets/q2.png",
+    "expected_aspect_ratio": "16:9",
+    "watermark_scan": true,
+    "if_mock_upstream": true
+  },
+  "expected_output_fragment": {
+    "pass": false,
+    "issues": [
+      "watermark_detected"
+    ],
+    "severity": "blocker"
+  }
+}

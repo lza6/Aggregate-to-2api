@@ -1,0 +1,19 @@
+{
+  "name": "ecommerce-compliance-redline-case",
+  "task": "医疗功效宣称应被拒绝并给替代方向",
+  "input": {
+    "scene": "main",
+    "product": {
+      "name": "示例保健品"
+    },
+    "selling_points": [
+      "治愈失眠",
+      "全国第一"
+    ]
+  },
+  "expected_output_fragment": {
+    "rejected": true,
+    "reason": "absolute_claim",
+    "alternative": "改为可验证数据表述"
+  }
+}

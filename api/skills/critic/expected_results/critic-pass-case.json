@@ -1,0 +1,16 @@
+{
+  "name": "critic-pass-case",
+  "task": "视频产物质量达标，critic 应通过",
+  "input": {
+    "prompt": "生成 16:9 城市夜景延时摄影视频",
+    "task_type": "video",
+    "asset_url": "https://example.com/assets/v1.mp4",
+    "aspect_ratio": "16:9",
+    "dimensions": "1920x1080"
+  },
+  "expected_output_fragment": {
+    "pass": true,
+    "score": 0.8,
+    "recommendation": "accept"
+  }
+}

@@ -1,6 +1,22 @@
 ---
 name: critic-review
 description: 独立终检 Agent——视频/图任务完成前用干净上下文调 LLM 审查质量，与 adaptive_router 评分解耦
+version: 1.0.0
+security:
+  run: isolated
+  network: readonly-llm
+  approvals: none
+inputs:
+  prompt: string 必填 原始任务描述
+  task_type: string 必填 video|image
+  asset_url: string 必填 产物可访问地址
+  aspect_ratio: string 可选 期望比例
+  dimensions: string 可选 如 1920x1080
+outputs:
+  pass: boolean 是否通过
+  score: number 0-1 综合评分
+  issues: array 问题标记列表
+  recommendation: string accept|regenerate|fallback
 ---
 
 ## 触发条件

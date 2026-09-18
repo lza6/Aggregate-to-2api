@@ -2,6 +2,21 @@
 name: ppt-outline-gen
 description: PPT 大纲生成技能——把用户一句话需求分解为结构化演示文稿大纲（章节/要点/配图建议），供 ppt 场景 DAG 节点调用
 scene: ppt
+version: 1.0.0
+security:
+  run: isolated
+  network: none
+  approvals: none
+inputs:
+  topic: string 必填 演示主题
+  audience: string 可选 默认 内部汇报
+  duration_minutes: integer 可选 默认 10
+  page_count: integer 可选
+  style: string 可选
+outputs:
+  title: string 演示标题
+  pages: array 大纲页列表
+  assumptions: array 假设声明
 ---
 
 ## 什么时候使用

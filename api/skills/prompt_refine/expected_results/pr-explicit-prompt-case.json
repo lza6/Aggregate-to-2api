@@ -1,0 +1,11 @@
+{
+  "name": "pr-explicit-prompt-case",
+  "task": "已有明确参数不应覆盖",
+  "input": {
+    "raw_prompt": "横屏城市夜景插画 2K"
+  },
+  "expected_output_fragment": {
+    "fallback": true,
+    "aspect_ratio": "16:9"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "iq-pass-case",
+  "task": "尺寸比例一致，无重复无水印应通过",
+  "input": {
+    "asset_url": "https://example.com/assets/q1.png",
+    "expected_aspect_ratio": "1:1",
+    "width": 1024,
+    "height": 1024,
+    "watermark_scan": true,
+    "if_mock_upstream": true
+  },
+  "expected_output_fragment": {
+    "pass": true,
+    "issues": [],
+    "severity": "none"
+  }
+}

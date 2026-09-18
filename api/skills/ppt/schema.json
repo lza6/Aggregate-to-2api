@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ppt-outline-gen input schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "topic": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audience": {
+      "type": "string"
+    },
+    "duration_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 240
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "style": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "topic"
+  ]
+}

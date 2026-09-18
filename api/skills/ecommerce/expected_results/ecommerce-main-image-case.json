@@ -1,0 +1,28 @@
+{
+  "name": "ecommerce-main-image-case",
+  "task": "主图 5 张执行稿 + 生图 Prompt",
+  "input": {
+    "scene": "main",
+    "platform": "天猫",
+    "product": {
+      "name": "降噪蓝牙耳机",
+      "color": "曜石黑"
+    },
+    "selling_points": [
+      "主动降噪 -45dB",
+      "续航 36 小时",
+      "低延迟游戏模式"
+    ],
+    "target_audience": "通勤党",
+    "image_count": 5
+  },
+  "expected_output_fragment": {
+    "driver": "visual-driven",
+    "campaign_style": {
+      "palette": "深空黑+电光蓝"
+    },
+    "prompts": [
+      "主图/文案/生图 Prompt 列表"
+    ]
+  }
+}

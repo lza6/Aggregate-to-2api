@@ -1,0 +1,14 @@
+{
+  "name": "ppt-internal-report-case",
+  "task": "内部周报大纲",
+  "input": {
+    "topic": "Q3 运营复盘"
+  },
+  "expected_output_fragment": {
+    "title": "Q3 运营复盘",
+    "pages": [],
+    "assumptions": [
+      "默认 内部汇报 / 10 分钟"
+    ]
+  }
+}

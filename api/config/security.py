@@ -30,6 +30,11 @@ class SecuritySettings(BaseModel):
     chat_requests_per_minute: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
     # v11.0.0 S-1: DAG 编排端点每分钟限流（0 = 不限；独立于聊天/生图，防无 Key 刷上游免费额度）
     dag_requests_per_minute: int = Field(30, validation_alias="IF_DAG_REQUESTS_PER_MINUTE")
+    # B1b / P0-2: 技能安全扫描闸门（SkillSpector 对标）。
+    # IF_SKILL_SCAN_ENABLED（缺省 1）开启静态扫描；IF_SKILL_SCAN_REJECT（缺省 60）为风险分阈值，
+    # risk_score >= 阈值时拒绝技能沉淀。纯静态 AST/正则，禁止执行/联网。
+    skill_scan_enabled: bool = Field(True)
+    skill_scan_reject: int = Field(60)
 
     @classmethod
     def from_settings(cls, s: Any) -> SecuritySettings:
@@ -48,6 +53,8 @@ class SecuritySettings(BaseModel):
             api_keys=[k.strip() for k in (s.if_api_keys or "").split(",") if k.strip()],
             chat_requests_per_minute=s.if_chat_rate_limit,
             dag_requests_per_minute=s.if_dag_requests_per_minute,
+            skill_scan_enabled=s.if_skill_scan_enabled,
+            skill_scan_reject=s.if_skill_scan_reject,
         )
 
     def to_env(self) -> dict[str, Any]:

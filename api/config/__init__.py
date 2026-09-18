@@ -219,6 +219,10 @@ class Settings(BaseSettings):
     if_chat_rate_limit: int = Field(60, validation_alias="IF_CHAT_RATE_LIMIT")
     # v11.0.0 S-1: DAG 编排端点每分钟限流（0 = 不限；独立窗口防无 Key 刷上游免费额度）
     if_dag_requests_per_minute: int = Field(30, validation_alias="IF_DAG_REQUESTS_PER_MINUTE")
+    # B1b / P0-2: 技能安全扫描闸门开关（SkillSpector 对标）。缺省 1 开启；0=放行不扫描。
+    if_skill_scan_enabled: bool = Field(True, validation_alias="IF_SKILL_SCAN_ENABLED")
+    # 风险分阈值（0-100）：risk_score >= 阈值 → 拒绝技能沉淀。
+    if_skill_scan_reject: int = Field(60, validation_alias="IF_SKILL_SCAN_REJECT")
 
     # ── tryingopen.com 匿名网关（v4.4 聊天）──────────────────
     # 开关：字符串 '1'/'true'/'on' → True（走 _bool_str_coerce）。原先 os.getenv 直读，现纳入模型。
@@ -252,6 +256,11 @@ class Settings(BaseSettings):
     # ── v8.1 P1-A agent 化能力跃迁开关 ──
     # P1-A1 skills 四件套体系（api/skills/<scene>/SKILL.md + frontmatter 索引）
     if_agent_skills_enabled: bool = Field(True, validation_alias="IF_AGENT_SKILLS_ENABLED")
+    # B2 / P0-1: 技能沉淀闭环开关（手动收藏 MVP）。缺省 0 = 功能关闭零行为变化；
+    # 开启后用户可将 DAG run 保存为技能草稿，经审批后进入「我的技能」。
+    if_skill_sediment_enabled: bool = Field(False, validation_alias="IF_SKILL_SEDIMENT_ENABLED")
+    # B3 / P0-3: 教学化 explain（DAG 节点释义）。缺省 1 开启模板释义；0=关闭零行为变化。
+    if_agent_explain_enabled: bool = Field(True, validation_alias="IF_AGENT_EXPLAIN_ENABLED")
     # P1-A2 意图分类→Provider/Skill 路由层（规则正则兜底 + LLM 仅处理模糊意图）
     if_agent_intent_classifier: bool = Field(True, validation_alias="IF_AGENT_INTENT_CLASSIFIER")
     # P0-6 Embedding 双路命中阈值（规则未命中时与意图原型相似度低于此值降级 LLM）

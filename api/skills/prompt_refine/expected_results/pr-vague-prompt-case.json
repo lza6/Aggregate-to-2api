@@ -1,0 +1,21 @@
+{
+  "name": "pr-vague-prompt-case",
+  "task": "模糊 prompt 应细化为结构化参数",
+  "input": {
+    "raw_prompt": "来一张好看的",
+    "history": [
+      {
+        "role": "user",
+        "content": "来一张好看的"
+      }
+    ],
+    "desired_aspect_ratio": "16:9"
+  },
+  "expected_output_fragment": {
+    "refined_prompt": "...",
+    "style": "...",
+    "aspect_ratio": "16:9",
+    "resolution": "1K",
+    "fallback": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "critic-watermark-case",
+  "task": "检测到水印，critic 应建议重生成",
+  "input": {
+    "prompt": "生成 1:1 电商主图",
+    "task_type": "image",
+    "asset_url": "https://example.com/assets/i2.png",
+    "aspect_ratio": "1:1"
+  },
+  "expected_output_fragment": {
+    "pass": false,
+    "score": 0.4,
+    "issues": [
+      "watermark_detected"
+    ],
+    "recommendation": "regenerate"
+  }
+}

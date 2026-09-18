@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ecommerce-visual-copywriting input schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scene": {
+      "type": "string",
+      "enum": [
+        "main",
+        "detail",
+        "sku",
+        "storefront",
+        "campaign"
+      ]
+    },
+    "platform": {
+      "type": "string",
+      "description": "主导平台"
+    },
+    "product": {
+      "type": "object",
+      "description": "商品名称/卖点/人群"
+    },
+    "selling_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "target_audience": {
+      "type": "string"
+    },
+    "image_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    }
+  },
+  "required": [
+    "scene",
+    "product",
+    "selling_points"
+  ]
+}

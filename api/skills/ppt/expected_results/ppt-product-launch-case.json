@@ -1,0 +1,22 @@
+{
+  "name": "ppt-product-launch-case",
+  "task": "产品发布会大纲",
+  "input": {
+    "topic": "AI 图像生成网关产品发布会",
+    "audience": "开发者",
+    "duration_minutes": 20,
+    "style": "科技感深色"
+  },
+  "expected_output_fragment": {
+    "title": "AI 图像生成网关产品发布会",
+    "pages": [
+      {
+        "no": 1,
+        "headline": "开场钩子"
+      }
+    ],
+    "assumptions": [
+      "受众=开发者，时长 20 分钟"
+    ]
+  }
+}

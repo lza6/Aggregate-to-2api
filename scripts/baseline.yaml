@@ -1,0 +1,7 @@
+# skillspector baseline 白名单（B1b / P0-2）
+# 命中条目将被抑制（不计分、不拒绝）。支持按 rule_id / category / pattern 抑制。
+rules:
+  - rule_id: exfil_env_read
+    comment: 技能读取 IF_MOCK_UPSTREAM 等运行开关属正常行为，白名单放行（仍保留记录可见性）
+  - pattern: "docs.example.com"
+    comment: 示例文档链接，非投毒源

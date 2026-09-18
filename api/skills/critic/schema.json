@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "critic-review input schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "原始任务描述"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "video",
+        "image"
+      ]
+    },
+    "asset_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "产物可访问地址"
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "pattern": "^\\d+:\\d+$"
+    },
+    "dimensions": {
+      "type": "string",
+      "pattern": "^\\d+x\\d+$"
+    }
+  },
+  "required": [
+    "prompt",
+    "task_type",
+    "asset_url"
+  ]
+}

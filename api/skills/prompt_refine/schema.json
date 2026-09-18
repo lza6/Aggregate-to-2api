@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "prompt-refine input schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "raw_prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      }
+    },
+    "desired_aspect_ratio": {
+      "type": "string",
+      "pattern": "^\\d+:\\d+$"
+    },
+    "resolution": {
+      "type": "string",
+      "enum": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    }
+  },
+  "required": [
+    "raw_prompt"
+  ]
+}

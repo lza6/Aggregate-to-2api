@@ -11,6 +11,7 @@ from . import (
     admin,
     agent_dag,  # noqa: F401  (v9.0.0-A DAG 编排：/v1/agent/dag/*)
     agent_human,  # noqa: F401  (v12.0.1 T3 human_input 审批：/v1/agent/human-inbox*)
+    agent_skills_admin,  # noqa: F401  (B2/P0-1 技能沉淀：/v1/agent/skills/save-from-run)
     chat,
     ecosystem,
     gallery,  # noqa: F401  (P3-D1 向量检索：/v1/gallery/similar)
@@ -38,6 +39,8 @@ api_router.include_router(agent_dag.router)
 api_router.include_router(mcp_server.router)
 # v12.0.1 T3：human_input 审批通道（/v1/agent/human-inbox*），节点侧由 IF_HUMAN_INPUT_ENABLED 控制
 api_router.include_router(agent_human.router)
+# B2 / P0-1：技能沉淀管理（保存/审批/我的技能），IF_SKILL_SEDIMENT_ENABLED=0 时保存端点 404
+api_router.include_router(agent_skills_admin.router)
 # v8.3 P3-D1：画廊相似图检索（/v1/gallery/similar*），依赖 IF_VECTOR_SEARCH_ENABLED=1
 api_router.include_router(gallery.router)
 
