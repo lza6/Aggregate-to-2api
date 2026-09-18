@@ -254,3 +254,21 @@
 - 记忆 RRF 压测未达 50ms 目标（v18）：保持纯 SQL 缺省，RRF 留 IF_MEMORY_RRF 开关；勿在未优化索引/触达基准前默认开启。
 - MCP tools/list 现 8 工具（v18）：旧客户端兼容（annotations readOnlyHint 不变）；审批开关缺省 0 全可见。
 - E2E 现 38 段（v18）：video/ppt 端点需 env 开关；tools/list 断言 8 工具。
+
+
+## v19.0.0 安全参数化+上下文成本治理验证记录（2026-09-19）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-19 | P2-3 solver evaluate 参数化（validate_solve_params + 入口接入） | test_solver_evaluate 7 + 既有 turnstile/captcha 组合 34 全绿 | 注入字符拒绝；兼容 mock 短 sitekey |
+| 2026-09-19 | P2-2 上下文 trim（trim_chat_messages/summarize_for_intent/estimate_tokens） | test_context_trim 6 全绿 | 纯函数库，IF_CTX_TRIM 由调用方决定 |
+| 2026-09-19 | P2-1 视频 SSE 逐帧（hub publish + /events 端点） | test_video_tasks 6 全绿（SSE publish/replay） | 复用 tasks SSE 基建 |
+| 2026-09-19 | 组合回归（本批 12 文件） | 0F | — |
+| 2026-09-19 | 真实 E2E 38 段 | **38/38 PASS** | 本轮零回归 |
+| 2026-09-19 | 版本 bump 18.0.0→19.0.0（全链 14 处）+ dist 重建 | 契约同步 | — |
+
+## 新增「验证过勿重跑」结论（v19.0.0）
+
+- solver 参数校验已落地（v19）：sitekey 白名单=安全字符类 1-120（勿再加最短长度限制，会误拒 mock/真实 CF sitekey）；注入字符（空格/引号/分号）被拒。
+- 上下文 trim 纯函数库可用（v19）：`trim_chat_messages`/`summarize_for_intent`，调用方按 `IF_CTX_TRIM` 接入。
+- 视频 SSE 已可用（v19）：`/v1/video/{task_id}/events` 复用 TaskEventHub + Last-Event-ID 补偿。
