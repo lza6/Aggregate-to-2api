@@ -176,6 +176,14 @@ async def dag_run(payload: DagRunRequest, request: Request):
             await _execute_run_safe(run, on_trace=_store_trace_callback)
         finally:
             await _persist_run_memory(run)
+            # v18 P0-1：技能自动沉淀（IF_SKILL_SEDIMENT_AUTO=1 时对 succeeded run 生成候选草稿，
+            # 内部四重前置检查 + 扫描闸门 + 重放验证；失败静默降级不阻塞后台）
+            try:
+                from ..agent.skill_sediment_auto import maybe_sediment_run
+
+                await maybe_sediment_run(run)
+            except Exception as exc:  # noqa: BLE001 - 自动沉淀是增强能力，失败不崩后台
+                log.warning("DAG run 自动沉淀失败（降级）: %s", exc)
             await _await_maybe(_STORE.upsert(run))
 
     from ..background import spawn
@@ -325,6 +333,14 @@ async def dag_resume(run_id: str, request: Request):
             await _execute_run_safe(run, on_trace=_store_trace_callback, resume=True)
         finally:
             await _persist_run_memory(run)
+            # v18 P0-1：技能自动沉淀（IF_SKILL_SEDIMENT_AUTO=1 时对 succeeded run 生成候选草稿，
+            # 内部四重前置检查 + 扫描闸门 + 重放验证；失败静默降级不阻塞后台）
+            try:
+                from ..agent.skill_sediment_auto import maybe_sediment_run
+
+                await maybe_sediment_run(run)
+            except Exception as exc:  # noqa: BLE001 - 自动沉淀是增强能力，失败不崩后台
+                log.warning("DAG run 自动沉淀失败（降级）: %s", exc)
             await _await_maybe(_STORE.upsert(run))
 
     from ..background import spawn

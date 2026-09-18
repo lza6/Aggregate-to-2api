@@ -77,6 +77,27 @@ class MemoryRecord:
 
 
 
+def _rrf_merge(rankings: list[list[int]], k: int = 60) -> dict[int, float]:
+    """Reciprocal Rank Fusion：多路排序融合（v18 P0-2，ai-memory/mem0 对标）。
+
+    对每路排名列表（rank 1 起）累计 1/(k+rank) 得分；返回 {rowid: score}。
+    空输入返回 {}。
+    """
+    scores: dict[int, float] = {}
+    for rank_list in rankings:
+        for i, rid in enumerate(rank_list):
+            scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + i + 1)
+    return scores
+
+
+def _fts_match_expr(query: str, max_terms: int = 8) -> str:
+    """查询串 → FTS5 MATCH 表达式（空格分词 + OR，防注入：仅放行 \"引号包裹词\"）。"""
+    toks = [tok for tok in query.replace('"', " ").split() if tok][:max_terms]
+    if not toks:
+        return '""'
+    return " OR ".join(f'"{tok}"' for tok in toks)
+
+
 def _build_explain(r, now: float) -> list[str]:
     """构造单条记忆命中理由（B4/P1-1，纯 Python 零 DB 开销）。"""
     reasons: list[str] = []
@@ -181,6 +202,24 @@ class MemoryStore:
             except sqlite3.OperationalError as exc:
                 if "duplicate column" not in str(exc).lower():
                     raise
+            # v18 P0-2：mem_atoms FTS5 虚表 + 同步触发器（RRF 检索用；幂等，存量数据由 rebuild 补齐）
+            conn.executescript(
+                '''
+                CREATE VIRTUAL TABLE IF NOT EXISTS mem_atoms_fts USING fts5(
+                    content, content='mem_atoms', content_rowid='id', tokenize='unicode61'
+                );
+                CREATE TRIGGER IF NOT EXISTS mem_atoms_fts_ai AFTER INSERT ON mem_atoms BEGIN
+                    INSERT INTO mem_atoms_fts(rowid, content) VALUES (new.id, new.content);
+                END;
+                CREATE TRIGGER IF NOT EXISTS mem_atoms_fts_ad AFTER DELETE ON mem_atoms BEGIN
+                    INSERT INTO mem_atoms_fts(mem_atoms_fts, rowid, content) VALUES('delete', old.id, old.content);
+                END;
+                CREATE TRIGGER IF NOT EXISTS mem_atoms_fts_au AFTER UPDATE OF content ON mem_atoms BEGIN
+                    INSERT INTO mem_atoms_fts(mem_atoms_fts, rowid, content) VALUES('delete', old.id, old.content);
+                    INSERT INTO mem_atoms_fts(rowid, content) VALUES (new.id, new.content);
+                END;
+                '''
+            )
             conn.commit()
 
     async def observe(self, user_key: str, scene: str, content: str, importance: float = 0.5) -> int:
@@ -206,15 +245,33 @@ class MemoryStore:
             cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         return column in cols
 
-    async def query(self, user_key: str, scene: str, layer: str = "L1", limit: int = 10) -> list[MemoryRecord]:
+    async def query(
+        self,
+        user_key: str,
+        scene: str,
+        layer: str = "L1",
+        limit: int = 10,
+        mode: str = "auto",
+    ) -> list[MemoryRecord]:
         """查询某层记忆（供 chat 端点注入上下文）。
 
         v14 P3 supersede：mem_atoms 查询默认过滤 superseded_by IS NULL（被取代的旧 L1
         不返回）。保底：旧库列缺失时降级不过滤（不崩，向后兼容）。
+        v18 P0-2 RRF：mode=auto 时按 IF_MEMORY_RRF 决定（缺省纯 SQL 零回归）；mode=rrf 强制
+        双路融合（importance 排序 + FTS5 BM25）；FTS 不可用自动降级纯 SQL。
         """
         table = {"L0": "mem_observations", "L1": "mem_atoms", "L2": "mem_scenarios", "L3": "mem_persona"}.get(layer)
         if not table:
             return []
+
+        rrf_enabled = mode == "rrf"
+        if mode == "auto":
+            try:
+                from ..config import get_settings
+
+                rrf_enabled = bool(get_settings().if_memory_rrf)
+            except Exception:  # noqa: BLE001
+                rrf_enabled = False
 
         # supersede 过滤：仅 L1（mem_atoms）且列存在；列缺失降级不过滤
         supersede_filter = ""
@@ -222,14 +279,14 @@ class MemoryStore:
             supersede_filter = " AND superseded_by IS NULL"
 
         def _query() -> list[MemoryRecord]:
+            now = time.time()
             with self._conn() as conn:
                 rows = conn.execute(
                     f"SELECT * FROM {table} WHERE user_key=? AND scene=?{supersede_filter} "
                     "ORDER BY importance DESC, last_accessed_at DESC LIMIT ?",
                     (user_key, scene, limit),
                 ).fetchall()
-                now = time.time()
-                return [
+                plain_records = [
                     MemoryRecord(
                         id=r["id"],
                         layer=layer,
@@ -246,6 +303,60 @@ class MemoryStore:
                     )
                     for r in rows
                 ]
+                if not rrf_enabled or table != "mem_atoms":
+                    return plain_records
+                # RRF 双路：importance 排序（top 50）+ FTS5 BM25（top 50，场景过滤）
+                try:
+                    imp_rank = [
+                        r[0]
+                        for r in conn.execute(
+                            f"SELECT id FROM {table} WHERE user_key=? AND scene=?{supersede_filter} "
+                            "ORDER BY importance DESC, last_accessed_at DESC LIMIT 50",
+                            (user_key, scene),
+                        ).fetchall()
+                    ]
+                    fts_rank: list[int] = []
+                    if len(plain_records) < limit:
+                        # 仅当结果不足时才用 FTS 扩充（BM25 相关词召回）
+                        fts_rows = conn.execute(
+                            "SELECT a.id FROM mem_atoms_fts f JOIN mem_atoms a ON a.id = f.rowid "
+                            "WHERE a.user_key=? AND a.scene=?" + (" AND a.superseded_by IS NULL" if "superseded_by IS NULL" in supersede_filter else "") + " "
+                            "AND mem_atoms_fts MATCH ? ORDER BY bm25(mem_atoms_fts) LIMIT 50",
+                            (user_key, scene, _fts_match_expr(scene + " " + user_key)),
+                        ).fetchall()
+                        fts_rank = [r[0] for r in fts_rows]
+                    merged = _rrf_merge([imp_rank, fts_rank])
+                except sqlite3.OperationalError:
+                    merged = {}
+                if not merged:
+                    return plain_records
+                top_ids = [rid for rid, _ in sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:limit]]
+                if not top_ids:
+                    return plain_records
+                rows = conn.execute(
+                    f"SELECT * FROM {table} WHERE id IN ({','.join('?' * len(top_ids))})",
+                    tuple(top_ids),
+                ).fetchall()
+                by_id = {r["id"]: r for r in rows}
+                records: list[MemoryRecord] = []
+                for rid in top_ids:
+                    r = by_id.get(rid)
+                    if r is None:
+                        continue
+                    records.append(MemoryRecord(
+                        id=r["id"],
+                        layer=layer,
+                        user_key=r["user_key"],
+                        scene=r["scene"],
+                        content=r["content"],
+                        importance=r["importance"],
+                        created_at=r["created_at"],
+                        last_accessed_at=r["last_accessed_at"],
+                        source_ids=r["source_ids"],
+                        superseded_by=r["superseded_by"] if "superseded_by" in r.keys() else None,  # noqa: SIM118 - sqlite3.Row 的 in 判值非键
+                        explain=_build_explain(r, now) + [f"RRF 融合命中（id={rid}）"],
+                    ))
+                return records
 
         records = await asyncio.to_thread(_query)
         # 查询即更新访问时间（hot 记忆不衰减）

@@ -261,6 +261,18 @@ class Settings(BaseSettings):
     if_skill_sediment_enabled: bool = Field(False, validation_alias="IF_SKILL_SEDIMENT_ENABLED")
     # B3 / P0-3: 教学化 explain（DAG 节点释义）。缺省 1 开启模板释义；0=关闭零行为变化。
     if_agent_explain_enabled: bool = Field(True, validation_alias="IF_AGENT_EXPLAIN_ENABLED")
+    # v18 P0-1: 技能自动沉淀（DAG run 终态自动生成候选草稿，经重放验证+审批）。缺省 0=关闭。
+    if_skill_sediment_auto: bool = Field(False, validation_alias="IF_SKILL_SEDIMENT_AUTO")
+    # 重放验证门限：候选技能在探针任务集上的平均分需 >= 既有技能均分 * 该系数才预标记可批。
+    if_skill_gate_threshold: float = Field(0.8, validation_alias="IF_SKILL_GATE_THRESHOLD")
+    # 自动沉淀草稿上限（防堆积）。
+    if_skill_max_draft: int = Field(50, validation_alias="IF_SKILL_MAX_DRAFT")
+    # 自动沉淀 LLM 摘要预算（USD；缺省 0=不烧真实 LLM，用规则模板生成）
+    if_skill_auto_budget_usd: float = Field(0.0, validation_alias="IF_SKILL_AUTO_BUDGET_USD")
+    # v18 P1-2: PPT 可编辑产物生成（python-pptx）。缺省 0=关闭端点。
+    if_ppt_generate: bool = Field(False, validation_alias="IF_PPT_GENERATE")
+    # v18 P1-1: 视频生成任务（Mock 全链路）。缺省 0=关闭；1=启用 /v1/video 提交/轮询
+    if_video_enabled: bool = Field(False, validation_alias="IF_VIDEO_ENABLED")
     # P1-A2 意图分类→Provider/Skill 路由层（规则正则兜底 + LLM 仅处理模糊意图）
     if_agent_intent_classifier: bool = Field(True, validation_alias="IF_AGENT_INTENT_CLASSIFIER")
     # P0-6 Embedding 双路命中阈值（规则未命中时与意图原型相似度低于此值降级 LLM）
@@ -271,6 +283,8 @@ class Settings(BaseSettings):
     if_memory_consolidation_interval: float = Field(300.0, validation_alias="IF_MEMORY_CONSOLIDATION_INTERVAL")
     # v14 P3 三档衰减（hot 提分/cold 淘汰）挂载开关（默认关 0，零行为变化；1=consolidate 尾部调 apply_decay）
     if_memory_apply_decay: bool = Field(False, validation_alias="IF_MEMORY_APPLY_DECAY")
+    # v18 P0-2: 记忆三流检索 RRF 融合（FTS5 BM25 + importance 排序）。缺省 0=纯 SQL 零回归。
+    if_memory_rrf: bool = Field(False, validation_alias="IF_MEMORY_RRF")
     # P1-A4 provider 风险档案 Tier + PreToolUse 硬门禁（paid Tier 默认拦截真实付费）
     if_provider_risk_tier: bool = Field(True, validation_alias="IF_PROVIDER_RISK_TIER")
     # P1-A7 独立终检 Agent（交付前 LLM 审查，用 tryingopen 免费上游）
@@ -292,6 +306,8 @@ class Settings(BaseSettings):
     if_mcp_enabled: bool = Field(False, validation_alias="IF_MCP_ENABLED")
     # v16 P0-1 MCP Streamable HTTP（1=Accept text/event-stream 时响应走 SSE 分帧 + resources/prompts 能力；0=纯 JSON 单响应兼容旧客户端）
     if_mcp_streamable: bool = Field(True, validation_alias="IF_MCP_STREAMABLE")
+    # v18 P1-3: MCP 渐进暴露审批开关。缺省 0=全部工具可见（旧客户端零回归）；1=新工具需 admin 审批后对客户端可见
+    if_mcp_tool_approval: bool = Field(False, validation_alias="IF_MCP_TOOL_APPROVAL")
     # v16 P0-3 画廊管理端：分页大小（1-200）与打包单批上限（防 512MB 容器全量内存打包 OOM）
     if_gallery_page_size: int = Field(50, validation_alias="IF_GALLERY_PAGE_SIZE")
     if_gallery_zip_batch: int = Field(20, validation_alias="IF_GALLERY_ZIP_BATCH")
