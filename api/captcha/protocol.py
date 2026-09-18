@@ -37,6 +37,9 @@ class CaptchaResult:
     user_agent: str = ""
     elapsed_ms: float = 0.0
     solver: str = ""
+    # P2-1：回放元数据（cf_clearance 绑定 domain+UA+获取时间；turnstile 通道留空）
+    bound_domain: str = ""
+    created_at: float = 0.0
 
     @property
     def ok(self) -> bool:
@@ -69,4 +72,33 @@ def from_cf_clearance(d: dict[str, Any] | None) -> CaptchaResult:
         user_agent=str(d.get("user_agent", "") or ""),
         elapsed_ms=float(d.get("elapsed_ms", 0.0) or 0.0),
         solver=CF_CLEARANCE_SOLVER,
+        bound_domain=str(d.get("bound_domain", "") or ""),
+        created_at=float(d.get("created_at", 0.0) or 0.0),
     )
+
+
+def validate_replay(
+    result: CaptchaResult,
+    expected_domain: str,
+    user_agent: str | None = None,
+    max_age_seconds: float = 1800.0,
+) -> list[str]:
+    """P2-1：cf_clearance 回放元数据校验（captcha-solver 对标）。
+
+    cf_clearance 绑定 IP+JA3+UA，跨域/跨 UA/过期回放会被 CF 拒绝或引发风控。
+    返回不匹配理由列表（空 = 可安全回放）；turnstile 通道（无 bound_domain）直接放行。
+    """
+    reasons: list[str] = []
+    if result.solver != CF_CLEARANCE_SOLVER or not result.bound_domain:
+        return reasons
+    if result.bound_domain != expected_domain:
+        reasons.append(f"domain 不匹配: {result.bound_domain} != {expected_domain}")
+    if user_agent and result.user_agent and result.user_agent != user_agent:
+        reasons.append("user_agent 不匹配（cf_clearance 绑定 UA）")
+    if result.created_at > 0 and max_age_seconds > 0:
+        import time
+
+        age = time.time() - result.created_at
+        if age > max_age_seconds:
+            reasons.append(f"凭证过期（age={age:.0f}s > {max_age_seconds:.0f}s）")
+    return reasons

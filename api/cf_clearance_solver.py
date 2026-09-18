@@ -531,6 +531,8 @@ class CfClearanceSolver:
                     "cookies": all_cookies,
                     "user_agent": ua,
                     "elapsed_ms": elapsed,
+                    "bound_domain": domain,
+                    "created_at": time.time(),
                     "method": "protocol",
                     "warning": ("cf_clearance 绑定 IP+JA3+UA，回放须用同 IP+同 UA+匹配 TLS 栈"),
                 }

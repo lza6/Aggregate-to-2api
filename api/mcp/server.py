@@ -34,13 +34,13 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .. import auth
 from ..errors import AppError, ErrorCodes
-from .tools import build_tools, find_tool
+from .tools import build_tools, find_tool, tool_annotations
 
 router = APIRouter()
 log = logging.getLogger("mcp.server")
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "16.1.0"}
+SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "17.0.0"}
 _MCP_SESSION_HEADER = "Mcp-Session-Id"
 
 
@@ -238,7 +238,8 @@ async def mcp_endpoint(request: Request):
                             "name": t.name,
                             "description": t.description,
                             "inputSchema": t.input_schema,
-                            "annotations": {"readOnlyHint": t.read_only},
+                            # P1-7：intent 映射完整 annotations（readOnlyHint 兼容旧客户端）
+                            "annotations": tool_annotations(t),
                         }
                         for t in tools_cache
                     ]

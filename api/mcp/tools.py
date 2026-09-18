@@ -38,9 +38,13 @@ TOOL_PROVIDER_MAP: dict[str, str] = {
 
 
 class McpTool:
-    """单个 MCP 工具定义（不可变）。"""
+    """单个 MCP 工具定义（不可变）。
 
-    __slots__ = ("name", "description", "input_schema", "handler", "read_only")
+    P1-7（smart-mcp-proxy 对标）：intent 三档 read/write/destructive，
+    映射 MCP 2025-06-18 annotations（readOnlyHint/destructiveHint/idempotentHint/openWorldHint）。
+    """
+
+    __slots__ = ("name", "description", "input_schema", "handler", "read_only", "intent", "expose")
 
     def __init__(
         self,
@@ -50,12 +54,17 @@ class McpTool:
         handler: Handler,
         *,
         read_only: bool = True,
+        intent: str | None = None,
+        expose: bool = True,
     ) -> None:
         self.name = name
         self.description = description
         self.input_schema = input_schema
         self.handler = handler
         self.read_only = read_only
+        # intent 缺省按 read_only 推断（写工具显式标注 write/destructive）
+        self.intent = intent or ("read" if read_only else "write")
+        self.expose = expose
 
 
 # ── 工具 handler 实现（薄封装，只调现有模块）─────────────────
@@ -157,6 +166,7 @@ def build_tools() -> list[McpTool]:
             description="列出听风AI 全部可复用技能（SKILL.md frontmatter 索引，按 scene 分组）",
             input_schema={"type": "object", "properties": {}, "required": []},
             handler=_tool_skills_list,
+            intent="read",
         ),
         McpTool(
             name="skills_get",
@@ -167,6 +177,7 @@ def build_tools() -> list[McpTool]:
                 "required": ["name"],
             },
             handler=_tool_skills_get,
+            intent="read",
         ),
         McpTool(
             name="dag_plan",
@@ -180,6 +191,8 @@ def build_tools() -> list[McpTool]:
                 "required": ["prompt"],
             },
             handler=_tool_dag_plan,
+            read_only=False,
+            intent="write",
         ),
         McpTool(
             name="dag_status",
@@ -190,6 +203,7 @@ def build_tools() -> list[McpTool]:
                 "required": ["run_id"],
             },
             handler=_tool_dag_status,
+            intent="read",
         ),
         McpTool(
             name="generate_image",
@@ -202,6 +216,7 @@ def build_tools() -> list[McpTool]:
             },
             handler=_tool_generate_image,
             read_only=False,  # 写语义标注（v12.0.0 无硬门禁，靠 Mock 优先 + 限流兜底）
+            intent="write",
         ),
         McpTool(
             name="task_status",
@@ -212,12 +227,54 @@ def build_tools() -> list[McpTool]:
                 "required": ["task_id"],
             },
             handler=_tool_task_status,
+            intent="read",
         ),
     ]
 
 
 def find_tool(tools: list[McpTool], name: str) -> McpTool | None:
     return next((t for t in tools if t.name == name), None)
+
+
+# ── P1-7 渐进工具暴露：intent 注解 + 检索/描述（smart-mcp-proxy 对标）──
+_INTENT_VALID = {"read", "write", "destructive"}
+
+
+def tool_annotations(tool: McpTool) -> dict[str, bool]:
+    """按 intent 映射 MCP 2025-06-18 annotations（旧客户端仅读 readOnlyHint 不受影响）。"""
+    return {
+        "readOnlyHint": tool.intent == "read",
+        "destructiveHint": tool.intent == "destructive",
+        "idempotentHint": tool.intent == "read",
+        "openWorldHint": False,
+    }
+
+
+def retrieve_tools(tools: list[McpTool], query: str, *, include_hidden: bool = False) -> list[McpTool]:
+    """关键词过滤（零依赖：name/description 分词包含匹配），渐进暴露用。"""
+    q = query.strip().lower()
+    if not q:
+        return [t for t in tools if include_hidden or t.expose]
+    return [
+        t
+        for t in tools
+        if (include_hidden or t.expose)
+        and (q in t.name.lower() or q in t.description.lower())
+    ]
+
+
+def describe_tool(tools: list[McpTool], name: str) -> dict[str, Any] | None:
+    """单工具详情（含 annotations/inputSchema），供 describe_tool 能力/审计。"""
+    tool = find_tool(tools, name)
+    if tool is None:
+        return None
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "intent": tool.intent,
+        "annotations": tool_annotations(tool),
+        "inputSchema": tool.input_schema,
+    }
 
 
 # ── P1-9 预算门禁（tools/call 分发前统一闸口）─────────────
