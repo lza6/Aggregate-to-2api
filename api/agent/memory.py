@@ -30,7 +30,7 @@ import logging
 import os
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 log = logging.getLogger("agent.memory")
 
@@ -73,7 +73,30 @@ class MemoryRecord:
     last_accessed_at: float
     source_ids: str  # 来源记录 id 列表（L1 来自哪些 L0）
     superseded_by: int | None = None  # v14 P3：被同 (user_key, scene, content) 的新 L1 取代时指向新记录 id
+    explain: list[str] = field(default_factory=list)  # B4/P1-1：命中理由（importance/新鲜度），前端「为什么命中」
 
+
+
+def _build_explain(r, now: float) -> list[str]:
+    """构造单条记忆命中理由（B4/P1-1，纯 Python 零 DB 开销）。"""
+    reasons: list[str] = []
+    importance = float(r["importance"])
+    if importance >= 0.8:
+        reasons.append("importance 高（>=0.8），优先命中")
+    elif importance >= 0.6:
+        reasons.append("importance 中等（0.6-0.8）")
+    else:
+        reasons.append("importance 普通（<0.6）")
+    age = now - float(r["last_accessed_at"])
+    if age < 86400:
+        reasons.append("近期访问过（<1 天，hot 记忆）")
+    elif age < 7 * 86400:
+        reasons.append("一周内访问过")
+    else:
+        reasons.append("较久未访问")
+    if "superseded_by" in r.keys() and r["superseded_by"] is None:  # noqa: SIM118 - sqlite3.Row 的 in 判值非键
+        reasons.append("当前有效（未被取代）")
+    return reasons
 
 class MemoryStore:
     """四层记忆存储 + 异步巩固管道。"""
@@ -205,6 +228,7 @@ class MemoryStore:
                     "ORDER BY importance DESC, last_accessed_at DESC LIMIT ?",
                     (user_key, scene, limit),
                 ).fetchall()
+                now = time.time()
                 return [
                     MemoryRecord(
                         id=r["id"],
@@ -218,6 +242,7 @@ class MemoryStore:
                         source_ids=r["source_ids"],
                         # sqlite3.Row 的 `in` 只匹配值不匹配键；必须用 r.keys() 判定列存在
                         superseded_by=r["superseded_by"] if "superseded_by" in r.keys() else None,  # noqa: SIM118 - sqlite3.Row 的 in 判值非键
+                        explain=_build_explain(r, now),
                     )
                     for r in rows
                 ]

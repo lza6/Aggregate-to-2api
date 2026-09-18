@@ -136,6 +136,7 @@ async def query_memory(
                 "content": r.content,
                 "importance": r.importance,
                 "created_at": r.created_at,
+                "explain": r.explain,
             }
             for r in records
         ],
