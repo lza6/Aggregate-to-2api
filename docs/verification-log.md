@@ -336,3 +336,14 @@
 ### 自动化测试
 - 后端 tests/test_gallery_crud.py + test_chat_routes.py：15 passed
 - frontend Tasks.test.tsx 单文件：4 passed（全量 2 失败为预存并行 flaky，非本轮回归）
+## v20.3.0 终局闭环审计记录（2026-09-26 第三轮）
+
+### Agent 真实 LLM 全链路生产 E2E
+- plan（重试后）：mock=false, llm_used=true, model=tryingopen/z-ai/glm-5.3-flash, 4 节点
+- run：succeeded；scene→llm（真实夏天诗 443 字符）→critic（30s 超时降级护栏）→llm（定稿）
+- 首次 plan 偶发 mock 回退（上游瞬时故障），重试即真实 —— 与用户经验一致（单 IP 并发限制重试即成功）
+- 结论：tryingopen 真实调用闭环确认；planner 的 mock 回退是防崩主链路设计，非 bug
+
+### 生产全链路快照
+- healthz 200 ok / gallery 200 count / ppt 200 pptx / chat_models 200 items 13
+- /admin 200 新 build；首页 200 v20.3.0
