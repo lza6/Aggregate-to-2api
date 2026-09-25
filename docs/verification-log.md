@@ -316,3 +316,23 @@
 - 服务器 git pull → HEAD=e803ad6
 - landing/dist 本地构建后 SFTP 上传 17 文件（服务器无 node）
 - 旧 dist 备份 dist.bak-20.2.1；systemctl restart imagefree-api → active + healthz ok
+## v20.3.0 补强闭环验证记录（2026-09-26 续）
+
+### /admin 管理台部署 v20.3.0
+- frontend dist 本地重建（vite build 全绿，35 文件）→ SFTP 上传 /opt/imagefree-api/frontend/dist（旧备份 dist.bak-20.2.0）
+- systemctl restart → /admin/ HTTP 200，Playwright 验证导航齐全（在线聊天/提供商/任务/号池/日志/仪表盘/生成/智能体/API 指南/健康/生态/成本）
+
+### AI PPT 工具卡真实可用
+- systemd service 注入 Environment=IF_PPT_GENERATE=1 → daemon-reload + restart → active
+- POST /v1/skills/ppt/generate 真实 200：content-type=pptx，29996 字节，PK magic，X-Slides=3
+- Playwright 门户 PPT 卡：真实下载 outline.pptx + 「下载成功 ✓」
+
+### 生产全路由回归审计（Playwright，0 console error）
+- 首页：title「一站式 AI 创意平台」/ H1 / 6 卡片 / 11 画廊图 / v20.3.0 / 0 admin / 0 slow+honor
+- /admin：导航齐全加载成功
+- 移动端 375：无横向滚动，卡片 6，触控目标 77px
+- 门户对话/Agent/生图/PPT：真实 E2E（此前已验证）
+
+### 自动化测试
+- 后端 tests/test_gallery_crud.py + test_chat_routes.py：15 passed
+- frontend Tasks.test.tsx 单文件：4 passed（全量 2 失败为预存并行 flaky，非本轮回归）

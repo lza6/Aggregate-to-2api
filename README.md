@@ -13,13 +13,17 @@
 
 ## 📋 概述
 
-听风AI 是一个**生产级 AI 图像生成 API 网关**，将上游 AI 服务（imagefree.net、aifreeforever.com，以及 tryingopen.com 对话）聚合为统一的 OpenAI 风格 `/v1/*` 接口。nanobanana 与 fal.ai 已下线。核心能力包括：
+听风AI 是一个**生产级 AI 图像生成 API 网关**，将上游 AI 服务（imagefree.net、aifreeforever.com，以及 tryingopen.com 对话）聚合为统一的 OpenAI 风格 `/v1/*` 接口。nanobanana 与 fal.ai 已下线。
+
+> **🎨 v20.3.0 用户门户**：首页 = 一站式 AI 创意平台（media.io 范式）——Hero + 6 工具卡（AI 对话/文生图/图生图/AI 视频/AI PPT/AI 智能体，点击即用）+ 灵感画廊瀑布流。管理后台收敛到 `/admin`（站长专用），用户路径零管理入口。免登录免费在线使用。
+
+核心能力包括：
 
 - **🔄 多提供商自适应路由** — MAB-EWMA 引擎结合成功率/时延/负载实时打分，自动降级/熔断
 - **👥 号池自动化** — 自动注册 + 每日签到，管理 1000+ 账号无需人工干预
 - **🌐 代理池轮换** — 住宅代理 + 免费代理双源，每 IP 递增冷却 + 24h 每日限额重置
 - **⚡ 高并发架构** — 有界优先级队列 + Worker 池（4-16 自适应）+ Turnstile token 预取，扛 270+ RPS
-- **🖥️ React 管理面板** — `/admin` 首页是 tryingopen 在线对话；仪表盘改到 `/dashboard`。提供商、任务、日志仍在侧栏。
+- **🖥️ 用户门户 + 管理后台分离 (v20.3.0)** — `/` 是 Vue3 AI 工具门户（对话/生图/图生图/视频/PPT/Agent 在线使用 + 画廊）；`/admin` 是 React 站长后台（在线对话/仪表盘/提供商/任务/号池/日志/画廊等）。
 - **🔍 深度可观测性** — Prometheus 指标 + 审计日志 + 内置告警引擎 + WebSocket 实时日志 + OTel 分布式追踪
 - **📡 SSE 每任务事件流** — `/v1/tasks/{id}/events` 实时推送 status/progress/result + Last-Event-ID 断线补偿
 - **💬 文本对话与智能体网关 (v4.4)** — 整合 TryingOpen 匿名多模型，提供标准 OpenAI `/v1/chat/completions` 与 Anthropic `/v1/messages` 兼容端点，支持思考链、工具调用（Function Calling）与多模态 Vision，自动代理轮换突破单 IP 频控。
@@ -32,7 +36,7 @@
 - **🌐 i18n 双语 (v16.1)** — 零依赖轻量 i18n（`t()`/`useT()`，en/zh 91 key 一致性测试锁定）+ Layout/Generate/Tasks/Gallery/Dashboard/ApiGuide 主路径接线 + 顶栏语言切换；landing 复用既有 zh/en 平行字典。
 - **🗄️ 数据治理 (v16.1)** — 任务软归档（`IF_TASK_RETENTION_DAYS=90` 到期终态→archived，列表退冷/详情可查）+ `POST /v1/admin/export/tasks` 批量导出（CSV BOM 中文表头/json 完整字段/管理 Key/审计/10 万行截断）+ 成本预警（`IF_COST_ALERT_PCT=80` webhook 幂等）+ `GET /v1/admin/health-report` 七维健康自诊断（JSON/MD，前端导出）。
 
-> 📌 **线上演示**：https://imagefree.tingfengai.art（腾讯云东京，公益开放）
+> 📌 **线上演示**：https://imagefree.hwhcie.bond（Azure，公益开放 · 一站式 AI 创意平台）
 
 ---
 
