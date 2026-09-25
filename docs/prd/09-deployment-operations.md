@@ -75,7 +75,7 @@ environment:
 ```yaml
 # 号池自动注册
 - IF_ACCOUNT_AUTO=1
-- IF_NANOBANANA_ACCOUNT_TARGET=500
+- IF_NANOBANANA_ACCOUNT_TARGET=500（已下线，不再生效）
 
 # 鉴权防滥用
 - IF_API_KEYS=sk-key1,sk-key2

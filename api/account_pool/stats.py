@@ -138,10 +138,10 @@ class StatsMixin:
         }
 
     async def dashboard(self) -> dict:
-        """前端「号池」看板数据：包含 nanobanana 等所有受支持提供商。"""
+        """前端「号池」看板数据：按 DB 实际存在的 provider 汇总。"""
         counts = await self.counts()
         out = {}
-        all_providers = set(counts.keys()) | {"nanobanana"}
+        all_providers = set(counts.keys())
         for prov in all_providers:
             c = counts.get(prov, {})
             # 兼容读取各状态计数

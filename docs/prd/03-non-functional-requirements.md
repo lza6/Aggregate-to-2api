@@ -250,7 +250,7 @@
 
 ### NFR-COMPLI-03 内容审核
 
-- **上游**:依赖各上游(nanobanana/aifreeforever/imagefree)自身的内容审核
+- **上游**:依赖各上游(aifreeforever/imagefree)自身的内容审核
 - **本地**:`_moderate` 等方法(部分 provider 实现)做基础过滤
 - **红线**:不生成违法内容,依赖上游策略 + 本地兜底
 

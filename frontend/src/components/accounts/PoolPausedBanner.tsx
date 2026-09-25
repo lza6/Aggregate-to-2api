@@ -39,7 +39,7 @@ export function PoolPausedBanner({
             <span className="pool-disabled-icon">⏸</span>
             <div>
               <div className="pool-disabled-title">号池管理已停用</div>
-              <div className="pool-disabled-desc">nanobanana / falai 已从提供商清单移除。在线使用请走首页对话。</div>
+              <div className="pool-disabled-desc">nanobanana 与 fal.ai 已下线。在线使用请走首页对话。</div>
             </div>
           </div>
         </div>

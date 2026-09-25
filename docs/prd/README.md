@@ -1,6 +1,6 @@
 # 听风AI(imagefree-2ai)产品需求文档与技术文档套件
 
-> 版本:v7.2.0(代码标注,演进中) · 最后更新:2026-09-03 · 全部简体中文撰写
+> 版本:v20.0.0(代码标注) · 最后更新:2026-09-26 · 全部简体中文撰写
 > 文档与代码实现一一对应,所有断言可由 `api/` 源码与 `deploy/docker-compose.yml` 验证。
 
 ## 文档结构
@@ -19,9 +19,9 @@
 
 ## 项目定位
 
-**听风AI(imagefree-2ai)** 是一个公益运行的**多提供商 AI 图像/视频/对话生成开放网关**。它通过逆向号池、Cloudflare Turnstile 自动求解、邮箱池自动注册、代理池轮换等工程化手段,把多个免费/积分制上游(imagefree.net、aifreeforever、nanobanana-pro、fal.ai、tryingopen)聚合为统一 OpenAI/Anthropic 兼容接口,对外提供免费、开放、高并发生成服务。
+**听风AI(imagefree-2ai)** 是一个公益运行的**多提供商 AI 图像/视频/对话生成开放网关**。它通过逆向号池、Cloudflare Turnstile 自动求解、邮箱池自动注册、代理池轮换等工程化手段,把多个免费/积分制上游(imagefree.net、aifreeforever、tryingopen)聚合为统一 OpenAI/Anthropic 兼容接口（nanobanana-pro、fal.ai 已下线）,对外提供免费、开放、高并发生成服务。
 
-- **代码入口**:`api/main.py`(FastAPI 应用组装,`app = FastAPI(version="7.2.0")`)
+- **代码入口**:`api/main.py`(FastAPI 应用组装,`app = FastAPI(version="20.0.0")`)
 - **配置入口**:`api/config/__init__.py`(pydantic-settings,IF_ 前缀环境变量)
 - **部署入口**:`deploy/docker-compose.yml`(cfsolver + api 双服务)
 - **公网地址**:`https://imagefree.tingfengai.art`(腾讯云东京 + Caddy 自动 HTTPS)
@@ -38,6 +38,6 @@
 ## 约定
 
 - 所有代码标识符、路径、命令、环境变量、错误码保留英文(如 `POST /v1/generate`、`IF_WORKERS`、`AUTH.001`)
-- 版本号以 `api/main.py` 的 `version="7.2.0"` 与 `pyproject.toml` 的 `version = "7.2.0"` 为准
+- 版本号以 `api/main.py` 的 `version="20.0.0"` 与 `pyproject.toml` 的 `version = "20.0.0"` 为准
 - 性能指标以 `docs/architecture-evolution.md` 与 `deploy/README.deploy.md` 记录的实测值为准(50 并发 ≈270 RPS、单 token 求解 ≈5s)
 - 文档遵循"证据优先":未验证项标注"待验证",不宣称"无 bug"或"可上线"

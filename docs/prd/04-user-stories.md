@@ -143,7 +143,7 @@
 **以便** 持续供给积分制提供商额度（nanobanana 下线后此故事已归档）。
 
 **验收标准**:
-- [ ] 配 `IF_ACCOUNT_AUTO=1` + `IF_NANOBANANA_ACCOUNT_TARGET=500`
+- [x] 配 `IF_ACCOUNT_AUTO=1` + `IF_NANOBANANA_ACCOUNT_TARGET=500` —— 已随下线归档
 - [ ] 号池自动注册(linshi/mail.tm 等 9 源邮箱),7x24h 每成功 1 个休息 90s
 - [x] nanobanana 每日签到 —— 已随提供商下线归档(历史 7 天循环 [4,4,8,4,4,4,10],美区时区北京 15:00 重置)
 - [ ] `GET /v1/account-pool` 返回分页账号(邮箱脱敏)+ 补号速率 + 成本聚合

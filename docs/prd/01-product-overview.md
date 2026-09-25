@@ -4,9 +4,9 @@
 
 **听风AI(imagefree-2ai)** 是一个公益运行的**多提供商 AI 图像/视频/对话生成开放网关**。项目通过逆向工程与系统工程化手段,将多个免费或积分制的上游 AI 生成服务聚合为统一的 OpenAI/Anthropic 兼容接口,对外提供免费、开放、高并发的生成能力。
 
-项目代码入口 `api/main.py` 组装 FastAPI 应用(`version="7.2.0"`),核心特征:
+项目代码入口 `api/main.py` 组装 FastAPI 应用(`version="20.0.0"`),核心特征:
 
-- **多提供商网关**:imagefree.net、aifreeforever、nanobanana-pro、fal.ai(minimax-H3 视频)、tryingopen(匿名对话)等上游经统一抽象(`api/providers/base.py`)后对外暴露一致接口
+- **多提供商网关**:imagefree.net、aifreeforever、tryingopen(匿名对话)等上游经统一抽象(`api/providers/base.py`)后对外暴露一致接口（nanobanana-pro、fal.ai 已下线）
 - **Cloudflare Turnstile 自动求解**:通过 `cf_solver` 联邦(camoufox 无头浏览器)自动求解人机验证,调用方无感
 - **逆向号池**:自动注册账号、每日签到续额、状态机管理生命周期(unregistered → registering → active → working → cooling → dead)
 - **高并发引擎**:有界优先级队列 + worker 池 + 多 key token 池预取,入口仅做校验+入库+入队,慢操作由后台 worker 消费
@@ -19,13 +19,13 @@
 
 ### 用户侧痛点
 
-1. **免费 AI 生成服务零散且不稳定**:各上游站点(imagefree.net、nanobanana-pro 等)单独使用时,受限于单账号积分额度、每日签到、Cloudflare 人机验证、单 IP 限额,普通用户难以稳定调用
+1. **免费 AI 生成服务零散且不稳定**:各上游站点(imagefree.net、aifreeforever 等)单独使用时,受限于单账号积分额度、每日签到、Cloudflare 人机验证、单 IP 限额,普通用户难以稳定调用
 2. **接入门槛高**:各上游接口非标准、需自行处理 Turnstile 求解、cookie 会话、RSC Server Action 编码、Next-Action ID 嗅探,普通开发者难以集成
 3. **无统一标准接口**:上游既有 REST、又有 Next.js Server Action、又有 OpenAI 兼容,客户端(Cherry Studio、Cursor、NextChat、OpenAI SDK)需要标准 `/v1/chat/completions`、`/v1/models` 契约才能接入
 
 ### 供给侧痛点
 
-4. **额度碎片化**:nanobanana 每日签到续额(7 天循环 [4,4,8,4,4,4,10],积分 2 天过期);aifreeforever 每 IP 每日限额;imagefree 需 Turnstile token。单账号单 IP 均无法持续供给
+4. **额度碎片化**:aifreeforever 每 IP 每日限额;imagefree 需 Turnstile token（hanobanana 签到已随下线移除）。单账号单 IP 均无法持续供给
 5. **风控对抗**:批量注册被 Cloudflare/邮箱源 429 限流;同 IP 批量注册必被风控;Turnstile 求解是串行瓶颈(单槽 ≈5s/token)
 6. **运维成本**:个人公益项目预算有限(2C2G/512MB 容器档),无法上 Postgres/Kafka/Redis 集群,需在单机 SQLite 形态下扛住公益流量
 
@@ -68,7 +68,7 @@
 
 - 图像生成:文生图(txt2img)、图生图(img2img)、文生视频(txt2vid)、图生视频(img2vid)
 - 文本对话:OpenAI `/v1/chat/completions` 兼容、Anthropic `/v1/messages` 兼容、流式 SSE、思考链(reasoning)、工具调用(tool_calls)
-- 多提供商路由:imagefree、aifreeforever、nanobanana、fal.ai、tryingopen,含 MAB-EWMA 自适应路由与跨商降级
+- 多提供商路由:imagefree、aifreeforever、tryingopen,含 MAB-EWMA 自适应路由与跨商降级
 - 资源池:号池(注册/签到/借还/状态机)、邮箱池(9 源)、代理池(住宅+免费双源)、token 池(双水位+批量填充)
 - 任务管理:同步等待、异步提交、SSE 事件流、死信队列(DLQ)、幂等
 - 可观测性:Prometheus `/metrics`、OTel 链路、SSE 实时日志、WebSocket 日志、审计日志、慢日志画像、成本可视化
@@ -101,7 +101,7 @@
 | **DLQ** | 死信队列(Dead Letter Queue),失败任务最终落地,见 `api/db/` |
 | **SSE** | Server-Sent Events,任务事件流与聊天流式输出 |
 | **MAB-EWMA** | 多臂老虎机 + 指数加权移动平均,自适应路由打分,见 `api/adaptive_router.py` |
-| **RSC** | React Server Components,Next.js Server Action 编码(nanobanana 上游使用) |
+| **RSC** | React Server Components,Next.js Server Action 编码（nanobanana 上游使用,已随下线不再启用） |
 | **ActionSniffer** | 动态嗅探 Next.js Server Action ID,见 `api/providers/action_sniffer.py` |
 | **livez/healthz/readyz** | 存活/就绪探针(Kubernetes 约定),liveness 只看进程,readiness 聚合依赖 |
 | **IF_ 前缀** | 所有环境变量前缀(imagefree),pydantic-settings 集中管理 |

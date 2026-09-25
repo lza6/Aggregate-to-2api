@@ -32,11 +32,11 @@ const costBody = {
   monthly: [{ month: '2026-08', cost_usd: 5.5, calls: 3 }],
   by_provider: [
     { provider: 'openai', calls: 2, cost_usd: 4.5, tokens: 100, credits_used: 10, images: 1 },
-    { provider: 'nanobanana', calls: 1, cost_usd: 7.84, tokens: 0, credits_used: 8, images: 2 },
+    { provider: 'aifreeforever', calls: 1, cost_usd: 7.84, tokens: 0, credits_used: 8, images: 2 },
   ],
   by_model: [
     { provider: 'openai', model: 'gpt-4o-mini', cost_usd: 4.5, calls: 2 },
-    { provider: 'nanobanana', model: 'flux-1.1-pro', cost_usd: 7.84, calls: 1 },
+    { provider: 'aifreeforever', model: 'flux-1.1-pro', cost_usd: 7.84, calls: 1 },
   ],
   image_cost_usd_mtd: 7.84,
   note: '口径说明',
@@ -100,7 +100,7 @@ describe('CostsPage 导出 CSV', () => {
     expect(bytes[2]).toBe(0xbf);
     expect(text).toContain('维度');
     expect(text).toContain('openai');
-    expect(text).toContain('nanobanana/flux-1.1-pro');
+    expect(text).toContain('aifreeforever/flux-1.1-pro');
     expect(text).toContain('gpt-4o-mini');
   });
 

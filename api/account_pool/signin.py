@@ -68,7 +68,7 @@ class SigninMixin:
         return [dict(r) for r in rows]
 
     async def _daily_checkin_loop(self, provider: str) -> None:
-        """nanobanana：定时检查签到（按时区与间隔），按批次处理避免 O(n)。"""
+        """历史签到巡检（nanobanana 下线后不再由 start() 挂载；保留供测试/兼容）。"""
         BATCH_SIZE = 500  # 每轮最多处理 500 个账号，避免单次全表扫描阻塞事件循环
         first_cycle = True
         while True:
@@ -125,7 +125,7 @@ class SigninMixin:
                                     note=acc.get("note") or "",
                                     register_ip=acc.get("register_ip") or "",
                                 )
-                                log.info("nanobanana cookie 续期成功 %s", acc["email"])
+                                log.info("签到 cookie 续期成功 %s", acc["email"])
                             else:
                                 # 累计失败计数，>=3 次才标 dead
                                 prev_note = acc.get("note") or ""
@@ -136,11 +136,11 @@ class SigninMixin:
                                     )
                                 else:
                                     await self.mark(provider, acc["email"], "active", note=f"fail:{fail_n + 1}")
-                                    log.warning("nanobanana %s checkin+re_login 失败 (第 %d 次)", acc["email"], fail_n)
+                                    log.warning("%s checkin+re_login 失败 (第 %d 次)", acc["email"], fail_n)
                         else:
                             await self.mark(provider, acc["email"], "dead", note="cookie 失效（无密码可续期）")
                     except Exception as e:
-                        log.warning("nanobanana 签到失败 %s: %s", acc["email"], e)
+                        log.warning("签到失败 %s: %s", acc["email"], e)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

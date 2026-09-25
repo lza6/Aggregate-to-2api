@@ -144,7 +144,7 @@ export function AccountsPage() {
             号池（已下线）
             <span className="title-badge">{totalItems} 个活跃账号</span>
           </h1>
-          <p className="page-desc">各平台长效账号自动注册、每日签到续额调度、脱敏活跃明细及邮箱分配</p>
+          <p className="page-desc">号池历史查询（自动注册/签到已随提供商下线停用）、脱敏活跃明细及邮箱分配</p>
         </div>
         <button onClick={reload} className="tf-btn tf-btn-secondary">
           <span>🔄</span> 刷新号池

@@ -11,7 +11,7 @@ const slowResponse = {
   count: 2,
   items: [
     {
-      task_id: 'task_abc123', model: 'gpt-4o', provider: 'nanobanana',
+      task_id: 'task_abc123', model: 'gpt-4o', provider: 'aifreeforever',
       queue_ms: 1200.5, wait_token_ms: 300.2, solve_ms: 1500.8, upstream_ms: 6200.4,
       retry_ms: 1001.2, total_ms: 10340.2, slowest_stage: 'upstream', status: 'completed',
       trace_id: 'trace_1', submit_ms: 800.1, poll_ms: 5400.2, created_at: 1730000000,
@@ -81,7 +81,7 @@ describe('SlowPage', () => {
 
     expect(screen.getByText('task_abc')).toBeInTheDocument(); // task_abc123 前 8 字符
     expect(screen.getByText('gpt-4o')).toBeInTheDocument();
-    expect(screen.getByText('nanobanana')).toBeInTheDocument();
+    expect(screen.getByText('aifreeforever')).toBeInTheDocument();
     expect(screen.getAllByText('10.34s').length).toBeGreaterThan(0); // 10340.2ms → s（max 卡 + 明细行均可出现）
     expect(screen.getByText('dall-e-3')).toBeInTheDocument();
 

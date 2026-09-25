@@ -26,7 +26,7 @@ log = logging.getLogger("account_pool")
 class AccountPoolBase:
     """P2-3: aiosqlite + asyncio.Lock 全 async 实现，与 db/core.py 一致。
 
-    原同步 sqlite3 + threading.Lock 在 async 路径（nanobanana.generate / registerer）
+    原同步 sqlite3 + threading.Lock 在 async 路径（号池 generate / registerer）
     直接阻塞事件循环；现全部 async 化，连接在 _get_conn 惰性创建（同 loop 复用）。
     """
 
@@ -125,7 +125,7 @@ class AccountPoolBase:
                 cookie        TEXT,
                 credits       INTEGER DEFAULT 0,
                 status        TEXT DEFAULT 'ok',       -- ok/active | working | cooling/exhausted | dead/banned | registering | unregistered
-                checkin_at    REAL,                     -- nanobanana 上次签到时间
+                checkin_at    REAL,                     -- 上次签到时间
                 created_at    REAL,
                 updated_at    REAL,
                 cooling_since REAL,                     -- 进入 cooling 状态的时间戳

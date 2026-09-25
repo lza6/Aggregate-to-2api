@@ -35,7 +35,7 @@ class EngineMixin:
 
     @staticmethod
     def _autoreg_enabled(provider: str) -> bool:
-        # 兼容旧键；nanobanana 下线后启动不再调用，测试可显式开启
+        # 仅供测试直调：nanobanana 下线后启动路径（start()）不再调用本方法
         return os.getenv("IF_NANOBANANA_AUTOREG", "1").strip().lower() in {"1", "true", "yes", "on"}
 
     async def stop(self) -> None:
