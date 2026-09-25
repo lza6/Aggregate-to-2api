@@ -40,14 +40,15 @@ export default function App() {
           <CommandPalette />
           <Suspense fallback={<PageFallback />}>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<ErrorBoundary><ChatPlayground /></ErrorBoundary>} />
+              <Route path="/chat" element={<ErrorBoundary><ChatPlayground /></ErrorBoundary>} />
+              <Route path="/dashboard" element={<Dashboard />} />
               {/* P1-5: 每个懒加载页面再包一层嵌套边界 —— 单页渲染异常只降级该页，不连坐整站 */}
               <Route path="/providers" element={<ErrorBoundary><ProvidersPage /></ErrorBoundary>} />
               <Route path="/tasks" element={<ErrorBoundary><TasksPage /></ErrorBoundary>} />
               <Route path="/accounts" element={<ErrorBoundary><AccountsPage /></ErrorBoundary>} />
               <Route path="/logs" element={<ErrorBoundary><LogsPage /></ErrorBoundary>} />
               <Route path="/dlq" element={<ErrorBoundary><DLQPage /></ErrorBoundary>} />
-              <Route path="/chat" element={<ErrorBoundary><ChatPlayground /></ErrorBoundary>} />
               <Route path="/generate" element={<ErrorBoundary><GeneratePage /></ErrorBoundary>} />
               <Route path="/health" element={<ErrorBoundary><HealthPage /></ErrorBoundary>} />
               <Route path="/security" element={<ErrorBoundary><SecurityPage /></ErrorBoundary>} />

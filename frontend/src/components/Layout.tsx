@@ -56,8 +56,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="nav-section-title">{t('nav.core')}</div>
         <nav className="sidebar-nav" aria-label="核心模块导航">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon" aria-hidden="true">📊</span>
-            <span className="nav-text">{t('nav.dashboard')}</span>
+            <span className="nav-icon" aria-hidden="true">💬</span>
+            <span className="nav-text">{t('nav.chat')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/providers" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
@@ -90,9 +90,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-text">{t('nav.slow')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
-          <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
-            <span className="nav-icon" aria-hidden="true">💬</span>
-            <span className="nav-text">{t('nav.chat')}</span>
+          <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>
+            <span className="nav-icon" aria-hidden="true">📊</span>
+            <span className="nav-text">{t('nav.dashboard')}</span>
             <span className="nav-pip" aria-hidden="true" />
           </NavLink>
           <NavLink to="/generate" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'} onClick={() => setDrawerOpen(false)}>

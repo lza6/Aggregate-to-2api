@@ -22,14 +22,14 @@ interface CmdItem {
 
 // 与 Layout 侧栏同步的导航清单（避免重复维护两份）
 const COMMANDS: CmdItem[] = [
-  { id: 'dashboard', label: '仪表盘', hint: '系统总览', path: '/', icon: '📊', keywords: '仪表盘 总览 dashboard 首页' },
+  { id: 'dashboard', label: '仪表盘', hint: '系统总览', path: '/dashboard', icon: '📊', keywords: '仪表盘 总览 dashboard' },
   { id: 'providers', label: '提供商', hint: '集群状态', path: '/providers', icon: '🔌', keywords: '提供商 providers 上游 集群' },
   { id: 'tasks', label: '任务管理', hint: '生成任务', path: '/tasks', icon: '📋', keywords: '任务 tasks 生成' },
   { id: 'accounts', label: '长效号池', hint: '账号管理', path: '/accounts', icon: '👤', keywords: '号池 accounts 账号 长效' },
   { id: 'logs', label: '实时日志', hint: 'WebSocket 日志流', path: '/logs', icon: '📝', keywords: '日志 logs 实时' },
   { id: 'dlq', label: '死信队列', hint: 'DLQ 重试', path: '/dlq', icon: '🗑️', keywords: '死信 dlq dlq 重试 队列' },
   { id: 'slow', label: '慢请求画像', hint: '瓶颈定位', path: '/slow', icon: '🐌', keywords: '慢 slow 慢请求 画像' },
-  { id: 'chat', label: '在线聊天', hint: 'AI Playground', path: '/chat', icon: '💬', keywords: '聊天 chat playground 对话' },
+  { id: 'chat', label: '在线聊天', hint: '首页对话', path: '/', icon: '💬', keywords: '聊天 chat playground 对话 首页' },
   { id: 'generate', label: '在线生成', hint: '文生图 / 图生图', path: '/generate', icon: '🖼️', keywords: '生成 generate 文生图 图生图' },
   { id: 'api-guide', label: 'API 指南', hint: '调用示例', path: '/api-guide', icon: '📖', keywords: 'api 指南 guide 文档' },
   { id: 'health', label: '健康体检', hint: '出图能力', path: '/health', icon: '🩺', keywords: '健康 health 体检' },

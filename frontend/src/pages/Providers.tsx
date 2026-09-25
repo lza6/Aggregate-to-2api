@@ -6,10 +6,6 @@ import { Skeleton, Empty, ErrorRetry } from '../components/Feedback';
 import { useApi } from '../hooks/useApi';
 import type { ProviderSummary, EmailSource, ProxyPoolEntry } from '../api';
 
-// v6.9.1: nanobanana 号池已停用（用户「把这个号池停一下」）。
-// 纯前端折叠：needs_account=True 的提供商排末尾且默认折叠，保留后端能力，可通过开关恢复。
-const NANOBANANA_HIDDEN_KEY = 'imagefreeHideNanobananaPool';
-
 export function ProvidersPage() {
   const { data, loading, error, reload } = useApi(() => fetchProviders(), { intervalMs: 10000 });
   const [providers, setProviders] = useState<{ prefix: string; summary: ProviderSummary }[]>([]);
@@ -28,21 +24,13 @@ export function ProvidersPage() {
     if (proxyApi.data) setProxyEntries(proxyApi.data.items ?? []);
   }, [proxyApi.data]);
 
-  // nanobanana 折叠开关（localStorage 持久化，默认隐藏 = 用户「停一下」意图）
-  const [nbHidden, setNbHidden] = useState<boolean>(() => {
-    try { return localStorage.getItem(NANOBANANA_HIDDEN_KEY) !== '0'; } catch { return true; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(NANOBANANA_HIDDEN_KEY, nbHidden ? '1' : '0'); } catch { /* ignore */ }
-  }, [nbHidden]);
-
   useEffect(() => {
     if (data) {
       setProviders(Object.entries(data.items ?? {}).map(([prefix, summary]) => ({ prefix, summary })));
     }
   }, [data]);
 
-  // 排序：needs_account=False（不需要账号）在前；needs_account=True（nanobanana）排末尾。
+  // 排序：needs_account=False（不需要账号）在前；needs_account=True 的排末尾。
   const sorted = useMemo(() => {
     const noAccount = providers.filter(({ summary }) => !summary.needs_account);
     const withAccount = providers.filter(({ summary }) => summary.needs_account);
@@ -107,52 +95,26 @@ export function ProvidersPage() {
         </div>
       </section>
 
-      {/* 需要账号的提供商（nanobanana）—— 排末尾，可折叠（号池已停用） */}
       {sorted.withAccount.length > 0 && (
         <section className="prov-section">
-          <div className="prov-section-head-row">
-            <h2 className="prov-section-title">
-              🔐 需要账号（号池）
-              <span className="prov-section-sub prov-section-sub-warn">号池自动补号已暂停 · 每日签到停用</span>
-            </h2>
-            <button
-              className="tf-btn tf-btn-sm"
-              onClick={() => setNbHidden(v => !v)}
-              aria-expanded={!nbHidden}
-              title="切换号池区块显示"
-            >
-              {nbHidden ? '▸ 展开查看' : '▾ 折叠隐藏'}
-            </button>
+          <h2 className="prov-section-title">
+            需要账号
+            <span className="prov-section-sub">这些上游不会自动补号</span>
+          </h2>
+          <div className="prov-grid">
+            {sorted.withAccount.map(({ prefix, summary }) => (
+              <ProviderCard
+                key={prefix}
+                name={summary.display_name ?? prefix}
+                prefix={prefix}
+                baseUrl={summary.base_url}
+                models={summary.model_count ?? 0}
+                status={summary.health_status ?? 'unknown'}
+                errorCount={summary.error_count ?? 0}
+                credits={summary.credits}
+              />
+            ))}
           </div>
-          {!nbHidden && (
-            <div className="prov-grid">
-              {sorted.withAccount.map(({ prefix, summary }) => (
-                <div key={prefix} className="prov-card-disabled-wrap">
-                  <ProviderCard
-                    name={summary.display_name ?? prefix}
-                    prefix={prefix}
-                    baseUrl={summary.base_url}
-                    models={summary.model_count ?? 0}
-                    status={summary.health_status ?? 'unknown'}
-                    errorCount={summary.error_count ?? 0}
-                    credits={summary.credits}
-                  />
-                  <div className="prov-disabled-banner">
-                    ⏸ NanoBanana Pro 每日签到号池已停用（自动补号/签到会话卡片不展示，后端能力保留）
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {nbHidden && (
-            <div className="prov-hidden-placeholder tf-card">
-              <span className="prov-hidden-icon">⏸</span>
-              <div>
-                <div className="prov-hidden-title">号池管理已停用</div>
-                <div className="prov-hidden-desc">NanoBanana Pro（每日签到）自动补号已暂停，可在 Accounts 页查看历史号池或在此展开恢复查看</div>
-              </div>
-            </div>
-          )}
         </section>
       )}
 

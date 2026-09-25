@@ -87,10 +87,8 @@ interface AccountPoolData {
   page_size?: number;
 }
 
-const PROVIDER_META: Record<string, { name: string; note: string }> = {
-  nanobanana: { name: 'NanoBanana Pro', note: '每日签到自动续额（长效号池管理）' },
-};
-const ACTIVE_PROVIDERS = new Set(['nanobanana']);
+const PROVIDER_META: Record<string, { name: string; note: string }> = {};
+const ACTIVE_PROVIDERS = new Set<string>();
 
 const ACCOUNT_ROW_H = 48;
 const ACCOUNT_CONTAINER_H = 560;
@@ -124,7 +122,7 @@ export function AccountsPage() {
     return (
       <div className="accounts-page-container">
         <div className="page-header">
-          <h1 className="page-title">长效号池管理</h1>
+          <h1 className="page-title">号池（已下线）</h1>
         </div>
         <div className="pool-grid">
           <Skeleton lines={4} height={160} />
@@ -143,7 +141,7 @@ export function AccountsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">
-            长效号池管理
+            号池（已下线）
             <span className="title-badge">{totalItems} 个活跃账号</span>
           </h1>
           <p className="page-desc">各平台长效账号自动注册、每日签到续额调度、脱敏活跃明细及邮箱分配</p>

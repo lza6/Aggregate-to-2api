@@ -11,7 +11,7 @@ export interface ProviderSummary {
   credits?: number | null;
   error_count: number;
   degraded: boolean;
-  // v6.9.1: 是否需要号池账号（供前端把「不需要账号」提供商排前面、nanobanana 折叠到末尾）
+  // 是否需要号池账号（供前端把「不需要账号」提供商排前面）
   needs_account?: boolean;
   // v6.9.1: 是否每请求需轮换代理（供前端展示能力说明）
   needs_proxy_per_request?: boolean;

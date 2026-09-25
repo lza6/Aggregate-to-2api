@@ -180,7 +180,7 @@ export interface CostByProviderRow {
   calls: number;
   cost_usd: number;
   tokens: number;
-  // 图片成本挂 nanobanana 行时追加
+  // 图片成本挂图片提供商行时追加
   credits_used?: number;
   images?: number;
 }

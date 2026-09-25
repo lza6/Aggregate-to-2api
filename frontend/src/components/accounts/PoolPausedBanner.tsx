@@ -19,7 +19,7 @@ export function PoolPausedBanner({
             </div>
             <div className="pool-paused-desc">
               {poolPaused
-                ? 'NanoBanana Pro 每日签到号池已停用（自动补号/签到会话卡片不展示），后端能力保留，可随时恢复'
+                ? '签到型号池提供商已下线，这里只保留历史查询'
                 : '号池已恢复展示，自动补号/签到会话与明细表正常显示'}
             </div>
           </div>
@@ -39,7 +39,7 @@ export function PoolPausedBanner({
             <span className="pool-disabled-icon">⏸</span>
             <div>
               <div className="pool-disabled-title">号池管理已停用</div>
-              <div className="pool-disabled-desc">NanoBanana Pro（每日签到）自动补号暂停，达标率/补号速率/签到会话卡片不展示。后端能力保留，可点击上方「展开明细」恢复查看</div>
+              <div className="pool-disabled-desc">nanobanana / falai 已从提供商清单移除。在线使用请走首页对话。</div>
             </div>
           </div>
         </div>

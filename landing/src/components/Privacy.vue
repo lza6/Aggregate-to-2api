@@ -37,8 +37,6 @@ const sections = computed(() => isEn.value ? [
     items: [
       'imagefree — main site, no account needed.',
       'aifreeforever — free, per-IP daily quota, uses free proxy rotation.',
-      'nanobanana-pro — credit-based, uses self-managed test accounts with daily check-in.',
-      'falai — optional provider (toggle-gated).',
       'tryingopen — chat provider, per-IP hourly limit.',
     ],
   },
@@ -98,8 +96,6 @@ const sections = computed(() => isEn.value ? [
     items: [
       'imagefree —— 主站，无需账号。',
       'aifreeforever —— 免费，每 IP 每日限额，使用免费代理轮换。',
-      'nanobanana-pro —— 积分制，使用自管测试账号每日签到续额。',
-      'falai —— 可选提供商（开关控制）。',
       'tryingopen —— 聊天提供商，每 IP 每时限额。',
     ],
   },

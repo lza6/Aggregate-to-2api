@@ -9,6 +9,7 @@ import { useScroll, useMediaQuery } from '@vueuse/core'
 import { motion } from 'motion-v'
 import { useReveal } from './composables/useReveal'
 import SectionStatus from './components/SectionStatus.vue'
+import HomeChat from './components/HomeChat.vue'
 import SectionProviders from './components/SectionProviders.vue'
 import SectionUsage from './components/SectionUsage.vue'
 import SectionCode from './components/SectionCode.vue'
@@ -146,6 +147,8 @@ function goHome() { window.location.hash = '' }
           <SectionStatus :stats="stats" :chips="statChips" :meta="metaInfo" :loading="status.loading.value" :error="status.error.value" />
         </motion.div>
       </section>
+
+      <HomeChat />
 
       <!-- 提供商与模型网格 -->
       <motion.section v-bind="reveal2">
