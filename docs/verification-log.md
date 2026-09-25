@@ -298,3 +298,21 @@
 | 2026-09-26 | export_tasks 无界（P1） | 已有 LIMIT 10 万截断，管理端点低频，**部分缓解不改流式** | — |
 | 2026-09-26 | token 池阻塞（P1） | 压测调优项：需 cf_solver 多槽 + TOKEN_PREFETCH_CONCURRENCY 提升 | 非代码 bug |
 | 2026-09-26 | 部署同步 | 服务器 git pull → c7ceed2，openapi version 20.0.0→20.2.0 | 修复部署=仓库一致 |
+## v20.3.0 AI 工具门户上线验证记录（2026-09-26）
+
+### 门户结构（生产 https://imagefree.hwhcie.bond）
+- title=「听风AI — 一站式 AI 创意平台」，H1=「一站式 AI 创意平台」
+- 6 工具卡 / 11 画廊真实 R2 图 / 3 信任胶囊 / 0 管理后台链接 / 0 slow+honor 运维链接 / 页脚 v20.3.0
+- console error = 0
+
+### 在线使用真实 E2E（生产）
+- AI 对话：tryingopen deepseek-v4-pro-0813 → 真实回复「我是听风AI 聚合网关的对话助手…」，0 error
+- AI Agent：自然语言「帮我写一首关于夏天的诗」→ 3 节点 DAG（llm 创作 → critic 审阅 → llm 定稿），tryingopen 真实规划，0 error
+- 文生图（本地 dev 代理验证）：真实出图 R2（~27s），PortalGenerate 渲染 image_url 成功
+- 画廊：/v1/gallery count=11，全部 image_url 公网 R2 可加载
+
+### 部署
+- 本地推送 e803ad6（2 主题 commit：门户重构 + 版本 bump）
+- 服务器 git pull → HEAD=e803ad6
+- landing/dist 本地构建后 SFTP 上传 17 文件（服务器无 node）
+- 旧 dist 备份 dist.bak-20.2.1；systemctl restart imagefree-api → active + healthz ok
