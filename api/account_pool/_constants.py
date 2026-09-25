@@ -22,7 +22,7 @@ from ..providers.base import MOCK_REGISTER  # noqa: F401  (re-export 源)
 log = logging.getLogger("account_pool")
 
 DB_FILE = os.getenv("IF_ACCOUNT_DB_FILE", "data/account_pool.db")
-# nanobanana 目标常驻账号数（默认 10000）
+# 号池目标常驻账号数（默认 10000）；nanobanana 下线后仅测试兼容使用
 TARGET_NANOBANANA = int(os.getenv("IF_NANOBANANA_ACCOUNT_TARGET", "10000"))
 # 补号冷却（秒）：注册器连续失败时退避，防风控。
 # 7x24h 不间断注册：每成功 1 个后休息 90s（24h ≈ 960 个），

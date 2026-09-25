@@ -27,11 +27,10 @@ log = logging.getLogger("agent.budget_guard")
 
 # 估算表（USD/次；按 provider 定价量级，精确计费走 chat_usage cost_usd 实际记账）
 _PROVIDER_ESTIMATE_USD: dict[str, float] = {
-    "falai": 0.04,  # fal.ai 按张计费量级
     "imagefree": 0.0,  # 公益免费
     "aifreeforever": 0.0,  # 公益免费
-    "nanobanana": 0.0,  # 公益免费
-    "tryingopen": 0.0,  # metered 免费
+    "tryingopen": 0.0,  # 匿名聊天，agent 与首页对话真实调用
+    "paid": 0.04,  # 预算门禁测试用的付费量级占位，不是线上提供商
     "unknown": 0.01,  # 保守默认（未知 provider 按低价估）
 }
 

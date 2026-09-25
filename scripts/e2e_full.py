@@ -204,9 +204,10 @@ class E2ERunner:
         self.check("模型列表 HTTP 200", d["status"] == 200, str(d["status"]))
         items = (d.get("json") or {}).get("items") or {}
         count = (d.get("json") or {}).get("count") or 0
-        self.check("模型总数 ≥ 40", count >= 40, f"count={count}")
+        self.check("模型总数 ≥ 5", count >= 5, f"count={count}")
         self.check("imagefree 组存在", "imagefree" in items)
-        self.check("nanobanana 组存在", "nanobanana" in items)
+        self.check("nanobanana 组不存在", "nanobanana" not in items)
+        self.check("aifreeforever 组存在", "aifreeforever" in items)
         naming_ok = all(m["id"].startswith(p + "/") for p, ms in items.items() for m in ms)
         self.check("模型命名 <提供商>/<真实模型名>", naming_ok)
 

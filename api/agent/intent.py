@@ -53,7 +53,7 @@ _INTENT_RULES: list[tuple[str, str, list[str], float]] = [
         "image-quality-check",
         0.9,
     ),
-    ("video", "falai", [r"生成视频|文生视频|txt2vid|视频|video"], "critic-review", 0.85),
+    ("video", "", [r"生成视频|文生视频|txt2vid|视频|video"], "critic-review", 0.85),
     ("chat", "tryingopen", [r"聊天|对话|问答|chat|问.*答"], "prompt-refine", 0.8),
     ("ecommerce", "imagefree", [r"电商|主图|详情页|商品图|店铺"], "image-quality-check", 0.85),
     ("ppt", "tryingopen", [r"PPT|ppt|幻灯片|演示文稿"], "prompt-refine", 0.7),
@@ -80,7 +80,7 @@ _EMBED_PROTO_B64: dict[str, str] = {
 # 意图原型 → 默认 provider_hint / skill_hint（与规则正则同源，保持路由一致性）
 _EMBED_PROTO_META: dict[str, tuple[str, str]] = {
     "image": ("imagefree", "image-quality-check"),
-    "video": ("falai", "critic-review"),
+    "video": ("", "critic-review"),
     "chat": ("tryingopen", "prompt-refine"),
     "ecommerce": ("imagefree", "image-quality-check"),
     "ppt": ("tryingopen", "prompt-refine"),
@@ -213,10 +213,9 @@ def _rule_classify(prompt: str) -> IntentResult | None:
 
 
 async def _llm_classify(prompt: str) -> IntentResult:
-    """LLM 二次分类（模糊意图）。用 tryingopen 免费上游。
+    """LLM 二次分类（模糊意图）。默认真实调用 tryingopen。
 
-    付费 API 红线：本函数用 tryingopen 免费上游 + IF_MOCK_UPSTREAM=1 Mock，
-    不发起真实付费调用。用户批准后才可切真实 LLM。
+    IF_MOCK_UPSTREAM=1 时返回规则兜底，供离线测试。
     """
     # 默认 Mock：返回 unknown + 低 confidence（不崩主链路）
     from ..config import get_settings
@@ -250,7 +249,7 @@ async def _llm_classify(prompt: str) -> IntentResult:
         system_prompt = (
             "你是意图分类器。把用户 prompt 分类为以下场景之一，只输出 JSON：\n"
             '{"scene":"image|image_edit|video|chat|ecommerce|ppt|unknown",'
-            '"provider_hint":"imagefree|falai|tryingopen|",'
+            '"provider_hint":"imagefree|aifreeforever|tryingopen|",'
             '"skill_hint":"image-quality-check|prompt-refine|critic-review|",'
             '"confidence":0.0-1.0}\n'
             "只输出 JSON，不要其他文字。"

@@ -30,9 +30,9 @@ class BrowserPool:
     def __init__(self, pool_size: int | None = None, headful: bool | None = None,
                  proxy_pool: Any | None = None) -> None:
         self.pool_size = int(pool_size if pool_size is not None
-                             else config.IF_FALAI_BROWSER_POOL_SIZE)
+                             else getattr(config, "IF_FALAI_BROWSER_POOL_SIZE", 2))
         self.headful = bool(headful if headful is not None
-                            else config.IF_FALAI_BROWSER_HEADFUL)
+                            else getattr(config, "IF_FALAI_BROWSER_HEADFUL", False))
         self._proxy_pool = proxy_pool
         self._slots: list[dict[str, Any]] = []  # 每个 slot: {browser, context, page, proxy}
         self._sem = asyncio.Semaphore(max(1, self.pool_size))
@@ -160,7 +160,7 @@ class BrowserPool:
         }
 
 
-# 模块单例（lifespan 绑定 proxy_pool 后注入到 falai provider）
+# 模块单例（falai 下线后暂留；仅测试引用，无运行时调用方）
 browser_pool = BrowserPool()
 
 

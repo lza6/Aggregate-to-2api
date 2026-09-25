@@ -18,7 +18,7 @@ supersede 语义（v14 P3，参考 agentmemory 巩固蓝本 isLatest + supersede
 
 开关：IF_MEMORY_CONSOLIDATION_ENABLED=0 关闭，回退无记忆（零回归）。
 三档衰减开关：IF_MEMORY_APPLY_DECAY（缺省关 0）→ consolidate 尾部可选挂载 apply_decay()。
-LLM 调用：巩固压缩用 tryingopen 上游 LLM（付费 API 红线：Mock 或用户批准预算）。
+LLM 调用：巩固压缩默认真实调用 tryingopen。IF_MOCK_UPSTREAM=1 时走本地去重。
 
 数据层：复用现有 SQLite（imagefree.db），加 4 张表（不改 requests/chat_usage schema）。
 """

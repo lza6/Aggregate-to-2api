@@ -36,7 +36,7 @@ async def test_rule_classify_video():
 
     r = await classify_intent("生成一段视频")
     assert r.scene == "video"
-    assert r.provider_hint == "falai"
+    assert r.provider_hint == ""
     assert r.skill_hint == "critic-review"
 
 

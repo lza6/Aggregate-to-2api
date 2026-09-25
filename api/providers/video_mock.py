@@ -1,7 +1,7 @@
 """视频 Mock provider（指南 v18 P1-1，zack-d _submit_and_poll 语义的 Mock 版）。
 
 提交→轮询→完成 全 Mock（IF_MOCK_UPSTREAM=1 语义）：渲染进度按时间推进（约 5s 完成），
-最终产出占位 mp4 URL（零真实付费）。真实 provider 动作族（falai 抽象统一）后置。
+最终产出占位 mp4 URL（零真实付费）。真实视频 provider 动作族后置。
 """
 from __future__ import annotations
 

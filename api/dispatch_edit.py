@@ -338,7 +338,7 @@ async def edit_image(req: EditRequest):
             # P0-4: imagefree 上游只支持单图 → 明确报错，不静默丢弃额外图
             raise AppError(
                 ErrorCodes.BAD_REQUEST,
-                "imagefree 上游仅支持单图参考（多图请使用 aifreeforever / nanobanana）",
+                "imagefree 上游仅支持单图参考（多图请使用 aifreeforever）",
                 422,
             )
 

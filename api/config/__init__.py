@@ -291,7 +291,7 @@ class Settings(BaseSettings):
     if_critic_agent_enabled: bool = Field(True, validation_alias="IF_CRITIC_AGENT_ENABLED")
     # v9.0.0-A 智能体 DAG 编排（/v1/agent/dag/*，缺省开启；0 关闭时路由 404）
     if_agent_dag_enabled: bool = Field(True, validation_alias="IF_AGENT_DAG_ENABLED")
-    # v9.0.0-A DAG LLM 规划器（IF_MOCK_UPSTREAM=1 时纯 Mock；0 时可走 tryingopen 免费上游）
+    # agent / 首页对话默认真实调用 tryingopen。IF_MOCK_UPSTREAM=1 只用于离线测试。
     if_mock_upstream: bool = Field(False, validation_alias="IF_MOCK_UPSTREAM")
     if_agent_planner_enabled: bool = Field(True, validation_alias="IF_AGENT_PLANNER_ENABLED")
     # v9.0.0-A planner 真实 LLM 的默认模型（约定 tryingopen/default，registry 无此 id 时回退首个 chat model）
@@ -364,7 +364,6 @@ class Settings(BaseSettings):
     if_proxy_trace_concurrency: int = Field(8, validation_alias="IF_PROXY_TRACE_CONCURRENCY")
     account_db_file: str = Field("data/account_pool.db", validation_alias="IF_ACCOUNT_DB_FILE")
     email_db_file: str = Field("data/email_registry.db", validation_alias="IF_EMAIL_DB_FILE")
-    nanobanana_account_target: int = Field(10000, validation_alias="IF_NANOBANANA_ACCOUNT_TARGET")
     account_auto: bool = Field(True, validation_alias="IF_ACCOUNT_AUTO")
     mock_register: bool = Field(False, validation_alias="IF_MOCK_REGISTER")
     # AI 兜底邮件验证码/验证链接提取（默认关闭；正则未命中时降级 LLM）
@@ -388,19 +387,6 @@ class Settings(BaseSettings):
     reg_backoff_ip: float = Field(120.0, validation_alias="IF_REG_BACKOFF_IP")
     reg_backoff_transient_base: float = Field(2.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_BASE")
     reg_backoff_transient_max: float = Field(30.0, validation_alias="IF_REG_BACKOFF_TRANSIENT_MAX")
-
-    # ── fal.ai minimax-H3 视频提供商（Playwright 浏览器即服务）──
-    if_falai_enabled: bool = Field(True, validation_alias="IF_FALAI_ENABLED")
-    if_falai_hcaptcha_sitekey: str = Field(
-        "79e0463a-f79a-4742-b3da-489afd1cbe68",
-        validation_alias="IF_FALAI_HCAPTCHA_SITEKEY",
-    )
-    if_falai_hcaptcha_mode: str = Field("passive", validation_alias="IF_FALAI_HCAPTCHA_MODE")
-    if_falai_browser_headful: bool = Field(True, validation_alias="IF_FALAI_BROWSER_HEADFUL")
-    if_falai_browser_pool_size: int = Field(2, validation_alias="IF_FALAI_BROWSER_POOL_SIZE")
-    if_falai_verify_timeout: int = Field(90, validation_alias="IF_FALAI_VERIFY_TIMEOUT")
-    if_falai_poll_interval: float = Field(2.0, validation_alias="IF_FALAI_POLL_INTERVAL")
-    if_falai_poll_timeout: int = Field(120, validation_alias="IF_FALAI_POLL_TIMEOUT")
 
     # ── 分组配置（延迟初始化，由 model_validator 填充）───────────────
     # 公开接口限速：每 IP 每分钟允许的生成提交次数（0 = 关闭限速）
@@ -467,8 +453,6 @@ class Settings(BaseSettings):
         "if_auto_block_permanent",
         "if_admin_key_open",
         "if_proxy_trace_enabled",
-        "if_falai_enabled",
-        "if_falai_browser_headful",
         "if_security_headers_enabled",
         "if_csp_enabled",
         "if_docs_enabled",
@@ -731,7 +715,7 @@ IF_LOG_RETENTION_DAYS = settings.if_log_retention_days
 
 # 函数式读取（走 get_settings() 工厂，P0-2 收敛后统一调用方）：
 def mock_upstream() -> bool:
-    """IF_MOCK_UPSTREAM 是否开启（E2E/CI 用稳定 Mock，避免真实付费上游）。"""
+    """IF_MOCK_UPSTREAM 是否开启。默认 False：agent 真实调用 tryingopen。测试可显式置 1。"""
     return get_settings().if_mock_upstream
 
 
@@ -777,7 +761,6 @@ IF_PROXY_TRACE_MAX_PER_ROUND = settings.if_proxy_trace_max_per_round
 IF_PROXY_TRACE_CONCURRENCY = settings.if_proxy_trace_concurrency
 ACCOUNT_DB_FILE = settings.account_db_file
 EMAIL_DB_FILE = settings.email_db_file
-NANOBANANA_ACCOUNT_TARGET = settings.nanobanana_account_target
 ACCOUNT_AUTO = settings.account_auto
 MOCK_REGISTER = settings.mock_register
 IF_MAIL_AI_EXTRACT = settings.if_mail_ai_extract
@@ -801,14 +784,6 @@ REG_BACKOFF_IP = settings.reg_backoff_ip
 REG_BACKOFF_TRANSIENT_BASE = settings.reg_backoff_transient_base
 REG_BACKOFF_TRANSIENT_MAX = settings.reg_backoff_transient_max
 # fal.ai minimax-H3 视频提供商（Playwright 浏览器即服务）
-IF_FALAI_ENABLED = settings.if_falai_enabled
-IF_FALAI_HCAPTCHA_SITEKEY = settings.if_falai_hcaptcha_sitekey
-IF_FALAI_HCAPTCHA_MODE = settings.if_falai_hcaptcha_mode
-IF_FALAI_BROWSER_HEADFUL = settings.if_falai_browser_headful
-IF_FALAI_BROWSER_POOL_SIZE = settings.if_falai_browser_pool_size
-IF_FALAI_VERIFY_TIMEOUT = settings.if_falai_verify_timeout
-IF_FALAI_POLL_INTERVAL = settings.if_falai_poll_interval
-IF_FALAI_POLL_TIMEOUT = settings.if_falai_poll_timeout
 # 公开接口限速（0 = 关闭）
 IF_REQUESTS_PER_MINUTE = settings.if_requests_per_minute
 # L1 秒级令牌桶（None = 默认取 IF_REQUESTS_PER_MINUTE；<=0 关闭 L1）

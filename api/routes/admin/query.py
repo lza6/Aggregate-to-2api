@@ -121,7 +121,7 @@ async def cost_overview():
     image_credits_used = 0
     image_images = 0
     try:
-        _raw_cs = await _account_pool.account_pool.cost_summary("nanobanana")
+        _raw_cs = await _account_pool.account_pool.cost_summary("imagefree")
         cs = await _raw_cs if inspect.isawaitable(_raw_cs) else _raw_cs
         image_credits_used = cs.get("total_credits_used", 0)
         image_images = cs.get("total_images_used", 0)
@@ -147,14 +147,14 @@ async def cost_overview():
 
     nb_found = False
     for row in monthly_by_provider:
-        if row.get("provider") == "nanobanana":
+        if row.get("provider") == "imagefree":
             row["cost_usd"] = round(float(row.get("cost_usd", 0.0)) + image_cost, 6)
             row["credits_used"] = image_credits_used
             row["images"] = image_images
             nb_found = True
     if not nb_found and (image_cost > 0 or image_credits_used > 0):
         monthly_by_provider.append({
-            "provider": "nanobanana",
+            "provider": "imagefree",
             "calls": 0,
             "cost_usd": round(image_cost, 6),
             "tokens": 0,
@@ -212,33 +212,19 @@ async def account_pool_dashboard(
     """号池看板与分页账号明细。"""
     from ...account_pool import account_pool  # noqa: PLC0415
     from ...email_pool import email_pool  # noqa: PLC0415
-    from ...registerer import STAGE_LABELS  # noqa: PLC0415
 
+    # nanobanana 已下线：号池看板不再绑定特定提供商，统一按账号池自身统计。
+    provider = None
     page_data = await account_pool.list_page(
-        "nanobanana",
+        provider,
         None,
         page,
         page_size,
         search,
     )
-    reg = account_pool.registerers.get("nanobanana")
     live_stage = None
-    if reg is not None:
-        snap = getattr(reg, "live_session_snapshot", None)
-        if snap:
-            live_stage = {
-                "stage": snap.get("stage"),
-                "stage_label": STAGE_LABELS.get(snap.get("stage"), snap.get("stage")),
-                "email": snap.get("email"),
-                "email_source": snap.get("email_source"),
-                "created_at": snap.get("created_at"),
-                "updated_at": snap.get("updated_at"),
-                "last_error": snap.get("last_error"),
-                "error_category": snap.get("error_category"),
-                "stage_durations": snap.get("stage_durations"),
-            }
-    growth = await account_pool.growth_stats("nanobanana")
-    cost = await account_pool.cost_summary("nanobanana")
+    growth = await account_pool.growth_stats(provider)
+    cost = await account_pool.cost_summary(provider)
     desensitized = []
     now_ts = time.time()
     for item in page_data["items"]:

@@ -10,76 +10,10 @@ import httpx
 import pytest
 
 from api.providers import registry
-from api.providers.base import ProviderError, ProviderRateLimited
+from api.providers.base import ProviderRateLimited
 from api.providers.registry import bootstrap
 
 bootstrap()
-
-
-# ── nanobanana RSC 解析 ──────────────────────────
-
-
-def _rsc_response(lines: list[str], status: int = 200) -> httpx.Response:
-    body = "\n".join(lines)
-    return httpx.Response(status_code=status, text=body, headers={"Content-Type": "text/x-component"})
-
-
-class TestNanobananaRscParse:
-    @pytest.mark.asyncio
-    async def test_simple_success_line(self):
-        p = registry.providers["nanobanana"]
-        r = _rsc_response(['0:{"success":true,"taskId":"t123"}'])
-        assert await p._parse_action_response(r) == "t123"
-
-    @pytest.mark.asyncio
-    async def test_dollar_escape_fallback(self):
-        p = registry.providers["nanobanana"]
-        # $$ 转义的 JSON（RSC 编码 '$' 开头字符串）
-        r = _rsc_response(['0:{"success":true,"taskId":"$$t456"}'])
-        tid = await p._parse_action_response(r)
-        assert tid is not None and "456" in tid
-
-    @pytest.mark.asyncio
-    async def test_multiple_zero_lines_skip_invalid(self):
-        p = registry.providers["nanobanana"]
-        # 前几行非 dict / 无 success → 跳过，直到有效行
-        r = _rsc_response(
-            [
-                '0:"flight-data"',
-                "0:[1,2,3]",
-                '0:{"foo":1}',
-                '0:{"success":true,"taskId":"t789"}',
-            ]
-        )
-        assert await p._parse_action_response(r) == "t789"
-
-    @pytest.mark.asyncio
-    async def test_missing_task_id_skips(self):
-        p = registry.providers["nanobanana"]
-        r = _rsc_response(['0:{"success":true}'])
-        with pytest.raises(ProviderError):
-            await p._parse_action_response(r)
-
-    @pytest.mark.asyncio
-    async def test_error_payload_raises(self):
-        p = registry.providers["nanobanana"]
-        r = _rsc_response(['0:{"error":"quota exceeded"}'])
-        with pytest.raises(ProviderError) as ei:
-            await p._parse_action_response(r)
-        assert "失败" in str(ei.value)
-
-    @pytest.mark.asyncio
-    async def test_non_200_raises(self):
-        p = registry.providers["nanobanana"]
-        r = _rsc_response([], status=500)
-        with pytest.raises(ProviderError) as ei:
-            await p._parse_action_response(r)
-        assert "500" in str(ei.value)
-
-    def test_rsc_encode_dollar_escaped(self):
-        p = registry.providers["nanobanana"]
-        out = p._rsc_encode({"url": "$https://x"})
-        assert "$$" in out
 
 
 # ── aifreeforever 429 限流分支 ──────────────────────
@@ -135,7 +69,7 @@ class TestFindAlternative:
         registry.mark_down("imagefree", "test")
         try:
             alt_provider, alt_model = registry.find_alternative("imagefree/default")
-            # 至少应找到（nanobanana 等同能力）或 None（无可替代时不抛错）
+            # 至少应找到（aifreeforever 等同能力）或 None（无可替代时不抛错）
             assert alt_provider is None or alt_provider.prefix != "imagefree"
         finally:
             registry.recover("imagefree")

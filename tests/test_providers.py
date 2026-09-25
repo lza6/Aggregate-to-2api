@@ -33,20 +33,19 @@ def _bootstrap(monkeypatch):
 # ── 注册表 / 模型命名 ─────────────────────────────
 class TestRegistry:
     def test_providers_registered(self):
-        assert {"imagefree", "aifreeforever", "nanobanana"} <= set(registry.providers)
+        assert {"imagefree", "aifreeforever"} <= set(registry.providers)
+        assert "nanobanana" not in registry.providers
+        assert "falai" not in registry.providers
 
     def test_model_naming_contract(self):
         """命名契约：<提供商前缀>/<上游真实模型名>。"""
         specs = registry.all_models()
-        assert len(specs) >= 30
+        assert len(specs) >= 5
         for m in specs:
             assert "/" in m.id, f"模型 id 必须含提供商前缀: {m.id}"
             assert m.id.startswith(m.provider + "/")
             # 上游模型名非空且真实（不含我们的前缀）
             assert m.upstream_model and m.upstream_model not in m.id.split("/")[0]
-
-    def test_nanobanana_models(self):
-        assert "nanobanana/nano-banana-pro" in registry._models
 
     def test_imagefree_legacy_presets(self):
         assert "imagefree/default" in registry._models
@@ -54,14 +53,10 @@ class TestRegistry:
 
     def test_provider_summary(self):
         s = registry.provider_summary()
-        # 号池停用（IF_ACCOUNT_AUTO=0，conftest 默认）时 nanobanana 等需账号提供商被隐藏，
-        # 不进 summary；imagefree/aifreeforever 无需账号始终可见。
         assert "imagefree" in s and "aifreeforever" in s
+        assert "nanobanana" not in s and "falai" not in s
         assert s["aifreeforever"]["needs_proxy_per_request"] is True
         assert s["imagefree"]["needs_account"] is False
-        # 号池启用时 nanobanana 才出现；此时断言其 needs_account=True
-        if "nanobanana" in s:
-            assert s["nanobanana"]["needs_account"] is True
         # P1-E: 验证新增字段
         for prefix in s:
             assert "error_count" in s[prefix], f"{prefix} 缺少 error_count"
@@ -87,37 +82,6 @@ class TestProviderGenerate:
         assert "未就绪" in res.error
 
     @pytest.mark.asyncio
-    async def test_nanobanana_mock_account_generates(self, monkeypatch):
-        """mock 号池账号（cookie=mock-session）→ 需先 startup 注入 _client 再回 mock completed。"""
-        p = registry.providers["nanobanana"]
-        monkeypatch.setattr(p, "_load_accounts", lambda: MOCK_ACC)
-        await p.startup()
-        res = await p.generate("nanobanana/nano-banana-pro", "cat", "1:1", resolution="1K")
-        await p.shutdown()
-        assert res.status == "completed"
-        assert res.asset_url and "mock.example" in res.asset_url
-
-    @pytest.mark.asyncio
-    async def test_nanobanana_no_account_error(self, monkeypatch):
-        p = registry.providers["nanobanana"]
-        monkeypatch.setattr(p, "_load_accounts", lambda: [])
-        await p.startup()
-        res = await p.generate("nanobanana/nano-banana-pro", "cat", "1:1")
-        await p.shutdown()
-        assert res.status == "error"
-        assert "号池" in res.error
-
-    @pytest.mark.asyncio
-    async def test_nanobanana_exhausted_credits(self, monkeypatch):
-        p = registry.providers["nanobanana"]
-        monkeypatch.setattr(p, "_load_accounts", lambda: [dict(MOCK_ACC[0], credits=0)])
-        await p.startup()
-        res = await p.generate("nanobanana/nano-banana-pro", "cat", "1:1")
-        await p.shutdown()
-        assert res.status == "error"
-        assert "余额" in res.error
-
-    @pytest.mark.asyncio
     async def test_aifreeforever_no_proxy_pool(self, monkeypatch):
         p = registry.providers["aifreeforever"]
         # monkeypatch 恢复原值——直接赋 None 会污染全局 registry 单例，
@@ -126,13 +90,6 @@ class TestProviderGenerate:
         res = await p.generate("aifreeforever/gpt-image-2", "cat", "1:1")
         # 无代理池时回退直连，可能因 cf_solver 不可用而失败
         assert res.status in ("error",)
-
-    @pytest.mark.asyncio
-    async def test_nanobanana_contract_placeholder(self):
-        p = registry.providers["nanobanana"]
-        res = await p.generate("nanobanana/nano-banana-pro", "cat", "1:1")
-        assert res.status == "error"  # 未 startup（_client 为 None）→ 明确报错
-        assert "未启动" in res.error
 
 
 # ── main 路由分发（mock 全开，需 Engine 启动）────────────────────
@@ -166,9 +123,15 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
         assert tid and (await tmp_db.get(tid)) is not None
 
         # nanobanana mock 号池 → 后台任务 completed
-        prov = registry.providers["nanobanana"]
-        monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
+        from api.providers.base import GenerationResult
+
+        prov = registry.providers["aifreeforever"]
+
+        async def _ok(*_a, **_k):
+            return GenerationResult(status="completed", asset_url="https://mock.example/x.png")
+
+        monkeypatch.setattr(prov, "generate", _ok)
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "aifreeforever")
         await prov.startup()
         tid2 = await _dispatch_generate(
             type(
@@ -178,7 +141,7 @@ async def test_dispatch_generate_routes(tmp_db, monkeypatch):
                     "prompt": "cat",
                     "aspect_ratio": "1:1",
                     "download": False,
-                    "model": "nanobanana/nano-banana-pro",
+                    "model": "aifreeforever/gpt-image-2",
                     "resolution": "1K",
                     "duration": None,
                     "priority": None,
@@ -210,14 +173,20 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
     engine.db = tmp_db
     await engine.start()
     try:
-        prov = registry.providers["nanobanana"]
-        monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
+        from api.providers.base import GenerationResult
+
+        prov = registry.providers["aifreeforever"]
+
+        async def _ok(*_a, **_k):
+            return GenerationResult(status="completed", asset_url="https://mock.example/x.png")
+
+        monkeypatch.setattr(prov, "generate", _ok)
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "aifreeforever")
         await prov.startup()
 
         # 验证信号量按 limit 隔离
-        p2_sem = _provider_sem("nanobanana", _NORMAL_CONCURRENCY)
-        p1_sem = _provider_sem("nanobanana", _HIGH_CONCURRENCY)
+        p2_sem = _provider_sem("aifreeforever", _NORMAL_CONCURRENCY)
+        p1_sem = _provider_sem("aifreeforever", _HIGH_CONCURRENCY)
         assert p2_sem is not p1_sem, "P1 与 P2 的信号量实例应不同"
 
         # 验证 P2 串行：acquire → 再 acquire 会阻塞
@@ -244,7 +213,7 @@ async def test_dispatch_generate_non_imagefree_priority(tmp_db, monkeypatch):
                         "prompt": f"priority-{label}",
                         "aspect_ratio": "1:1",
                         "download": False,
-                        "model": "nanobanana/nano-banana-pro",
+                        "model": "aifreeforever/gpt-image-2",
                         "resolution": "1K",
                         "duration": None,
                         "priority": prio,
@@ -278,11 +247,17 @@ async def test_dispatch_edit_routes(tmp_db, monkeypatch):
     engine.db = tmp_db
     await engine.start()
     try:
-        prov = registry.providers["nanobanana"]
-        monkeypatch.setattr(prov, "_load_accounts", lambda: list(MOCK_ACC))
-        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "nanobanana")
+        from api.providers.base import GenerationResult
+
+        prov = registry.providers["aifreeforever"]
+
+        async def _ok(*_a, **_k):
+            return GenerationResult(status="completed", asset_url="https://mock.example/x.png")
+
+        monkeypatch.setattr(prov, "generate", _ok)
+        monkeypatch.setattr(registry.adaptive_router, "select_best", lambda *a, **kw: "aifreeforever")
         await prov.startup()
-        tid = await _dispatch_edit("nanobanana/nano-banana-pro", "make red", b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, False)
+        tid = await _dispatch_edit("aifreeforever/gpt-image-2", "make red", b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, False)
         for _ in range(50):
             s = (await tmp_db.get(tid))["status"]
             if s in ("completed", "error"):
@@ -301,4 +276,4 @@ def test_normalize_model_legacy():
 
     assert _normalize_model("default") == "imagefree/default"
     assert _normalize_model("anime") == "imagefree/anime"
-    assert _normalize_model("nanobanana/nano-banana-pro") == "nanobanana/nano-banana-pro"
+    assert _normalize_model("aifreeforever/gpt-image-2") == "aifreeforever/gpt-image-2"

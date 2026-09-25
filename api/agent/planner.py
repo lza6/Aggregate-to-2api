@@ -3,8 +3,8 @@
 把用户的一句话任务分解为可执行的多节点 DAG（scene → 节点序列）：
 - Mock 路径（默认，IF_MOCK_UPSTREAM=1）：由 intent 规则推导 scene → 固定节点串
   （scene 根节点 + 可选的终检 critic 节点），零真实 LLM 调用（付费红线）
-- 真实 LLM 路径（IF_MOCK_UPSTREAM=0）：调 tryingopen 免费上游分解；
-  解析失败 / 无模型 / 无 provider → 回退 Mock，不崩主链路
+- 真实 LLM 路径（默认，IF_MOCK_UPSTREAM=0）：直接调 tryingopen 分解；
+  解析失败 / 无模型 / 无 provider → 回退规则规划，不崩主链路
 
 复用：意图分类走 api/agent/intent（规则正则兜底）；DAG 引擎走 api/agent/dag；
 提示词组装走 api/prompts（loader/compose）。三铁律：不重构现有模块，只追加。
@@ -184,10 +184,10 @@ async def plan_with_mock(prompt: str, scene: str | None = None) -> dict[str, Any
 
 
 async def plan_with_llm(prompt: str, scene: str | None = None) -> dict[str, Any]:
-    """真实 LLM 规划（tryingopen 免费上游）。
+    """真实 LLM 规划：默认调用 tryingopen。
 
-    付费红线：本函数只调 tryingopen（metered 非付费）+ IF_MOCK_UPSTREAM=0 时启用；
-    任何异常/无模型/无 provider/解析失败 → 回退 Mock，不崩主链路。
+    IF_MOCK_UPSTREAM=1 时走规则规划（离线测试）。
+    任何异常/无模型/无 provider/解析失败 → 回退规则规划，不崩主链路。
     """
     from ..config import get_settings
 

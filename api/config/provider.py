@@ -23,7 +23,6 @@ class ProviderSettings(BaseModel):
     proxy_trace_concurrency: int = 8
     account_db_file: str = "data/account_pool.db"
     email_db_file: str = "data/email_registry.db"
-    nanobanana_account_target: int = 10000
     account_auto: bool = True
     mock_register: bool = False
     degrade_threshold: int = 3
@@ -35,16 +34,6 @@ class ProviderSettings(BaseModel):
     reg_backoff_ip: float = 120.0
     reg_backoff_transient_base: float = 2.0
     reg_backoff_transient_max: float = 30.0
-    # fal.ai minimax-H3 视频提供商（Playwright 浏览器即服务）
-    falai_enabled: bool = True
-    falai_hcaptcha_sitekey: str = "79e0463a-f79a-4742-b3da-489afd1cbe68"
-    falai_hcaptcha_mode: str = "passive"
-    falai_browser_headful: bool = True
-    falai_browser_pool_size: int = 2
-    falai_verify_timeout: int = 90
-    falai_poll_interval: float = 2.0
-    falai_poll_timeout: int = 120
-
     @classmethod
     def from_settings(cls, s: Any) -> ProviderSettings:
         """从 Settings 实例提取字段构造 ProviderSettings。"""
@@ -58,7 +47,6 @@ class ProviderSettings(BaseModel):
             proxy_sticky_window=s.if_proxy_sticky_window,
             account_db_file=s.account_db_file,
             email_db_file=s.email_db_file,
-            nanobanana_account_target=s.nanobanana_account_target,
             account_auto=s.account_auto,
             mock_register=s.mock_register,
             degrade_threshold=s.if_provider_degrade_threshold,
@@ -73,12 +61,4 @@ class ProviderSettings(BaseModel):
             proxy_trace_ttl=s.if_proxy_trace_ttl,
             proxy_trace_max_per_round=s.if_proxy_trace_max_per_round,
             proxy_trace_concurrency=s.if_proxy_trace_concurrency,
-            falai_enabled=s.if_falai_enabled,
-            falai_hcaptcha_sitekey=s.if_falai_hcaptcha_sitekey,
-            falai_hcaptcha_mode=s.if_falai_hcaptcha_mode,
-            falai_browser_headful=s.if_falai_browser_headful,
-            falai_browser_pool_size=s.if_falai_browser_pool_size,
-            falai_verify_timeout=s.if_falai_verify_timeout,
-            falai_poll_interval=s.if_falai_poll_interval,
-            falai_poll_timeout=s.if_falai_poll_timeout,
         )

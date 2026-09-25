@@ -1,7 +1,7 @@
 """tests/test_agent_intent_llm.py — P1-A1 意图分类 LLM 调用参数拼装单测。
 
-验收（核心）：用 Mock LLM 客户端验证 _llm_classify 的 LLM 调用**参数拼装**，
-**禁止真实调 tryingopen 上游**（付费 API 红线：Mock 验证参数拼装 + 解析 + 异常分支）。
+验收（核心）：用注入的 Mock client 验证 _llm_classify 的参数拼装、解析和异常分支。
+生产默认真实调用 tryingopen；本文件注入 Mock 只是为了稳定断言，不是禁止真实调用。
 
 覆盖分支：
 - success：LLM 返回合法 JSON → 解析正确 + llm_used=True + inc success
@@ -38,8 +38,8 @@ def _isolate_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     关键坑（P0-2 收敛后补充）：模块级 os.environ.setdefault 会在本文件被 import 时
     把 IF_MOCK_UPSTREAM 永久设为 0，后续 test_agent_intent.py 的 setdefault("IF_MOCK_UPSTREAM", "1")
-    变 no-op，导致 test_fuzzy_intent_uses_llm_mock 走真实 LLM 路径调 tryingopen 上游
-    （违反付费 API 红线：tryingopen 免费也不在测试里真实调）。
+    变 no-op，导致 test_fuzzy_intent_uses_llm_mock 走到真实 tryingopen。
+    本文件仍注入 Mock client，避免用例依赖外网；生产路径不禁止真实调用。
     用 monkeypatch.setenv 替代 setdefault，确保每用例结束后 env 自动还原。
 
     P0-2 配置工厂缓存：IF_MOCK_UPSTREAM 现在走 get_settings() 单例（lru 缓存）。
@@ -146,7 +146,7 @@ async def test_llm_classify_success_parses_json(monkeypatch: pytest.MonkeyPatch)
 async def test_llm_classify_timeout_falls_back_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     """timeout 分支：LLM 调用抛 TimeoutError → 回退 unknown + inc llm_error。
 
-    付费 API 红线：不真实调上游，Mock provider 抛 TimeoutError 模拟超时。
+    Mock provider 抛 TimeoutError，用来覆盖超时回退。
     """
     fake_provider = _FakeProviderExc(TimeoutError("LLM 超时"))
     _patch_registry(monkeypatch, [_fake_spec()], {"tryingopen": fake_provider})

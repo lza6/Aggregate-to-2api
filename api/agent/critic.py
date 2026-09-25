@@ -11,7 +11,7 @@
 - length_penalty：超时/超 token 扣分
 
 开关：IF_CRITIC_AGENT_ENABLED=0 关闭，回退无终检（零回归）。
-LLM 调用：用 tryingopen 免费上游（付费 API 红线：Mock 或用户批准预算）。
+LLM 调用：默认真实调用 tryingopen。IF_MOCK_UPSTREAM=1 时走规则终检。
 """
 
 from __future__ import annotations
@@ -55,8 +55,7 @@ async def review_generation(
 ) -> CriticResult:
     """对一次生成产物做终检。
 
-    付费 API 红线：用 tryingopen 免费上游 + IF_MOCK_UPSTREAM=1 Mock。
-    用户批准后才真实调 LLM 审查。
+    默认真实调用 tryingopen。IF_MOCK_UPSTREAM=1 时走规则终检。
 
     返回 CriticResult。失败不崩主链路（降级 pass=True + warn）。
     """

@@ -10,8 +10,6 @@
 - imagefree_client.py:253  mock 分支  {"status":"completed","image":"...","progress":100}
 - imagefree_client.py:278  真实轮询归一化 {"status":"completed","image":..., "progress":...}
 - imagefree_client.py:415  mock 分支  {"status":"completed","image":"..."}（EditResponse）
-- nanobanana.py:206       提交 RSC     {"success":true,"taskId":...}
-- nanobanana.py:222-232   轮询响应    {"state":"success","resultUrls":[...]} / assets[...]
 """
 
 from __future__ import annotations
@@ -60,7 +58,6 @@ class EditResponse(BaseModel):
 # 做形状校验，不绑定这些路径。代码略，任务要求不写调用逻辑改动。
 
 _READ_PATHS: dict[str, dict[str, list[str]]] = {
-    "nanobanana": {"submit": ["taskId"], "poll": ["resultUrls"]},
     "aifreeforever": {"submit": ["images"]},
 }
 
@@ -78,21 +75,6 @@ def probe_imagefree_poll(data: dict) -> dict | None:
         img = data.get("image")
         if isinstance(img, str) and img.startswith(("https://", "http://")):
             return data
-    return None
-
-
-def probe_nanobanana_poll(data: dict) -> str | None:
-    """nanobanana._poll_task 的 success 分支（nanobanana.py:223-232）。"""
-    if not isinstance(data, dict) or data.get("state") != "success":
-        return None
-    urls = data.get("resultUrls") or []
-    if urls:
-        return urls[0]
-    for a in data.get("assets") or []:
-        if a.get("downloadUrl"):
-            return a["downloadUrl"]
-        if a.get("previewUrl"):
-            return a["previewUrl"]
     return None
 
 

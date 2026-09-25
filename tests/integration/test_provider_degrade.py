@@ -16,7 +16,7 @@ class TestProviderDegrade:
                 "/v1/generate/async",
                 json={
                     "prompt": "test",
-                    "model": "nanobanana/nano-banana-pro",
+                    "model": "retired/missing-model",
                     "aspect_ratio": "1:1",
                 },
             )

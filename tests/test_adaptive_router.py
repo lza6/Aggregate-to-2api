@@ -163,13 +163,12 @@ class TestRecord:
 class TestRegistryIntegration:
     def test_provider_for_uses_adaptive_router(self):
         """registry.provider_for 应通过自适应路由选 provider，而非直接返回首选。"""
-        from api.providers import aifreeforever, imagefree, nanobanana
+        from api.providers import aifreeforever, imagefree
         from api.providers.registry import Registry
 
         reg = Registry()
         reg.register(imagefree.ImagefreeProvider())
         reg.register(aifreeforever.AifreeforeverProvider())
-        reg.register(nanobanana.NanobananaProvider())
 
         # 找到有候选的模型（imagefree 模型 + 备选能力匹配）
         model_id = "imagefree/default"
@@ -306,13 +305,12 @@ class TestDegradedSelectBest:
 
     def test_find_alternatives_returns_sorted_by_capability_overlap(self):
         """find_alternatives 按能力重叠数降序返回（重叠越多越优先）。"""
-        from api.providers import aifreeforever, imagefree, nanobanana
+        from api.providers import aifreeforever, imagefree
         from api.providers.registry import Registry
 
         reg = Registry()
         reg.register(imagefree.ImagefreeProvider())
         reg.register(aifreeforever.AifreeforeverProvider())
-        reg.register(nanobanana.NanobananaProvider())
         model_id = "imagefree/default"
         alts = reg.find_alternatives(model_id)
         # 至少能找到备用（aifreeforever 与 imagefree 能力有重叠）

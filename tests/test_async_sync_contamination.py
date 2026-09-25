@@ -26,7 +26,6 @@ HOT_MODULES = [
     "api/account_pool/scoring.py",
     "api/account_pool/__init__.py",
     "api/email_pool.py",
-    "api/providers/nanobanana.py",
     "api/providers/aifreeforever.py",
     "api/providers/imagefree.py",
 ]

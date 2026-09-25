@@ -114,10 +114,6 @@ async def lifespan(_app):
     aifree = registry.providers.get("aifreeforever")
     if aifree:
         aifree._proxy_pool = proxy_pool
-    # fal.ai minimax-H3-max：注入代理池（每 IP 5 次/天额度轮换）
-    falai = registry.providers.get("falai")
-    if falai:
-        falai._proxy_pool = proxy_pool
 
     from .free_proxy_fetcher import free_proxy_fetcher
 
@@ -203,7 +199,7 @@ async def lifespan(_app):
     await shutdown_phase(3.0, "② DB 写缓冲刷新", _flush_db())
     await shutdown_phase(10.0, "③ Worker 停止", engine.stop())
 
-    # v7.6 P0：非 imagefree 生成任务（nanobanana/aifreeforever/falai）是 asyncio.create_task
+    # v7.6 P0：非 imagefree 生成任务（aifreeforever）是 asyncio.create_task
     # 挂 _PROVIDER_TASKS，不 drain 则重启时被硬取消、结果不落库（客户端永久 pending）。
     # 放在 Provider 停止之前、DB 关闭之前，给在途任务足够时间落库。
     async def _drain_provider_tasks() -> None:

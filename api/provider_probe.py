@@ -3,7 +3,6 @@
 定时探测上游目标：
 - imagefree.net（主站）
 - aifreeforever.com
-- nanobanana-pro.com
 - cf_solver (8001 本地求解器)
 """
 
@@ -33,13 +32,6 @@ PROBE_TARGETS = [
         "name": "aifreeforever.com",
         "url": "https://aifreeforever.com",
         "api_endpoint": "https://aifreeforever.com/api/generate",
-        "check_type": "web_and_api",
-    },
-    {
-        "provider": "nanobanana",
-        "name": "nanobanana-pro.com",
-        "url": "https://nanobanana-pro.com/zh",
-        "api_endpoint": "https://nanobanana-pro.com/api/auth/session",
         "check_type": "web_and_api",
     },
 ]

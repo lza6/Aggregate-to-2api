@@ -318,28 +318,6 @@ async def test_cost_summary_aggregation(tmp_path):
     await p2._close_conn_safe()
 
 
-def test_image_credit_cost_mapping():
-    """image_credit_cost 镜像上游 encodeImageCost（按模型+分辨率返回单图积分）。"""
-    from api.providers.nanobanana import image_credit_cost
-
-    assert image_credit_cost("nano-banana-pro", "1K") == 4
-    assert image_credit_cost("nano-banana-pro", "4K") == 14
-    assert image_credit_cost("nano-banana-2", "2K") == 8
-    assert image_credit_cost("nano-banana-2", "4K") == 12
-    assert image_credit_cost("gpt-image-2", "1K") == 6  # P1-5 漏档回归
-    assert image_credit_cost("gpt-image-2", "4K") == 14
-    assert image_credit_cost("seedream-5.0-pro", "1K") == 7  # P1-5 漏档回归
-    assert image_credit_cost("seedream-5.0-pro", "2K") == 14
-    assert image_credit_cost("seedream-5.0-lite", "2K") == 6  # P1-5 漏档回归
-    assert image_credit_cost("seedream-5.0-lite", "3K") == 6
-    assert image_credit_cost("seedream-5.0-lite", "1K") == 6  # P1-5 漏档回归：1K 不得回退默认 4
-    assert image_credit_cost("grok-imagine", "1K", quality_mode="quality") == 6
-    assert image_credit_cost("grok-imagine", "1K", task_type="edit") == 5
-    assert image_credit_cost("z-image", "1K") == 2
-    # 未命中回退默认 4
-    assert image_credit_cost("unknown-model", "1K") == 4
-
-
 # ── 邮箱池 ──────────────────────────────────────
 class TestEmailPool:
     @pytest.mark.asyncio

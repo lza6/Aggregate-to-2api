@@ -285,8 +285,8 @@ async def test_v1_cost_image_cost_usd(cost_app, tmp_db, monkeypatch):
     body = resp.json()
     assert abs(body["image_cost_usd_mtd"] - 1.0) < 1e-6  # 100 * 0.01
     assert abs(body["month_to_date_usd"] - 1.0) < 1e-6  # token_mtd(0) + image(1.0)
-    # by_provider 含 nanobanana 行（图片成本挂这里）
-    nb = [p for p in body["by_provider"] if p["provider"] == "nanobanana"]
+    # by_provider 含 imagefree 行（图片成本挂这里）
+    nb = [p for p in body["by_provider"] if p["provider"] == "imagefree"]
     assert nb and abs(nb[0]["cost_usd"] - 1.0) < 1e-6
     assert nb[0]["credits_used"] == 100
     assert nb[0]["images"] == 10

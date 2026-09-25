@@ -18,8 +18,8 @@ from api.browser_pool import BrowserPool
 
 
 def test_constructor_defaults(monkeypatch):
-    monkeypatch.setattr("api.browser_pool.config.IF_FALAI_BROWSER_POOL_SIZE", 3)
-    monkeypatch.setattr("api.browser_pool.config.IF_FALAI_BROWSER_HEADFUL", False)
+    monkeypatch.setattr("api.browser_pool.config.IF_FALAI_BROWSER_POOL_SIZE", 3, raising=False)
+    monkeypatch.setattr("api.browser_pool.config.IF_FALAI_BROWSER_HEADFUL", False, raising=False)
     pool = BrowserPool()
     assert pool.pool_size == 3
     assert pool.headful is False

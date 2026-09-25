@@ -27,17 +27,15 @@ class EngineMixin:
 
     # ── 自动补号 / 签到 / 延寿唤醒循环 ────────────────────────
     async def start(self) -> None:
-        # 为长效签到型提供商（nanobanana）开启自动补号与延寿巡检
-        auto_provs = [p for p in ("nanobanana",) if self._autoreg_enabled(p)]
-        for prov in auto_provs:
-            self.checkin_tasks[f"register:{prov}"] = asyncio.create_task(self._autoregister_loop(prov))
-        # 每日签到与自动延寿巡检器
-        self.checkin_tasks["nanobanana_checkin"] = asyncio.create_task(self._daily_checkin_loop("nanobanana"))
+        # nanobanana 已下线：启动时不再挂自动补号/每日签到。
+        # _autoregister_loop / _daily_checkin_loop 仍保留，测试可按 provider 名直接调用。
+        auto_provs: list[str] = []
         self.checkin_tasks["wake_inspector"] = asyncio.create_task(self._cooling_wake_loop())
-        log.info("号池 FSM 引擎启动：自动补号 %s + 签到与延寿唤醒巡检器就绪", auto_provs)
+        log.info("号池 FSM 引擎启动：签到型提供商已下线，仅保留延寿唤醒巡检 %s", auto_provs)
 
     @staticmethod
     def _autoreg_enabled(provider: str) -> bool:
+        # 兼容旧键；nanobanana 下线后启动不再调用，测试可显式开启
         return os.getenv("IF_NANOBANANA_AUTOREG", "1").strip().lower() in {"1", "true", "yes", "on"}
 
     async def stop(self) -> None:
@@ -53,7 +51,7 @@ class EngineMixin:
         while True:
             try:
                 await asyncio.sleep(300)
-                for prov in ("nanobanana",):
+                for prov in ():
                     # P2-3: 方法已 async，直接 await（不再 to_thread）
                     await self._reclaim_lease_timeout(prov)
                     await self.wake_cooling_accounts(prov)

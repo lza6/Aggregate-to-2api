@@ -52,7 +52,7 @@ class TestNormalizeModel:
         assert _normalize_model(None) == "imagefree/default"
 
     def test_prefixed_passthrough(self):
-        assert _normalize_model("nanobanana/nano-banana-pro") == "nanobanana/nano-banana-pro"
+        assert _normalize_model("aifreeforever/gpt-image-2") == "aifreeforever/gpt-image-2"
 
 
 class TestValidateModel:

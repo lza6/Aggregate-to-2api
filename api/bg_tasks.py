@@ -120,7 +120,7 @@ async def run_background_tasks(db, engine, registry, solver_guard, worker_health
                     month_ts = datetime.datetime(_now_dt.year, _now_dt.month, 1).timestamp()
                     token_mtd = await _cu.cost_usd_for_range(month_ts, datetime.datetime.now().timestamp())
                     image_mtd = 0.0
-                    for _prov in ("nanobanana", "imagefree", "aifreeforever"):
+                    for _prov in ("imagefree", "aifreeforever"):
                         try:
                             # P2-3(v7.2.0): cost_summary 已 async(aiosqlite),直接 await——
                             # 原 asyncio.to_thread 包裹 async 函数会把协程对象当返回值(丢失 creds_used)

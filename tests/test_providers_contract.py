@@ -14,7 +14,6 @@ from api.contracts import (
     exact_contract_error,
     parse_contract,
     probe_imagefree_poll,
-    probe_nanobanana_poll,
     validate_contract,
 )
 
@@ -49,24 +48,6 @@ def imagefree_edit_mock() -> dict:
 
 
 @pytest.fixture
-def nanobanana_submit() -> dict:
-    """nanobanana.py:206 提交 RSC 0: 行解析后 data。"""
-    return {"success": True, "taskId": "t-g21a4b", "password": ""}
-
-
-@pytest.fixture
-def nanobanana_poll() -> dict:
-    """nanobanana.py:221-232 success 分支：resultUrls 直取 / assets 兜底。"""
-    return {"state": "success", "resultUrls": ["https://cdn.nb-pro.com/img/2.png"]}
-
-
-@pytest.fixture
-def nanobanana_poll_assets() -> dict:
-    """nanobanana.py:226-232 assets 兜底分支。"""
-    return {"state": "success", "resultUrls": [], "assets": [{"previewUrl": "https://cdn.nb-pro.com/img/3.png"}]}
-
-
-@pytest.fixture
 def aifreeforever_images() -> dict:
     """aifreeforever.py:195-197 _generate 返回。"""
     return {"success": True, "images": ["https://aif.forevercdn.com/img/4.png"]}
@@ -93,28 +74,6 @@ class TestValidSamplesPass:
         d = imagefree_edit_mock
         assert validate_contract(EditResponse, d)
         assert parse_contract(EditResponse, d) is None
-
-    def test_nanobanana_submit_shape(self, nanobanana_submit):
-        d = nanobanana_submit
-        assert d.get("success") and d["taskId"]
-        # 提交响应（success/taskId）本身不是最终产物 dict；归一化后才走 ImageGenerationResponse
-        norm = {"task_id": d["taskId"], "status": STATUS_COMPLETED, "image": "https://cdn.nb-pro.com/img/2.png"}
-        assert parse_contract(ImageGenerationResponse, norm) is None
-        # task_id 可缺（默认 ""）；但 image 必填，缺了严格 parse 提示缺 image
-        no_tid = {"status": STATUS_COMPLETED, "image": "https://cdn.nb-pro.com/img/2.png"}
-        assert validate_contract(ImageGenerationResponse, no_tid)
-        assert parse_contract(ImageGenerationResponse, {}) is not None
-        assert "image" in parse_contract(ImageGenerationResponse, {}) or ""
-
-    def test_nanobanana_poll(self, nanobanana_poll):
-        url = probe_nanobanana_poll(nanobanana_poll)
-        assert url == "https://cdn.nb-pro.com/img/2.png"
-        norm = {"task_id": "t-g21a4b", "status": STATUS_COMPLETED, "image": url}
-        assert parse_contract(ImageGenerationResponse, norm) is None
-
-    def test_nanobanana_poll_assets(self, nanobanana_poll_assets):
-        url = probe_nanobanana_poll(nanobanana_poll_assets)
-        assert url == "https://cdn.nb-pro.com/img/3.png"
 
     def test_aifreeforever_images(self, aifreeforever_images):
         urls = aifreeforever_images["images"]
@@ -167,7 +126,3 @@ class TestBrokenSamplesFail:
         assert not validate_contract(ImageGenerationResponse, ["x"])
         assert parse_contract(ImageGenerationResponse, None) is not None
 
-    def test_nanobanana_poll_breaks(self, nanobanana_poll):
-        # 上游把 resultUrls 改名为 results → 探针找不到 URL
-        broken = {"state": "success", "results": ["https://cdn.nb-pro.com/img/5.png"]}
-        assert probe_nanobanana_poll(broken) is None

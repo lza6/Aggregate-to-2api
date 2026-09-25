@@ -1,7 +1,7 @@
 """模型注册表：统一收集各提供商 ModelSpec，暴露 /v1/models 与路由查找。
 
 命名契约：外部模型 id = "<provider前缀>/<上游真实模型名>"，让 API/前端用户一目了然
-上游来源。例：nanobanana/nano-banana-pro、aifreeforever/gpt-image-2、imagefree/default。
+上游来源。例：aifreeforever/gpt-image-2、imagefree/default、tryingopen/default。
 
 路由：自 v3.2 起 provider_for() 结合自适应路由引擎（MAB-EWMA）在候选内实时打分，
 不再"只看健康不看实时质量"。降级/熔断仍旧优先。
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from . import aifreeforever, imagefree, nanobanana
+from . import aifreeforever, imagefree
 from .base import ChatProvider, ModelSpec, Provider
 
 log = logging.getLogger("registry")
@@ -296,7 +296,7 @@ class Registry:
         """号池自动补号是否启用（IF_ACCOUNT_AUTO）。
 
         号池停用（IF_ACCOUNT_AUTO=0）时，needs_account=True 的图片提供商
-        （nanobanana/minimaxh3 等）在前端模型列表与提供商看板中隐藏——
+        （需账号的图片提供商）在前端模型列表与提供商看板中隐藏——
         用户选不到这些用不了的模型，避免无效提交堆积 DLQ。后端适配器与
         account_pool 能力保留，启用号池即自动恢复展示。
         """
@@ -361,7 +361,7 @@ class Registry:
         """每个提供商的看板摘要（状态/能力/模型数/额度/错误计数/降级标记），前端与 healthz 用。
 
         号池停用（IF_ACCOUNT_AUTO=0）时，needs_account 图片提供商
-        （nanobanana/minimaxh3 等）不在此输出，前端看不到这些用不了的提供商。
+        （需账号的图片提供商）不在此输出，前端看不到这些用不了的提供商。
         """
         self._ensure_booted()
         out = {}
@@ -428,27 +428,16 @@ registry = Registry()
 def bootstrap() -> None:
     """创建并注册全部提供商实例（幂等）。
 
-    架构优化：已移除用完即丢且不可签到的冗余提供商，
-    将所有算力与号池集中在支持每日自动签到续额的长效提供商（nanobanana）
-    以及主力提供商（imagefree, aifreeforever）。
-    v4.4: 同步注册文本对话 ChatProvider（tryingopen，可通过 IF_TRYINGOPEN_ENABLED 关闭）。
+    图片上游只保留 imagefree 与 aifreeforever。
+    nanobanana / falai 已下线，不再注册。
+    文本对话 ChatProvider 固定为 tryingopen（agent 与首页在线对话的上游，可通过 IF_TRYINGOPEN_ENABLED 关闭）。
+    默认真实调用 tryingopen；仅当 IF_MOCK_UPSTREAM=1 时 agent 规划/分类才走本地规则。
     """
     if registry.providers:
         return
     registry.register(imagefree.ImagefreeProvider())
     registry.register(aifreeforever.AifreeforeverProvider())
-    registry.register(nanobanana.NanobananaProvider())
-    # fal.ai minimax-H3-max 视频（纯算 Kasada x-is-human + 会话池化复用 24h）
-    import os
-
-    if os.getenv("IF_FALAI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
-        try:
-            from .falai import FalaiProvider
-
-            registry.register(FalaiProvider())
-        except Exception as e:
-            log.warning("提供商 falai 注册失败（降级跳过）: %s", e)
-    # v4.4: 文本对话提供商（导入失败/开关关闭时静默跳过，不影响图像主链路）
+    # tryingopen：导入失败或开关关闭时跳过，不影响图像主链路。
     from .. import config  # noqa: PLC0415
 
     if config.IF_TRYINGOPEN_ENABLED:

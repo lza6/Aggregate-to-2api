@@ -49,7 +49,7 @@ class TestEstimate:
         assert estimate_cost("tryingopen") == 0.0
 
     def test_paid_provider_positive(self):
-        assert estimate_cost("falai") > 0.0
+        assert estimate_cost("paid") > 0.0
 
     def test_unknown_provider_conservative(self):
         assert estimate_cost("no-such-provider") == 0.01
@@ -59,7 +59,7 @@ class TestEstimate:
 class TestOffMode:
     async def test_off_default_passes(self, _no_spent):
         """默认 off：直通零行为变化。"""
-        d = await check_can_spend("falai")
+        d = await check_can_spend("paid")
         assert d.allowed is True
         assert d.mode == "off"
 
@@ -72,7 +72,7 @@ class TestObserveMode:
         monkeypatch.setenv("IF_BUDGET_GUARD_MODE", "observe")
         monkeypatch.setenv("IF_COST_BUDGET_USD", "0.01")
         reset_settings()
-        d = await check_can_spend("falai")  # est 0.04 > budget 0.01
+        d = await check_can_spend("paid")  # est 0.04 > budget 0.01
         assert d.allowed is True
         assert d.mode == "observe"
         assert "observe" in d.reason
@@ -87,7 +87,7 @@ class TestEnforceMode:
         monkeypatch.setenv("IF_COST_BUDGET_USD", "0.01")
         reset_settings()
         with pytest.raises(BudgetExceededError) as ei:
-            await assert_can_spend("falai")
+            await assert_can_spend("paid")
         assert ei.value.status_code == 402
 
     async def test_enforce_within_budget_passes(self, monkeypatch, _no_spent):
@@ -96,7 +96,7 @@ class TestEnforceMode:
         monkeypatch.setenv("IF_BUDGET_GUARD_MODE", "enforce")
         monkeypatch.setenv("IF_COST_BUDGET_USD", "10.0")
         reset_settings()
-        d = await assert_can_spend("falai")
+        d = await assert_can_spend("paid")
         assert d.allowed is True
 
     async def test_enforce_budget_unset_blocks_paid_only(self, monkeypatch, _no_spent):
@@ -107,7 +107,7 @@ class TestEnforceMode:
         monkeypatch.delenv("IF_COST_BUDGET_USD", raising=False)
         reset_settings()
         with pytest.raises(BudgetExceededError):
-            await assert_can_spend("falai")
+            await assert_can_spend("paid")
         d = await assert_can_spend("imagefree")  # 免费 provider 放行
         assert d.allowed is True
 
@@ -126,7 +126,7 @@ class TestSpentIntegration:
         monkeypatch.setenv("IF_COST_BUDGET_USD", "0.08")
         reset_settings()
         with pytest.raises(BudgetExceededError):
-            await assert_can_spend("falai")
+            await assert_can_spend("paid")
 
 
 class TestToolEstimate:
