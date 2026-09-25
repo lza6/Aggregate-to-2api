@@ -793,14 +793,15 @@ class DBQueriesMixin:
         await self._ensure_flushed()
         now = time.time()
         conn = await self._get_read_conn()
-        cursor = await conn.execute("SELECT key, value, ttl, cached_at FROM cache_store")
+        # v20.2: SQL 侧过滤过期条目，避免全表加载后 Python 过滤（表大时内存膨胀）
+        cursor = await conn.execute(
+            "SELECT key, value, ttl, cached_at FROM cache_store WHERE cached_at + ttl > ?", (now,)
+        )
         rows = await cursor.fetchall()
         result: list[tuple[str, str, float]] = []
         for row in rows:
-            deadline = row["cached_at"] + row["ttl"]
-            remaining = deadline - now
-            if remaining > 0:
-                result.append((row["key"], row["value"], remaining))
+            remaining = (row["cached_at"] + row["ttl"]) - now
+            result.append((row["key"], row["value"], remaining))
         return result
 
     async def delete_cache_batch(self, keys: list[str]) -> None:

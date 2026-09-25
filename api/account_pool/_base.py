@@ -135,6 +135,7 @@ class AccountPoolBase:
                 PRIMARY KEY (provider, email)
             );
             CREATE INDEX IF NOT EXISTS idx_acc_provider_status ON accounts(provider, status);
+                CREATE INDEX IF NOT EXISTS idx_acc_provider_status_credits ON accounts(provider, status, credits, updated_at);
             """)
             # 向下兼容：如果已有旧表缺少列则自动升级
             try:

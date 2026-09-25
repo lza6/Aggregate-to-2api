@@ -509,10 +509,12 @@ class Engine:
         """
         row = await self.db.get(task_id)
         if not row:
+            self._enqueued_at.pop(task_id, None)
             return None
         # P0-4: 取消检查①——任务已被取消（cancel 端点已落终态），worker 直接放弃认领，
         # 不 mark_started、不进 token 获取，保证已取消任务不再占用 worker/求解槽位。
         if row.get("status") == "cancelled":
+            self._enqueued_at.pop(task_id, None)
             return "cancelled"
         await self.db.mark_started(task_id)
         # B2: worker 后台协程脱离入口请求 contextvars——从 DB row 恢复 trace_id

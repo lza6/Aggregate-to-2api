@@ -283,3 +283,18 @@
 | 2026-09-26 | 线上对话/Anthropic/agent plan 复询 | 200（tryingopen 真实路径，mock=False） | Anthropic 503 确认上游瞬时抖动非回归 |
 | 2026-09-26 | 前端复核（v20 改动后） | tsc 0 + vitest 35/35 + landing build 0 | — |
 | 2026-09-25 | 部署上线 20.204.27.154（ARM64） | imagefree-api 8100 + cfsolver 8001 + nginx 443 | cf_solver camoufox 单次 ~3s |
+
+
+## v20.2 生产化审计补充（2026-09-26，Spec 008）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-26 | SQL 安全审计（S2 子代理） | P0=0（无注入，拼接均参数化/白名单）；P1=7 | 见下修复 |
+| 2026-09-26 | 索引优化（P1 修复） | 3 表 5 组合索引：requests(status,finished_at/created_at/model)、chat_usage(provider,model)、accounts(provider,status,credits,updated_at) | migrations.py/_base.py 增量 DDL |
+| 2026-09-26 | `_enqueued_at` 内存泄漏（P1） | row=None/cancelled 早退路径补 pop | engine.py _process |
+| 2026-09-26 | `load_cache_snapshot` 全表（P1） | 改 SQL 侧 `WHERE cached_at+ttl > now` 过滤 | queries.py |
+| 2026-09-26 | `_queue_counts` 漂移（S2 报） | 复核后无需修复：put 失败时递增未执行，递减成对 | 误报已记录 |
+| 2026-09-26 | email_pool `_load_used` 全量（P1） | **有意保留**：注册器已下线，邮箱池低频，改动面大收益低 | — |
+| 2026-09-26 | export_tasks 无界（P1） | 已有 LIMIT 10 万截断，管理端点低频，**部分缓解不改流式** | — |
+| 2026-09-26 | token 池阻塞（P1） | 压测调优项：需 cf_solver 多槽 + TOKEN_PREFETCH_CONCURRENCY 提升 | 非代码 bug |
+| 2026-09-26 | 部署同步 | 服务器 git pull → c7ceed2，openapi version 20.0.0→20.2.0 | 修复部署=仓库一致 |

@@ -38,6 +38,10 @@ async def _create_requests_table(conn: aiosqlite.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_requests_created ON requests(created_at);
         CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
         CREATE INDEX IF NOT EXISTS idx_requests_finished ON requests(finished_at);
+        -- v20.2 性能：高频过滤+排序组合索引（gallery/list/export）
+        -- 注：requests 无 model 列（model 在 idempotency/chat_usage），故不加 (status, model)
+        CREATE INDEX IF NOT EXISTS idx_requests_status_finished ON requests(status, finished_at);
+        CREATE INDEX IF NOT EXISTS idx_requests_status_created ON requests(status, created_at);
     """)
 
 
@@ -121,6 +125,7 @@ async def _apply_chat_usage_migrations(conn: aiosqlite.Connection) -> None:
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_month ON chat_usage(month)")
         if "provider" in _ccols:
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_provider ON chat_usage(provider, created_at)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_provider_model ON chat_usage(provider, model)")
     except Exception:
         pass
 
