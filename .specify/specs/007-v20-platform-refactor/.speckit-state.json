@@ -1,0 +1,13 @@
+{
+  "featureId": "007",
+  "name": "v20-platform-refactor",
+  "basePath": ".specify/specs/007-v20-platform-refactor",
+  "phase": "plan",
+  "taskIndex": 0,
+  "totalTasks": 15,
+  "taskIteration": 1,
+  "maxTaskIterations": 5,
+  "globalIteration": 1,
+  "maxGlobalIterations": 100,
+  "awaitingApproval": false
+}
