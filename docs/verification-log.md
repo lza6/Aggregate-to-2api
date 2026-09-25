@@ -272,3 +272,14 @@
 - solver 参数校验已落地（v19）：sitekey 白名单=安全字符类 1-120（勿再加最短长度限制，会误拒 mock/真实 CF sitekey）；注入字符（空格/引号/分号）被拒。
 - 上下文 trim 纯函数库可用（v19）：`trim_chat_messages`/`summarize_for_intent`，调用方按 `IF_CTX_TRIM` 接入。
 - 视频 SSE 已可用（v19）：`/v1/video/{task_id}/events` 复用 TaskEventHub + Last-Event-ID 补偿。
+
+
+## v20.2.0 代理池高并发验证记录（2026-09-26）
+
+| 日期 | 范围 | 结果 | 备注 |
+|------|------|------|------|
+| 2026-09-26 | v20.2 代理池高并发：imagefree「单 IP 忙」错误触发代理换出口 | test_worker_engine_compat 13/13 + ruff 0 | 新增 `_is_upstream_ip_busy` |
+| 2026-09-26 | 真机并发 E2E（20.204.27.154）：imagefree 文生图 x4 并发 | **4/4 completed**（修复前 3 error DLQ） | 代理池 1404 已启用 IF_FREE_PROXY=1 |
+| 2026-09-26 | 线上对话/Anthropic/agent plan 复询 | 200（tryingopen 真实路径，mock=False） | Anthropic 503 确认上游瞬时抖动非回归 |
+| 2026-09-26 | 前端复核（v20 改动后） | tsc 0 + vitest 35/35 + landing build 0 | — |
+| 2026-09-25 | 部署上线 20.204.27.154（ARM64） | imagefree-api 8100 + cfsolver 8001 + nginx 443 | cf_solver camoufox 单次 ~3s |
