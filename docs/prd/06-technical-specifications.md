@@ -55,7 +55,7 @@ pydantic-settings 集中管理,`IF_` 前缀环境变量,10 个子配置类:
 | `HTTPSettings` | `config/http.py` | host/port/proxy/UA/连接数/keepalive/上游在途 |
 | `SolverSettings` | `config/solver.py` | base_url/sitekey/cf_solver_urls/节点权重/熔断/token预取 |
 | `CacheSettings` | `config/cache.py` | LRU 大小/TTL/Redis |
-| `ProviderSettings` | `config/provider.py` | 代理文件/免费代理/号池目标/降级阈值/falai |
+| `ProviderSettings` | `config/provider.py` | 代理文件/免费代理/号池目标/降级阈值 |
 | `PoolSettings` | `config/pool.py` | token 池大小/TTL/等待超时 |
 | `QueueSettings` | `config/queue.py` | 队列上限/worker/自动伸缩/DLQ |
 | `ObservabilitySettings` | `config/observability.py` | 健康检查/告警/日志 |
@@ -161,7 +161,7 @@ pydantic-settings 集中管理,`IF_` 前缀环境变量,10 个子配置类:
 | 字段 | 用途 |
 |------|------|
 | email | 账号邮箱(主键) |
-| provider | 提供商前缀(nanobanana 等) |
+| provider | 提供商前缀(imagefree/aifreeforever/tryingopen 等) |
 | status | 状态(active/working/cooling/dead/registering) |
 | cookie | 上游会话 cookie(better-auth session_token 等) |
 | password | 注册密码(加密存储) |
@@ -288,7 +288,7 @@ down:provider.health_status == "down",静态回退到能力匹配备用
 
 ### 6.5.3 模型命名契约
 
-- **外部 id**:`<provider前缀>/<上游真实模型名>`,如 `nanobanana/nano-banana-pro`、`aifreeforever/gpt-image-2`、`imagefree/default`
+- **外部 id**:`<provider前缀>/<上游真实模型名>`,如 `imagefree/default`、`aifreeforever/gpt-image-2`、`tryingopen/default`
 - **能力**:`ModelSpec.capabilities` 声明 `txt2img/img2img/txt2vid/img2vid`
 - **积分费率**:`ModelSpec.credits`(上游每图消耗,如 nano-banana-pro:4,4K:14)
 

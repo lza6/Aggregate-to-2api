@@ -49,14 +49,14 @@
 │                         │                                             │
 │           ┌─────────────▼──────────────────────────────────┐          │
 │           │   providers/ 多提供商网关                        │          │
-│           │   ┌────────────┐ ┌──────────────┐ ┌───────────┐│          │
-│           │   │ imagefree  │ │ aifreeforever│ │nanobanana ││          │
-│           │   │ Turnstile  │ │ 每 IP 限额   │ │ 号池签到  ││          │
-│           │   └────────────┘ └──────────────┘ └───────────┘│          │
 │           │   ┌────────────┐ ┌──────────────┐               │          │
-│           │   │ falai      │ │ tryingopen   │  registry.py  │          │
-│           │   │ 视频生成    │ │ 匿名对话     │  MAB-EWMA 路由│          │
+│           │   │ imagefree  │ │ aifreeforever│  registry.py  │          │
+│           │   │ Turnstile  │ │ 每 IP 限额   │  MAB-EWMA 路由│          │
 │           │   └────────────┘ └──────────────┘               │          │
+│           │   ┌────────────┐                                 │          │
+│           │   │ tryingopen │  （nanobanana/falai 已下线）     │          │
+│           │   │ 匿名对话    │                                 │          │
+│           │   └────────────┘                                 │          │
 │           └─────────────────────────────────────────────────┘          │
 │                                                                         │
 │           ┌─────────────────┐ ┌──────────────┐ ┌──────────────┐       │
@@ -67,9 +67,9 @@
                            │
                   ┌────────▼─────────────────────┐
                   │   上游 AI 生成服务             │
-                  │  imagefree.net · nanobanana-  │
-                  │  pro.com · aifreeforever.com │
-                  │  fal.ai · tryingopen.com     │
+                  │  imagefree.net · aifree-     │
+                  │  forever.com · tryingopen.com │
+                  │  （nanobanana/fal.ai 已下线）  │
                   └──────────────────────────────┘
 ```
 
@@ -84,7 +84,7 @@
 | **调度层** | `api/dispatch.py`、`api/dispatch_edit.py` | 鉴权 → 校验 → INSERT(SQLite) → 入队 → 返回,统一同步/异步提交前置,图生图跨进程互斥与代理池 |
 | **引擎层** | `api/worker/engine.py`、`api/worker/token_pool.py` | 有界优先级队列 + worker 池 + 多 key token 池预取,后台消费任务 |
 | **路由引擎** | `api/adaptive_router.py`、`api/providers/registry.py` | MAB-EWMA 自适应路由打分,降级/熔断状态机,跨商能力匹配降级 |
-| **提供商层** | `api/providers/` | 上游抽象基类 `Provider`/`ChatProvider` + 各上游实现(imagefree/aifreeforever/nanobanana/falai/tryingopen) + `ActionSniffer` |
+| **提供商层** | `api/providers/` | 上游抽象基类 `Provider`/`ChatProvider` + 各上游实现(imagefree/aifreeforever/tryingopen) + `ActionSniffer` |
 | **资源池层** | `api/account_pool.py`、`api/email_pool.py`、`api/proxy_pool.py` | 号池(状态机+签到)、邮箱池(9源)、代理池(住宅+免费双源) |
 | **数据层** | `api/db/` | aiosqlite + WAL + 批量写,任务/统计/画廊/DLQ/幂等/路由持久化 |
 | **存储适配层** | `api/storage/` | `StorageAdapter` 抽象,SQLite(默认)/Redis(集群)双实现,前瞻能力未接线 |
@@ -157,7 +157,7 @@ POST /v1/generate                     worker 池(IF_WORKERS=10)
 ### 5.3.3 多提供商路由(`api/providers/registry.py` + `api/adaptive_router.py`)
 
 ```
-                   GET /v1/generate?model=nanobanana/nano-banana-pro
+                   GET /v1/generate?model=imagefree/default
                                 │
                                 ▼
                    ┌─────────────────────────────┐

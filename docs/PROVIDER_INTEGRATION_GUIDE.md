@@ -1,3 +1,5 @@
+> 2026-09-25：`nanobanana` 与 `falai` 已从运行时注册表移除。当前图片上游是 `imagefree`、`aifreeforever`；对话与 agent 的真实上游是 `tryingopen`（`IF_MOCK_UPSTREAM` 默认 0，允许真实调用）。下文里仍出现的 nanobanana/falai 片段只作历史接入样例，不要再注册。
+
 # 提供商接入指南（Provider Integration Guide）
 
 本文档说明如何为听风AI 网关接入一个新的上游图像/对话提供商。目标读者：维护者本人（降低未来接入新上游的认知成本）。

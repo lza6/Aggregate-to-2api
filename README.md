@@ -6,20 +6,20 @@
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/python-3.11+-brightgreen.svg" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/docker-compose-orange.svg" alt="Docker"></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-19.0.0-brightgreen.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-20.0.0-brightgreen.svg" alt="Version"></a>
 </p>
 
 ---
 
 ## 📋 概述
 
-听风AI 是一个**生产级 AI 图像生成 API 网关**，将多家上游 AI 图像服务（imagefree.net、aifreeforever.com、nanobanana-pro.com 等）聚合为统一的 OpenAI 风格 `/v1/*` 接口。核心能力包括：
+听风AI 是一个**生产级 AI 图像生成 API 网关**，将上游 AI 服务（imagefree.net、aifreeforever.com，以及 tryingopen.com 对话）聚合为统一的 OpenAI 风格 `/v1/*` 接口。nanobanana 与 fal.ai 已下线。核心能力包括：
 
 - **🔄 多提供商自适应路由** — MAB-EWMA 引擎结合成功率/时延/负载实时打分，自动降级/熔断
 - **👥 号池自动化** — 自动注册 + 每日签到，管理 1000+ 账号无需人工干预
 - **🌐 代理池轮换** — 住宅代理 + 免费代理双源，每 IP 递增冷却 + 24h 每日限额重置
 - **⚡ 高并发架构** — 有界优先级队列 + Worker 池（4-16 自适应）+ Turnstile token 预取，扛 270+ RPS
-- **🖥️ React 管理面板** — 独立 React 前端（/admin），图表化监控任务、提供商、号池、死信队列与实时日志
+- **🖥️ React 管理面板** — `/admin` 首页是 tryingopen 在线对话；仪表盘改到 `/dashboard`。提供商、任务、日志仍在侧栏。
 - **🔍 深度可观测性** — Prometheus 指标 + 审计日志 + 内置告警引擎 + WebSocket 实时日志 + OTel 分布式追踪
 - **📡 SSE 每任务事件流** — `/v1/tasks/{id}/events` 实时推送 status/progress/result + Last-Event-ID 断线补偿
 - **💬 文本对话与智能体网关 (v4.4)** — 整合 TryingOpen 匿名多模型，提供标准 OpenAI `/v1/chat/completions` 与 Anthropic `/v1/messages` 兼容端点，支持思考链、工具调用（Function Calling）与多模态 Vision，自动代理轮换突破单 IP 频控。
@@ -207,9 +207,7 @@ curl http://127.0.0.1:8100/v1/agent/dag/{run_id}
 |--------|------|------|------|------|
 | `imagefree` | imagefree.net | txt2img / img2img | Turnstile token | 直连 |
 | `aifreeforever` | aifreeforever.com | txt2img / img2img（≤3 参考图） | 匿名 + Turnstile | **每 IP 每日限额 → 每请求轮换代理** |
-| `nanobanana` | nanobanana-pro.com | txt2img / img2img | better-auth cookie + 号池 | 每日签到续额 |
-| `tryingopen` | tryingopen.com | **chat / chat_tools / chat_vision** | **完全匿名（13+ 开源大模型）** | **单 IP 限流 20次/h → 代理池自动故障轮换** |
-| `falai` | fal.ai | **txt2vid / img2vid（minimax-h3-max）** | 匿名 + Kasada x-is-human（纯算） | **每 IP 每天 5 次免费 → 代理池轮换** |
+| `tryingopen` | tryingopen.com | **chat / chat_tools / chat_vision** | **完全匿名（开源大模型）** | **单 IP 限流 → 代理池轮换。agent 与首页对话默认真实调用** |
 
 ---
 
@@ -272,7 +270,7 @@ node resp-audit.cjs  # 响应式 4 断点审计（375/768/1024/1440，截图归�
 
 - **健康检查降级**：`GET /v1/healthz` 看 `cf_solver`/`solver_status`，详见表。
 - **任务 pending**：`GET /v1/diagnostics` 看 worker `stale`、队列深度、磁盘。
-- **号池空**：`GET /v1/account-pool` 看账号数；nanobanana 依赖每日签到续额。
+- **号池**：nanobanana 已下线，启动时不再自动补号/签到。
 
 ---
 

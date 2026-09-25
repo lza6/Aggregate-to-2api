@@ -1,10 +1,10 @@
 # imagefree-2ai · 项目上下文
 
-听风AI —— 多提供商 AI 图像/对话生成网关。聚合 imagefree / aifreeforever / nanobanana / tryingopen / falai 五家上游，统一暴露 OpenAI 风格 `/v1/*` 接口，含号池自动化、代理池轮换、高并发异步队列、React 管理面板。
+听风AI —— 多提供商 AI 图像/对话生成网关。图片上游聚合 imagefree / aifreeforever（nanobanana、falai 已下线），对话与智能体上游为 tryingopen，统一暴露 OpenAI 风格 `/v1/*` 接口，含代理池轮换、高并发异步队列、React 管理面板（`/` 为在线对话，仪表盘在 `/dashboard`）。
 
 ## 规则（优先级最高，覆盖一切默认行为）
 
-- **付费 API 红线**：真实付费上游（fal.ai / imagefree 等）调用预算默认为 0。用 Mock / fixture / 录制响应验证参数拼装、轮询、回调、超时、重试、幂等；禁止为"通过测试"发起真实付费请求。
+- **付费 API 红线**：真实付费上游调用预算默认为 0（tryingopen 为匿名免费上游，agent/对话默认真实调用）。用 Mock / fixture / 录制响应验证参数拼装、轮询、回调、超时、重试、幂等；禁止为"通过测试"发起真实付费请求。
 - **Windows 平台**：禁止 `.sh` 脚本，用 `node` 或 PowerShell；命令链接用 `; if($?) { }` 而非 `&&`；查可执行文件用 `where.exe`；搜索用内置 `rg`，不依赖 `grep`/`awk`/`sed`/`tmux`。
 - **不自动提交**：未经明确指示不创建 commit / push / PR。提交前过 `.pre-commit-config.yaml`（ruff check+format + 基础 hooks）。
 - **不可变优先**：创建新对象而非就地修改；防隐藏副作用与并发竞态。
@@ -32,7 +32,7 @@ api/
   worker/            engine.py 引擎 / token_pool.py Turnstile token 预取池
   account_pool.py    号池（aiosqlite，>1000 行，待拆分）
   email_pool.py      邮箱池 + email_sources/（多临时邮箱源：mailtm/mailgw/tempmail/guerrilla/do22/linshi/temptf/custom_imap）
-  providers/         base.py + imagefree/aifreeforever/nanobanana/tryingopen/falai + registry.py + action_sniffer.py
+  providers/         base.py + imagefree/aifreeforever/tryingopen + registry.py + action_sniffer.py
   config/            分组配置包（base/cache/db/edit/http/observability/pool/provider/queue/security/solver/settings.py 兼容命名空间）
   db/                core.py（连接池）/ queries.py / queue_store.py / lease_store.py / ip_blocklist_store.py
   auth.py            聊天端点固定 Key 鉴权（IF_API_KEYS）

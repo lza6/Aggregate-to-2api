@@ -209,7 +209,7 @@
 
 ### 8.8.3 上游调用边界
 
-- **逆向免费额度**:本项目上游调用均为逆向免费额度(imagefree.net/nanobanana-pro/aifreeforever/fal.ai/tryingopen 的免费积分),不发起真实付费
+- **逆向免费额度**:本项目图片上游为匿名免费额度(imagefree.net/aifreeforever),对话/agent 上游为 tryingopen 匿名免费模型,不发起真实付费
 - **Mock 开关**:`IF_MOCK_UPSTREAM=0`(生产留空)、`IF_MOCK_REGISTER=0`(生产留空,防测试期 mock-session cookie 泄漏到线上当真实账号)
 
 ## 8.9 安全响应协议

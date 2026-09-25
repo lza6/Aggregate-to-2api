@@ -288,7 +288,7 @@ GET /v1/model   (单数别名)
 {
   "object": "list",
   "data": [{"id": "...", "object": "model", "created": 0, "owned_by": "..."}],
-  "items": {"imagefree": [...], "nanobanana": [...]},
+  "items": {"imagefree": [...], "aifreeforever": [...], "tryingopen": [...]},
   "count": N
 }
 ```

@@ -22,7 +22,7 @@ imagefree-2ai/
 │   │   ├── imagefree.py    # imagefree 适配器
 │   │   ├── minimaxh3.py    # minimaxh3 适配器
 │   │   ├── aifreeforever.py
-│   │   ├── nanobanana.py
+│   │   ├── （nanobanana/falai 已下线，文件删除）
 │   │   └── __init__.py
 │   ├── account_pool.py     # 号池管理
 │   ├── proxy_pool.py       # 代理池管理

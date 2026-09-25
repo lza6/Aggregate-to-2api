@@ -84,23 +84,23 @@ sudo docker compose build api && sudo docker compose up -d api
 
 ---
 
-## 多提供商网关部署（听风AI · 逆向号池）
+## 多提供商网关部署（听风AI）
 
-> 在 imagefree 主站之上叠加 minimaxh3 / aifreeforever / nanobanana 等积分制提供商 +
-> 号池自动注册 + 每日签到 + 免费/住宅代理池。部署 = 同步代码 → compose 重启 → 配代理/号池。
+> 图片上游为 imagefree / aifreeforever（匿名免费），对话与 agent 上游为 tryingopen。
+> nanobanana、minimaxh3、fal.ai 已于 v20.0.0 全量下线：不再启动自动补号/每日签到，
+> `IF_NANOBANANA_ACCOUNT_TARGET` / `IF_FALAI_*` 配置不再生效。
 
 ### 1. 同步代码并重启
 
 ```bash
 # 服务器上（/home/ubuntu/imagefree-api）
-# v6.8.0 起 build context = 仓库根（..），直接用根 api/ 源码构建，无需 sync_deploy 同步
 cd /home/ubuntu/imagefree-api
 sudo docker compose build api && sudo docker compose up -d api
-curl http://127.0.0.1:8100/v1/models        # 应返回 45 模型（4 提供商）
-curl http://127.0.0.1:8100/v1/account-pool   # 号池看板
+curl http://127.0.0.1:8100/v1/models        # 应返回 imagefree/aifreeforever 图片模型 + tryingopen 对话模型
+curl http://127.0.0.1:8100/v1/chat/completions -d '{"model":"tryingopen/default","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-### 2. 启用免费代理池（aifreeforever 每 IP 每日限额场景）
+### 2. 启用免费代理池（aifreeforever / tryingopen 每 IP 限额场景）
 
 compose 的 api 服务 environment 加：
 ```yaml
@@ -111,36 +111,10 @@ compose 的 api 服务 environment 加：
 ```
 验证：`sudo docker logs imagefree-api | grep 免费代理` 应看到 `sources_ok=N fetched=N injected=N`。
 
-### 3. 号池自动补号 + 每日签到
+### 3. 号池（nanobanana 下线后默认停用）
 
-```yaml
-- IF_ACCOUNT_AUTO=1
-# minimaxh3 已于 v6.8.0 全量移除（IF_MINIMAXH3_ACCOUNT_TARGET 已废弃，填了不生效）
-- IF_NANOBANANA_ACCOUNT_TARGET=500  # nanobanana 每日签到续额 → 常驻 500
-```
-验证：`curl /v1/account-pool` 看 `nanobanana.ok` 是否增长、`auto_register: true`。
-
-### 4. 手动批量真实注册（500 号，服务器执行）
-
-> 前提：cf_solver 可求解（8001 通）、邮箱源 temp.tf 可达、Turnstile 不被上游风控。
-> **必须配合代理池轮换**（`--use-proxy-pool`），否则同 IP 批量注册必被风控。
-
-```bash
-cd /home/ubuntu/imagefree-api
-# 免费代理池兜底（先开 IF_FREE_PROXY=1 让池子有货）：
-sudo docker exec imagefree-api python scripts/inject_accounts.py --provider minimaxh3 --count 500 --real --use-proxy-pool
-sudo docker exec imagefree-api python scripts/inject_accounts.py --provider nanobanana --count 500 --real --use-proxy-pool
-# 或从宿主机（容器内 /app/data 挂载到 ./data）：
-python3 scripts/inject_accounts.py --provider minimaxh3 --count 500 --real --use-proxy-pool --db data/account_pool.db
-```
-注册成功日志 `[N/500] 注册成功 xxx@high.edu.pl credits=4`；完成后 `curl /v1/account-pool` 确认 500 号。
-
-### 5. 注意事项（真实运行）
-
-- minimaxh3 新号 4 积分：一次生成即耗光 → 号池必须维持 500 常驻，自动补号循环会持续补。
-- nanobanana 签到奖励 7 天循环 [4,4,8,4,4,4,10]，积分 2 天过期 → 每天签到（号池自动跑），签到后尽快消费。
-- aifreeforever 每 IP 每日限额：务必开 `IF_FREE_PROXY=1`（免费代理量大兜底）或住宅代理文件；429 自动冷却递增 + 24h 重置。
-- 内存：号池/代理池在 api 容器内，cf_solver 每浏览器上下文 0.5-1GB；500 号并发注册时 Turnstile 求解是瓶颈（单槽 ~5s/次）。
+- `IF_ACCOUNT_AUTO` 默认 0，启动不再挂自动补号/每日签到；历史账号数据保留在 `data/account_pool.db`。
+- 在线使用入口：落地页首页对话（HomeChat）与 `/admin`（`/` 在线聊天、`/dashboard` 仪表盘）。
 
 ## v2.3.0 更新内容
 

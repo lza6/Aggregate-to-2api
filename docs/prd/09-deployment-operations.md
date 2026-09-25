@@ -331,10 +331,8 @@ curl http://127.0.0.1:8100/v1/slow | python3 -m json.tool
 ### 9.8.3 号池补号
 
 ```bash
-# 自动补号(配 IF_ACCOUNT_AUTO=1 后自动跑)
-# 手动批量真实注册(需代理池轮换,防风控)
-sudo docker exec imagefree-api python scripts/inject_accounts.py \
-  --provider nanobanana --count 500 --real --use-proxy-pool
+# 自动补号默认关闭（nanobanana 已下线；IF_ACCOUNT_AUTO 不再挂签到/补号循环）
+# 历史账号数据保留在 data/account_pool.db，/v1/account-pool 仅作查询
 
 # 验证
 curl http://127.0.0.1:8100/v1/account-pool | python3 -m json.tool
@@ -345,7 +343,7 @@ curl http://127.0.0.1:8100/v1/account-pool | python3 -m json.tool
 - **Turnstile 求解失败**:看 `solver_guard.snapshot()`,熔断时 30s 后自动探测恢复
 - **邮箱源 429**:email_pool 自动退避切换备用源
 - **代理 429**:proxy_pool 递增冷却(0/30/90/300/900s),24h 重置
-- **站点改版**:ActionSniffer 动态嗅探自愈(nanobanana),失败回退静态 Action ID
+- **站点改版**:ActionSniffer 动态嗅探自愈,失败回退静态 Action ID（nanobanana 下线后不再启用）
 
 ## 9.9 服务器资源约束
 

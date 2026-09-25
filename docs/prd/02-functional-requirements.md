@@ -141,7 +141,7 @@
 ### FR-PROV-04 Action 嗅探
 
 - **实现**:`api/providers/action_sniffer.py`
-- **场景**:nanobanana 等使用 Next.js Server Action 的上游,站点改版后 Action ID 变化,嗅探失败回退静态兜底值
+- **场景**:使用 Next.js Server Action 的上游,站点改版后 Action ID 变化,嗅探失败回退静态兜底值（该机制随 nanobanana 下线不再启用）
 - **价值**:站点改版无需改代码即可自愈
 
 ## 2.5 资源池(FR-POOL)
@@ -151,7 +151,7 @@
 - **实现**:`api/account_pool.py`,状态机 `AccountStatus`(unregistered/registering/active/working/cooling/dead)
 - **操作**:borrow(借号)/release(归还)/mark_dead(封号)/mark_cooling(冷却)
 - **自动补号**:`IF_ACCOUNT_AUTO=1` + `IF_NANOBANANA_ACCOUNT_TARGET`(默认 10000)持续注册补号
-- **每日签到**:nanobanana 7 天循环 [4,4,8,4,4,4,10],美区时区重置(北京 15:00),积分 2 天过期
+- **每日签到**:已随 nanobanana 下线移除（历史实现:7 天循环 [4,4,8,4,4,4,10],美区时区重置(北京 15:00),积分 2 天过期）
 - **看板**:`GET /v1/account-pool` 返回分页账号明细(邮箱脱敏)+ 补号速率画像 + 成本聚合
 - **持久化**:`data/account_pool.db`(aiosqlite + WAL + busy_timeout)
 
