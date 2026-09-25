@@ -76,6 +76,25 @@ async def generate_once_b3(engine: Any, row: dict[str, Any], token: str, proxy: 
     return out
 
 
+
+def _is_upstream_ip_busy(err: Exception) -> bool:
+    """判定上游「单 IP 并发槽被占」类错误（等价 429，应触发代理池换 IP 重试）。
+
+    imagefree 免费层对同 IP 并发第二个任务返回 HTTP 200 + JSON error：
+      "You already have a free image task in progress. Please wait..."
+    而非真正的 429 状态码；该语义 = 当前出口 IP 忙 → 与 429 同等对待，
+    走代理池换出口（图生图 _is_edit_slot_wedged 同款模式）。
+    """
+    msg = str(err).lower()
+    return any(k in msg for k in (
+        "you already have a free image task",
+        "already have a free image task in progress",
+        "free image task in progress",
+        "image task in progress",
+        "editing task in progress",
+    ))
+
+
 async def generate_with_429_proxy_fallback(
     engine: Any, task_id: str, row: dict[str, Any], token: str
 ) -> dict[str, Any]:
@@ -89,9 +108,9 @@ async def generate_with_429_proxy_fallback(
     try:
         return await generate_once_b3(engine, row, token)
     except ImagefreeError as e:
-        if "429" not in str(e):
+        if "429" not in str(e) and not _is_upstream_ip_busy(e):
             raise
-        log.warning("task %s 直连被上游 429，切换代理池重试", task_id)
+        log.warning("task %s 直连被上游限流/IP忙（429 或 free task in progress），切换代理池重试: %.80s", task_id, e)
 
     last_error: Exception | None = None
     for round_no in range(1, 4):  # 最多 3 个代理出口
@@ -118,7 +137,7 @@ async def generate_with_429_proxy_fallback(
         try:
             result = await generate_once_b3(engine, row, fallback_token, proxy=proxy_url)
         except ImagefreeError as exc:
-            rate_limited = "429" in str(exc)
+            rate_limited = "429" in str(exc) or _is_upstream_ip_busy(exc)
             await engine._proxy_pool.mark_failure(proxy_url, rate_limited=rate_limited)
             last_error = exc
             if not rate_limited or round_no == 3:
