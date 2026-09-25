@@ -3,7 +3,7 @@
 一体化探针：启动 mock cf_solver + uvicorn → wait_port → 真实 HTTP 断言 → 清理进程。
 覆盖端点：
 1. GET  /healthz                       基础健康
-2. GET  /openapi.json                  openapi version == 12.0.0（版本全链）
+2. GET  /openapi.json                  openapi version == 20.0.0（版本全链）
 3. GET  /v1/agent/skills               技能清单含 ecommerce/ppt 新场景
 4. GET  /v1/agent/skills/{name}        单技能详情（v12.0.0 新增）
 5. POST /v1/mcp initialize             MCP 握手（v12.0.0 新增）
@@ -112,7 +112,7 @@ def main() -> int:
         check("1 /v1/healthz 200", r.status_code == 200)
         r = client.get("/openapi.json")
         ver = r.json().get("info", {}).get("version", "")
-        check("2 openapi version==19.0.0", ver == "19.0.0", f"got {ver}")
+        check("2 openapi version==20.0.0", ver == "20.0.0", f"got {ver}")
 
         # 3-4. skills 可发现性
         r = client.get("/v1/agent/skills")
@@ -128,7 +128,7 @@ def main() -> int:
 
         # 5-7. MCP
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "19.0.0"
+        ok5 = r.status_code == 200 and r.json()["result"]["serverInfo"]["version"] == "20.0.0"
         check("5 mcp initialize", ok5)
         r = client.post("/v1/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         tools = {t["name"] for t in r.json()["result"]["tools"]}
