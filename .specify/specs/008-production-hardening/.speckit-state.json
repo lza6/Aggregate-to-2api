@@ -1,0 +1,13 @@
+{
+  "featureId": "008",
+  "name": "production-hardening",
+  "basePath": ".specify/specs/008-production-hardening",
+  "phase": "specify",
+  "taskIndex": 0,
+  "totalTasks": 0,
+  "taskIteration": 1,
+  "maxTaskIterations": 5,
+  "globalIteration": 1,
+  "maxGlobalIterations": 100,
+  "awaitingApproval": false
+}
