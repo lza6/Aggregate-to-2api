@@ -18,10 +18,11 @@ router = APIRouter()
 
 
 def _guard(request: Request, prompt: str) -> None:
-    """入口防护：per-IP 限速 + API Key 鉴权（全站写操作统一要求）。
+    """入口防护：per-IP 限速 + 内容校验（公益开放，写操作无需 API Key）。
 
-    生图/图生图端点现在与聊天端点一致，必须携带有效 API Key
-    （Authorization: Bearer / X-API-Key / ?api_key=）。未配置 IF_API_KEYS 时保持开放兼容。
+    v20.3.3 注释修正（终局审计 P2）：v7.7.1 起公益定位，生图/图生图不再强制 API Key
+    （guard_generate_request 只做 per-IP 限速 + 真实 IP 取证）；若站长配置 IF_API_KEYS
+    则可选启用业务 Key 鉴权。前端「配置 API Key」面板为可选兼容项。
     """
     from .. import auth
 

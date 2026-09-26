@@ -275,7 +275,12 @@ async def dag_list(limit: int = 20, status: str | None = None, request: Request 
 
 @router.get("/v1/agent/dag/{run_id}")
 async def dag_get(run_id: str, request: Request):
-    """查询 DAG run 状态（含每节点状态）。"""
+    """查询 DAG run 状态（含每节点状态）。
+
+    v20.3.3 P2（终局审计闭环）：把 explain_templates 教学化释义真接线——
+    IF_AGENT_EXPLAIN_ENABLED=1（缺省）时，每节点附加 `explain` 字段（what/why/io 大白话），
+    供门户/管理台展示「为什么这样规划」。向后兼容：新增字段不破坏现有契约。
+    """
     _dag_enabled_or_404()
     auth.guard_chat_request(request)  # 读操作不占用 DAG 写限流额度
 
@@ -283,9 +288,35 @@ async def dag_get(run_id: str, request: Request):
     if run is None:
         raise AppError(ErrorCodes.NOT_FOUND, "DAG run 不存在", 404)
     # SQLite store 返回 dict（已是 public_state 形状）；内存 store 返回 DagRun 对象
-    if isinstance(run, dict):
-        return run
-    return run.public_state()
+    data = run if isinstance(run, dict) else run.public_state()
+    # v20.3.3 P2：教学化释义接线（缺省开；IF_AGENT_EXPLAIN_ENABLED=0 关闭零行为变化）
+    _attach_explain(data)
+    return data
+
+
+def _attach_explain(data: dict) -> None:
+    """给 DAG run 的每节点附加 explain 教学化释义（受 IF_AGENT_EXPLAIN_ENABLED 控制）。"""
+    try:
+        from ..config import get_settings
+
+        if not getattr(get_settings(), "if_agent_explain_enabled", True):
+            return
+    except Exception:
+        return
+    try:
+        from ..agent.explain_templates import build_node_explain
+
+        nodes = data.get("nodes")
+        if not isinstance(nodes, list):
+            return
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            kind = node.get("kind") or "llm"
+            node["explain"] = build_node_explain(kind, node)
+    except Exception:
+        # 教学化是增强信息，失败静默不影响主链路
+        return
 
 
 @router.post("/v1/agent/dag/{run_id}/resume")
