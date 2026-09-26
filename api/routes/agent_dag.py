@@ -270,6 +270,10 @@ async def dag_list(limit: int = 20, status: str | None = None, request: Request 
     items = await _await_maybe(_STORE.list(limit=limit, status=status))
     # 统一为 public_state dict 形状（sqlite store 已 dict；内存 store 返回 DagRun 对象）
     rows = [r if isinstance(r, dict) else r.public_state() for r in items]
+    # v20.3.8（真实缺口修复）：列表端点与详情端点一致，每 run 节点附加教学化 explain——
+    # 管理台 RunCard 用列表数据渲染节点，此前 explain 缺失导致 UI 展示不了教学化释义
+    for row in rows:
+        _attach_explain(row)
     return {"items": rows, "count": len(rows)}
 
 
