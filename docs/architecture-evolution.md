@@ -74,3 +74,18 @@
 
 ## 4. 一句话总结
 **当前最划算的三步：Cloudflare 免费层（CDN+WAF+限流）→ UptimeRobot 拨测 → litestream 异地备份。全部免费，零架构改动。其余项在触发器出现前都是负优化。**
+
+
+---
+
+## 9. v20.3.2 落地：nginx 静态加速（对应 CDN 项）
+
+2026-09-26 已落地（非 CF 代理，nginx 层直接加速）：
+
+| 措施 | 配置 | 效果 |
+|------|------|------|
+| /assets 缓存 | `expires 1y` + `Cache-Control: public, max-age=31536000, immutable` | hash 文件浏览器/CDN 长期缓存，回源大减 |
+| gzip 压缩 | `gzip on; gzip_types ...js css json svg` | JS 124KB→48KB（-62%） |
+| index.html no-cache | `location = /` + `= /index.html` no-cache | 防旧 hash chunk 引用 |
+
+未来升级 CF 免费层时，此 nginx 配置与 CF Cache Rules 兼容（双重缓存）。
