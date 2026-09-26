@@ -206,6 +206,7 @@ onMounted(loadModels)
 
       <div v-if="busy" class="gen-busy" role="status">
         <span class="dot ok"></span> {{ t('pgen.busy') }}
+        <span v-if="isImg" class="gen-busy-hint">{{ t('pgen.edit_hint') }}</span>
       </div>
       <p v-else-if="resultError" class="gen-error" role="alert">⚠ {{ resultError }}</p>
       <div v-else-if="resultUrl" class="gen-result">
@@ -235,6 +236,7 @@ h3 { margin: 0; font-size: 20px; }
 .upload-ok { color: var(--ok); font-weight: 700; }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
 .gen-busy { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+.gen-busy-hint { color: var(--warn); font-size: 12.5px; }
 .gen-error { color: var(--warn); font-size: 13px; }
 .gen-result img { max-width: 100%; max-height: 360px; border-radius: var(--radius); border: 1px solid var(--line-2); }
 .gen-result { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
