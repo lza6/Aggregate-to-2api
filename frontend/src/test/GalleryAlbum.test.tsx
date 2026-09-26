@@ -58,7 +58,9 @@ describe('Gallery v16 P0-3 相册化', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // v20.3.1 flaky 根治：restoreAllMocks 还原 stubGlobal(IntersectionObserver)，
+    // 并行文件间 IO stub 消失 → 无限滚动用例偶发失败。改 clearAllMocks 保留全局 stub。
+    vi.clearAllMocks();
   });
 
   it('渲染多张图；点击勾选框进入多选并显示操作条', async () => {

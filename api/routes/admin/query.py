@@ -44,7 +44,13 @@ async def models():
     - `items` / `count`：本服务前端 admin 面板使用的自有分组格式；
     - `data` / `object`：OpenAI 标准 `/v1/models` 契约（Cherry Studio、OpenAI SDK、
       Cursor、NextChat 等客户端按此解析模型列表，缺 `data` 字段会提示"检测不到模型"）。
+
+    v20.3.1 P0：模型目录 60s 缓存（portal 生图/对话模型加载与 OpenAI SDK 客户端共享，
+    避免每次请求重复 bootstrap + grouped 重建；上游 provider 注册变化由 registry 自适应刷新兜底）。
     """
+    cached = await gallery_cache.get("models:catalog")
+    if cached is not None:
+        return cached
     from ...providers.registry import bootstrap as providers_bootstrap  # noqa: PLC0415
 
     providers_bootstrap()
@@ -59,13 +65,15 @@ async def models():
         for mods in groups.values()
         for m in mods
     ]
-    return {
+    result = {
         "object": "list",
         "data": data_list,
         "items": groups,
         "count": len(data_list),
         "note": "模型 id 命名：<提供商前缀>/<上游真实模型名>；capabilities 含 txt2img/img2img/txt2vid",
     }
+    await gallery_cache.set("models:catalog", result, ttl=60)
+    return result
 
 
 @router.get("/v1/providers")

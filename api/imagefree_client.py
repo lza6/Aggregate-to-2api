@@ -395,10 +395,16 @@ def detect_mime(data: bytes) -> str:
 
 
 async def _edit_client(proxy: str | None) -> httpx.AsyncClient:
-    """图生图专用 client：指定代理时新建（session 绑定），否则用共享连接池。"""
+    """图生图专用 client：总是新建一次性 client（不复用共享连接池）。
+
+    v20.3.1 P0（真实缺陷修复）：图生图曾复用共享 H2 keep-alive 会话，空闲后上游
+    TLS 会话失效 → `SSLV3_ALERT_HANDSHAKE_FAILURE`（curl 每次新连接正常、共享复用坏）。
+    一次性 client 每次全新 TLS 握手，规避坏会话；调用方（upload/submit/poll）负责 aclose。
+    """
+    kwargs: dict = {"timeout": httpx.Timeout(30.0), "headers": {"User-Agent": config.USER_AGENT}}
     if proxy:
-        return httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(30.0), headers={"User-Agent": config.USER_AGENT})
-    return _get_client()
+        kwargs["proxy"] = proxy
+    return httpx.AsyncClient(**kwargs)
 
 
 async def upload_edit_image(
@@ -427,8 +433,8 @@ async def upload_edit_image(
     if up.status_code not in (200, 201, 204):
         raise ImagefreeError(f"上传图片失败: HTTP {up.status_code} {up.text[:120]}")
     log.info("图生图图片已上传 publicUrl=%s%s", public_url, " (proxy)" if proxy else "")
-    if proxy:
-        await client.aclose()
+    # v20.3.1 P0：client 恒为一次性（新建），统一关闭防连接泄漏
+    await client.aclose()
     return public_url
 
 
@@ -454,8 +460,8 @@ async def submit_edit(
     if not tid:
         raise ImagefreeError(f"图生图响应缺少 taskId: {data}")
     log.info("图生图已提交 taskId=%s%s", tid, " (proxy)" if proxy else "")
-    if proxy:
-        await client.aclose()
+    # v20.3.1 P0：client 恒为一次性，统一关闭
+    await client.aclose()
     return tid
 
 
@@ -494,5 +500,5 @@ async def poll_edit_status(
                 raise ImagefreeError(f"图生图失败: {data.get('error') or data}")
             await asyncio.sleep(poll_interval)
     finally:
-        if proxy:
-            await client.aclose()
+        # v20.3.1 P0：client 恒为一次性，统一关闭
+        await client.aclose()

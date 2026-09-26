@@ -76,7 +76,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  // v20.3.1 flaky 根治：restoreAllMocks 会还原 vi.stubGlobal('EventSource')，
+  // 并行测试文件间导致 EventSource 被还原为 undefined → SSE dispatch 失败。
+  // 改用 clearAllMocks（只清 mock 调用/实现，不清全局 stub）。
+  vi.clearAllMocks();
   EventSourceStub.instances = [];
 });
 

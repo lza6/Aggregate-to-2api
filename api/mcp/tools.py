@@ -15,6 +15,7 @@ observe 模式仅记录不拦截。
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -133,10 +134,17 @@ async def _tool_generate_image(args: dict[str, Any]) -> Any:
     prompt = str(args.get("prompt", "")).strip()
     if not prompt:
         raise ValueError("prompt 不能为空")
-    await _exec_image(prompt[:2000])
+    # v20.3.1 P1（终局审计）：不再丢弃 _exec_image 返回值——真实 provider 结果 URL 透传，
+    # mock 降级串也透传说明；task 缓存以真实结果为信源，杜绝恒 mock://image.png 假结果。
+    result_text = await _exec_image(prompt[:2000])
+    url = result_text
+    # 从 "[image] 生成结果：https://..." / "[image-mock] 已生成图像占位：https://..." 提取 URL
+    m = re.search(r"https?://\S+", result_text)
+    if m:
+        url = m.group(0)
     # 统一异步任务契约：返回 task_id + queued，轮询 task_status 收敛（幂等）
     task_id = f"img_{uuid.uuid4().hex[:12]}"
-    _mock_image_cache[task_id] = {"status": "completed", "prompt": prompt[:200], "url": "mock://image.png"}
+    _mock_image_cache[task_id] = {"status": "completed", "prompt": prompt[:200], "url": url, "detail": result_text[:300]}
     return {"task_id": task_id, "status": "queued"}
 
 

@@ -254,7 +254,10 @@ async def meta(request: Request, response: Response) -> dict[str, Any]:
     P2-3: ETag 协商缓存（同 /v1/system——api_key_mask 变化时 ETag 自动失效）。
     """
     from ..auth import auth_enabled, public_keymask
+    from ..config import get_settings
 
+    # v20.3.1 P1（审计）：门户工具卡开关检测——前端据此降级（PPT/视频未启用时点开不再 404）
+    _s = get_settings()
     payload = {
         "sitekey": config.SITEKEY,
         "aspect_ratios": config.ASPECT_RATIOS,
@@ -262,6 +265,8 @@ async def meta(request: Request, response: Response) -> dict[str, Any]:
         "gallery_requires_password": bool(config.IF_GALLERY_PASSWORD),
         "auth_enabled": auth_enabled(),
         "api_key_mask": public_keymask(),
+        "ppt_enabled": bool(getattr(_s, "if_ppt_generate", False)),
+        "video_enabled": bool(getattr(_s, "if_video_enabled", False)),
     }
     etag = '"' + hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:32] + '"'
     inm = request.headers.get("if-none-match")

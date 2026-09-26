@@ -7,7 +7,32 @@ B4: 每条日志同时保留结构化字段（level/logger/message/trace_id/req_
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
+
+
+# v20.3.1 P1（终局审计）：/v1/logs 与 /v1/logs/ws 匿名公开，必须在 handler 层统一脱敏，
+# 防止业务 logger 写入的 api_key/token/prompt 片段/URL 参数经该通道泄露。
+# 匹配模式按「先长后短」顺序替换，避免短模式先吃掉长凭证的一部分。
+_SENSITIVE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # 完整 Authorization / Bearer
+    (re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._~+/=-]{6,}"), r"\1***"),
+    # 显式 key= / api_key= / x-api-key 值
+    (re.compile(r"(?i)((?:api[_-]?key|apikey|token|secret|password|passwd)\s*[:=]\s*)[A-Za-z0-9._~+/=-]{6,}"), r"\1***"),
+    # 裸 sk- / tfai- 前缀凭证
+    (re.compile(r"\b(?:sk-[A-Za-z0-9_-]{8,}|tfai-[A-Za-z0-9_-]{6,})"), "***"),
+    # URL query 中的敏感参数（弱通道 api_key 也脱敏）
+    (re.compile(r"(?i)(\?[^\s#&]*\b(?:api_key|key|token|secret|password)=)[^&\s#]+"), r"\1***"),
+]
+
+
+def _redact(text: str) -> str:
+    """对日志 message 做统一脱敏：凭证/密钥/敏感 query 参数。"""
+    if not text:
+        return text
+    for pattern, repl in _SENSITIVE_PATTERNS:
+        text = pattern.sub(repl, text)
+    return text
 
 
 class LogBufferHandler(logging.Handler):
@@ -28,7 +53,8 @@ class LogBufferHandler(logging.Handler):
                 "level": record.levelname,
                 "severity": record.levelname.lower(),
                 "logger": record.name,
-                "message": record.getMessage(),
+                # v20.3.1 P1：message 统一脱敏后再入环形缓冲（/v1/logs、/v1/logs/ws 消费此字段）
+                "message": _redact(record.getMessage()),
             }
             # B2/B4: 注入 trace_id/req_id（从 contextvars，无活跃请求则省略）
             try:
