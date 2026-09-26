@@ -146,6 +146,12 @@ export function DagTrace({ node }: { node: DagNodePublic | null }) {
         {node.condition && <span>条件 {node.condition}</span>}
         {node.depends_on.length > 0 && <span>依赖 {node.depends_on.join(', ')}</span>}
       </div>
+      {node.explain && (
+        <section>
+          <div className="dag-trace-label">教学化释义（这步为什么/做什么）</div>
+          <pre className="dag-trace-block dag-trace-explain">{node.explain}</pre>
+        </section>
+      )}
       {nothingYet && <div className="dag-trace-empty-inline">该节点尚未执行</div>}
       {node.prompt && (
         <section>
@@ -252,7 +258,7 @@ export function DagGraph({ nodes, onSelect }: DagGraphProps) {
                 aria-pressed={isSelected}
                 aria-label={`节点 ${node.id}（${statusLabel(node.status)}）`}
               >
-                <title>{NODE_HINT[node.kind] ?? `节点 ${node.id}`}</title>
+                <title>{node.explain?.split('\n')[0] ?? NODE_HINT[node.kind] ?? `节点 ${node.id}`}</title>
                 <rect
                   className="dag-svg-node-box"
                   width={NODE_W}

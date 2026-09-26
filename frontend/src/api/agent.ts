@@ -18,6 +18,8 @@ export interface DagNodePublic {
   created_at: number;
   started_at: number | null;
   finished_at: number | null;
+  /** v20.3.6：后端教学化释义（what/why/io，GET /v1/agent/dag/{id} 附加） */
+  explain?: string | null;
 }
 
 export interface DagRunPublic {
