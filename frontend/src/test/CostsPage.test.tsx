@@ -44,7 +44,11 @@ const costBody = {
 const forecastBody = { daily_avg_30d: 0.4, projected_exceed_date: null, days_remaining: 18, budget_usd: 100, current_spent_30d: 12.34, disabled: false, note: '预测' };
 
 function mockFetch() {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown) => {
+  // v20.3.9 flaky 根治：spyOn(globalThis,'fetch') 在 Slow.test 等 stubGlobal('fetch') 并行时
+  // 会 spy 到被替换的 mock 上，restore 后全局状态错乱 → 偶发失败。
+  // 改 vi.stubGlobal + vi.unstubAllGlobals（显式全局所有权，与其他 stubGlobal 文件一致，
+  // vitest 按 worker 隔离管理，消除跨文件污染）。
+  vi.stubGlobal('fetch', async (url: unknown) => {
     const u = String(url);
     if (u.includes('/cost-forecast')) {
       return new Response(JSON.stringify(forecastBody), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -54,7 +58,7 @@ function mockFetch() {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   capturedBlobs.length = 0;
 });
 

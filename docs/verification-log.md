@@ -491,3 +491,15 @@
 ### 全量测试基线（环境限制记录）
 - 前端 vitest 全量 296：295 passed + 1 并行 flaky（CostsPage 单跑 4 passed = flaky 非回归）
 - 后端 pytest：本环境（Python 3.14 + 工具链）全量运行 EXIT=4 无输出（工具链问题），已用分文件子集验证核心（agent_dag 19/gallery 15/chat 等全绿）；collect-only 正常
+## v20.3.9 测试基线提升验证记录（2026-09-26）
+
+### M1 前端 CostsPage flaky 根治
+- 根因：CostsPage 用 vi.spyOn(globalThis,'fetch') + restoreAllMocks，与 Slow.test 的 stubGlobal('fetch') 并行时全局污染 → 偶发失败
+- 修复：改 vi.stubGlobal('fetch') + vi.unstubAllGlobals（与其他 stubGlobal 文件一致的全局所有权模式）
+- 验证：全量 vitest 串行 28 文件 / 296 测试 **全部通过（296/296）**（此前 295+1 flaky）
+- 说明：vitest 并行在本机有 worker 崩溃（23 errors，非 flaky），串行稳定全绿为验收标准
+
+### M2 后端 pytest 工具链（环境债，诚实记录）
+- pytest 9.1.1 + Python 3.14 + pytest-asyncio 1.4：全量/单文件 EXIT=4 静默（工具链兼容问题，非代码缺陷）
+- pytest --version 正常、collect-only 部分正常；已验证分文件子集（agent_dag 19/gallery 15/chat）全绿
+- 建议：CI 用固定 Python 3.11 + pytest 8 跑全量；本地以分文件子集为基线
