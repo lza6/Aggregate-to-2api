@@ -434,3 +434,21 @@
 
 ### 部署
 - 推送 8cb39c1（三方一致），服务器 git pull + restart active
+## v20.3.4 发行闭环验证记录（2026-09-26）
+
+### G1 教学化 explain 前端闭环
+- PortalAgent run 后节点 explain 回填 + 可折叠展示（details/summary ▸）
+- 生产 E2E：「写诗」→ 3 节点全部 explain（[llm] 大模型处理节点…/为什么/输入输出），点击展开完整显示，0 console error
+
+### G2 图生图超时降级
+- PortalGenerate busy 显示已等待时长（分:秒）+ 15 分钟超时降级提示
+- 与后端 EDIT_TIMEOUT=600s error 兜底一致
+
+### 版本漂移修复（关键）
+- 问题：bump 后未重建 dist → 误传 20.3.3 版本标记 dist
+- 修复：重建 landing dist（index-J_Rp9JeE.js 含 20.3.4）→ 重新上传
+- 验证：生产 footer v20.3.4 ✅
+
+### 部署
+- 推送 055d509 + dist 重新上传（备份 dist.bak-2033）
+- 服务器 git pull + restart active
