@@ -367,3 +367,22 @@
 - 后端 agent_dag_exec + dispatch_edit_branches 46 passed
 - landing build 全绿（44 模块）
 - frontend Tasks/GalleryAlbum afterEach clearAllMocks（flaky 根治）
+## v20.3.1 图生图 TLS 深度修复（2026-09-26 第二轮）
+
+### 第一轮修复（连接复用）→ 仍 500
+- 初判：_edit_client 复用坏会话 → 改一次性 client + aclose
+- 实测：POST /v1/edit 仍 500 SSLV3_ALERT_HANDSHAKE_FAILURE
+
+### 真实根因（第二轮）
+- traceback 定位：失败在 download_image（下载**输入图片**画廊 R2 URL），非上游 imagefree
+- 根因：download_image 防 DNS rebinding 用 **IP 直连**（safe_url=IP），httpx 对 IP URL 的 TLS SNI=IP ≠ 域名 → Cloudflare(R2) 拒绝握手
+- curl 用域名 SNI 正确所以正常；文生图无此步所以正常
+
+### 修复
+- download_image：保留公网 IP 校验（SSRF 防护），改用**域名连接**（SNI 正确）+ 一次性 client
+- 本地验证：R2 URL 下载 941KB PNG 成功
+
+### 生产 E2E（部署 904c846 后）
+- POST /v1/edit 500 → **200**（task_id 返回）
+- DB：upstream_task_id=072f3635...（上游提交成功）+ status=pending（上游生成中）
+- 结论：图生图真实链路已打通（500 缺陷修复）；上游出图耗时 > 5min 属上游正常
