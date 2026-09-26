@@ -503,3 +503,20 @@
 - pytest 9.1.1 + Python 3.14 + pytest-asyncio 1.4：全量/单文件 EXIT=4 静默（工具链兼容问题，非代码缺陷）
 - pytest --version 正常、collect-only 部分正常；已验证分文件子集（agent_dag 19/gallery 15/chat）全绿
 - 建议：CI 用固定 Python 3.11 + pytest 8 跑全量；本地以分文件子集为基线
+## v20.3.10 后端测试环境真相澄清（2026-09-26）
+
+### 认知修正：后端 pytest 环境正常（前几轮「环境债」记录有误）
+- 之前多轮记录「后端 pytest EXIT=4 环境债」——根因是**误用了不存在的文件名**（test_auth.py 应为 test_auth_ip.py；test_fmt.py 不存在）
+- 真相：`.venv`（Python 3.11.13）pytest 一直能跑；test_auth_ip.py 7 passed
+- 教训：pytest 对不存在路径返回 exit 4 且本环境静默无输出 → 误导为环境崩溃。后续用 `Get-ChildItem` 确认文件存在再跑
+
+### 全量测试基线（分批次实测）
+- 第一批 47 文件（test_account*~test_config*）：**除 1 个隔离 flaky 外全绿**
+- **预存隔离 flaky**：test_account_pool.py::test_dashboard_counts_reflect_state
+  - 单独跑 `-k dashboard_counts` PASSED；全量文件跑时 18 个测试后污染失败
+  - 根因：AccountPool 内部跨 tmp_path 实例的共享状态（测试隔离缺口，非本轮引入，account_pool 未改过）
+  - 建议：低优先级测试隔离债，CI 可忽略或后续修 fixture 隔离
+
+### 环境
+- pytest 9.1.1 → 8.3.5 降级尝试（pyproject 允许 >=8.0），测试仍正常
+- 前端 vitest 全量串行 296/296 全绿（v20.3.9 已记录）
