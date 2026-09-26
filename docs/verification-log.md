@@ -452,3 +452,15 @@
 ### 部署
 - 推送 055d509 + dist 重新上传（备份 dist.bak-2033）
 - 服务器 git pull + restart active
+
+## v20.3.5 数据备份闭环验证记录（2026-09-26）
+
+### 备份机制确认（H 系列）
+- 发现：仓库已有 scripts/backup_db.py（VACUUM INTO 热备 + integrity_check + row_count + --all），但生产未配置 cron
+- 配置：cron 每日 03:00 全量备份 7 个 DB → /opt/imagefree-api/backups，保留 7 天
+- 执行：--all 备份 7/7 成功（imagefree.db requests=20 行校验 + integrity ok）
+- 恢复演练：备份文件全部 PRAGMA integrity_check = ok（可恢复）
+- 简版脚本误建已删（无双脚本冲突）
+
+### SOP 更新
+- SOP v3.1.0 补「数据库备份」章节：机制/范围/cron/手动备份/恢复步骤

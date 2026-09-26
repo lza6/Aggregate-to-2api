@@ -1,6 +1,6 @@
 # imagefree API 标准操作程序（SOP）
 
-> 版本: 3.0.0 | 最后更新: 2026-09-26
+> 版本: 3.1.0 | 最后更新: 2026-09-26
 > 适用: 本机（Windows 开发）+ 线上服务器（Azure 20.204.27.154，systemd + nginx）
 > 公网入口: `https://imagefree.hwhcie.bond`（nginx 443 → FastAPI 8100）
 > 当前代码版本: v20.3.x（发版前先核对 pyproject.toml/README 版本徽章）
@@ -64,6 +64,32 @@ curl -s -o /dev/null -w "home=%{http_code} admin=%{http_code}\n" http://127.0.0.
 cp /etc/nginx/sites-available/imagefree /etc/nginx/sites-available/imagefree.bak-<日期>
 # 编辑后:
 nginx -t && systemctl reload nginx
+```
+
+---
+
+## 3. 数据库备份（可恢复性保障，v20.3.5 确认配置）
+
+**机制**：`scripts/backup_db.py`（VACUUM INTO 在线热备，WAL 安全不锁写）
+- 备份范围：data/ 下全部 7 个 SQLite DB（imagefree/account_pool/dag_runs/email_registry/human_inbox/queue/skills）
+- 输出：`/opt/imagefree-api/backups/<db>-<时间戳>.db`
+- 校验：备份后自动 `PRAGMA integrity_check` + `requests` 行数核对
+- 保留：`--keep-days 7`（超期自动清理）
+
+**cron 调度**（已在生产配置）：
+```bash
+0 3 * * * cd /opt/imagefree-api && /opt/imagefree-api/.venv/bin/python scripts/backup_db.py --all --out-dir /opt/imagefree-api/backups --keep-days 7 >> /opt/imagefree-api/backups/backup.log 2>&1
+```
+
+**手动备份 / 恢复演练**：
+```bash
+# 手动全量备份
+cd /opt/imagefree-api && .venv/bin/python scripts/backup_db.py --all --out-dir /opt/imagefree-api/backups --keep-days 7
+
+# 恢复（用备份文件替换 data/ 下对应 db，先停服务避免写冲突）
+systemctl stop imagefree-api
+cp backups/imagefree-<时间戳>.db data/imagefree.db
+systemctl start imagefree-api
 ```
 
 ---
