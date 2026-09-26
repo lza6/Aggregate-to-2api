@@ -404,3 +404,18 @@
 - 前端 authHeaders 冗余带 Key + 后端匿名开放 = 兼容契约（配 Key 可选，不配也可用）
 - Generate.tsx 提示「写接口需 Key」为防御性文案（生产 IF_API_KEYS 空时永不触发）
 - 结论：前端契约与后端实际一致，无隐藏不一致
+## v20.3.2 发行闭环验证记录（2026-09-26）
+
+### 版本 bump + 部署
+- 全链 bump 20.3.2（12 文件：api/frontend/landing/desktop/pyproject/README）
+- landing dist（17 文件）+ frontend dist（35 文件）上传部署（旧备份 dist.bak-2031）
+- 服务器 git pull → 6e86105，restart active，healthz ok
+
+### 图生图时长提示（UX 缺口）
+- PortalGenerate img busy 态加「图生图生成约需 5-10 分钟」提示（zh/en）
+- 验证：图生图卡表单正常（upload-row 渲染，模型加载完成，0 error）；hint 仅 busy 态出现（未提交不触发，符合预期）
+
+### 生产 E2E 回归（Playwright，0 console error）
+- 首页 footer v20.3.2 / 6 卡片 / 12 画廊图 / 0 admin
+- 文生图/图生图卡模型加载正常
+- nginx 静态资源 immutable + gzip 仍生效
