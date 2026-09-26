@@ -464,3 +464,19 @@
 
 ### SOP 更新
 - SOP v3.1.0 补「数据库备份」章节：机制/范围/cron/手动备份/恢复步骤
+## v20.3.6 发行闭环验证记录（2026-09-26）
+
+### J1 管理台 explain 消费
+- DagGraph tooltip 优先 node.explain（fallback NODE_HINT）
+- DagTrace 详情面板新增「教学化释义」区块
+- DagNodePublic 类型补 explain?: string | null
+- frontend build 全绿；生产 /admin/agent 页面加载正常（0 console error）
+
+### J2 备份恢复演练自动化
+- scripts/restore_drill.py（非破坏性：临时目录恢复 + integrity + requests 行数 + 清理）
+- cron 每周日 04:00 演练（imagefree/dag_runs/queue）
+- 服务器实测 3/3 通过：imagefree(requests=20)/dag_runs/queue integrity=ok
+- git pull 冲突处理：未跟踪 restore_drill.py 与新 commit 冲突 → 删旧拉新，服务器 HEAD=46bf2bc
+
+### 部署
+- 推送 46bf2bc（三方一致），frontend dist 上传（备份 dist.bak-2035），restart active
