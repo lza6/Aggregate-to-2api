@@ -82,6 +82,10 @@ function pollRun(id) {
         const body = await r.json()
         if (body.status === 'succeeded' || body.status === 'completed') {
           status.value = 'succeeded'
+          // v20.3.4 G1：run 详情节点的 explain（教学化释义）回填到计划展示
+          if (Array.isArray(body.nodes) && body.nodes.length) {
+            plan.value = body.nodes.map((n) => ({ ...n, prompt: n.prompt || n.id, explain: n.explain || '' }))
+          }
           result.value = (body.nodes || []).map((n) => (n.result || '')).filter(Boolean).join('\n').slice(0, 600)
           clearPoll(); resolve()
         } else if (body.status === 'failed' || body.status === 'error') {
@@ -123,10 +127,13 @@ function pollRun(id) {
     </div>
 
     <div v-if="plan" class="plan-list">
-      <span v-for="(n, i) in plan" :key="i" class="plan-node">
-        <span class="node-kind">{{ n.kind }}</span>
-        {{ n.prompt || n.id }}
-      </span>
+      <details v-for="(n, i) in plan" :key="i" class="plan-node">
+        <summary>
+          <span class="node-kind">{{ n.kind }}</span>
+          {{ n.prompt || n.id }}
+        </summary>
+        <p v-if="n.explain" class="plan-explain">{{ n.explain }}</p>
+      </details>
     </div>
 
     <p v-if="err" class="agent-err" role="alert">⚠ {{ err }}</p>
@@ -143,7 +150,12 @@ h3 { margin: 0; font-size: 20px; }
 .agent-actions { display: flex; gap: 10px; }
 .btn-sm { padding: 8px 14px; font-size: 13px; min-height: 40px; }
 .plan-list { display: flex; flex-direction: column; gap: 6px; }
-.plan-node { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 12px; }
+.plan-node { display: block; font-size: 13px; color: var(--text-2); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 12px; }
+.plan-node summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+.plan-node summary::-webkit-details-marker { display: none; }
+.plan-node summary::before { content: '▸'; color: var(--muted-2); transition: transform var(--dur-fast) var(--ease-spring); }
+.plan-node[open] summary::before { transform: rotate(90deg); }
+.plan-explain { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; white-space: pre-wrap; line-height: 1.6; }
 .node-kind { font-size: 11px; font-weight: 700; color: var(--brand-2); background: var(--brand-soft); border-radius: var(--radius-pill); padding: 2px 8px; }
 .agent-err { color: var(--warn); font-size: 13px; }
 .agent-ok { color: var(--ok); font-size: 13px; }

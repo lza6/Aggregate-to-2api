@@ -19,6 +19,7 @@ const modelError = ref('')
 const prompt = ref('')
 const aspect = ref('1:1')
 const busy = ref(false)
+const waitSec = ref(0)
 const resultUrl = ref('')
 const resultError = ref('')
 const uploadData = ref('')
@@ -76,6 +77,7 @@ async function submit() {
   resultUrl.value = ''
   resultError.value = ''
   busy.value = true
+  waitSec.value = 0
   try {
     if (isImg.value) {
       // 图生图（异步编辑）
@@ -151,6 +153,14 @@ function pollEdit(taskId) {
         } else {
           fails = 0
         }
+        // v20.3.4 G2：图生图超时降级（15 分钟未完成给提示，防无限等待）
+        if (task.status === 'pending' || task.status === 'processing') {
+          waitSec.value += 3
+          if (waitSec.value >= 900) {
+            resultError.value = '图生图处理超时（超过 15 分钟），请稍后到管理台查看或重新提交'
+            clearPoll(); resolve()
+          }
+        }
       } catch (e) {
         fails += 1
         if (fails >= 5) { resultError.value = '任务查询失败'; clearPoll(); resolve() }
@@ -206,7 +216,7 @@ onMounted(loadModels)
 
       <div v-if="busy" class="gen-busy" role="status">
         <span class="dot ok"></span> {{ t('pgen.busy') }}
-        <span v-if="isImg" class="gen-busy-hint">{{ t('pgen.edit_hint') }}</span>
+        <span v-if="isImg" class="gen-busy-hint">{{ t('pgen.edit_hint') }}（已等待 {{ Math.floor(waitSec/60) }}:{{ String(waitSec%60).padStart(2,'0') }}）</span>
       </div>
       <p v-else-if="resultError" class="gen-error" role="alert">⚠ {{ resultError }}</p>
       <div v-else-if="resultUrl" class="gen-result">

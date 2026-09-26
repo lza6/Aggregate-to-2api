@@ -1,6 +1,6 @@
 {
   "name": "tingfeng-desktop",
-  "version": "20.3.3",
+  "version": "20.3.4",
   "private": true,
   "scripts": {
     "dev": "tauri dev",
