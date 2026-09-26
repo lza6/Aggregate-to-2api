@@ -1,9 +1,9 @@
 # Workflow Status — 终局闭环总审计 / 生产化补强（Spec 008）→ Spec 009 门户重构
 
 > 更新：2026-09-26 ｜ 上一版本：Phase A 参考项目对标（2026-09-22，已归档 docs/archived/）
-> 主项目：`C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai`（听风AI，v20.3.2（已发布 v20.3.0/v20.3.1））
+> 主项目：`C:\Users\Administrator.DESKTOP-EGNE9ND\Desktop\imagefree-2ai`（听风AI，v20.3.7（已发布 v20.3.0~v20.3.6））
 > 生产：20.204.27.154（ARM64 2C/4G）nginx 443 → imagefree-api 8100 + cfsolver 8001（camoufox）+ 代理池 1130
-> 编排：Spec Kit 009/010 + 主控工作流
+> 编排：Spec Kit 009/010 + 主控工作流（v20.3.3~v20.3.6 已闭环）
 
 ## 当前状态（2026-09-26）
 
@@ -16,7 +16,11 @@
 | cf_solver | ✅ camoufox ARM64 单次 ~3s | solve_success |
 | 管理后台收敛 | ✅ 首页 0 管理入口 + 0 运维链接；/admin 保留 | Playwright 断言 adminLinks=0 |
 | 画廊 | ✅ 9 张真实 R2 图瀑布流 | /v1/gallery count=9 |
-| 版本/Release | 🔄 v20.3.0 待发 | 见下 |
+| 版本/Release | ✅ v20.3.0~v20.3.6 已发布（Latest v20.3.6） | gh release 逐版核验 |
+| 图生图真实可用 | ✅ /v1/edit 500→200（TLS 修复）+ 时长提示 | v20.3.1/v20.3.4 验证 |
+| 数据备份 | ✅ cron 每日 7 DB 热备 + 每周恢复演练 | v20.3.5/v20.3.6 验证 |
+| 教学化 explain | ✅ 后端接线 + 门户/管理台前端消费 | v20.3.3/v20.3.4/v20.3.6 验证 |
+| nginx 静态加速 | ✅ /assets immutable + gzip -62% | v20.3.2 验证 |
 
 ## 本轮子任务工作流（Spec 010 生产加固，v20.3.2）
 
@@ -36,6 +40,18 @@
 - PPT/视频开关检测（meta ppt_enabled/video_enabled）→ 已闭环 ✅
 - Agent 真实 LLM plan+run（glm-5.3-flash 4 节点 succeeded）→ 已闭环 ✅
 - frontend Tasks/GalleryAlbum flaky（clearAllMocks）→ 已根治 ✅
+
+## 本轮子任务工作流（v20.3.3 ~ v20.3.6 连续闭环）
+
+| 版本 | 子任务 | 状态 | 产出/证据 |
+|------|--------|------|----------|
+| v20.3.3 | F1 DAG 教学化 explain 后端接线 | ✅ | GET /v1/agent/dag/{id} 节点附加 explain（8 类节点 what/why/io） |
+| v20.3.3 | F2 假功能注释修正 | ✅ | video 恒 Mock / 公益开放无 Key 注释事实化 |
+| v20.3.4 | G1 门户 explain 前端消费 | ✅ | PortalAgent run 后 explain 可折叠展示 |
+| v20.3.4 | G2 图生图超时降级 | ✅ | busy 等待时长 + 15min 超时提示 |
+| v20.3.5 | H 系列 数据备份闭环 | ✅ | cron 每日 7 DB 热备 + 恢复演练 integrity=ok |
+| v20.3.6 | J1 管理台 explain 消费 | ✅ | DagGraph tooltip/DagTrace 教学化释义 |
+| v20.3.6 | J2 恢复演练自动化 | ✅ | scripts/restore_drill.py + cron 每周日 |
 
 ## 本轮子任务工作流（Spec 009 门户重构）
 

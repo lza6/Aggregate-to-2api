@@ -1,7 +1,7 @@
 {
   "name": "imagefree-frontend",
   "private": true,
-  "version": "20.3.6",
+  "version": "20.3.7",
   "type": "module",
   "scripts": {
     "dev": "vite",

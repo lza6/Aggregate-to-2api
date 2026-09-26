@@ -1,6 +1,6 @@
 # imagefree API 标准操作程序（SOP）
 
-> 版本: 3.1.0 | 最后更新: 2026-09-26
+> 版本: 3.2.0 | 最后更新: 2026-09-26
 > 适用: 本机（Windows 开发）+ 线上服务器（Azure 20.204.27.154，systemd + nginx）
 > 公网入口: `https://imagefree.hwhcie.bond`（nginx 443 → FastAPI 8100）
 > 当前代码版本: v20.3.x（发版前先核对 pyproject.toml/README 版本徽章）
@@ -92,9 +92,22 @@ cp backups/imagefree-<时间戳>.db data/imagefree.db
 systemctl start imagefree-api
 ```
 
+**自动恢复演练**（v20.3.6 起，非破坏性：临时目录验证可恢复）：
+```bash
+# cron 每周日 04:00（已在生产配置）
+0 4 * * 0 cd /opt/imagefree-api && /opt/imagefree-api/.venv/bin/python scripts/restore_drill.py --backup-dir /opt/imagefree-api/backups --dbs imagefree,dag_runs,queue >> /opt/imagefree-api/backups/drill.log 2>&1
+# 手动演练
+/opt/imagefree-api/.venv/bin/python scripts/restore_drill.py --backup-dir /opt/imagefree-api/backups --dbs imagefree
+```
+
+**异地备份（前置条件未满足，需 R2/S3 凭证后启用）**：
+- 当前备份仅服务器本地（/opt/imagefree-api/backups），机器故障会丢失
+- 前置：提供 R2/S3 凭证后，用 litestream 或 rclone 把 backups/ 推送到异地对象存储（RPO 秒级）
+- 凭证就绪前保持本地 cron 每日备份（RPO=24h 兜底）
+
 ---
 
-## 3. 功能开关（systemd 环境变量）
+## 4. 功能开关（systemd 环境变量）
 
 | 开关 | 值 | 作用 |
 |------|-----|------|
@@ -108,7 +121,7 @@ systemctl start imagefree-api
 
 ---
 
-## 4. 常见排障
+## 5. 常见排障
 
 | 症状 | 排查 | 修复 |
 |------|------|------|
@@ -119,7 +132,7 @@ systemctl start imagefree-api
 
 ---
 
-## 5. 验证记录约定（防重复优化）
+## 6. 验证记录约定（防重复优化）
 
 已闭环项记录在 `docs/verification-log.md` + workflow_status「已验证勿重做」——
 新任务先查该清单，避免重复跑同一测试/优化。

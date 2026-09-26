@@ -69,7 +69,7 @@ router = APIRouter()
 log = logging.getLogger("mcp.server")
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "20.3.6"}
+SERVER_INFO = {"name": "tingfeng-ai-mcp", "version": "20.3.7"}
 _MCP_SESSION_HEADER = "Mcp-Session-Id"
 
 
