@@ -347,3 +347,23 @@
 ### 生产全链路快照
 - healthz 200 ok / gallery 200 count / ppt 200 pptx / chat_models 200 items 13
 - /admin 200 新 build；首页 200 v20.3.0
+## v20.3.1 生产缺陷修复 + 审计 P1 闭环验证记录（2026-09-26）
+
+### P0 图生图 TLS 修复
+- 复现：POST /v1/edit（image=画廊 R2 URL）→ 500 SYS.001
+- 日志：SSLV3_ALERT_HANDSHAKE_FAILURE（httpx.ConnectError）
+- 根因：_edit_client 复用共享 H2 keep-alive 会话，空闲后上游 TLS 会话失效；curl 新连接正常
+- 修复：图生图链恒一次性 client + 三处 aclose
+- 验证：生产 /v1/edit 真实 E2E（URL 输入 → 出图）
+
+### P1 终局审计闭环
+- /v1/models 60s 缓存（gallery_cache）
+- /v1/logs + ws 脱敏（_redact 验证：Bearer/api_key/token/query 全替换 ***）
+- MCP generate_image 真实 URL 透传（手动验证 mock 占位 https URL）
+- /v1/meta 加 ppt_enabled/video_enabled；PortalPpt/Video 开关降级
+- .env 模板权威化（根入口 + deploy 补 12 变量）
+
+### 测试
+- 后端 agent_dag_exec + dispatch_edit_branches 46 passed
+- landing build 全绿（44 模块）
+- frontend Tasks/GalleryAlbum afterEach clearAllMocks（flaky 根治）
