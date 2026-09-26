@@ -386,3 +386,21 @@
 - POST /v1/edit 500 → **200**（task_id 返回）
 - DB：upstream_task_id=072f3635...（上游提交成功）+ status=pending（上游生成中）
 - 结论：图生图真实链路已打通（500 缺陷修复）；上游出图耗时 > 5min 属上游正常
+## v20.3.2 生产加固（nginx 缓存/压缩 + 高并发探针 + 契约审计）（2026-09-26）
+
+### C1 nginx 静态资源加速（P0，用户点名 CDN/缓存）
+- 问题：/assets 无缓存头每次回源；gzip_types 未配置
+- 修复：location /assets/ → cache-control immutable + expires 1y；gzip on + gzip_types 补全；location = / 和 = /index.html no-cache
+- 验证：JS 响应 cache-control: public,max-age=31536000,immutable；gzip 压缩 124662→47946 字节（-62%）；首页 no-cache
+- 备份：/etc/nginx/sites-available/imagefree.bak-2031
+
+### C2 高并发极限施压探针（只读端点，不伤生产）
+- /v1/healthz + /v1/gallery 并发 20/50/100：全部 ok=100% 无错误无 429（防穿透稳定）
+- 服务器本地延迟 3ms（CPU load 0.04 极低）→ 服务端无瓶颈
+- 公网 p50 2-4.7s = 公网 TLS 握手开销（探针 connection:close 新建会话），非服务端缺陷
+- 产出：scripts/probe_concurrency.py（可复用探针）
+
+### C3 契约防坑审计
+- 前端 authHeaders 冗余带 Key + 后端匿名开放 = 兼容契约（配 Key 可选，不配也可用）
+- Generate.tsx 提示「写接口需 Key」为防御性文案（生产 IF_API_KEYS 空时永不触发）
+- 结论：前端契约与后端实际一致，无隐藏不一致
