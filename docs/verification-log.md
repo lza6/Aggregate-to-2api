@@ -419,3 +419,18 @@
 - 首页 footer v20.3.2 / 6 卡片 / 12 画廊图 / 0 admin
 - 文生图/图生图卡模型加载正常
 - nginx 静态资源 immutable + gzip 仍生效
+## v20.3.3 发行闭环验证记录（2026-09-26）
+
+### F1 DAG 教学化 explain 真接线（P2 审计闭环）
+- 问题：explain_templates 有测试（test_agent_explain）但主链路未接线 → 假功能
+- 修复：GET /v1/agent/dag/{run_id} 每节点附加 explain 字段（_attach_explain，IF_AGENT_EXPLAIN_ENABLED=1 缺省开）
+- 本地验证：scene/llm/critic 节点全部附加（[scene] 任务入口节点…/为什么/输入输出）
+- 生产 E2E：run_id e8b5ac5df3a842c2，节点 scene/llm/critic 全部返回 explain ✅
+- 测试：agent_dag/agent_explain/gallery 27 passed
+
+### F2 假功能注释修正
+- video_provider.py：「IF_MOCK_UPSTREAM=1→Mock；真实后置」→「视频恒 Mock（上游未接入），开关无效」
+- generate.py _guard：「必须携带 API Key」→「公益开放无 Key（v7.7.1 起），IF_API_KEYS 可选」
+
+### 部署
+- 推送 8cb39c1（三方一致），服务器 git pull + restart active
