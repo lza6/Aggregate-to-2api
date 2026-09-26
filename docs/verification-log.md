@@ -480,3 +480,14 @@
 
 ### 部署
 - 推送 46bf2bc（三方一致），frontend dist 上传（备份 dist.bak-2035），restart active
+## v20.3.8 发行闭环验证记录（2026-09-26）
+
+### L3 管理台 explain E2E 发现的真实缺口 + 修复
+- 问题：管理台 RunCard 用列表端点 /v1/agent/dag?limit= 渲染节点，explain 只附加在详情端点 → UI 教学化释义无法展示
+- 修复：dag_list 每 run 节点同样 _attach_explain（与详情一致）
+- 验证：列表端点节点 explain present=True；/admin/agent 点击 run admin-explain-e2e → 点击节点 → .dag-trace-explain=1 真实显示「[scene] 任务入口节点…为什么…输入输出…」，0 console error
+- 测试：agent_dag_routes + agent_explain 19 passed
+
+### 全量测试基线（环境限制记录）
+- 前端 vitest 全量 296：295 passed + 1 并行 flaky（CostsPage 单跑 4 passed = flaky 非回归）
+- 后端 pytest：本环境（Python 3.14 + 工具链）全量运行 EXIT=4 无输出（工具链问题），已用分文件子集验证核心（agent_dag 19/gallery 15/chat 等全绿）；collect-only 正常
