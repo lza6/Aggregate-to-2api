@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     generate_max_attempts: int = Field(2, validation_alias="IF_GENERATE_MAX_ATTEMPTS")
     if_txt_retry_max: int = Field(3, validation_alias="IF_TXT_RETRY_MAX")
     if_txt_retry_backoff_base: int = Field(5, validation_alias="IF_TXT_RETRY_BACKOFF_BASE")
+    if_txt_max_inflight: int = Field(1, validation_alias="IF_TXT_MAX_INFLIGHT")
+    if_txt_slot_wait: int = Field(120, validation_alias="IF_TXT_SLOT_WAIT")
+    if_txt_slot_stale: int = Field(600, validation_alias="IF_TXT_SLOT_STALE")
     token_wait_timeout: int = Field(30, validation_alias="IF_TOKEN_WAIT_TIMEOUT")
     sync_timeout: int = Field(300, validation_alias="IF_SYNC_TIMEOUT")
 

@@ -79,6 +79,9 @@ EDIT_PROXY_POOL_IDLE_TTL = settings.edit_proxy_pool_idle_ttl
 GENERATE_MAX_ATTEMPTS = settings.generate_max_attempts
 IF_TXT_RETRY_MAX = settings.if_txt_retry_max
 IF_TXT_RETRY_BACKOFF_BASE = settings.if_txt_retry_backoff_base
+IF_TXT_MAX_INFLIGHT = settings.if_txt_max_inflight
+IF_TXT_SLOT_WAIT = settings.if_txt_slot_wait
+IF_TXT_SLOT_STALE = settings.if_txt_slot_stale
 TOKEN_WAIT_TIMEOUT = settings.token_wait_timeout
 SYNC_TIMEOUT = settings.sync_timeout
 

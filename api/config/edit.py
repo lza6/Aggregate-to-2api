@@ -29,6 +29,9 @@ class EditSettings(BaseModel):
     generate_max_attempts: int = 2
     txt_retry_max: int = 3
     txt_retry_backoff_base: int = 5
+    txt_max_inflight: int = 1
+    txt_slot_wait: int = 120
+    txt_slot_stale: int = 600
     sync_timeout: int = 300
     max_image_bytes: int = 4 * 1024 * 1024
 
@@ -55,6 +58,9 @@ class EditSettings(BaseModel):
             generate_max_attempts=s.generate_max_attempts,
             txt_retry_max=s.if_txt_retry_max,
             txt_retry_backoff_base=s.if_txt_retry_backoff_base,
+            txt_max_inflight=s.if_txt_max_inflight,
+            txt_slot_wait=s.if_txt_slot_wait,
+            txt_slot_stale=s.if_txt_slot_stale,
             sync_timeout=s.sync_timeout,
             max_image_bytes=4 * 1024 * 1024,
         )

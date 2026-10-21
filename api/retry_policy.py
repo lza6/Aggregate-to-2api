@@ -23,6 +23,10 @@ class AdaptiveRetryStrategy:
         "timeout": {"backoff_base": 10, "max_retries": 3, "jitter": 0.3},
         "server_error": {"backoff_base": 15, "max_retries": 4, "jitter": 0.4},
         "network_error": {"backoff_base": 5, "max_retries": 2, "jitter": 0.5},
+        # P0-并发闸门：上游按出口 IP 硬限「免费任务同时在途 1 个」，回
+        # "You already have a free image task in progress."。这是可等待状态
+        # （不是错误），退避要比普通 transient 长，避免 3 次几秒内烧完进 DLQ。
+        "upstream_busy": {"backoff_base": 30, "max_retries": 3, "jitter": 0.5},
         # P1-A5（M11）：新增 forbidden / payload_too_large 两种 kind
         # forbidden：401/403/权限不足（permanent 语义，但区分出 kind 便于上层决策）
         # payload_too_large：413 请求体过大（不重试，直接拒绝并提示用户改参数）
@@ -32,6 +36,13 @@ class AdaptiveRetryStrategy:
 
     # 各类错误的消息标记
     RATE_LIMITED_MARKERS = ("429", "rate_limit", "rate limit", "too many requests")
+    # 上游并发槽被占（同出口已有免费任务在途 / 本代理的槽位等待超时）
+    UPSTREAM_BUSY_MARKERS = (
+        "task in progress",
+        "already have a free image task",
+        "already have an image editing task",
+        "槽位繁忙",
+    )
     TOKEN_REJECTED_MARKERS = ("token_rejected", "human verification failed")
     TIMEOUT_MARKERS = ("timeout",)
     SERVER_ERROR_MARKERS = ("5xx", "503", "502", "504", "500")
@@ -93,6 +104,11 @@ class AdaptiveRetryStrategy:
         for marker in AdaptiveRetryStrategy.RATE_LIMITED_MARKERS:
             if marker in msg:
                 return "rate_limited"
+
+        # 上游并发槽被占：可等待，独立 kind 走更长退避
+        for marker in AdaptiveRetryStrategy.UPSTREAM_BUSY_MARKERS:
+            if marker in msg:
+                return "upstream_busy"
 
         for marker in AdaptiveRetryStrategy.TOKEN_REJECTED_MARKERS:
             if marker in msg:
