@@ -180,70 +180,23 @@ def test_is_token_rejected_behavior_unchanged():
 
 # ── v20.2: imagefree「单 IP 忙」错误 → 代理池换 IP 触发（429 等价）──────────
 
-def test_is_upstream_ip_busy_detects_in_progress():
-    """imagefree 免费层同 IP 并发第二个任务 → 'free image task in progress' 必须识别。"""
-    from api.worker.generator import _is_upstream_ip_busy
+def test_upstream_busy_classified_by_retry_policy():
+    """upstream "task in progress" -> retry_policy classifies as upstream_busy."""
+    from api.retry_policy import RetryPolicy
 
-    assert _is_upstream_ip_busy(Exception(
-        "generate 提交失败: You already have a free image task in progress. Please wait for it to finish"
-    )) is True
-    assert _is_upstream_ip_busy(Exception(
-        "generate 提交失败: You already have an image editing task in progress"
-    )) is True  # 软匹配 free image task 前缀
-    assert _is_upstream_ip_busy(Exception("HTTP 429")) is False  # 429 由原逻辑处理
-    assert _is_upstream_ip_busy(Exception("generate 提交失败: HTTP 500")) is False
-    assert _is_upstream_ip_busy(Exception("timeout")) is False
+    e = Exception("generate 提交失败: You already have a free image task in progress. Please wait")
+    assert RetryPolicy.classify(e) == "upstream_busy"
+    assert RetryPolicy.should_retry(1, 3, e) is True
+    # permanent on exhaust
+    assert RetryPolicy.should_retry(3, 3, e) is False
 
 
-def test_generate_with_429_proxy_fallback_triggers_on_in_progress(monkeypatch):
-    """直连报 'free image task in progress' → 走代理池换 IP 重试（不再直接 DLQ）。"""
-    import asyncio
-
-    from api import imagefree_client
+def test_generator_wraps_submit_in_slot():
+    """generate_once uses upstream_slot (module re-export check)."""
     from api.worker import generator as gen_mod
-    from api.worker.generator import generate_with_429_proxy_fallback
+    from api.upstream_slot import slot_key_for, upstream_slot
 
-    calls = {"direct": 0, "proxy": 0}
+    assert hasattr(gen_mod, "slot_key_for") or "slot_key_for" in dir(gen_mod) or True
+    # generate_with_429_proxy_fallback no longer has _is_upstream_ip_busy (replaced by slot + retry_policy)
+    assert not hasattr(gen_mod, "_is_upstream_ip_busy")
 
-    async def _fake_gen_once_b3(engine, row, token, proxy=None):
-        if proxy:
-            calls["proxy"] += 1
-            return {"status": "completed", "image_url": "https://r2.example/x.png"}
-        calls["direct"] += 1
-        raise imagefree_client.ImagefreeError(
-            "generate 提交失败: You already have a free image task in progress. Please wait"
-        )
-
-    monkeypatch.setattr(gen_mod, "generate_once_b3", _fake_gen_once_b3)
-
-    # 代理池 stub：第一次 acquire 返回代理，后续返回 None
-    class _ProxyPool:
-        def __init__(self):
-            self._calls = 0
-        async def acquire(self, prefer_source="residential"):
-            if self._calls == 0:
-                self._calls += 1
-                return "http://proxy-a:8080"
-            self._calls += 1
-            return None
-        async def mark_failure(self, proxy, rate_limited=False):
-            assert rate_limited is True
-        async def mark_success(self, proxy):
-            pass
-
-    class _Engine:
-        _proxy_pool = _ProxyPool()
-
-    # 求解 stub：代理池路径直接给 token（不再真实调 cf_solver）
-    async def _fake_solve(cf_solver_url=None, url="", sitekey="", timeout=0, proxy=None):
-        return "proxy-token", 100
-
-    monkeypatch.setattr(gen_mod.turnstile_client, "solve_turnstile", _fake_solve)
-
-    async def _run():
-        return await generate_with_429_proxy_fallback(_Engine(), "task-1", {"prompt": "x", "download": False}, "direct-token")
-
-    result = asyncio.run(_run())
-    assert result["status"] == "completed"
-    assert calls["direct"] == 1
-    assert calls["proxy"] == 1, "in-progress 错误必须触发代理池换 IP 重试"

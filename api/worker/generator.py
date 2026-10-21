@@ -16,6 +16,7 @@ from typing import Any
 
 from .. import config, imagefree_client, turnstile_client
 from ..imagefree_client import ImagefreeError
+from ..upstream_slot import slot_key_for, upstream_slot
 
 log = logging.getLogger("engine.generator")
 
@@ -35,20 +36,33 @@ async def generate_once(engine: Any, row: dict[str, Any], token: str, proxy: str
 
     engine 鸭子类型：只需有 _proxy_pool 属性（本函数未用，留作未来扩展）。
     """
-    tid = await imagefree_client.submit_generate(
-        config.BASE_URL,
-        config.apply_model(row["prompt"], row.get("model", "default")),
-        row["aspect_ratio"],
-        token,
-        30.0,
-        proxy=proxy,
-    )
-    result = await imagefree_client.poll_generate_status(
-        config.BASE_URL,
-        tid,
-        config.GENERATE_TIMEOUT,
-        config.GENERATE_POLL_INTERVAL,
-    )
+    # P0-并发闸门：上游按出口 IP 硬限「免费任务同时在途 1 个」，超限回
+    # "You already have a free image task in progress."。槽位覆盖 submit→poll 全程
+    # （上游任务是异步的，只有轮询到终态才算释放），出口不同的请求各自成键。
+    slot_key = slot_key_for(proxy)
+    # reuse_context=True: engine ????? key ??????????
+    async with upstream_slot(
+        slot_key, wait=float(config.IF_TXT_SLOT_WAIT), reuse_context=True
+    ) as slot_ok:
+        if not slot_ok:
+            raise ImagefreeError(
+                f"免费任务槽位繁忙（上游同出口同时在途已达 {config.IF_TXT_MAX_INFLIGHT} 上限，"
+                f"等待 {config.IF_TXT_SLOT_WAIT}s 超时）"
+            )
+        tid = await imagefree_client.submit_generate(
+            config.BASE_URL,
+            config.apply_model(row["prompt"], row.get("model", "default")),
+            row["aspect_ratio"],
+            token,
+            30.0,
+            proxy=proxy,
+        )
+        result = await imagefree_client.poll_generate_status(
+            config.BASE_URL,
+            tid,
+            config.GENERATE_TIMEOUT,
+            config.GENERATE_POLL_INTERVAL,
+        )
     out: dict[str, Any] = {"status": "completed", "image_url": result["image"]}
     if row["download"]:
         try:
@@ -76,25 +90,6 @@ async def generate_once_b3(engine: Any, row: dict[str, Any], token: str, proxy: 
     return out
 
 
-
-def _is_upstream_ip_busy(err: Exception) -> bool:
-    """判定上游「单 IP 并发槽被占」类错误（等价 429，应触发代理池换 IP 重试）。
-
-    imagefree 免费层对同 IP 并发第二个任务返回 HTTP 200 + JSON error：
-      "You already have a free image task in progress. Please wait..."
-    而非真正的 429 状态码；该语义 = 当前出口 IP 忙 → 与 429 同等对待，
-    走代理池换出口（图生图 _is_edit_slot_wedged 同款模式）。
-    """
-    msg = str(err).lower()
-    return any(k in msg for k in (
-        "you already have a free image task",
-        "already have a free image task in progress",
-        "free image task in progress",
-        "image task in progress",
-        "editing task in progress",
-    ))
-
-
 async def generate_with_429_proxy_fallback(
     engine: Any, task_id: str, row: dict[str, Any], token: str
 ) -> dict[str, Any]:
@@ -108,9 +103,9 @@ async def generate_with_429_proxy_fallback(
     try:
         return await generate_once_b3(engine, row, token)
     except ImagefreeError as e:
-        if "429" not in str(e) and not _is_upstream_ip_busy(e):
+        if "429" not in str(e):
             raise
-        log.warning("task %s 直连被上游限流/IP忙（429 或 free task in progress），切换代理池重试: %.80s", task_id, e)
+        log.warning("task %s 直连被上游 429，切换代理池重试", task_id)
 
     last_error: Exception | None = None
     for round_no in range(1, 4):  # 最多 3 个代理出口
@@ -137,7 +132,7 @@ async def generate_with_429_proxy_fallback(
         try:
             result = await generate_once_b3(engine, row, fallback_token, proxy=proxy_url)
         except ImagefreeError as exc:
-            rate_limited = "429" in str(exc) or _is_upstream_ip_busy(exc)
+            rate_limited = "429" in str(exc)
             await engine._proxy_pool.mark_failure(proxy_url, rate_limited=rate_limited)
             last_error = exc
             if not rate_limited or round_no == 3:
